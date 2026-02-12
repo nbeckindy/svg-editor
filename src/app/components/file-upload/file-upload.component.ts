@@ -30,8 +30,14 @@ import { SvgService } from '../../services/svg.service';
     </div>
   `,
   styles: [`
+    :host {
+      display: block;
+      height: 100%;
+    }
     .upload-container {
       padding: 20px;
+      height: 100%;
+      box-sizing: border-box;
     }
     .upload-zone {
       border: 2px dashed #ccc;
@@ -39,6 +45,12 @@ import { SvgService } from '../../services/svg.service';
       padding: 40px;
       text-align: center;
       transition: all 0.3s ease;
+      height: 100%;
+      box-sizing: border-box;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
     }
     .upload-zone.drag-over {
       border-color: #2196F3;

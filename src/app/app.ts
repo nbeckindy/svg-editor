@@ -1,6 +1,7 @@
 import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FileUploadComponent } from './components/file-upload/file-upload.component';
+import { IconPaletteComponent } from './components/icon-palette/icon-palette.component';
 import { SvgCanvasComponent } from './components/svg-canvas/svg-canvas.component';
 import { PropertiesPanelComponent } from './components/properties-panel/properties-panel.component';
 
@@ -10,6 +11,7 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
   imports: [
     CommonModule,
     FileUploadComponent,
+    IconPaletteComponent,
     SvgCanvasComponent,
     PropertiesPanelComponent
   ],
@@ -19,7 +21,10 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
         <h1>Angular SVG Editor</h1>
       </header>
 
-      <app-file-upload (svgLoaded)="onSVGLoaded($event)"></app-file-upload>
+      <div class="toolbar-row">
+        <app-file-upload (svgLoaded)="onSVGLoaded($event)"></app-file-upload>
+        <app-icon-palette (svgLoaded)="onSVGLoaded($event)"></app-icon-palette>
+      </div>
 
       <div class="main-content">
         <div class="canvas-area">
@@ -45,6 +50,20 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
     }
     header h1 {
       margin: 0;
+    }
+    .toolbar-row {
+      display: flex;
+      gap: 20px;
+      align-items: stretch;
+      padding: 20px;
+      min-height: 160px;
+    }
+    .toolbar-row app-file-upload {
+      flex-shrink: 0;
+    }
+    .toolbar-row app-icon-palette {
+      flex: 1;
+      min-width: 0;
     }
     .main-content {
       display: grid;
