@@ -1,16 +1,25 @@
 import { Component, Input, AfterViewInit, ViewChild, ElementRef, OnChanges } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { AsyncPipe } from '@angular/common';
 import { Element as SVGElement } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
+import { EditorToolService } from '../../services/editor-tool.service';
+import { CanvasViewService } from '../../services/canvas-view.service';
 
 @Component({
   selector: 'app-svg-canvas',
   standalone: true,
-  imports: [CommonModule],
+  imports: [AsyncPipe],
   template: `
-    <div class="canvas-container">
-      <div #svgContainer class="svg-canvas" (click)="onCanvasClick($event)"></div>
+    <div class="canvas-container" [class.zoom-mode]="(editorTool.currentTool$ | async) === 'zoom'">
+      <div class="svg-canvas" (click)="onCanvasClick($event)">
+        <div
+          #svgContainer
+          class="svg-zoom-wrapper"
+          [style.transform]="'translate(' + canvasView.panX + 'px,' + canvasView.panY + 'px) scale(' + canvasView.scale + ')'"
+          style="transform-origin: 0 0">
+        </div>
+      </div>
       @if (!svgContent) {
         <div class="placeholder">
           <p>Load an SVG file to begin editing</p>
@@ -29,6 +38,12 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
     .svg-canvas {
       width: 100%;
       height: 100%;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
+    .svg-zoom-wrapper {
+      display: inline-block;
     }
     .placeholder {
       position: absolute;
@@ -42,6 +57,9 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
       outline: 2px dashed #2196F3;
       outline-offset: 2px;
     }
+    .canvas-container.zoom-mode {
+      cursor: zoom-in;
+    }
   `]
 })
 export class SvgCanvasComponent implements AfterViewInit, OnChanges {
@@ -50,7 +68,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges {
 
   constructor(
     private svgManipulation: SvgManipulationService,
-    private shapeSelection: ShapeSelectionService
+    private shapeSelection: ShapeSelectionService,
+    public editorTool: EditorToolService,
+    public canvasView: CanvasViewService
   ) {}
 
   ngAfterViewInit(): void {
@@ -67,12 +87,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges {
 
   private initializeSVG(): void {
     this.svgManipulation.initializeSVG(this.svgContainer.nativeElement, this.svgContent);
+    this.canvasView.init();
   }
 
   onCanvasClick(event: MouseEvent): void {
+    if (this.editorTool.getCurrentTool() === 'zoom') {
+      if (!this.svgContent || !this.canvasView.isInitialized()) return;
+      const rect = this.svgContainer.nativeElement.getBoundingClientRect();
+      const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
+      if (point) {
+        this.canvasView.zoomInAt(point.x, point.y);
+      }
+      return;
+    }
+
     const target = event.target as Element;
-    
-    // Check if clicked element is a shape
     if (target.tagName !== 'svg') {
       const svgElement = this.svgManipulation.getSVGInstance()?.findOne(`#${target.id}`) as SVGElement;
       if (svgElement) {
@@ -81,7 +110,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges {
         this.svgManipulation.highlightShape(properties.id);
       }
     } else {
-      // Clicked on canvas background
       this.shapeSelection.clearSelection();
       this.svgManipulation.clearHighlight();
     }

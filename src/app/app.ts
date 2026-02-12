@@ -2,6 +2,7 @@ import { Component } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FileUploadComponent } from './components/file-upload/file-upload.component';
 import { IconPaletteComponent } from './components/icon-palette/icon-palette.component';
+import { ToolStripComponent } from './components/tool-strip/tool-strip.component';
 import { SvgCanvasComponent } from './components/svg-canvas/svg-canvas.component';
 import { PropertiesPanelComponent } from './components/properties-panel/properties-panel.component';
 
@@ -10,6 +11,7 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
   standalone: true,
   imports: [
     CommonModule,
+    ToolStripComponent,
     FileUploadComponent,
     IconPaletteComponent,
     SvgCanvasComponent,
@@ -22,6 +24,7 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
       </header>
 
       <div class="toolbar-row">
+        <app-tool-strip></app-tool-strip>
         <app-file-upload (svgLoaded)="onSVGLoaded($event)"></app-file-upload>
         <app-icon-palette (svgLoaded)="onSVGLoaded($event)"></app-icon-palette>
       </div>
@@ -57,6 +60,10 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
       align-items: stretch;
       padding: 20px;
       min-height: 160px;
+    }
+    .toolbar-row app-tool-strip {
+      flex-shrink: 0;
+      align-self: center;
     }
     .toolbar-row app-file-upload {
       flex-shrink: 0;
