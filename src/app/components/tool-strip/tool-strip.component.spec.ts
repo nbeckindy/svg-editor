@@ -32,12 +32,13 @@ describe('ToolStripComponent', () => {
     expect(selectorBtn?.classList.contains('active')).toBe(true);
   });
 
-  it('should display Selector and Zoom buttons', () => {
+  it('should display Selector, Zoom, and Pan buttons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('.tool-btn');
-    expect(buttons.length).toBe(2);
+    expect(buttons.length).toBe(3);
     expect((buttons[0] as HTMLElement).textContent?.trim()).toBe('Selector');
     expect((buttons[1] as HTMLElement).textContent?.trim()).toBe('Zoom');
+    expect((buttons[2] as HTMLElement).textContent?.trim()).toContain('Pan');
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {
@@ -71,6 +72,20 @@ describe('ToolStripComponent', () => {
     expect(editorToolService.getCurrentTool()).toBe('selector');
   });
 
+  it('should set tool to pan when Pan button is clicked', () => {
+    const setToolSpy = vi.spyOn(editorToolService, 'setTool');
+    const compiled = fixture.nativeElement as HTMLElement;
+    const panBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
+      (el) => (el as HTMLElement).textContent?.trim().includes('Pan')
+    ) as HTMLElement;
+
+    panBtn.click();
+    fixture.detectChanges();
+
+    expect(setToolSpy).toHaveBeenCalledWith('pan');
+    expect(editorToolService.getCurrentTool()).toBe('pan');
+  });
+
   it('should show Zoom button as active when zoom tool is selected', () => {
     editorToolService.setTool('zoom');
     fixture.detectChanges();
@@ -83,6 +98,21 @@ describe('ToolStripComponent', () => {
       (el) => (el as HTMLElement).textContent?.trim() === 'Selector'
     );
     expect(zoomBtn?.classList.contains('active')).toBe(true);
+    expect(selectorBtn?.classList.contains('active')).toBe(false);
+  });
+
+  it('should show Pan button as active when pan tool is selected', () => {
+    editorToolService.setTool('pan');
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const panBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
+      (el) => (el as HTMLElement).textContent?.trim().includes('Pan')
+    );
+    const selectorBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
+      (el) => (el as HTMLElement).textContent?.trim() === 'Selector'
+    );
+    expect(panBtn?.classList.contains('active')).toBe(true);
     expect(selectorBtn?.classList.contains('active')).toBe(false);
   });
 });

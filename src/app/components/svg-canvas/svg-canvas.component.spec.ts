@@ -120,6 +120,40 @@ describe('SvgCanvasComponent', () => {
     expect(svgY).toBe(50);
   });
 
+  it('should call zoomOutAt when zoom tool is active and user Alt+clicks', () => {
+    const zoomOutAtSpy = vi.spyOn(canvasViewService, 'zoomOutAt');
+    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('zoom');
+
+    const wrapperEl = component.svgContainer.nativeElement as HTMLElement;
+    vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+      left: 10,
+      top: 20,
+      width: 200,
+      height: 200,
+      right: 210,
+      bottom: 220,
+      x: 10,
+      y: 20,
+      toJSON: () => {}
+    });
+
+    const mockEvent = {
+      target: { tagName: 'svg' },
+      clientX: 60,
+      clientY: 70,
+      altKey: true
+    } as unknown as MouseEvent;
+
+    component.onCanvasClick(mockEvent);
+
+    expect(zoomOutAtSpy).toHaveBeenCalled();
+    const [svgX, svgY] = zoomOutAtSpy.mock.calls[0];
+    expect(svgX).toBe(50);
+    expect(svgY).toBe(50);
+  });
+
   it('should not call zoomInAt when zoom tool is active but no SVG content', () => {
     editorToolService.setTool('zoom');
     component.svgContent = '';
@@ -135,6 +169,57 @@ describe('SvgCanvasComponent', () => {
     component.onCanvasClick(mockEvent);
 
     expect(zoomInAtSpy).not.toHaveBeenCalled();
+  });
+
+  it('should not call zoomOutAt when zoom tool is active but no SVG content', () => {
+    editorToolService.setTool('zoom');
+    component.svgContent = '';
+    fixture.detectChanges();
+
+    const zoomOutAtSpy = vi.spyOn(canvasViewService, 'zoomOutAt');
+    const mockEvent = {
+      target: { tagName: 'svg' },
+      clientX: 50,
+      clientY: 50,
+      altKey: true
+    } as unknown as MouseEvent;
+
+    component.onCanvasClick(mockEvent);
+
+    expect(zoomOutAtSpy).not.toHaveBeenCalled();
+  });
+
+  it('should call zoomInAt not zoomOutAt when zoom tool is active and user clicks without Alt', () => {
+    const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
+    const zoomOutAtSpy = vi.spyOn(canvasViewService, 'zoomOutAt');
+    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('zoom');
+
+    const wrapperEl = component.svgContainer.nativeElement as HTMLElement;
+    vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+      left: 10,
+      top: 20,
+      width: 200,
+      height: 200,
+      right: 210,
+      bottom: 220,
+      x: 10,
+      y: 20,
+      toJSON: () => {}
+    });
+
+    const mockEvent = {
+      target: { tagName: 'svg' },
+      clientX: 60,
+      clientY: 70,
+      altKey: false
+    } as unknown as MouseEvent;
+
+    component.onCanvasClick(mockEvent);
+
+    expect(zoomInAtSpy).toHaveBeenCalled();
+    expect(zoomOutAtSpy).not.toHaveBeenCalled();
   });
 
   it('should not clear selection when zoom tool is active and user clicks canvas', () => {
@@ -168,5 +253,110 @@ describe('SvgCanvasComponent', () => {
 
     expect(clearSelectionSpy).not.toHaveBeenCalled();
     expect(clearHighlightSpy).not.toHaveBeenCalled();
+  });
+
+  it('should not clear selection or select shape when pan tool is active and user clicks canvas', () => {
+    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+    const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
+    const selectShapeSpy = vi.spyOn(shapeSelectionService, 'selectShape');
+
+    component.svgContent = '<svg viewBox="0 0 100 100"><circle id="c1" cx="50" cy="50" r="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('pan');
+
+    const mockEvent = {
+      target: { tagName: 'svg' },
+      clientX: 50,
+      clientY: 50
+    } as unknown as MouseEvent;
+
+    component.onCanvasClick(mockEvent);
+
+    expect(clearSelectionSpy).not.toHaveBeenCalled();
+    expect(clearHighlightSpy).not.toHaveBeenCalled();
+    expect(selectShapeSpy).not.toHaveBeenCalled();
+  });
+
+  it('should start pan on mousedown when pan tool is active and left button', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('pan');
+    canvasViewService.panX = 10;
+    canvasViewService.panY = 20;
+
+    const mousedownEvent = {
+      button: 0,
+      clientX: 100,
+      clientY: 150,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+
+    component.onCanvasMouseDown(mousedownEvent);
+
+    expect(component.isPanning).toBe(true);
+    expect(mousedownEvent.preventDefault).toHaveBeenCalled();
+
+    const setPanSpy = vi.spyOn(canvasViewService, 'setPan');
+    component.onDocumentMouseMove({
+      clientX: 120,
+      clientY: 170
+    } as MouseEvent);
+
+    expect(setPanSpy).toHaveBeenCalledWith(30, 40);
+  });
+
+  it('should not start pan on mousedown when not pan tool', () => {
+    editorToolService.setTool('selector');
+    const mousedownEvent = {
+      button: 0,
+      clientX: 100,
+      clientY: 150,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+
+    component.onCanvasMouseDown(mousedownEvent);
+
+    expect(component.isPanning).toBe(false);
+    expect(mousedownEvent.preventDefault).not.toHaveBeenCalled();
+  });
+
+  it('should not start pan on right or middle mouse button', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('pan');
+
+    const rightClick = { button: 2, preventDefault: vi.fn() } as unknown as MouseEvent;
+    component.onCanvasMouseDown(rightClick);
+    expect(component.isPanning).toBe(false);
+
+    const middleClick = { button: 1, preventDefault: vi.fn() } as unknown as MouseEvent;
+    component.onCanvasMouseDown(middleClick);
+    expect(component.isPanning).toBe(false);
+  });
+
+  it('should stop pan on document mouseup (left button)', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('pan');
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+
+    expect(component.isPanning).toBe(true);
+
+    component.onDocumentMouseUp({ button: 0 } as MouseEvent);
+    expect(component.isPanning).toBe(false);
+  });
+
+  it('should not update pan on mousemove when not panning', () => {
+    const setPanSpy = vi.spyOn(canvasViewService, 'setPan');
+    component.isPanning = false;
+
+    component.onDocumentMouseMove({ clientX: 50, clientY: 50 } as MouseEvent);
+
+    expect(setPanSpy).not.toHaveBeenCalled();
   });
 });

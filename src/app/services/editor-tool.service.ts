@@ -1,7 +1,7 @@
 import { Injectable } from '@angular/core';
 import { BehaviorSubject, Observable } from 'rxjs';
 
-export type EditorTool = 'selector' | 'zoom';
+export type EditorTool = 'selector' | 'zoom' | 'pan';
 
 @Injectable({
   providedIn: 'root'

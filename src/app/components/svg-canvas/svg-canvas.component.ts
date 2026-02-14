@@ -1,4 +1,4 @@
-import { Component, Input, AfterViewInit, ViewChild, ElementRef, OnChanges } from '@angular/core';
+import { Component, Input, AfterViewInit, ViewChild, ElementRef, OnChanges, HostListener } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
 import { Element as SVGElement } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
@@ -11,8 +11,13 @@ import { CanvasViewService } from '../../services/canvas-view.service';
   standalone: true,
   imports: [AsyncPipe],
   template: `
-    <div class="canvas-container" [class.zoom-mode]="(editorTool.currentTool$ | async) === 'zoom'">
-      <div class="svg-canvas" (click)="onCanvasClick($event)">
+    <div
+      class="canvas-container"
+      [class.zoom-mode]="(editorTool.currentTool$ | async) === 'zoom'"
+      [class.zoom-mode-out]="(editorTool.currentTool$ | async) === 'zoom' && altKeyPressed"
+      [class.pan-mode]="(editorTool.currentTool$ | async) === 'pan'"
+      [class.pan-dragging]="isPanning">
+      <div class="svg-canvas" (click)="onCanvasClick($event)" (mousedown)="onCanvasMouseDown($event)">
         <div
           #svgContainer
           class="svg-zoom-wrapper"
@@ -60,11 +65,53 @@ import { CanvasViewService } from '../../services/canvas-view.service';
     .canvas-container.zoom-mode {
       cursor: zoom-in;
     }
+    .canvas-container.zoom-mode-out {
+      cursor: zoom-out;
+    }
+    .canvas-container.pan-mode {
+      cursor: grab;
+    }
+    .canvas-container.pan-mode.pan-dragging {
+      cursor: grabbing;
+    }
   `]
 })
 export class SvgCanvasComponent implements AfterViewInit, OnChanges {
   @Input() svgContent: string = '';
   @ViewChild('svgContainer') svgContainer!: ElementRef<HTMLElement>;
+  altKeyPressed = false;
+  isPanning = false;
+  private panStartClientX = 0;
+  private panStartClientY = 0;
+  private panStartX = 0;
+  private panStartY = 0;
+
+  @HostListener('document:keydown', ['$event'])
+  onKeyDown(event: KeyboardEvent): void {
+    this.altKeyPressed = event.altKey;
+  }
+
+  @HostListener('document:keyup', ['$event'])
+  onKeyUp(event: KeyboardEvent): void {
+    this.altKeyPressed = event.altKey;
+  }
+
+  @HostListener('document:mousemove', ['$event'])
+  onDocumentMouseMove(event: MouseEvent): void {
+    if (this.isPanning) {
+      this.canvasView.setPan(
+        this.panStartX + (event.clientX - this.panStartClientX),
+        this.panStartY + (event.clientY - this.panStartClientY)
+      );
+    }
+  }
+
+  @HostListener('document:mouseup', ['$event'])
+  onDocumentMouseUp(event: MouseEvent): void {
+    if (event.button === 0) {
+      this.isPanning = false;
+    }
+  }
 
   constructor(
     private svgManipulation: SvgManipulationService,
@@ -90,13 +137,31 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges {
     this.canvasView.init();
   }
 
+  onCanvasMouseDown(event: MouseEvent): void {
+    if (this.editorTool.getCurrentTool() === 'pan' && event.button === 0) {
+      this.isPanning = true;
+      this.panStartClientX = event.clientX;
+      this.panStartClientY = event.clientY;
+      this.panStartX = this.canvasView.panX;
+      this.panStartY = this.canvasView.panY;
+      event.preventDefault();
+    }
+  }
+
   onCanvasClick(event: MouseEvent): void {
+    if (this.editorTool.getCurrentTool() === 'pan') {
+      return;
+    }
     if (this.editorTool.getCurrentTool() === 'zoom') {
       if (!this.svgContent || !this.canvasView.isInitialized()) return;
       const rect = this.svgContainer.nativeElement.getBoundingClientRect();
       const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
       if (point) {
-        this.canvasView.zoomInAt(point.x, point.y);
+        if (event.altKey) {
+          this.canvasView.zoomOutAt(point.x, point.y);
+        } else {
+          this.canvasView.zoomInAt(point.x, point.y);
+        }
       }
       return;
     }

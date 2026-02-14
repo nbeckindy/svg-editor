@@ -25,6 +25,22 @@ export class CanvasViewService {
   }
 
   /**
+   * Pan the view by the given screen-space delta. Does not modify the SVG.
+   */
+  panBy(dx: number, dy: number): void {
+    this.panX += dx;
+    this.panY += dy;
+  }
+
+  /**
+   * Set the pan offset directly (e.g. when dragging to a new position).
+   */
+  setPan(x: number, y: number): void {
+    this.panX = x;
+    this.panY = y;
+  }
+
+  /**
    * Convert screen click to SVG coordinates using wrapper rect and current pan/scale.
    */
   screenToSvg(clientX: number, clientY: number, rect: DOMRect): { x: number; y: number } | null {
@@ -40,6 +56,17 @@ export class CanvasViewService {
    */
   zoomInAt(svgX: number, svgY: number): void {
     const newScale = this.scale * 2;
+    this.panX = this.panX + svgX * (this.scale - newScale);
+    this.panY = this.panY + svgY * (this.scale - newScale);
+    this.scale = newScale;
+  }
+
+  /**
+   * Zoom out 2x centered on the given SVG point. Does nothing if scale would go below 1.
+   */
+  zoomOutAt(svgX: number, svgY: number): void {
+    if (this.scale <= 1) return;
+    const newScale = Math.max(1, this.scale / 2);
     this.panX = this.panX + svgX * (this.scale - newScale);
     this.panY = this.panY + svgY * (this.scale - newScale);
     this.scale = newScale;
