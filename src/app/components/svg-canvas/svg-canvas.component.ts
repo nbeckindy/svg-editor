@@ -1,5 +1,6 @@
-import { Component, Input, AfterViewInit, ViewChild, ElementRef, OnChanges, HostListener } from '@angular/core';
+import { Component, Input, AfterViewInit, ViewChild, ElementRef, OnChanges, HostListener, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
 import { AsyncPipe } from '@angular/common';
+import { Subscription } from 'rxjs';
 import { Element as SVGElement } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -18,11 +19,37 @@ import { CanvasViewService } from '../../services/canvas-view.service';
       [class.pan-mode]="(editorTool.currentTool$ | async) === 'pan'"
       [class.pan-dragging]="isPanning">
       <div class="svg-canvas" (click)="onCanvasClick($event)" (mousedown)="onCanvasMouseDown($event)">
-        <div
-          #svgContainer
-          class="svg-zoom-wrapper"
-          [style.transform]="'translate(' + canvasView.panX + 'px,' + canvasView.panY + 'px) scale(' + canvasView.scale + ')'"
-          style="transform-origin: 0 0">
+        <div class="canvas-inner">
+          <div
+            #zoomWrapper
+            class="svg-zoom-wrapper"
+            [style.transform]="'translate(' + canvasView.panX + 'px,' + canvasView.panY + 'px) scale(' + canvasView.scale + ')'"
+            style="transform-origin: 0 0">
+            <div #svgContainer></div>
+          </div>
+          <div
+            class="highlight-overlay-container"
+            [style.left.px]="canvasView.panX"
+            [style.top.px]="canvasView.panY"
+            [style.width.px]="overlayWidthPx"
+            [style.height.px]="overlayHeightPx">
+            <svg
+              class="highlight-overlay"
+              [attr.viewBox]="'0 0 ' + overlayWidthPx + ' ' + overlayHeightPx"
+              preserveAspectRatio="none"
+              overflow="visible">
+              @if (highlightRect) {
+                <rect
+                  [attr.x]="highlightRect.x"
+                  [attr.y]="highlightRect.y"
+                  [attr.width]="highlightRect.width"
+                  [attr.height]="highlightRect.height"
+                  fill="none"
+                  stroke="#2196F3"
+                  stroke-width="2"/>
+              }
+            </svg>
+          </div>
         </div>
       </div>
       @if (!svgContent) {
@@ -50,6 +77,22 @@ import { CanvasViewService } from '../../services/canvas-view.service';
     .svg-zoom-wrapper {
       display: inline-block;
     }
+    .canvas-inner {
+      position: relative;
+      display: inline-block;
+    }
+    .highlight-overlay-container {
+      position: absolute;
+      left: 0;
+      top: 0;
+      pointer-events: none;
+      overflow: visible;
+    }
+    .highlight-overlay-container .highlight-overlay {
+      width: 100%;
+      height: 100%;
+      display: block;
+    }
     .placeholder {
       position: absolute;
       top: 50%;
@@ -57,10 +100,6 @@ import { CanvasViewService } from '../../services/canvas-view.service';
       transform: translate(-50%, -50%);
       text-align: center;
       color: #999;
-    }
-    :host ::ng-deep .selected-shape {
-      outline: 2px dashed #2196F3;
-      outline-offset: 2px;
     }
     .canvas-container.zoom-mode {
       cursor: zoom-in;
@@ -76,15 +115,33 @@ import { CanvasViewService } from '../../services/canvas-view.service';
     }
   `]
 })
-export class SvgCanvasComponent implements AfterViewInit, OnChanges {
+export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnDestroy {
   @Input() svgContent: string = '';
   @ViewChild('svgContainer') svgContainer!: ElementRef<HTMLElement>;
+  @ViewChild('zoomWrapper') zoomWrapper!: ElementRef<HTMLElement>;
   altKeyPressed = false;
   isPanning = false;
+  overlayViewBox = '0 0 100 100';
+  wrapperWidth = 0;
+  wrapperHeight = 0;
+  get overlayWidthPx(): number {
+    return this.wrapperWidth * this.canvasView.scale;
+  }
+  get overlayHeightPx(): number {
+    return this.wrapperHeight * this.canvasView.scale;
+  }
+  /** SVG-coordinate bbox of selected shape; overlay pixel rect is derived from this so zoom updates the highlight. */
+  private lastBbox: { x: number; y: number; width: number; height: number } | null = null;
+  get highlightRect(): { x: number; y: number; width: number; height: number } | null {
+    return this.lastBbox && this.wrapperWidth > 0 && this.wrapperHeight > 0
+      ? this.svgBboxToOverlayPixels(this.lastBbox)
+      : null;
+  }
   private panStartClientX = 0;
   private panStartClientY = 0;
   private panStartX = 0;
   private panStartY = 0;
+  private selectionSub?: Subscription;
 
   @HostListener('document:keydown', ['$event'])
   onKeyDown(event: KeyboardEvent): void {
@@ -117,8 +174,28 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges {
     private svgManipulation: SvgManipulationService,
     private shapeSelection: ShapeSelectionService,
     public editorTool: EditorToolService,
-    public canvasView: CanvasViewService
+    public canvasView: CanvasViewService,
+    private cdr: ChangeDetectorRef
   ) {}
+
+  ngOnInit(): void {
+    this.selectionSub = this.shapeSelection.selectedShape$.subscribe((shape) => {
+      setTimeout(() => {
+        if (!shape) {
+          this.lastBbox = null;
+        } else {
+          this.syncOverlayViewBox();
+          const bbox = this.svgManipulation.getShapeBBox(shape.id);
+          this.lastBbox = bbox;
+        }
+        this.cdr.detectChanges();
+      }, 0);
+    });
+  }
+
+  ngOnDestroy(): void {
+    this.selectionSub?.unsubscribe();
+  }
 
   ngAfterViewInit(): void {
     if (this.svgContent) {
@@ -132,9 +209,113 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges {
     }
   }
 
+  private syncOverlayViewBox(): void {
+    const mainSvg = this.svgContainer?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) return;
+    const vb = mainSvg.getAttribute('viewBox');
+    if (vb) {
+      this.overlayViewBox = vb;
+    } else {
+      const w = mainSvg.getAttribute('width') || mainSvg.clientWidth || 100;
+      const h = mainSvg.getAttribute('height') || mainSvg.clientHeight || 100;
+      const width = typeof w === 'string' && w.endsWith('%') ? 100 : Number(w) || 100;
+      const height = typeof h === 'string' && h.endsWith('%') ? 100 : Number(h) || 100;
+      this.overlayViewBox = `0 0 ${width} ${height}`;
+    }
+    const el = this.zoomWrapper?.nativeElement;
+    if (el && (el.offsetWidth > 0 || el.offsetHeight > 0)) {
+      this.wrapperWidth = el.offsetWidth;
+      this.wrapperHeight = el.offsetHeight;
+    }
+  }
+
+  /** Convert SVG viewBox bbox to overlay pixel coordinates. Uses the main SVG viewport and its position within the wrapper so alignment matches the browser. */
+  private svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
+    const parts = this.overlayViewBox.split(/\s+/);
+    const vbMinX = parts.length >= 4 ? Number(parts[0]) || 0 : 0;
+    const vbMinY = parts.length >= 4 ? Number(parts[1]) || 0 : 0;
+    const vbW = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
+    const vbH = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
+    const canvasScale = this.canvasView.scale;
+    const mainSvg = this.svgContainer?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) {
+      const sx = (this.wrapperWidth * canvasScale) / vbW;
+      const sy = (this.wrapperHeight * canvasScale) / vbH;
+      return {
+        x: (bbox.x - vbMinX) * sx,
+        y: (bbox.y - vbMinY) * sy,
+        width: bbox.width * sx,
+        height: bbox.height * sy
+      };
+    }
+    const wrapperRect = this.zoomWrapper?.nativeElement?.getBoundingClientRect();
+    const svgRect = mainSvg.getBoundingClientRect();
+    let viewportW = svgRect.width;
+    let viewportH = svgRect.height;
+    let svgLeftInWrapper = 0;
+    let svgTopInWrapper = 0;
+    const usingVisualRects = Boolean(wrapperRect && viewportW > 0 && viewportH > 0);
+    if (!usingVisualRects) {
+      viewportW = this.wrapperWidth;
+      viewportH = this.wrapperHeight;
+    } else {
+      svgLeftInWrapper = svgRect.left - wrapperRect!.left;
+      svgTopInWrapper = svgRect.top - wrapperRect!.top;
+    }
+    const par = mainSvg.getAttribute('preserveAspectRatio') ?? 'xMidYMid meet';
+    const isNone = par.split(/\s+/)[0] === 'none';
+    let scaleFit: number;
+    let offsetX: number;
+    let offsetY: number;
+    if (isNone) {
+      const sx = (viewportW * (usingVisualRects ? 1 : canvasScale)) / vbW;
+      const sy = (viewportH * (usingVisualRects ? 1 : canvasScale)) / vbH;
+      const px = svgLeftInWrapper + (bbox.x - vbMinX) * (viewportW / vbW);
+      const py = svgTopInWrapper + (bbox.y - vbMinY) * (viewportH / vbH);
+      return {
+        x: usingVisualRects ? px : px * canvasScale,
+        y: usingVisualRects ? py : py * canvasScale,
+        width: bbox.width * sx,
+        height: bbox.height * sy
+      };
+    }
+    scaleFit = Math.min(viewportW / vbW, viewportH / vbH);
+    const align = par.split(/\s+/)[0].toLowerCase();
+    const contentW = scaleFit * vbW;
+    const contentH = scaleFit * vbH;
+    if (align.includes('xmin')) offsetX = 0;
+    else if (align.includes('xmid')) offsetX = (viewportW - contentW) / 2;
+    else offsetX = viewportW - contentW;
+    if (align.includes('ymin')) offsetY = 0;
+    else if (align.includes('ymid')) offsetY = (viewportH - contentH) / 2;
+    else offsetY = viewportH - contentH;
+    const viewportX = offsetX + (bbox.x - vbMinX) * scaleFit;
+    const viewportY = offsetY + (bbox.y - vbMinY) * scaleFit;
+    if (usingVisualRects) {
+      return {
+        x: svgLeftInWrapper + viewportX,
+        y: svgTopInWrapper + viewportY,
+        width: bbox.width * scaleFit,
+        height: bbox.height * scaleFit
+      };
+    }
+    const x = (svgLeftInWrapper + viewportX) * canvasScale;
+    const y = (svgTopInWrapper + viewportY) * canvasScale;
+    const w = bbox.width * scaleFit * canvasScale;
+    const h = bbox.height * scaleFit * canvasScale;
+    return { x, y, width: w, height: h };
+  }
+
   private initializeSVG(): void {
     this.svgManipulation.initializeSVG(this.svgContainer.nativeElement, this.svgContent);
     this.canvasView.init();
+    this.syncOverlayViewBox();
+    const shape = this.shapeSelection.getSelectedShape();
+    if (shape) {
+      this.lastBbox = this.svgManipulation.getShapeBBox(shape.id);
+    } else {
+      this.lastBbox = null;
+    }
   }
 
   onCanvasMouseDown(event: MouseEvent): void {

@@ -137,49 +137,42 @@ describe('SvgManipulationService', () => {
     expect(stroke).toBe('none');
   });
 
-  it('should highlight a shape', () => {
-    const svgContent = '<svg><path id="highlight-test" d="M10 10 L50 50" stroke="#000000"/></svg>';
-    
+  it('getShapeBBox should return bounding box in SVG coordinates', () => {
+    const svgContent = '<svg viewBox="0 0 100 100"><rect id="bbox-test" x="10" y="20" width="30" height="40"/></svg>';
     service.initializeSVG(container, svgContent);
-    service.highlightShape('highlight-test');
-    
-    const svgInstance = service.getSVGInstance();
-    const shape = svgInstance?.findOne('#highlight-test');
-    
-    expect(shape?.hasClass('selected-shape')).toBe(true);
+    const rectEl = container.querySelector('#bbox-test');
+    if (rectEl && typeof (rectEl as SVGGraphicsElement).getBBox !== 'function') {
+      (rectEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 10, y: 20, width: 30, height: 40 } as DOMRect);
+    }
+    const bbox = service.getShapeBBox('bbox-test');
+    expect(bbox).not.toBeNull();
+    expect(bbox!.x).toBe(10);
+    expect(bbox!.y).toBe(20);
+    expect(bbox!.width).toBe(30);
+    expect(bbox!.height).toBe(40);
   });
 
-  it('should clear highlight', () => {
-    const svgContent = '<svg><line id="clear-highlight-test" x1="0" y1="0" x2="100" y2="100" stroke="#000000"/></svg>';
-    
+  it('getShapeBBox should return null when shape does not exist', () => {
+    const svgContent = '<svg><circle id="c1" cx="50" cy="50" r="40"/></svg>';
     service.initializeSVG(container, svgContent);
-    service.highlightShape('clear-highlight-test');
-    
-    const svgInstance = service.getSVGInstance();
-    let shape = svgInstance?.findOne('#clear-highlight-test');
-    expect(shape?.hasClass('selected-shape')).toBe(true);
-    
+    expect(service.getShapeBBox('nonexistent')).toBeNull();
+  });
+
+  it('getShapeBBox should return null when SVG not initialized', () => {
+    expect(service.getShapeBBox('any-id')).toBeNull();
+  });
+
+  it('highlightShape and clearHighlight should not modify SVG (no-op)', () => {
+    const svgContent = '<svg><path id="noop-test" d="M10 10 L50 50"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const pathBefore = container.querySelector('#noop-test');
+    expect(pathBefore?.classList.contains('selected-shape')).toBe(false);
+    service.highlightShape('noop-test');
+    const pathAfter = container.querySelector('#noop-test');
+    expect(pathAfter?.classList.contains('selected-shape')).toBe(false);
     service.clearHighlight();
-    shape = svgInstance?.findOne('#clear-highlight-test');
-    expect(shape?.hasClass('selected-shape')).toBe(false);
-  });
-
-  it('should clear previous highlight when highlighting new shape', () => {
-    const svgContent = '<svg><circle id="shape1" cx="50" cy="50" r="40"/><rect id="shape2" width="100" height="100"/></svg>';
-    
-    service.initializeSVG(container, svgContent);
-    
-    service.highlightShape('shape1');
-    const svgInstance = service.getSVGInstance();
-    let shape1 = svgInstance?.findOne('#shape1');
-    expect(shape1?.hasClass('selected-shape')).toBe(true);
-    
-    service.highlightShape('shape2');
-    shape1 = svgInstance?.findOne('#shape1');
-    const shape2 = svgInstance?.findOne('#shape2');
-    
-    expect(shape1?.hasClass('selected-shape')).toBe(false);
-    expect(shape2?.hasClass('selected-shape')).toBe(true);
+    expect(pathAfter?.classList.contains('selected-shape')).toBe(false);
   });
 
   it('should export SVG as string', () => {
@@ -198,7 +191,7 @@ describe('SvgManipulationService', () => {
   });
 
   it('should handle operations gracefully when not initialized', () => {
-    // These should not throw errors
+    expect(service.getShapeBBox('test')).toBeNull();
     expect(() => {
       service.updateFillColor('test', '#FF0000');
       service.addStroke('test', '#000000', 2);

@@ -359,4 +359,118 @@ describe('SvgCanvasComponent', () => {
 
     expect(setPanSpy).not.toHaveBeenCalled();
   });
+
+  it('should show overlay rect when a shape is selected', async () => {
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
+      x: 10,
+      y: 20,
+      width: 50,
+      height: 40
+    });
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="50" height="40"/></svg>';
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    shapeSelectionService.selectShape({
+      id: 'r1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+    expect(component.highlightRect).not.toBeNull();
+    expect(component.highlightRect!.x).toBe(10);
+    expect(component.highlightRect!.y).toBe(20);
+    expect(component.highlightRect!.width).toBe(50);
+    expect(component.highlightRect!.height).toBe(40);
+    const overlayRect = fixture.nativeElement.querySelector('.highlight-overlay rect');
+    expect(overlayRect).toBeTruthy();
+    expect(overlayRect.getAttribute('x')).toBe('10');
+    expect(overlayRect.getAttribute('y')).toBe('20');
+    expect(overlayRect.getAttribute('width')).toBe('50');
+    expect(overlayRect.getAttribute('height')).toBe('40');
+  });
+
+  it('should not show overlay rect when getShapeBBox returns null for selected shape', async () => {
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue(null);
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="50" height="40"/></svg>';
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    shapeSelectionService.selectShape({
+      id: 'r1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+    expect(component.highlightRect).toBeNull();
+    const overlayRect = fixture.nativeElement.querySelector('.highlight-overlay rect');
+    expect(overlayRect).toBeFalsy();
+  });
+
+  it('should call highlightShape when a shape is clicked with selector tool', () => {
+    const highlightShapeSpy = vi.spyOn(svgManipulationService, 'highlightShape');
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="shape-1" x="10" y="10" width="20" height="20"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+
+    const mockEvent = {
+      target: { id: 'shape-1', tagName: 'rect' },
+      clientX: 20,
+      clientY: 20
+    } as unknown as MouseEvent;
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: () => ({ id: () => 'shape-1' }),
+      find: () => []
+    } as any);
+    vi.spyOn(svgManipulationService, 'getShapeProperties').mockReturnValue({
+      id: 'shape-1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+
+    component.onCanvasClick(mockEvent);
+
+    expect(highlightShapeSpy).toHaveBeenCalledWith('shape-1');
+  });
+
+  it('should clear overlay when selection is cleared', async () => {
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10
+    });
+    component.svgContent = '<svg viewBox="0 0 100 100"><circle id="c1" cx="5" cy="5" r="5"/></svg>';
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    shapeSelectionService.selectShape({
+      id: 'c1',
+      type: 'circle',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+    expect(component.highlightRect).not.toBeNull();
+    shapeSelectionService.clearSelection();
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+    expect(component.highlightRect).toBeNull();
+    const overlayRect = fixture.nativeElement.querySelector('.highlight-overlay rect');
+    expect(overlayRect).toBeFalsy();
+  });
 });
