@@ -1,0 +1,12 @@
+---
+description: Prefer Angular MCP when working on Angular
+globs: "**/*.ts"
+alwaysApply: false
+---
+
+# Use Angular MCP for Angular work
+
+When modifying Angular code, generating components, or answering Angular questions:
+
+- Prefer using **Angular MCP** (Angular CLI MCP) to look up current APIs, patterns, and recommendations before implementing.
+- Use Angular MCP tools to validate or discover the recommended approach (e.g. signals, standalone, control flow) rather than relying only on general knowledge.

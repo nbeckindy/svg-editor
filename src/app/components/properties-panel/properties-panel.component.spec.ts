@@ -1,8 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal, WritableSignal } from '@angular/core';
 import { PropertiesPanelComponent } from './properties-panel.component';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
-import { BehaviorSubject } from 'rxjs';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import { vi } from 'vitest';
 
@@ -11,17 +11,17 @@ describe('PropertiesPanelComponent', () => {
   let fixture: ComponentFixture<PropertiesPanelComponent>;
   let shapeSelectionService: ShapeSelectionService;
   let svgManipulationService: SvgManipulationService;
-  let selectedShapeSubject: BehaviorSubject<ShapeProperties | null>;
+  let selectedShapeSignal: WritableSignal<ShapeProperties | null>;
 
   beforeEach(async () => {
-    selectedShapeSubject = new BehaviorSubject<ShapeProperties | null>(null);
+    selectedShapeSignal = signal<ShapeProperties | null>(null);
 
     const shapeSelectionServiceMock = {
-      selectedShape$: selectedShapeSubject.asObservable(),
+      selectedShape: selectedShapeSignal,
       updateSelectedShape: vi.fn((updates: Partial<ShapeProperties>) => {
-        const current = selectedShapeSubject.value;
+        const current = selectedShapeSignal();
         if (current) {
-          selectedShapeSubject.next({ ...current, ...updates });
+          selectedShapeSignal.set({ ...current, ...updates });
         }
       }),
       clearSelection: vi.fn()
@@ -73,7 +73,7 @@ describe('PropertiesPanelComponent', () => {
       opacity: 0.8
     };
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement;
@@ -89,7 +89,7 @@ describe('PropertiesPanelComponent', () => {
       fill: '#ff0000'
     };
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
     fixture.detectChanges();
 
     const newColor = '#00ff00';
@@ -109,7 +109,7 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 2
     };
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
     fixture.detectChanges();
 
     const newColor = '#0000ff';
@@ -129,7 +129,7 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 2
     };
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
     fixture.detectChanges();
 
     component.onStrokeColorChange('none');
@@ -150,7 +150,7 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 2
     };
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
     fixture.detectChanges();
 
     const newWidth = 5;
@@ -171,7 +171,7 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 2
     };
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
     fixture.detectChanges();
 
     const event = { target: { value: '0' } } as unknown as Event;
@@ -190,7 +190,7 @@ describe('PropertiesPanelComponent', () => {
       opacity: 1
     };
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
     fixture.detectChanges();
 
     const newOpacity = 0.5;
@@ -209,7 +209,7 @@ describe('PropertiesPanelComponent', () => {
       type: 'rect'
     };
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
     fixture.detectChanges();
 
     component.onClearSelection();
@@ -219,28 +219,19 @@ describe('PropertiesPanelComponent', () => {
     expect(svgManipulationService.clearHighlight).toHaveBeenCalled();
   });
 
-  it('should subscribe to selected shape changes on init', () => {
+  it('should reflect selected shape from signal', () => {
     const mockShape: ShapeProperties = {
       id: 'shape-2',
       type: 'circle',
       fill: '#00ff00'
     };
 
-    expect(component.selectedShape).toBeNull();
+    expect(component.selectedShape()).toBeNull();
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
+    fixture.detectChanges();
 
-    expect(component.selectedShape).toEqual(mockShape);
-  });
-
-  it('should unsubscribe on destroy', () => {
-    const destroySpy = vi.spyOn(component['destroy$'], 'next');
-    const completeSpy = vi.spyOn(component['destroy$'], 'complete');
-
-    component.ngOnDestroy();
-
-    expect(destroySpy).toHaveBeenCalled();
-    expect(completeSpy).toHaveBeenCalled();
+    expect(component.selectedShape()).toEqual(mockShape);
   });
 
   it('should use default stroke color when adding stroke without existing stroke', () => {
@@ -250,7 +241,7 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 0
     };
 
-    selectedShapeSubject.next(mockShape);
+    selectedShapeSignal.set(mockShape);
     fixture.detectChanges();
 
     const newWidth = 3;

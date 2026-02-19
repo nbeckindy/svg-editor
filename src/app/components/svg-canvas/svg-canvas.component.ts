@@ -1,6 +1,4 @@
-import { Component, Input, AfterViewInit, ViewChild, ElementRef, OnChanges, HostListener, OnInit, OnDestroy, ChangeDetectorRef } from '@angular/core';
-import { AsyncPipe } from '@angular/common';
-import { Subscription } from 'rxjs';
+import { Component, Input, AfterViewInit, ViewChild, ElementRef, OnChanges, HostListener, OnInit, OnDestroy, ChangeDetectorRef, effect } from '@angular/core';
 import { SVG, Element as SVGElement } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -10,7 +8,7 @@ import { CanvasViewService } from '../../services/canvas-view.service';
 @Component({
   selector: 'app-svg-canvas',
   standalone: true,
-  imports: [AsyncPipe],
+  imports: [],
   templateUrl: './svg-canvas.component.html',
   styleUrl: './svg-canvas.component.css'
 })
@@ -44,7 +42,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
   private panStartClientY = 0;
   private panStartX = 0;
   private panStartY = 0;
-  private selectionSub?: Subscription;
 
   /** Shape drag: when user drags the selected element we hide it and show a ghost until mouseup. */
   isDraggingShape = false;
@@ -133,10 +130,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
     public editorTool: EditorToolService,
     public canvasView: CanvasViewService,
     private cdr: ChangeDetectorRef
-  ) {}
-
-  ngOnInit(): void {
-    this.selectionSub = this.shapeSelection.selectedShape$.subscribe((shape) => {
+  ) {
+    effect(() => {
+      const shape = this.shapeSelection.selectedShape();
       setTimeout(() => {
         if (!shape) {
           this.lastBbox = null;
@@ -150,9 +146,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
     });
   }
 
-  ngOnDestroy(): void {
-    this.selectionSub?.unsubscribe();
-  }
+  ngOnInit(): void {}
+
+  ngOnDestroy(): void {}
 
   ngAfterViewInit(): void {
     if (this.svgContent) {

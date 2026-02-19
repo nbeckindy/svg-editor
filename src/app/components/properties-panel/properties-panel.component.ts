@@ -1,7 +1,6 @@
-import { Component, OnInit, OnDestroy } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Subject, takeUntil } from 'rxjs';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
@@ -14,43 +13,28 @@ import { ColorPickerComponent } from '../color-picker/color-picker.component';
   templateUrl: './properties-panel.component.html',
   styleUrl: './properties-panel.component.css'
 })
-export class PropertiesPanelComponent implements OnInit, OnDestroy {
-  selectedShape: ShapeProperties | null = null;
-  private destroy$ = new Subject<void>();
-
-  constructor(
-    private shapeSelectionService: ShapeSelectionService,
-    private svgManipulationService: SvgManipulationService
-  ) {}
-
-  ngOnInit(): void {
-    this.shapeSelectionService.selectedShape$
-      .pipe(takeUntil(this.destroy$))
-      .subscribe(shape => {
-        this.selectedShape = shape;
-      });
-  }
-
-  ngOnDestroy(): void {
-    this.destroy$.next();
-    this.destroy$.complete();
-  }
+export class PropertiesPanelComponent {
+  private shapeSelectionService = inject(ShapeSelectionService);
+  readonly selectedShape = this.shapeSelectionService.selectedShape;
+  private svgManipulationService = inject(SvgManipulationService);
 
   onFillColorChange(color: string): void {
-    if (this.selectedShape) {
-      this.svgManipulationService.updateFillColor(this.selectedShape.id, color);
+    const shape = this.selectedShape();
+    if (shape) {
+      this.svgManipulationService.updateFillColor(shape.id, color);
       this.shapeSelectionService.updateSelectedShape({ fill: color });
     }
   }
 
   onStrokeColorChange(color: string): void {
-    if (this.selectedShape) {
+    const shape = this.selectedShape();
+    if (shape) {
       if (color === 'none' || color === '') {
-        this.svgManipulationService.removeStroke(this.selectedShape.id);
+        this.svgManipulationService.removeStroke(shape.id);
         this.shapeSelectionService.updateSelectedShape({ stroke: undefined, strokeWidth: 0 });
       } else {
-        const width = this.selectedShape.strokeWidth || 1;
-        this.svgManipulationService.updateStrokeColor(this.selectedShape.id, color);
+        const width = shape.strokeWidth || 1;
+        this.svgManipulationService.updateStrokeColor(shape.id, color);
         this.shapeSelectionService.updateSelectedShape({ stroke: color });
       }
     }
@@ -59,14 +43,14 @@ export class PropertiesPanelComponent implements OnInit, OnDestroy {
   onStrokeWidthChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const width = parseFloat(target.value);
-    
-    if (this.selectedShape) {
+    const shape = this.selectedShape();
+    if (shape) {
       if (width === 0) {
-        this.svgManipulationService.removeStroke(this.selectedShape.id);
+        this.svgManipulationService.removeStroke(shape.id);
         this.shapeSelectionService.updateSelectedShape({ strokeWidth: 0 });
       } else {
-        const color = this.selectedShape.stroke || '#000000';
-        this.svgManipulationService.addStroke(this.selectedShape.id, color, width);
+        const color = shape.stroke || '#000000';
+        this.svgManipulationService.addStroke(shape.id, color, width);
         this.shapeSelectionService.updateSelectedShape({ strokeWidth: width });
       }
     }
@@ -75,9 +59,9 @@ export class PropertiesPanelComponent implements OnInit, OnDestroy {
   onOpacityChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const opacity = parseFloat(target.value);
-    
-    if (this.selectedShape) {
-      this.svgManipulationService.updateOpacity(this.selectedShape.id, opacity);
+    const shape = this.selectedShape();
+    if (shape) {
+      this.svgManipulationService.updateOpacity(shape.id, opacity);
       this.shapeSelectionService.updateSelectedShape({ opacity });
     }
   }

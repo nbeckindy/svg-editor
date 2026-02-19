@@ -1,42 +1,40 @@
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { Injectable, signal } from '@angular/core';
 import { ShapeProperties } from '../models/shape-properties.interface';
 
 @Injectable({
   providedIn: 'root'
 })
 export class ShapeSelectionService {
-  private selectedShapeSubject = new BehaviorSubject<ShapeProperties | null>(null);
-  public selectedShape$: Observable<ShapeProperties | null> = this.selectedShapeSubject.asObservable();
+  readonly selectedShape = signal<ShapeProperties | null>(null);
 
   /**
-   * Select a shape and emit its properties
+   * Select a shape and update the signal
    */
   selectShape(shape: ShapeProperties): void {
-    this.selectedShapeSubject.next(shape);
+    this.selectedShape.set(shape);
   }
 
   /**
    * Clear current selection
    */
   clearSelection(): void {
-    this.selectedShapeSubject.next(null);
+    this.selectedShape.set(null);
   }
 
   /**
    * Get currently selected shape
    */
   getSelectedShape(): ShapeProperties | null {
-    return this.selectedShapeSubject.value;
+    return this.selectedShape();
   }
 
   /**
    * Update selected shape properties
    */
   updateSelectedShape(updates: Partial<ShapeProperties>): void {
-    const current = this.selectedShapeSubject.value;
+    const current = this.selectedShape();
     if (current) {
-      this.selectedShapeSubject.next({ ...current, ...updates });
+      this.selectedShape.set({ ...current, ...updates });
     }
   }
 }

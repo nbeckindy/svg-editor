@@ -2,7 +2,7 @@
   <button
     type="button"
     class="tool-btn"
-    [class.active]="(currentTool$ | async) === 'selector'"
+    [class.active]="editorTool.currentTool() === 'selector'"
     (click)="setTool('selector')"
     title="Selector">
     Selector
@@ -10,7 +10,7 @@
   <button
     type="button"
     class="tool-btn"
-    [class.active]="(currentTool$ | async) === 'zoom'"
+    [class.active]="editorTool.currentTool() === 'zoom'"
     (click)="setTool('zoom')"
     title="Zoom (click to zoom in, Alt+click to zoom out)">
     Zoom
@@ -18,7 +18,7 @@
   <button
     type="button"
     class="tool-btn tool-btn-icon"
-    [class.active]="(currentTool$ | async) === 'pan'"
+    [class.active]="editorTool.currentTool() === 'pan'"
     (click)="setTool('pan')"
     title="Pan (drag to move the canvas)">
     <span class="tool-icon" aria-hidden="true">

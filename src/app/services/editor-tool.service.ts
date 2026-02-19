@@ -1,5 +1,4 @@
-import { Injectable } from '@angular/core';
-import { BehaviorSubject, Observable } from 'rxjs';
+import { Injectable, signal } from '@angular/core';
 
 export type EditorTool = 'selector' | 'zoom' | 'pan';
 
@@ -7,14 +6,13 @@ export type EditorTool = 'selector' | 'zoom' | 'pan';
   providedIn: 'root'
 })
 export class EditorToolService {
-  private currentToolSubject = new BehaviorSubject<EditorTool>('selector');
-  public currentTool$: Observable<EditorTool> = this.currentToolSubject.asObservable();
+  readonly currentTool = signal<EditorTool>('selector');
 
   setTool(tool: EditorTool): void {
-    this.currentToolSubject.next(tool);
+    this.currentTool.set(tool);
   }
 
   getCurrentTool(): EditorTool {
-    return this.currentToolSubject.value;
+    return this.currentTool();
   }
 }

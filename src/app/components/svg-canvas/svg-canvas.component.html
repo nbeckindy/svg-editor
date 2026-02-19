@@ -1,8 +1,8 @@
 <div
   class="canvas-container"
-  [class.zoom-mode]="(editorTool.currentTool$ | async) === 'zoom'"
-  [class.zoom-mode-out]="(editorTool.currentTool$ | async) === 'zoom' && altKeyPressed"
-  [class.pan-mode]="(editorTool.currentTool$ | async) === 'pan'"
+  [class.zoom-mode]="editorTool.currentTool() === 'zoom'"
+  [class.zoom-mode-out]="editorTool.currentTool() === 'zoom' && altKeyPressed"
+  [class.pan-mode]="editorTool.currentTool() === 'pan'"
   [class.pan-dragging]="isPanning">
   <div class="svg-canvas" (click)="onCanvasClick($event)" (mousedown)="onCanvasMouseDown($event)">
     <div class="canvas-inner">

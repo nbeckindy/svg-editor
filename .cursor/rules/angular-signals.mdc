@@ -1,0 +1,16 @@
+---
+description: Prefer Angular signals over observables for component state and templates
+globs: **/*.ts
+alwaysApply: false
+---
+
+# Prefer signals over observables
+
+In Angular components and services, **prefer signals over RxJS observables** for state and template bindings.
+
+- **State in services:** Use `signal()` and `computed()` instead of `BehaviorSubject` + `Observable`. Expose `readonly currentTool = signal<EditorTool>('selector')` and update with `.set()` or `.update()`.
+- **In templates:** Read signals by calling them: `editorTool.currentTool()`, `selectedShape()`. Use `@if (selectedShape(); as shape)` for control flow with an alias. Avoid `async` pipe when the source can be a signal.
+- **Reactive side effects:** Use `effect()` for imperative reactions to signal changes (e.g. syncing overlay when selection changes) instead of subscribing in `ngOnInit` and unsubscribing in `ngOnDestroy`.
+- **When to keep Observables:** Use observables for truly async/time-based streams (HTTP, WebSockets, intervals, event streams). For “current value” state that the template or other code reads, use signals.
+
+This aligns with Angular’s signal-based reactivity and reduces subscription boilerplate while keeping templates and state easy to follow.

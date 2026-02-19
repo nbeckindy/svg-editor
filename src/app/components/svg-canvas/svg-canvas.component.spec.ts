@@ -393,6 +393,8 @@ describe('SvgCanvasComponent', () => {
     });
     await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
     expect(component.highlightRect).not.toBeNull();
     expect(component.highlightRect!.x).toBe(10);
     expect(component.highlightRect!.y).toBe(20);
@@ -739,8 +741,12 @@ describe('SvgCanvasComponent', () => {
     });
     await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
     expect(component.highlightRect).not.toBeNull();
     shapeSelectionService.clearSelection();
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
     await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
     expect(component.highlightRect).toBeNull();

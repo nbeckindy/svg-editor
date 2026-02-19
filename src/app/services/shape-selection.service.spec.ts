@@ -90,24 +90,20 @@ describe('ShapeSelectionService', () => {
     expect(service.getSelectedShape()).toBeNull();
   });
 
-  it('should emit updates through observable', () => {
+  it('should update signal when selection changes', () => {
     const testShape: ShapeProperties = {
-      id: 'observable-test',
+      id: 'signal-test',
       type: 'path',
       fill: '#123456'
     };
 
-    const emissions: (ShapeProperties | null)[] = [];
-    const subscription = service.selectedShape$.subscribe(shape => {
-      emissions.push(shape);
-    });
+    expect(service.selectedShape()).toBeNull();
 
     service.selectShape(testShape);
-    
-    expect(emissions.length).toBe(2); // Initial null + new selection
-    expect(emissions[0]).toBeNull();
-    expect(emissions[1]).toEqual(testShape);
-    
-    subscription.unsubscribe();
+
+    expect(service.selectedShape()).toEqual(testShape);
+
+    service.clearSelection();
+    expect(service.selectedShape()).toBeNull();
   });
 });
