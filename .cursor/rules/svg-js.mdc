@@ -1,0 +1,15 @@
+---
+description: Always use svg.js when modifying any SVGs in this project
+alwaysApply: true
+---
+
+# SVG modifications: use svg.js
+
+When modifying, creating, or manipulating SVG content in this project, **always use the [@svgdotjs/svg.js](https://svgjs.com/) library** instead of raw DOM or manual attribute strings.
+
+- **Get the root instance** via `SvgManipulationService.getSVGInstance()` (returns `Svg | null`).
+- **Find elements** with `svgInstance.findOne('#id')` or `svgInstance.find('selector')`.
+- **Mutate shapes** using SVG.js methods (e.g. `shape.fill()`, `shape.dmove()`, `shape.attr()`, `shape.clone()`) rather than `element.setAttribute()` or `element.style`.
+- **Create new SVG structures** with `SVG()`, `SVG(domElement)`, or shape constructors (e.g. `.rect()`, `.circle()`) from the library, not `document.createElementNS('http://www.w3.org/2000/svg', ...)` for elements that live inside the canvas.
+
+This keeps behavior consistent, avoids duplication of logic, and ensures transforms/attributes are applied in a way the rest of the app expects.

@@ -5,6 +5,18 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { CanvasViewService } from '../../services/canvas-view.service';
 
+/** Mock SVG.js shape with clone() for drag-ghost tests. clone() returns a real DOM node so SVG.js add() can adopt it. */
+function mockSvgJsShape(
+  id: string,
+  node: Element
+): { id: () => string; node: Element; clone: () => SVGRectElement } {
+  return {
+    id: () => id,
+    node,
+    clone: () => document.createElementNS('http://www.w3.org/2000/svg', 'rect') as SVGRectElement
+  };
+}
+
 describe('SvgCanvasComponent', () => {
   let component: SvgCanvasComponent;
   let fixture: ComponentFixture<SvgCanvasComponent>;
@@ -442,6 +454,268 @@ describe('SvgCanvasComponent', () => {
     component.onCanvasClick(mockEvent);
 
     expect(highlightShapeSpy).toHaveBeenCalledWith('shape-1');
+  });
+
+  it('should start shape drag on mousedown when selected shape is clicked with selector tool', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="drag-target" x="10" y="20" width="30" height="40"/></svg>';
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'drag-target',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
+    const setVisibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
+    const rect = fixture.nativeElement.querySelector('#drag-target') || fixture.nativeElement.querySelector('rect');
+    const shapeNode = rect || document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    vi.spyOn(shapeNode, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 30, 30, 40));
+    const mousedownEvent = {
+      button: 0,
+      target: rect || { id: 'drag-target', tagName: 'rect' },
+      clientX: 25,
+      clientY: 40,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: () => mockSvgJsShape('drag-target', shapeNode)
+    } as any);
+    const wrapperEl = component.svgContainer?.nativeElement as HTMLElement;
+    if (wrapperEl) {
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      });
+    }
+    component.onCanvasMouseDown(mousedownEvent);
+    expect(component.isDraggingShape).toBe(true);
+    expect(setVisibilitySpy).toHaveBeenCalledWith('drag-target', false);
+  });
+
+  it('should not start shape drag when pan tool is active', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('pan');
+    shapeSelectionService.selectShape({
+      id: 'r1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    const mousedownEvent = {
+      button: 0,
+      target: { id: 'r1', tagName: 'rect' },
+      clientX: 25,
+      clientY: 40,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    component.onCanvasMouseDown(mousedownEvent);
+    expect(component.isDraggingShape).toBe(false);
+  });
+
+  it('should not start shape drag when mousedown on background (svg)', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'r1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    const mousedownEvent = {
+      button: 0,
+      target: { tagName: 'svg' },
+      clientX: 50,
+      clientY: 50,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    component.onCanvasMouseDown(mousedownEvent);
+    expect(component.isDraggingShape).toBe(false);
+  });
+
+  it('when shape drag is started, ghost wrapper should have overflow visible to avoid clipping', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="ghost-vis" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'ghost-vis',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
+    const rect = fixture.nativeElement.querySelector('#ghost-vis') || fixture.nativeElement.querySelector('rect');
+    const mousedownEvent = {
+      button: 0,
+      target: rect || { id: 'ghost-vis', tagName: 'rect' },
+      clientX: 25,
+      clientY: 40,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: () =>
+        mockSvgJsShape('ghost-vis', rect || document.createElementNS('http://www.w3.org/2000/svg', 'rect'))
+    } as any);
+    const wrapperEl = component.svgContainer?.nativeElement as HTMLElement;
+    if (wrapperEl) {
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      });
+    }
+    component.onCanvasMouseDown(mousedownEvent);
+    const ghostWrapper = document.body.querySelector('.drag-ghost') as HTMLElement;
+    expect(ghostWrapper).toBeTruthy();
+    expect(ghostWrapper.style.overflow).toBe('visible');
+  });
+
+  it('when shape drag is started, ghost SVG should have overflow visible to prevent clipping', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="ghost-svg" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'ghost-svg',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
+    const rect = fixture.nativeElement.querySelector('#ghost-svg') || fixture.nativeElement.querySelector('rect');
+    const mousedownEvent = {
+      button: 0,
+      target: rect || { id: 'ghost-svg', tagName: 'rect' },
+      clientX: 25,
+      clientY: 40,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: () =>
+        mockSvgJsShape('ghost-svg', rect || document.createElementNS('http://www.w3.org/2000/svg', 'rect'))
+    } as any);
+    const wrapperEl = component.svgContainer?.nativeElement as HTMLElement;
+    if (wrapperEl) {
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      });
+    }
+    component.onCanvasMouseDown(mousedownEvent);
+    const ghostSvg = document.body.querySelector('.drag-ghost svg');
+    expect(ghostSvg).toBeTruthy();
+    expect(ghostSvg?.getAttribute('overflow')).toBe('visible');
+  });
+
+  it('when shape drag is started, ghost viewBox should match shape bbox so shape fills the ghost', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="ghost-pad" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'ghost-pad',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
+    const rect = fixture.nativeElement.querySelector('#ghost-pad') || fixture.nativeElement.querySelector('rect');
+    const shapeNode = rect || document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    vi.spyOn(shapeNode, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 30, 30, 40));
+    const mousedownEvent = {
+      button: 0,
+      target: rect || { id: 'ghost-pad', tagName: 'rect' },
+      clientX: 25,
+      clientY: 40,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: () => mockSvgJsShape('ghost-pad', shapeNode)
+    } as any);
+    const wrapperEl = component.svgContainer?.nativeElement as HTMLElement;
+    if (wrapperEl) {
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      });
+    }
+    component.onCanvasMouseDown(mousedownEvent);
+    const ghostSvg = document.body.querySelector('.drag-ghost svg');
+    expect(ghostSvg).toBeTruthy();
+    const vb = ghostSvg?.getAttribute('viewBox') ?? '';
+    const [vx, vy, vw, vh] = vb.split(/\s+/).map(Number);
+    expect(vw).toBeGreaterThanOrEqual(30);
+    expect(vh).toBeGreaterThanOrEqual(40);
+    expect(vx).toBeLessThanOrEqual(10);
+    expect(vy).toBeLessThanOrEqual(20);
+  });
+
+  it('should on mouseup after drag call translateShape with delta and show shape again', () => {
+    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="drag-me" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'drag-me',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    const translateSpy = vi.spyOn(svgManipulationService, 'translateShape');
+    const setVisibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
+    component['isDraggingShape'] = true;
+    component['dragShapeId'] = 'drag-me';
+    component['dragStartSvg'] = { x: 25, y: 40 };
+    component.onDocumentMouseUp({
+      button: 0,
+      clientX: 45,
+      clientY: 60
+    } as MouseEvent);
+    expect(component.isDraggingShape).toBe(false);
+    expect(translateSpy).toHaveBeenCalledWith('drag-me', 20, 20);
+    expect(setVisibilitySpy).toHaveBeenCalledWith('drag-me', true);
   });
 
   it('should clear overlay when selection is cleared', async () => {

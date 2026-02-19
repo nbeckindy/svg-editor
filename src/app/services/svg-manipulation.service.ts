@@ -7,7 +7,6 @@ import { ShapeProperties } from '../models/shape-properties.interface';
 })
 export class SvgManipulationService {
   private svgInstance: Svg | null = null;
-  private selectedElement: SVGElement | null = null;
 
   /**
    * Initialize SVG.js with container and content
@@ -123,31 +122,49 @@ export class SvgManipulationService {
   }
 
   /**
-   * Highlight selected shape
+   * Move a shape by dx, dy in SVG coordinate space. Works for rect, circle, ellipse, path, etc.
    */
-  highlightShape(shapeId: string): void {
-    // Remove previous highlight
-    this.clearHighlight();
-    
+  translateShape(shapeId: string, dx: number, dy: number): void {
     if (!this.svgInstance) return;
-    
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
-    if (shape) {
-      this.selectedElement = shape;
-      // Add highlight effect (e.g., dashed outline)
-      shape.addClass('selected-shape');
+    if (shape && typeof shape.dmove === 'function') {
+      shape.dmove(dx, dy);
     }
   }
 
   /**
-   * Clear shape highlight
+   * Show or hide a shape (e.g. hide original during drag, show again on drop).
    */
-  clearHighlight(): void {
-    if (this.selectedElement) {
-      this.selectedElement.removeClass('selected-shape');
-      this.selectedElement = null;
+  setShapeVisibility(shapeId: string, visible: boolean): void {
+    if (!this.svgInstance) return;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    if (shape) {
+      shape.attr('visibility', visible ? 'visible' : 'hidden');
     }
   }
+
+  /**
+   * Get shape bounding box in SVG coordinate space. Does not modify the SVG.
+   */
+  getShapeBBox(shapeId: string): { x: number; y: number; width: number; height: number } | null {
+    if (!this.svgInstance) return null;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    if (!shape?.node) return null;
+    const node = shape.node as SVGGraphicsElement;
+    if (typeof node.getBBox !== 'function') return null;
+    const bbox = node.getBBox();
+    return { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
+  }
+
+  /**
+   * Highlight selected shape (no-op: highlight is drawn by canvas overlay, not by modifying SVG).
+   */
+  highlightShape(_shapeId: string): void {}
+
+  /**
+   * Clear shape highlight (no-op: overlay is driven by selection state).
+   */
+  clearHighlight(): void {}
 
   /**
    * Export current SVG as string

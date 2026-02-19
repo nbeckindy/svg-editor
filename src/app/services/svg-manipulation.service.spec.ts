@@ -201,4 +201,54 @@ describe('SvgManipulationService', () => {
       service.clearHighlight();
     }).not.toThrow();
   });
+
+  it('translateShape should move rect by dx, dy in SVG coordinates', () => {
+    const svgContent = '<svg viewBox="0 0 100 100"><rect id="move-rect" x="10" y="20" width="30" height="40"/></svg>';
+    service.initializeSVG(container, svgContent);
+    service.translateShape('move-rect', 15, 25);
+    const rect = container.querySelector('#move-rect');
+    expect(rect?.getAttribute('x')).toBe('25');
+    expect(rect?.getAttribute('y')).toBe('45');
+  });
+
+  it('translateShape should move circle by dx, dy (cx, cy)', () => {
+    const svgContent = '<svg viewBox="0 0 100 100"><circle id="move-circle" cx="50" cy="50" r="20"/></svg>';
+    service.initializeSVG(container, svgContent);
+    service.translateShape('move-circle', -10, 5);
+    const circle = container.querySelector('#move-circle');
+    expect(circle?.getAttribute('cx')).toBe('40');
+    expect(circle?.getAttribute('cy')).toBe('55');
+  });
+
+  it('translateShape should do nothing when shape does not exist', () => {
+    const svgContent = '<svg><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+    service.initializeSVG(container, svgContent);
+    expect(() => service.translateShape('nonexistent', 5, 5)).not.toThrow();
+  });
+
+  it('translateShape should do nothing when SVG not initialized', () => {
+    expect(() => service.translateShape('any-id', 1, 1)).not.toThrow();
+  });
+
+  it('setShapeVisibility should hide shape when visible is false', () => {
+    const svgContent = '<svg><rect id="vis-test" x="0" y="0" width="10" height="10"/></svg>';
+    service.initializeSVG(container, svgContent);
+    service.setShapeVisibility('vis-test', false);
+    const rect = container.querySelector('#vis-test');
+    expect(rect?.getAttribute('visibility')).toBe('hidden');
+  });
+
+  it('setShapeVisibility should show shape when visible is true', () => {
+    const svgContent = '<svg><rect id="vis-test2" x="0" y="0" width="10" height="10" visibility="hidden"/></svg>';
+    service.initializeSVG(container, svgContent);
+    service.setShapeVisibility('vis-test2', true);
+    const rect = container.querySelector('#vis-test2');
+    expect(rect?.getAttribute('visibility')).not.toBe('hidden');
+  });
+
+  it('setShapeVisibility should do nothing when shape does not exist', () => {
+    const svgContent = '<svg><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+    service.initializeSVG(container, svgContent);
+    expect(() => service.setShapeVisibility('nonexistent', false)).not.toThrow();
+  });
 });
