@@ -6,42 +6,8 @@ import { FormsModule } from '@angular/forms';
   selector: 'app-color-picker',
   standalone: true,
   imports: [CommonModule, FormsModule],
-  template: `
-    <div class="color-picker">
-      <input
-        type="color"
-        [value]="color"
-        (input)="onColorChange($event)"
-        class="color-input">
-      <input
-        type="text"
-        [value]="color"
-        (input)="onTextChange($event)"
-        class="color-text"
-        placeholder="#000000">
-    </div>
-  `,
-  styles: [`
-    .color-picker {
-      display: flex;
-      gap: 10px;
-      align-items: center;
-    }
-    .color-input {
-      width: 50px;
-      height: 40px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      cursor: pointer;
-    }
-    .color-text {
-      flex: 1;
-      padding: 8px;
-      border: 1px solid #ddd;
-      border-radius: 4px;
-      font-family: monospace;
-    }
-  `]
+  templateUrl: './color-picker.component.html',
+  styleUrl: './color-picker.component.css'
 })
 export class ColorPickerComponent {
   @Input() color: string = '#000000';

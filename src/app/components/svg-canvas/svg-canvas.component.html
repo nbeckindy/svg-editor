@@ -1,0 +1,47 @@
+<div
+  class="canvas-container"
+  [class.zoom-mode]="(editorTool.currentTool$ | async) === 'zoom'"
+  [class.zoom-mode-out]="(editorTool.currentTool$ | async) === 'zoom' && altKeyPressed"
+  [class.pan-mode]="(editorTool.currentTool$ | async) === 'pan'"
+  [class.pan-dragging]="isPanning">
+  <div class="svg-canvas" (click)="onCanvasClick($event)" (mousedown)="onCanvasMouseDown($event)">
+    <div class="canvas-inner">
+      <div
+        #zoomWrapper
+        class="svg-zoom-wrapper"
+        [style.transform]="'translate(' + canvasView.panX + 'px,' + canvasView.panY + 'px) scale(' + canvasView.scale + ')'"
+        style="transform-origin: 0 0">
+        <div #svgContainer></div>
+      </div>
+      <div
+        #highlightOverlayContainer
+        class="highlight-overlay-container"
+        [style.left.px]="canvasView.panX"
+        [style.top.px]="canvasView.panY"
+        [style.width.px]="overlayWidthPx"
+        [style.height.px]="overlayHeightPx">
+        <svg
+          class="highlight-overlay"
+          [attr.viewBox]="'0 0 ' + overlayWidthPx + ' ' + overlayHeightPx"
+          preserveAspectRatio="none"
+          overflow="visible">
+          @if (highlightRect) {
+            <rect
+              [attr.x]="highlightRect.x"
+              [attr.y]="highlightRect.y"
+              [attr.width]="highlightRect.width"
+              [attr.height]="highlightRect.height"
+              fill="none"
+              stroke="#2196F3"
+              stroke-width="2"/>
+          }
+        </svg>
+      </div>
+    </div>
+  </div>
+  @if (!svgContent) {
+    <div class="placeholder">
+      <p>Load an SVG file to begin editing</p>
+    </div>
+  }
+</div>

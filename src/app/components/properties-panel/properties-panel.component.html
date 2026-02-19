@@ -1,0 +1,96 @@
+<div class="properties-panel">
+  <div class="panel-header">
+    <h3>Properties</h3>
+  </div>
+
+  @if (selectedShape) {
+    <div class="properties-content">
+      <div class="property-group">
+        <label class="property-label">Shape Type</label>
+        <div class="property-value readonly">{{ selectedShape.type }}</div>
+      </div>
+
+      <div class="property-group">
+        <label class="property-label">ID</label>
+        <div class="property-value readonly">{{ selectedShape.id }}</div>
+      </div>
+
+      <div class="property-group">
+        <label class="property-label" for="fill-color">Fill Color</label>
+        <div class="color-input-group">
+          <app-color-picker
+            [color]="selectedShape.fill || '#000000'"
+            (colorChange)="onFillColorChange($event)">
+          </app-color-picker>
+        </div>
+      </div>
+
+      <div class="property-group">
+        <label class="property-label" for="stroke-color">Stroke Color</label>
+        <div class="color-input-group">
+          <app-color-picker
+            [color]="selectedShape.stroke || '#000000'"
+            (colorChange)="onStrokeColorChange($event)">
+          </app-color-picker>
+        </div>
+      </div>
+
+      <div class="property-group">
+        <label class="property-label" for="stroke-width">Stroke Width</label>
+        <div class="range-input-group">
+          <input
+            type="range"
+            id="stroke-width"
+            class="range-slider"
+            min="0"
+            max="20"
+            step="0.5"
+            [value]="selectedShape.strokeWidth || 0"
+            (input)="onStrokeWidthChange($event)">
+          <input
+            type="number"
+            class="range-number"
+            min="0"
+            max="100"
+            step="0.5"
+            [value]="selectedShape.strokeWidth || 0"
+            (change)="onStrokeWidthChange($event)">
+        </div>
+      </div>
+
+      <div class="property-group">
+        <label class="property-label" for="opacity">Opacity</label>
+        <div class="range-input-group">
+          <input
+            type="range"
+            id="opacity"
+            class="range-slider"
+            min="0"
+            max="1"
+            step="0.01"
+            [value]="selectedShape.opacity || 1"
+            (input)="onOpacityChange($event)">
+          <input
+            type="number"
+            class="range-number"
+            min="0"
+            max="1"
+            step="0.01"
+            [value]="selectedShape.opacity || 1"
+            (change)="onOpacityChange($event)">
+        </div>
+      </div>
+
+      <div class="panel-actions">
+        <button class="btn-secondary" (click)="onClearSelection()">
+          Clear Selection
+        </button>
+      </div>
+    </div>
+  } @else {
+    <div class="empty-state">
+      <p>No shape selected</p>
+      <p class="hint">Click on a shape in the canvas to edit its properties</p>
+    </div>
+  }
+</div>

@@ -1,0 +1,21 @@
+<div class="upload-container">
+  <div class="upload-zone"
+       (drop)="onDrop($event)"
+       (dragover)="onDragOver($event)"
+       (dragleave)="onDragLeave($event)"
+       [class.drag-over]="isDragOver">
+    <input
+      type="file"
+      #fileInput
+      accept=".svg,image/svg+xml"
+      (change)="onFileSelected($event)"
+      style="display: none">
+    <button (click)="fileInput.click()" class="upload-button">
+      Choose SVG File
+    </button>
+    <p>or drag and drop here</p>
+    @if (errorMessage) {
+      <div class="error">{{ errorMessage }}</div>
+    }
+  </div>
+</div>

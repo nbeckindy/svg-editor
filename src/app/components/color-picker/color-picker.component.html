@@ -1,0 +1,13 @@
+<div class="color-picker">
+  <input
+    type="color"
+    [value]="color"
+    (input)="onColorChange($event)"
+    class="color-input">
+  <input
+    type="text"
+    [value]="color"
+    (input)="onTextChange($event)"
+    class="color-text"
+    placeholder="#000000">
+</div>

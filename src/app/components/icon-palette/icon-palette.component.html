@@ -1,0 +1,15 @@
+<div class="palette-container">
+  <h3 class="palette-heading">Test icons</h3>
+  <div class="icon-grid">
+    @for (icon of icons; track icon.id) {
+      <button
+        type="button"
+        class="icon-item"
+        (click)="selectIcon(icon)"
+        [title]="icon.label">
+        <span class="icon-preview" [innerHTML]="getSafeSvg(icon.svg)"></span>
+        <span class="icon-label">{{ icon.label }}</span>
+      </button>
+    }
+  </div>
+</div>

@@ -1,0 +1,26 @@
+---
+description: Angular components should use separate HTML and CSS files
+globs: **/*.component.ts
+alwaysApply: false
+---
+
+# Angular component structure
+
+When creating or modifying Angular components in this project, **use separate HTML and CSS files** instead of inline `template` and `styles` (or `styleUrls` arrays).
+
+- **Template:** Use `templateUrl: './component-name.component.html'` and put the markup in a sibling file `component-name.component.html` in the same folder as the `.ts` file.
+- **Styles:** Use `styleUrl: './component-name.component.css'` (singular) and put the CSS in a sibling file `component-name.component.css`.
+
+Example `@Component`:
+
+```typescript
+@Component({
+  selector: 'app-my-feature',
+  standalone: true,
+  imports: [/* ... */],
+  templateUrl: './my-feature.component.html',
+  styleUrl: './my-feature.component.css'
+})
+```
+
+Do **not** use inline `template: \`...\`` or `styles: [\`...\`]` for new or refactored components. This keeps markup and styles easier to edit, lint, and format in separate files.

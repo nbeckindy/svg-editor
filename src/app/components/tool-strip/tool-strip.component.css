@@ -1,0 +1,46 @@
+.tool-strip {
+  display: flex;
+  gap: 4px;
+  align-items: center;
+}
+
+.tool-btn {
+  padding: 8px 14px;
+  font-size: 14px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #fff;
+  color: #333;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.tool-btn:hover {
+  background: #f5f5f5;
+  border-color: #999;
+}
+
+.tool-btn.active {
+  background: #1976D2;
+  border-color: #1976D2;
+  color: white;
+}
+
+.tool-btn-icon {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.tool-icon {
+  display: inline-flex;
+  line-height: 0;
+}
+
+.tool-icon svg {
+  display: block;
+}
+
+.tool-label {
+  font-size: 14px;
+}

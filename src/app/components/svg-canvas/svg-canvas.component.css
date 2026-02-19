@@ -1,0 +1,63 @@
+.canvas-container {
+  position: relative;
+  width: 100%;
+  height: 600px;
+  border: 1px solid #ddd;
+  background: white;
+}
+
+.svg-canvas {
+  width: 100%;
+  height: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.svg-zoom-wrapper {
+  display: inline-block;
+}
+
+.canvas-inner {
+  position: relative;
+  display: inline-block;
+}
+
+.highlight-overlay-container {
+  position: absolute;
+  left: 0;
+  top: 0;
+  pointer-events: none;
+  overflow: visible;
+}
+
+.highlight-overlay-container .highlight-overlay {
+  width: 100%;
+  height: 100%;
+  display: block;
+}
+
+.placeholder {
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  text-align: center;
+  color: #999;
+}
+
+.canvas-container.zoom-mode {
+  cursor: zoom-in;
+}
+
+.canvas-container.zoom-mode-out {
+  cursor: zoom-out;
+}
+
+.canvas-container.pan-mode {
+  cursor: grab;
+}
+
+.canvas-container.pan-mode.pan-dragging {
+  cursor: grabbing;
+}
