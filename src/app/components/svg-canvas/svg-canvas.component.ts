@@ -1,4 +1,4 @@
-import { Component, Input, AfterViewInit, ViewChild, ElementRef, OnChanges, HostListener, OnInit, OnDestroy, ChangeDetectorRef, effect } from '@angular/core';
+import { Component, input, viewChild, AfterViewInit, ElementRef, OnInit, OnDestroy, ChangeDetectorRef, effect } from '@angular/core';
 import { SVG, Element as SVGElement } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -10,13 +10,19 @@ import { CanvasViewService } from '../../services/canvas-view.service';
   standalone: true,
   imports: [],
   templateUrl: './svg-canvas.component.html',
-  styleUrl: './svg-canvas.component.css'
+  styleUrl: './svg-canvas.component.css',
+  host: {
+    '(document:keydown)': 'onKeyDown($event)',
+    '(document:keyup)': 'onKeyUp($event)',
+    '(document:mousemove)': 'onDocumentMouseMove($event)',
+    '(document:mouseup)': 'onDocumentMouseUp($event)'
+  }
 })
-export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnDestroy {
-  @Input() svgContent: string = '';
-  @ViewChild('svgContainer') svgContainer!: ElementRef<HTMLElement>;
-  @ViewChild('zoomWrapper') zoomWrapper!: ElementRef<HTMLElement>;
-  @ViewChild('highlightOverlayContainer') highlightOverlayContainer!: ElementRef<HTMLElement>;
+export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
+  readonly svgContent = input<string>('');
+  readonly svgContainer = viewChild<ElementRef<HTMLElement>>('svgContainer');
+  readonly zoomWrapper = viewChild<ElementRef<HTMLElement>>('zoomWrapper');
+  readonly highlightOverlayContainer = viewChild<ElementRef<HTMLElement>>('highlightOverlayContainer');
   altKeyPressed = false;
   isPanning = false;
   overlayViewBox = '0 0 100 100';
@@ -32,11 +38,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
   private lastBbox: { x: number; y: number; width: number; height: number } | null = null;
   /** During drag, overlay rect in overlay-container pixel coords so the blue outline follows the ghost. */
   private dragOverlayRect: { x: number; y: number; width: number; height: number } | null = null;
+  /** Cache key and result so the getter is stable across re-reads in the same CD cycle (avoids NG0100). */
+  private _highlightRectCache: { x: number; y: number; width: number; height: number } | null = null;
+  private _highlightRectCacheKey = '';
   get highlightRect(): { x: number; y: number; width: number; height: number } | null {
     if (this.isDraggingShape && this.dragOverlayRect) return this.dragOverlayRect;
-    return this.lastBbox && this.wrapperWidth > 0 && this.wrapperHeight > 0
-      ? this.svgBboxToOverlayPixels(this.lastBbox)
-      : null;
+    if (!this.lastBbox || this.wrapperWidth <= 0 || this.wrapperHeight <= 0) {
+      this._highlightRectCache = null;
+      this._highlightRectCacheKey = '';
+      return null;
+    }
+    const key = `${this.lastBbox.x}-${this.lastBbox.y}-${this.wrapperWidth}-${this.wrapperHeight}-${this.canvasView.scale}`;
+    if (this._highlightRectCacheKey === key) return this._highlightRectCache;
+    this._highlightRectCacheKey = key;
+    this._highlightRectCache = this.svgBboxToOverlayPixels(this.lastBbox);
+    return this._highlightRectCache;
   }
   private panStartClientX = 0;
   private panStartClientY = 0;
@@ -50,17 +66,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
   private dragStartBbox: { x: number; y: number; width: number; height: number } | null = null;
   private dragGhostEl: HTMLElement | null = null;
 
-  @HostListener('document:keydown', ['$event'])
   onKeyDown(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
   }
 
-  @HostListener('document:keyup', ['$event'])
   onKeyUp(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
   }
 
-  @HostListener('document:mousemove', ['$event'])
   onDocumentMouseMove(event: MouseEvent): void {
     if (this.isPanning) {
       this.canvasView.setPan(
@@ -68,7 +81,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
         this.panStartY + (event.clientY - this.panStartClientY)
       );
     } else if (this.isDraggingShape && this.dragGhostEl && this.dragStartSvg && this.dragStartBbox) {
-      const containerRect = this.svgContainer?.nativeElement?.getBoundingClientRect();
+      const containerRect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
       if (containerRect) {
         const currentSvg = this.canvasView.screenToSvg(event.clientX, event.clientY, containerRect);
         if (currentSvg) {
@@ -86,12 +99,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
     }
   }
 
-  @HostListener('document:mouseup', ['$event'])
   onDocumentMouseUp(event: MouseEvent): void {
     if (event.button !== 0) return;
     this.isPanning = false;
     if (this.isDraggingShape && this.dragShapeId && this.dragStartSvg) {
-      const rect = this.svgContainer?.nativeElement?.getBoundingClientRect();
+      const rect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
       if (rect) {
         const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
         if (point) {
@@ -114,8 +126,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
   private updateDragGhostAndOverlay(currentBbox: { x: number; y: number; width: number; height: number }): void {
     this.dragOverlayRect = this.svgBboxToOverlayPixels(currentBbox);
     if (!this.dragGhostEl) return;
-    const overlayContainer = this.highlightOverlayContainer?.nativeElement;
-    const rect = overlayContainer?.getBoundingClientRect() ?? this.zoomWrapper?.nativeElement?.getBoundingClientRect();
+    const overlayContainer = this.highlightOverlayContainer()?.nativeElement;
+    const rect = overlayContainer?.getBoundingClientRect() ?? this.zoomWrapper()?.nativeElement?.getBoundingClientRect();
     if (!rect) return;
     this.dragGhostEl.style.left = `${rect.left + this.dragOverlayRect.x}px`;
     this.dragGhostEl.style.top = `${rect.top + this.dragOverlayRect.y}px`;
@@ -136,13 +148,27 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
       setTimeout(() => {
         if (!shape) {
           this.lastBbox = null;
+          this._highlightRectCache = null;
+          this._highlightRectCacheKey = '';
         } else {
           this.syncOverlayViewBox();
           const bbox = this.svgManipulation.getShapeBBox(shape.id);
           this.lastBbox = bbox;
+          if (bbox) {
+            this._highlightRectCacheKey = '';
+          } else {
+            this._highlightRectCache = null;
+            this._highlightRectCacheKey = '';
+          }
         }
-        this.cdr.detectChanges();
+        // Rely on next CD run (e.g. fixture.detectChanges() in tests) so we don't trigger NG0100
+        this.cdr.markForCheck();
       }, 0);
+    });
+    effect(() => {
+      if (this.svgContent() && this.svgContainer()?.nativeElement) {
+        setTimeout(() => this.initializeSVG(), 0);
+      }
     });
   }
 
@@ -151,19 +177,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
   ngOnDestroy(): void {}
 
   ngAfterViewInit(): void {
-    if (this.svgContent) {
-      this.initializeSVG();
-    }
-  }
-
-  ngOnChanges(): void {
-    if (this.svgContainer && this.svgContent) {
+    if (this.svgContent()) {
       this.initializeSVG();
     }
   }
 
   private syncOverlayViewBox(): void {
-    const mainSvg = this.svgContainer?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
     if (!mainSvg) return;
     const vb = mainSvg.getAttribute('viewBox');
     if (vb) {
@@ -175,7 +195,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
       const height = typeof h === 'string' && h.endsWith('%') ? 100 : Number(h) || 100;
       this.overlayViewBox = `0 0 ${width} ${height}`;
     }
-    const el = this.zoomWrapper?.nativeElement;
+    const el = this.zoomWrapper()?.nativeElement;
     if (el && (el.offsetWidth > 0 || el.offsetHeight > 0)) {
       this.wrapperWidth = el.offsetWidth;
       this.wrapperHeight = el.offsetHeight;
@@ -193,7 +213,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
     const vbW = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
     const vbH = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
     const canvasScale = this.canvasView.scale;
-    const mainSvg = this.svgContainer?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
     if (!mainSvg) {
       const sx = (this.wrapperWidth * canvasScale) / vbW;
       const sy = (this.wrapperHeight * canvasScale) / vbH;
@@ -201,7 +221,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
       fetch('http://127.0.0.1:7242/ingest/a5b546a5-24cc-4fd4-b0a7-1b08d2ef458e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'svg-canvas.component.ts:svgBboxToOverlayPixels',message:'branch noMainSvg',data:{..._logInput,out,hypothesisId:'H1,H4,H5'},timestamp:Date.now()})}).catch(()=>{});
       return out;
     }
-    const wrapperRect = this.zoomWrapper?.nativeElement?.getBoundingClientRect();
+    const wrapperRect = this.zoomWrapper()?.nativeElement?.getBoundingClientRect();
     const svgRect = mainSvg.getBoundingClientRect();
     let viewportW = svgRect.width;
     let viewportH = svgRect.height;
@@ -259,7 +279,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
   }
 
   private initializeSVG(): void {
-    this.svgManipulation.initializeSVG(this.svgContainer.nativeElement, this.svgContent);
+    this.svgManipulation.initializeSVG(this.svgContainer()!.nativeElement, this.svgContent());
     this.canvasView.init();
     this.syncOverlayViewBox();
     const shape = this.shapeSelection.getSelectedShape();
@@ -268,6 +288,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
     } else {
       this.lastBbox = null;
     }
+    this._highlightRectCacheKey = '';
   }
 
   onCanvasMouseDown(event: MouseEvent): void {
@@ -281,12 +302,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
       event.preventDefault();
       return;
     }
-    if (this.editorTool.getCurrentTool() !== 'selector' || !this.svgContent || !this.canvasView.isInitialized()) return;
+    if (this.editorTool.getCurrentTool() !== 'selector' || !this.svgContent() || !this.canvasView.isInitialized()) return;
     const target = event.target as Element;
     if (target.tagName === 'svg' || !target.id) return;
     const selected = this.shapeSelection.getSelectedShape();
     if (!selected || selected.id !== target.id) return;
-    const rect = this.svgContainer?.nativeElement?.getBoundingClientRect();
+    const rect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
     if (!rect) return;
     const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
     if (!point) return;
@@ -318,7 +339,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
     const ghostTop = shapeScreenRect.top;
     const ghostWidth = shapeScreenRect.width;
     const ghostHeight = shapeScreenRect.height;
-    const overlayContainer = this.highlightOverlayContainer?.nativeElement;
+    const overlayContainer = this.highlightOverlayContainer()?.nativeElement;
     const dragOverlayRect = overlayContainer
       ? {
           x: shapeScreenRect.left - overlayContainer.getBoundingClientRect().left,
@@ -366,8 +387,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnChanges, OnInit, OnD
       return;
     }
     if (this.editorTool.getCurrentTool() === 'zoom') {
-      if (!this.svgContent || !this.canvasView.isInitialized()) return;
-      const rect = this.svgContainer.nativeElement.getBoundingClientRect();
+      if (!this.svgContent() || !this.canvasView.isInitialized()) return;
+      const rect = this.svgContainer()!.nativeElement.getBoundingClientRect();
       const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
       if (point) {
         if (event.altKey) {

@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Input, Output } from '@angular/core';
+import { Component, input, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 
@@ -10,22 +10,20 @@ import { FormsModule } from '@angular/forms';
   styleUrl: './color-picker.component.css'
 })
 export class ColorPickerComponent {
-  @Input() color: string = '#000000';
-  @Output() colorChange = new EventEmitter<string>();
+  readonly color = input<string>('#000000');
+  readonly colorChange = output<string>();
 
   onColorChange(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    this.color = input.value;
-    this.colorChange.emit(this.color);
+    const inputEl = event.target as HTMLInputElement;
+    const value = inputEl.value;
+    this.colorChange.emit(value);
   }
 
   onTextChange(event: Event): void {
-    const input = event.target as HTMLInputElement;
-    const value = input.value;
-    // Validate hex color
+    const inputEl = event.target as HTMLInputElement;
+    const value = inputEl.value;
     if (/^#[0-9A-F]{6}$/i.test(value)) {
-      this.color = value;
-      this.colorChange.emit(this.color);
+      this.colorChange.emit(value);
     }
   }
 }

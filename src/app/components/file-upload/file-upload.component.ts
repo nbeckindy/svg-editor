@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SvgService } from '../../services/svg.service';
 
@@ -10,7 +10,7 @@ import { SvgService } from '../../services/svg.service';
   styleUrl: './file-upload.component.css'
 })
 export class FileUploadComponent {
-  @Output() svgLoaded = new EventEmitter<string>();
+  readonly svgLoaded = output<string>();
   
   isDragOver = false;
   errorMessage = '';

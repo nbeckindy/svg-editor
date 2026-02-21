@@ -21,7 +21,7 @@ describe('ColorPickerComponent', () => {
   });
 
   it('should default color to #000000', () => {
-    expect(component.color).toBe('#000000');
+    expect(component.color()).toBe('#000000');
   });
 
   it('should emit colorChange when color input changes', () => {
@@ -31,7 +31,6 @@ describe('ColorPickerComponent', () => {
     const event = { target: { value: '#ff0000' } } as unknown as Event;
     component.onColorChange(event);
 
-    expect(component.color).toBe('#ff0000');
     expect(emitted).toEqual(['#ff0000']);
   });
 
@@ -42,7 +41,6 @@ describe('ColorPickerComponent', () => {
     const event = { target: { value: '#00ff00' } } as unknown as Event;
     component.onTextChange(event);
 
-    expect(component.color).toBe('#00ff00');
     expect(emitted).toEqual(['#00ff00']);
   });
 
@@ -53,13 +51,13 @@ describe('ColorPickerComponent', () => {
     const event = { target: { value: 'not-a-hex' } } as unknown as Event;
     component.onTextChange(event);
 
-    expect(component.color).toBe('#000000');
+    expect(component.color()).toBe('#000000');
     expect(emitted).toEqual([]);
   });
 
   it('should accept color as input', () => {
     fixture.componentRef.setInput('color', '#abcdef');
     fixture.detectChanges();
-    expect(component.color).toBe('#abcdef');
+    expect(component.color()).toBe('#abcdef');
   });
 });

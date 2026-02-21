@@ -1,0 +1,32 @@
+---
+description: Use input() and output() instead of @Input and @Output decorators
+globs: "**/*.component.ts"
+alwaysApply: false
+---
+
+# Prefer input() and output() over @Input and @Output
+
+Do **not** use the `@Input()` and `@Output()` decorators for new or refactored components. Use the **input()** and **output()** functions instead (Angular 17.3+).
+
+- **Inputs:** Declare with `readonly myProp = input<string>('default')` or `input.required<string>()`. In the class and template, read the value by calling the signal: `myProp()`.
+- **Outputs:** Declare with `readonly myEvent = output<string>()`. Emit with `this.myEvent.emit(value)`. The binding name in the parent template stays the same, e.g. `(myEvent)="handler($event)"`.
+
+**Example:**
+
+```typescript
+@Component({ ... })
+export class MyComponent {
+  readonly color = input<string>('#000000');
+  readonly colorChange = output<string>();
+
+  updateColor(value: string) {
+    this.colorChange.emit(value);
+  }
+}
+```
+
+Template: `[color]="parentValue"` and `(colorChange)="onColorChange($event)"`. Inside the component, use `color()` to read the current value.
+
+**Testing:** For signal inputs, set values in tests with `fixture.componentRef.setInput('inputName', value)`. For outputs, `output()` still exposes `.subscribe()` for assertions.
+
+This aligns with Angular’s signal-based APIs and current best practices.

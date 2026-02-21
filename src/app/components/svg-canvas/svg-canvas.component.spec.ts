@@ -60,7 +60,7 @@ describe('SvgCanvasComponent', () => {
     const svgContent = '<svg><circle cx="50" cy="50" r="40"/></svg>';
     const initializeSpy = vi.spyOn(svgManipulationService, 'initializeSVG');
     
-    component.svgContent = svgContent;
+    fixture.componentRef.setInput('svgContent', svgContent);
     fixture.detectChanges();
     
     // Give time for AfterViewInit to run
@@ -74,7 +74,7 @@ describe('SvgCanvasComponent', () => {
     const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
     const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
 
-    component.svgContent = '<svg><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
 
     const mockEvent = {
@@ -89,7 +89,7 @@ describe('SvgCanvasComponent', () => {
 
   it('should call canvasView.init when SVG is initialized', () => {
     const initSpy = vi.spyOn(canvasViewService, 'init');
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
 
     expect(svgManipulationService.getSVGInstance()).toBeTruthy();
@@ -98,14 +98,14 @@ describe('SvgCanvasComponent', () => {
 
   it('should zoom in at click position when zoom tool is active and SVG is loaded', () => {
     const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
 
     expect(canvasViewService.isInitialized()).toBe(true);
 
     editorToolService.setTool('zoom');
 
-    const wrapperEl = component.svgContainer.nativeElement as HTMLElement;
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
       left: 10,
       top: 20,
@@ -134,11 +134,11 @@ describe('SvgCanvasComponent', () => {
 
   it('should call zoomOutAt when zoom tool is active and user Alt+clicks', () => {
     const zoomOutAtSpy = vi.spyOn(canvasViewService, 'zoomOutAt');
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('zoom');
 
-    const wrapperEl = component.svgContainer.nativeElement as HTMLElement;
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
       left: 10,
       top: 20,
@@ -168,7 +168,7 @@ describe('SvgCanvasComponent', () => {
 
   it('should not call zoomInAt when zoom tool is active but no SVG content', () => {
     editorToolService.setTool('zoom');
-    component.svgContent = '';
+    fixture.componentRef.setInput('svgContent', '');
     fixture.detectChanges();
 
     const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
@@ -185,7 +185,7 @@ describe('SvgCanvasComponent', () => {
 
   it('should not call zoomOutAt when zoom tool is active but no SVG content', () => {
     editorToolService.setTool('zoom');
-    component.svgContent = '';
+    fixture.componentRef.setInput('svgContent', '');
     fixture.detectChanges();
 
     const zoomOutAtSpy = vi.spyOn(canvasViewService, 'zoomOutAt');
@@ -204,11 +204,11 @@ describe('SvgCanvasComponent', () => {
   it('should call zoomInAt not zoomOutAt when zoom tool is active and user clicks without Alt', () => {
     const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
     const zoomOutAtSpy = vi.spyOn(canvasViewService, 'zoomOutAt');
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('zoom');
 
-    const wrapperEl = component.svgContainer.nativeElement as HTMLElement;
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
       left: 10,
       top: 20,
@@ -238,11 +238,11 @@ describe('SvgCanvasComponent', () => {
     const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
     const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
 
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('zoom');
 
-    const wrapperEl = component.svgContainer.nativeElement as HTMLElement;
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
       left: 0,
       top: 0,
@@ -272,7 +272,7 @@ describe('SvgCanvasComponent', () => {
     const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
     const selectShapeSpy = vi.spyOn(shapeSelectionService, 'selectShape');
 
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle id="c1" cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="c1" cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('pan');
 
@@ -290,7 +290,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should start pan on mousedown when pan tool is active and left button', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('pan');
     canvasViewService.panX = 10;
@@ -333,7 +333,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should not start pan on right or middle mouse button', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('pan');
 
@@ -347,7 +347,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should stop pan on document mouseup (left button)', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('pan');
     component.onCanvasMouseDown({
@@ -379,7 +379,7 @@ describe('SvgCanvasComponent', () => {
       width: 50,
       height: 40
     });
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="50" height="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="50" height="40"/></svg>');
     component.wrapperWidth = 100;
     component.wrapperHeight = 100;
     fixture.detectChanges();
@@ -391,8 +391,6 @@ describe('SvgCanvasComponent', () => {
       strokeWidth: 0,
       opacity: 1
     });
-    await new Promise((r) => setTimeout(r, 0));
-    fixture.detectChanges();
     await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
     expect(component.highlightRect).not.toBeNull();
@@ -410,7 +408,7 @@ describe('SvgCanvasComponent', () => {
 
   it('should not show overlay rect when getShapeBBox returns null for selected shape', async () => {
     vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue(null);
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="50" height="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="50" height="40"/></svg>');
     component.wrapperWidth = 100;
     component.wrapperHeight = 100;
     fixture.detectChanges();
@@ -423,6 +421,7 @@ describe('SvgCanvasComponent', () => {
       opacity: 1
     });
     await new Promise((r) => setTimeout(r, 0));
+    await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
     expect(component.highlightRect).toBeNull();
     const overlayRect = fixture.nativeElement.querySelector('.highlight-overlay rect');
@@ -431,7 +430,7 @@ describe('SvgCanvasComponent', () => {
 
   it('should call highlightShape when a shape is clicked with selector tool', () => {
     const highlightShapeSpy = vi.spyOn(svgManipulationService, 'highlightShape');
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="shape-1" x="10" y="10" width="20" height="20"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="shape-1" x="10" y="10" width="20" height="20"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('selector');
 
@@ -459,7 +458,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should start shape drag on mousedown when selected shape is clicked with selector tool', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="drag-target" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="drag-target" x="10" y="20" width="30" height="40"/></svg>');
     component.wrapperWidth = 100;
     component.wrapperHeight = 100;
     fixture.detectChanges();
@@ -487,7 +486,7 @@ describe('SvgCanvasComponent', () => {
     vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
       findOne: () => mockSvgJsShape('drag-target', shapeNode)
     } as any);
-    const wrapperEl = component.svgContainer?.nativeElement as HTMLElement;
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
         left: 0,
@@ -507,7 +506,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should not start shape drag when pan tool is active', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('pan');
     shapeSelectionService.selectShape({
@@ -530,7 +529,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should not start shape drag when mousedown on background (svg)', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('selector');
     shapeSelectionService.selectShape({
@@ -553,7 +552,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('when shape drag is started, ghost wrapper should have overflow visible to avoid clipping', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="ghost-vis" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="ghost-vis" x="10" y="20" width="30" height="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('selector');
     shapeSelectionService.selectShape({
@@ -577,7 +576,7 @@ describe('SvgCanvasComponent', () => {
       findOne: () =>
         mockSvgJsShape('ghost-vis', rect || document.createElementNS('http://www.w3.org/2000/svg', 'rect'))
     } as any);
-    const wrapperEl = component.svgContainer?.nativeElement as HTMLElement;
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
         left: 0,
@@ -598,7 +597,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('when shape drag is started, ghost SVG should have overflow visible to prevent clipping', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="ghost-svg" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="ghost-svg" x="10" y="20" width="30" height="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('selector');
     shapeSelectionService.selectShape({
@@ -622,7 +621,7 @@ describe('SvgCanvasComponent', () => {
       findOne: () =>
         mockSvgJsShape('ghost-svg', rect || document.createElementNS('http://www.w3.org/2000/svg', 'rect'))
     } as any);
-    const wrapperEl = component.svgContainer?.nativeElement as HTMLElement;
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
         left: 0,
@@ -643,7 +642,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('when shape drag is started, ghost viewBox should match shape bbox so shape fills the ghost', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="ghost-pad" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="ghost-pad" x="10" y="20" width="30" height="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('selector');
     shapeSelectionService.selectShape({
@@ -668,7 +667,7 @@ describe('SvgCanvasComponent', () => {
     vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
       findOne: () => mockSvgJsShape('ghost-pad', shapeNode)
     } as any);
-    const wrapperEl = component.svgContainer?.nativeElement as HTMLElement;
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
         left: 0,
@@ -694,7 +693,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should on mouseup after drag call translateShape with delta and show shape again', () => {
-    component.svgContent = '<svg viewBox="0 0 100 100"><rect id="drag-me" x="10" y="20" width="30" height="40"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="drag-me" x="10" y="20" width="30" height="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('selector');
     shapeSelectionService.selectShape({
@@ -727,7 +726,7 @@ describe('SvgCanvasComponent', () => {
       width: 10,
       height: 10
     });
-    component.svgContent = '<svg viewBox="0 0 100 100"><circle id="c1" cx="5" cy="5" r="5"/></svg>';
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="c1" cx="5" cy="5" r="5"/></svg>');
     component.wrapperWidth = 100;
     component.wrapperHeight = 100;
     fixture.detectChanges();
@@ -741,12 +740,9 @@ describe('SvgCanvasComponent', () => {
     });
     await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
-    await new Promise((r) => setTimeout(r, 0));
-    fixture.detectChanges();
     expect(component.highlightRect).not.toBeNull();
     shapeSelectionService.clearSelection();
     await new Promise((r) => setTimeout(r, 0));
-    fixture.detectChanges();
     await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
     expect(component.highlightRect).toBeNull();

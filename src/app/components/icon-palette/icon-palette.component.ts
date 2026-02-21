@@ -1,4 +1,4 @@
-import { Component, EventEmitter, Output } from '@angular/core';
+import { Component, output } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TEST_ICONS, TestIcon } from '../../data/test-icons';
@@ -11,7 +11,7 @@ import { TEST_ICONS, TestIcon } from '../../data/test-icons';
   styleUrl: './icon-palette.component.css'
 })
 export class IconPaletteComponent {
-  @Output() svgLoaded = new EventEmitter<string>();
+  readonly svgLoaded = output<string>();
 
   icons = TEST_ICONS;
 
