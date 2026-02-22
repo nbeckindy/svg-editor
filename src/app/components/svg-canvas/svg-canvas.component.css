@@ -3,7 +3,8 @@
   width: 100%;
   height: 600px;
   border: 1px solid #ddd;
-  background: white;
+  /* 25% black: area outside the document viewBox (e.g. letterbox) */
+  background: #bfbfbf;
 }
 
 .svg-canvas {

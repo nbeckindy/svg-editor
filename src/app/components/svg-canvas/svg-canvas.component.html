@@ -25,6 +25,16 @@
           [attr.viewBox]="'0 0 ' + overlayWidthPx + ' ' + overlayHeightPx"
           preserveAspectRatio="none"
           overflow="visible">
+          @if (viewBoxOverlayRect) {
+            <rect
+              [attr.x]="viewBoxOverlayRect.x"
+              [attr.y]="viewBoxOverlayRect.y"
+              [attr.width]="viewBoxOverlayRect.width"
+              [attr.height]="viewBoxOverlayRect.height"
+              fill="none"
+              stroke="#000000"
+              stroke-width="1"/>
+          }
           @if (highlightRect) {
             <rect
               [attr.x]="highlightRect.x"

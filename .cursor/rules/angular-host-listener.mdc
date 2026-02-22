@@ -1,0 +1,25 @@
+---
+description: Use host metadata instead of @HostListener and @HostBinding
+globs: "**/*.component.ts"
+alwaysApply: false
+---
+
+# Prefer host over @HostListener and @HostBinding
+
+Do **not** use the `@HostListener` or `@HostBinding` decorators. They exist only for backwards compatibility. Put host listeners and bindings in the **host** object of the `@Component` or `@Directive` decorator instead.
+
+**Example — events:** Instead of `@HostListener('document:keydown', ['$event'])`, use:
+
+```typescript
+@Component({
+  selector: 'app-my',
+  host: {
+    '(document:keydown)': 'onKeyDown($event)',
+    '(document:mouseup)': 'onMouseUp($event)'
+  }
+})
+```
+
+**Example — host bindings:** Use the same property/class/style keys in the `host` object (e.g. `'class.foo': 'true'`, `'attr.aria-label': 'label'`).
+
+This follows current Angular best practices and keeps metadata in one place.

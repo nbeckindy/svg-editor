@@ -57,8 +57,9 @@ describe('SvgManipulationService', () => {
     
     service.initializeSVG(container, svgContent);
     
-    const circle = container.querySelector('circle');
-    const rect = container.querySelector('rect');
+    const contentGroup = container.querySelector('[data-editor-content-group]');
+    const circle = contentGroup?.querySelector('circle');
+    const rect = contentGroup?.querySelector('rect');
     
     expect(circle?.id).toBeTruthy();
     expect(rect?.id).toBeTruthy();
@@ -250,5 +251,27 @@ describe('SvgManipulationService', () => {
     const svgContent = '<svg><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
     service.initializeSVG(container, svgContent);
     expect(() => service.setShapeVisibility('nonexistent', false)).not.toThrow();
+  });
+
+  describe('viewBox visibility in editor', () => {
+    it('exportSVG should preserve original viewBox and content and omit editor-only nodes', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const exported = service.exportSVG();
+      expect(exported).toContain('viewBox="0 0 100 100"');
+      expect(exported).toContain('<rect');
+      expect(exported).toContain('id="r1"');
+      // Editor stage adds grey rect and viewBox rect; export must be logical document only
+      expect(exported).not.toMatch(/data-editor-outside-rect|data-editor-viewbox-rect/);
+    });
+
+    it('exportSVG with content outside viewBox should still export that content', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="inside" x="10" y="10" width="20" height="20"/><rect id="outside" x="150" y="150" width="30" height="30"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const exported = service.exportSVG();
+      expect(exported).toContain('id="inside"');
+      expect(exported).toContain('id="outside"');
+      expect(exported).toContain('viewBox="0 0 100 100"');
+    });
   });
 });

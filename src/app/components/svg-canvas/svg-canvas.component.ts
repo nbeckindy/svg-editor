@@ -54,6 +54,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this._highlightRectCache = this.svgBboxToOverlayPixels(this.lastBbox);
     return this._highlightRectCache;
   }
+  /** Set only in syncOverlayViewBox so it stays stable during CD. Document viewBox stroke drawn in overlay so it stays constant width at any zoom. */
+  private _viewBoxOverlayRect: { x: number; y: number; width: number; height: number } | null = null;
+  get viewBoxOverlayRect(): { x: number; y: number; width: number; height: number } | null {
+    return this._viewBoxOverlayRect;
+  }
   private panStartClientX = 0;
   private panStartClientY = 0;
   private panStartX = 0;
@@ -62,6 +67,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   /** Shape drag: when user drags the selected element we hide it and show a ghost until mouseup. */
   isDraggingShape = false;
   private dragShapeId: string | null = null;
+  /** True after drag ends so we ignore the following click (which would target SVG root and clear selection). */
+  private dragJustEnded = false;
   private dragStartSvg: { x: number; y: number } | null = null;
   private dragStartBbox: { x: number; y: number; width: number; height: number } | null = null;
   private dragGhostEl: HTMLElement | null = null;
@@ -103,22 +110,29 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (event.button !== 0) return;
     this.isPanning = false;
     if (this.isDraggingShape && this.dragShapeId && this.dragStartSvg) {
+      const shapeId = this.dragShapeId;
       const rect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
       if (rect) {
         const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
         if (point) {
           const dx = point.x - this.dragStartSvg.x;
           const dy = point.y - this.dragStartSvg.y;
-          this.svgManipulation.translateShape(this.dragShapeId, dx, dy);
+          this.svgManipulation.translateShape(shapeId, dx, dy);
         }
       }
-      this.svgManipulation.setShapeVisibility(this.dragShapeId, true);
+      this.svgManipulation.setShapeVisibility(shapeId, true);
       this.removeDragGhost();
       this.dragOverlayRect = null;
       this.isDraggingShape = false;
       this.dragShapeId = null;
       this.dragStartSvg = null;
       this.dragStartBbox = null;
+      this.dragJustEnded = true;
+      const newBbox = this.svgManipulation.getShapeBBox(shapeId);
+      if (newBbox) {
+        this.lastBbox = newBbox;
+        this._highlightRectCacheKey = '';
+      }
       this.cdr.detectChanges();
     }
   }
@@ -143,6 +157,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     public canvasView: CanvasViewService,
     private cdr: ChangeDetectorRef
   ) {
+    effect(() => {
+      this.svgContent();
+      this.canvasView.resetZoom();
+    });
     effect(() => {
       const shape = this.shapeSelection.selectedShape();
       setTimeout(() => {
@@ -182,9 +200,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
+  /** Sync overlay from the main SVG (editor stage). Its viewBox is the union of document viewBox and content; shape bboxes are in the same coordinate system. */
   private syncOverlayViewBox(): void {
     const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
-    if (!mainSvg) return;
+    if (!mainSvg) {
+      this._viewBoxOverlayRect = null;
+      return;
+    }
     const vb = mainSvg.getAttribute('viewBox');
     if (vb) {
       this.overlayViewBox = vb;
@@ -200,13 +222,32 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.wrapperWidth = el.offsetWidth;
       this.wrapperHeight = el.offsetHeight;
     }
+    if (this.svgManipulation.getSVGInstance() && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
+      const vb = this.svgManipulation.getDocumentViewBox();
+      const parts = vb.split(/\s+/);
+      if (parts.length >= 4) {
+        const x = Number(parts[0]) || 0;
+        const y = Number(parts[1]) || 0;
+        const w = Number(parts[2]) || 100;
+        const h = Number(parts[3]) || 100;
+        const bbox = { x, y, width: w, height: h };
+        setTimeout(() => {
+          this._viewBoxOverlayRect = this.svgBboxToOverlayPixels(bbox);
+          this.cdr.markForCheck();
+        }, 0);
+        return;
+      }
+    }
+    this._viewBoxOverlayRect = null;
+  }
+
+  /** Recompute and set _viewBoxOverlayRect. Uses the same logic as syncOverlayViewBox (document viewBox → svgBboxToOverlayPixels) so zoom and select stay in sync. */
+  private updateViewBoxOverlayRect(): void {
+    this.syncOverlayViewBox();
   }
 
   /** Convert SVG viewBox bbox to overlay pixel coordinates. Uses the main SVG viewport and its position within the wrapper so alignment matches the browser. */
   private svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
-    // #region agent log
-    const _logInput = { bbox, overlayViewBox: this.overlayViewBox, wrapperWidth: this.wrapperWidth, wrapperHeight: this.wrapperHeight, canvasScale: this.canvasView.scale };
-    // #endregion
     const parts = this.overlayViewBox.split(/\s+/);
     const vbMinX = parts.length >= 4 ? Number(parts[0]) || 0 : 0;
     const vbMinY = parts.length >= 4 ? Number(parts[1]) || 0 : 0;
@@ -217,9 +258,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!mainSvg) {
       const sx = (this.wrapperWidth * canvasScale) / vbW;
       const sy = (this.wrapperHeight * canvasScale) / vbH;
-      const out = { x: (bbox.x - vbMinX) * sx, y: (bbox.y - vbMinY) * sy, width: bbox.width * sx, height: bbox.height * sy };
-      fetch('http://127.0.0.1:7242/ingest/a5b546a5-24cc-4fd4-b0a7-1b08d2ef458e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'svg-canvas.component.ts:svgBboxToOverlayPixels',message:'branch noMainSvg',data:{..._logInput,out,hypothesisId:'H1,H4,H5'},timestamp:Date.now()})}).catch(()=>{});
-      return out;
+      return { x: (bbox.x - vbMinX) * sx, y: (bbox.y - vbMinY) * sy, width: bbox.width * sx, height: bbox.height * sy };
     }
     const wrapperRect = this.zoomWrapper()?.nativeElement?.getBoundingClientRect();
     const svgRect = mainSvg.getBoundingClientRect();
@@ -235,9 +274,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       svgLeftInWrapper = svgRect.left - wrapperRect!.left;
       svgTopInWrapper = svgRect.top - wrapperRect!.top;
     }
-    // #region agent log
-    fetch('http://127.0.0.1:7242/ingest/a5b546a5-24cc-4fd4-b0a7-1b08d2ef458e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'svg-canvas.component.ts:svgBboxToOverlayPixels',message:'mainSvg branch',data:{..._logInput,usingVisualRects,wrapperRect:wrapperRect?{left:wrapperRect.left,top:wrapperRect.top,width:wrapperRect.width,height:wrapperRect.height}:null,svgRectLeft:svgRect.left,svgRectTop:svgRect.top,svgLeftInWrapper,svgTopInWrapper,hypothesisId:'H2,H3'},timestamp:Date.now()})}).catch(()=>{});
-    // #endregion
     const par = mainSvg.getAttribute('preserveAspectRatio') ?? 'xMidYMid meet';
     const isNone = par.split(/\s+/)[0] === 'none';
     let scaleFit: number;
@@ -248,9 +284,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       const sy = (viewportH * (usingVisualRects ? 1 : canvasScale)) / vbH;
       const px = svgLeftInWrapper + (bbox.x - vbMinX) * (viewportW / vbW);
       const py = svgTopInWrapper + (bbox.y - vbMinY) * (viewportH / vbH);
-      const out = { x: usingVisualRects ? px : px * canvasScale, y: usingVisualRects ? py : py * canvasScale, width: bbox.width * sx, height: bbox.height * sy };
-      fetch('http://127.0.0.1:7242/ingest/a5b546a5-24cc-4fd4-b0a7-1b08d2ef458e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'svg-canvas.component.ts:svgBboxToOverlayPixels',message:'branch isNone',data:{..._logInput,usingVisualRects,out,hypothesisId:'H1,H2'},timestamp:Date.now()})}).catch(()=>{});
-      return out;
+      return { x: usingVisualRects ? px : px * canvasScale, y: usingVisualRects ? py : py * canvasScale, width: bbox.width * sx, height: bbox.height * sy };
     }
     scaleFit = Math.min(viewportW / vbW, viewportH / vbH);
     const align = par.split(/\s+/)[0].toLowerCase();
@@ -265,17 +299,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const viewportX = offsetX + (bbox.x - vbMinX) * scaleFit;
     const viewportY = offsetY + (bbox.y - vbMinY) * scaleFit;
     if (usingVisualRects) {
-      const out = { x: svgLeftInWrapper + viewportX, y: svgTopInWrapper + viewportY, width: bbox.width * scaleFit, height: bbox.height * scaleFit };
-      fetch('http://127.0.0.1:7242/ingest/a5b546a5-24cc-4fd4-b0a7-1b08d2ef458e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'svg-canvas.component.ts:svgBboxToOverlayPixels',message:'branch meet usingVisualRects',data:{..._logInput,usingVisualRects,viewportX,viewportY,out,hypothesisId:'H1,H2'},timestamp:Date.now()})}).catch(()=>{});
-      return out;
+      return { x: svgLeftInWrapper + viewportX, y: svgTopInWrapper + viewportY, width: bbox.width * scaleFit, height: bbox.height * scaleFit };
     }
     const x = (svgLeftInWrapper + viewportX) * canvasScale;
     const y = (svgTopInWrapper + viewportY) * canvasScale;
     const w = bbox.width * scaleFit * canvasScale;
     const h = bbox.height * scaleFit * canvasScale;
-    const out = { x, y, width: w, height: h };
-    fetch('http://127.0.0.1:7242/ingest/a5b546a5-24cc-4fd4-b0a7-1b08d2ef458e',{method:'POST',headers:{'Content-Type':'application/json'},body:JSON.stringify({location:'svg-canvas.component.ts:svgBboxToOverlayPixels',message:'branch meet fallback',data:{..._logInput,usingVisualRects,out,hypothesisId:'H1,H2'},timestamp:Date.now()})}).catch(()=>{});
-    return out;
+    return { x, y, width: w, height: h };
   }
 
   private initializeSVG(): void {
@@ -383,6 +413,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   onCanvasClick(event: MouseEvent): void {
+    const clickTarget = event.target as Element;
+    if (this.dragJustEnded) {
+      this.dragJustEnded = false;
+      if (clickTarget.tagName?.toLowerCase() === 'svg') {
+        return;
+      }
+    }
     if (this.editorTool.getCurrentTool() === 'pan') {
       return;
     }
@@ -396,18 +433,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         } else {
           this.canvasView.zoomInAt(point.x, point.y);
         }
+        this.updateViewBoxOverlayRect();
+        this.cdr.detectChanges();
       }
       return;
     }
 
-    const target = event.target as Element;
-    if (target.tagName !== 'svg') {
-      const svgElement = this.svgManipulation.getSVGInstance()?.findOne(`#${target.id}`) as SVGElement;
-      if (svgElement) {
-        const properties = this.svgManipulation.getShapeProperties(svgElement);
-        this.shapeSelection.selectShape(properties);
-        this.svgManipulation.highlightShape(properties.id);
-      }
+    const svgElement =
+      clickTarget.id && (this.svgManipulation.getSVGInstance()?.findOne(`#${clickTarget.id}`) as SVGElement);
+    if (svgElement) {
+      const properties = this.svgManipulation.getShapeProperties(svgElement);
+      this.shapeSelection.selectShape(properties);
+      this.svgManipulation.highlightShape(properties.id);
     } else {
       this.shapeSelection.clearSelection();
       this.svgManipulation.clearHighlight();

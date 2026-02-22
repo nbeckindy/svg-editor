@@ -398,12 +398,12 @@ describe('SvgCanvasComponent', () => {
     expect(component.highlightRect!.y).toBe(20);
     expect(component.highlightRect!.width).toBe(50);
     expect(component.highlightRect!.height).toBe(40);
-    const overlayRect = fixture.nativeElement.querySelector('.highlight-overlay rect');
-    expect(overlayRect).toBeTruthy();
-    expect(overlayRect.getAttribute('x')).toBe('10');
-    expect(overlayRect.getAttribute('y')).toBe('20');
-    expect(overlayRect.getAttribute('width')).toBe('50');
-    expect(overlayRect.getAttribute('height')).toBe('40');
+    const highlightRectEl = fixture.nativeElement.querySelector('.highlight-overlay rect[stroke="#2196F3"]');
+    expect(highlightRectEl).toBeTruthy();
+    expect(highlightRectEl.getAttribute('x')).toBe('10');
+    expect(highlightRectEl.getAttribute('y')).toBe('20');
+    expect(highlightRectEl.getAttribute('width')).toBe('50');
+    expect(highlightRectEl.getAttribute('height')).toBe('40');
   });
 
   it('should not show overlay rect when getShapeBBox returns null for selected shape', async () => {
@@ -424,8 +424,8 @@ describe('SvgCanvasComponent', () => {
     await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
     expect(component.highlightRect).toBeNull();
-    const overlayRect = fixture.nativeElement.querySelector('.highlight-overlay rect');
-    expect(overlayRect).toBeFalsy();
+    const highlightRectEl = fixture.nativeElement.querySelector('.highlight-overlay rect[stroke="#2196F3"]');
+    expect(highlightRectEl).toBeFalsy();
   });
 
   it('should call highlightShape when a shape is clicked with selector tool', () => {
@@ -746,7 +746,47 @@ describe('SvgCanvasComponent', () => {
     await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
     expect(component.highlightRect).toBeNull();
-    const overlayRect = fixture.nativeElement.querySelector('.highlight-overlay rect');
-    expect(overlayRect).toBeFalsy();
+    const highlightRectEl = fixture.nativeElement.querySelector('.highlight-overlay rect[stroke="#2196F3"]');
+    expect(highlightRectEl).toBeFalsy();
+  });
+
+  describe('viewBox visibility in editor', () => {
+    it('should render viewBox as a rect with white fill and thin black stroke when SVG has viewBox', async () => {
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      const canvasSvg = fixture.nativeElement.querySelector('.svg-canvas svg');
+      expect(canvasSvg).toBeTruthy();
+      const viewBoxFillRect = canvasSvg?.querySelector('rect[data-editor-viewbox-rect]');
+      expect(viewBoxFillRect).toBeTruthy();
+      expect(viewBoxFillRect?.getAttribute('fill')?.toLowerCase()).toBe('#ffffff');
+      expect(component.viewBoxOverlayRect).toBeDefined();
+    });
+
+    it('should show elements outside viewBox in the DOM (all elements visible)', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="outside-rect" x="150" y="150" width="30" height="30"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      const outsideRect = fixture.nativeElement.querySelector('#outside-rect');
+      expect(outsideRect).toBeTruthy();
+    });
+
+    it('should render light grey area outside viewBox', async () => {
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      const svg = fixture.nativeElement.querySelector('.svg-canvas svg');
+      expect(svg).toBeTruthy();
+      const outsideRect = svg?.querySelector('rect[data-editor-outside-rect]');
+      expect(outsideRect).toBeTruthy();
+      const fill = outsideRect?.getAttribute('fill')?.toLowerCase() ?? '';
+      expect(fill).toMatch(/^#?[dD]|gray|grey/);
+    });
   });
 });

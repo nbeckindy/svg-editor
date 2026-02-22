@@ -1,0 +1,32 @@
+---
+description: Use viewChild() and viewChildren() instead of @ViewChild and @ViewChildren
+globs: "**/*.component.ts"
+alwaysApply: false
+---
+
+# Prefer viewChild() and viewChildren() over @ViewChild and @ViewChildren
+
+Do **not** use the `@ViewChild` or `@ViewChildren` decorators for new or refactored components. Use the **viewChild()** and **viewChildren()** functions instead (Angular 17.3+ / signal queries).
+
+- **viewChild:** Declare with `readonly myRef = viewChild<ElementRef<HTMLElement>>('templateRefName')` or `viewChild.required('refName', { read: ElementRef })`. Read the current value by calling the signal: `this.myRef()` (returns `T | undefined` until the view is ready).
+- **viewChildren:** Use `viewChildren()` for multiple results instead of `QueryList`.
+
+**Example:**
+
+```typescript
+@Component({ ... })
+export class MyComponent {
+  readonly container = viewChild<ElementRef<HTMLElement>>('container');
+
+  someMethod() {
+    const el = this.container()?.nativeElement;
+    if (el) { ... }
+  }
+}
+```
+
+Template: keep the `#container` (or `#refName`) on the element. Bindings and template ref names are unchanged.
+
+**Benefits:** Query results are reactive (signals), work with `computed()` and `effect()`, and avoid relying on `ngAfterViewInit` for one-time setup when combined with effects. Handle `undefined` until the view is ready (e.g. `this.container()?.nativeElement`).
+
+**Testing:** In specs, read the query with the signal: `component.container()?.nativeElement`. Use `fixture.detectChanges()` so the view (and thus the query result) is populated before asserting.
