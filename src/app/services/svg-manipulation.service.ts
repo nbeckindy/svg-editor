@@ -265,6 +265,22 @@ export class SvgManipulationService {
   }
 
   /**
+   * Union of bounding boxes for the given shape ids. Returns null if no valid bboxes.
+   */
+  getUnionBBox(shapeIds: string[]): { x: number; y: number; width: number; height: number } | null {
+    const bboxes = shapeIds
+      .map((id) => this.getShapeBBox(id))
+      .filter((b): b is { x: number; y: number; width: number; height: number } => b != null);
+    if (bboxes.length === 0) return null;
+    if (bboxes.length === 1) return bboxes[0];
+    const minX = Math.min(...bboxes.map((b) => b.x));
+    const minY = Math.min(...bboxes.map((b) => b.y));
+    const maxX = Math.max(...bboxes.map((b) => b.x + b.width));
+    const maxY = Math.max(...bboxes.map((b) => b.y + b.height));
+    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  /**
    * Highlight selected shape (no-op: highlight is drawn by canvas overlay, not by modifying SVG).
    */
   highlightShape(_shapeId: string): void {}
@@ -291,5 +307,23 @@ export class SvgManipulationService {
    */
   getSVGInstance(): Svg | null {
     return this.svgInstance;
+  }
+
+  /**
+   * Return the given shape ids in DOM order (order of children in the editor content group).
+   * Ids not found in the content group are omitted.
+   */
+  getShapeIdsInDomOrder(shapeIds: string[]): string[] {
+    if (!this.svgInstance || shapeIds.length === 0) return [];
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    if (!contentGroup?.node) return [...shapeIds];
+    const idSet = new Set(shapeIds);
+    const ordered: string[] = [];
+    const children = Array.from((contentGroup.node as Element).children);
+    for (const child of children) {
+      const id = (child as Element).id;
+      if (id && idSet.has(id)) ordered.push(id);
+    }
+    return ordered.length > 0 ? ordered : [...shapeIds];
   }
 }

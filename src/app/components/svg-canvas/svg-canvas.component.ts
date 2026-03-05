@@ -64,9 +64,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private panStartX = 0;
   private panStartY = 0;
 
-  /** Shape drag: when user drags the selected element we hide it and show a ghost until mouseup. */
+  /** Shape drag: when user drags the selected element(s) we hide them and show a ghost until mouseup. */
   isDraggingShape = false;
-  private dragShapeId: string | null = null;
+  /** Ids of all shapes being dragged (one or many for group drag). */
+  private dragShapeIds: string[] = [];
   /** True after drag ends so we ignore the following click (which would target SVG root and clear selection). */
   private dragJustEnded = false;
   private dragStartSvg: { x: number; y: number } | null = null;
@@ -109,28 +110,32 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   onDocumentMouseUp(event: MouseEvent): void {
     if (event.button !== 0) return;
     this.isPanning = false;
-    if (this.isDraggingShape && this.dragShapeId && this.dragStartSvg) {
-      const shapeId = this.dragShapeId;
+    if (this.isDraggingShape && this.dragShapeIds.length > 0 && this.dragStartSvg) {
       const rect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
+      let dx = 0;
+      let dy = 0;
       if (rect) {
         const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
         if (point) {
-          const dx = point.x - this.dragStartSvg.x;
-          const dy = point.y - this.dragStartSvg.y;
-          this.svgManipulation.translateShape(shapeId, dx, dy);
+          dx = point.x - this.dragStartSvg.x;
+          dy = point.y - this.dragStartSvg.y;
         }
       }
-      this.svgManipulation.setShapeVisibility(shapeId, true);
+      for (const shapeId of this.dragShapeIds) {
+        this.svgManipulation.translateShape(shapeId, dx, dy);
+        this.svgManipulation.setShapeVisibility(shapeId, true);
+      }
       this.removeDragGhost();
       this.dragOverlayRect = null;
       this.isDraggingShape = false;
-      this.dragShapeId = null;
+      this.dragShapeIds = [];
       this.dragStartSvg = null;
       this.dragStartBbox = null;
       this.dragJustEnded = true;
-      const newBbox = this.svgManipulation.getShapeBBox(shapeId);
-      if (newBbox) {
-        this.lastBbox = newBbox;
+      const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
+      const unionBbox = this.svgManipulation.getUnionBBox(selectedIds);
+      if (unionBbox) {
+        this.lastBbox = unionBbox;
         this._highlightRectCacheKey = '';
       }
       this.cdr.detectChanges();
@@ -140,8 +145,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private updateDragGhostAndOverlay(currentBbox: { x: number; y: number; width: number; height: number }): void {
     this.dragOverlayRect = this.svgBboxToOverlayPixels(currentBbox);
     if (!this.dragGhostEl) return;
-    const overlayContainer = this.highlightOverlayContainer()?.nativeElement;
-    const rect = overlayContainer?.getBoundingClientRect() ?? this.zoomWrapper()?.nativeElement?.getBoundingClientRect();
+    const zoomEl = this.zoomWrapper()?.nativeElement;
+    const overlayEl = this.highlightOverlayContainer()?.nativeElement;
+    const rect = zoomEl?.getBoundingClientRect() ?? overlayEl?.getBoundingClientRect();
     if (!rect) return;
     this.dragGhostEl.style.left = `${rect.left + this.dragOverlayRect.x}px`;
     this.dragGhostEl.style.top = `${rect.top + this.dragOverlayRect.y}px`;
@@ -162,17 +168,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.canvasView.resetZoom();
     });
     effect(() => {
-      const shape = this.shapeSelection.selectedShape();
+      const shapes = this.shapeSelection.selectedShapes();
       setTimeout(() => {
-        if (!shape) {
+        if (shapes.length === 0) {
           this.lastBbox = null;
           this._highlightRectCache = null;
           this._highlightRectCacheKey = '';
         } else {
           this.syncOverlayViewBox();
-          const bbox = this.svgManipulation.getShapeBBox(shape.id);
-          this.lastBbox = bbox;
-          if (bbox) {
+          const ids = shapes.map((s) => s.id);
+          const unionBbox = this.svgManipulation.getUnionBBox(ids);
+          this.lastBbox = unionBbox;
+          if (unionBbox) {
             this._highlightRectCacheKey = '';
           } else {
             this._highlightRectCache = null;
@@ -312,9 +319,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.svgManipulation.initializeSVG(this.svgContainer()!.nativeElement, this.svgContent());
     this.canvasView.init();
     this.syncOverlayViewBox();
-    const shape = this.shapeSelection.getSelectedShape();
-    if (shape) {
-      this.lastBbox = this.svgManipulation.getShapeBBox(shape.id);
+    const shapes = this.shapeSelection.getSelectedShapes();
+    if (shapes.length > 0) {
+      const ids = shapes.map((s) => s.id);
+      this.lastBbox = this.svgManipulation.getUnionBBox(ids);
     } else {
       this.lastBbox = null;
     }
@@ -335,27 +343,41 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (this.editorTool.getCurrentTool() !== 'selector' || !this.svgContent() || !this.canvasView.isInitialized()) return;
     const target = event.target as Element;
     if (target.tagName === 'svg' || !target.id) return;
-    const selected = this.shapeSelection.getSelectedShape();
-    if (!selected || selected.id !== target.id) return;
+    if (!this.shapeSelection.isShapeSelected(target.id)) return;
     const rect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
     if (!rect) return;
     const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
     if (!point) return;
+    const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
+    for (const id of selectedIds) {
+      this.svgManipulation.setShapeVisibility(id, false);
+    }
     const svgInstance = this.svgManipulation.getSVGInstance();
-    const shape = svgInstance?.findOne(`#${selected.id}`) as SVGElement | undefined;
+    const shape = svgInstance?.findOne(`#${target.id}`) as SVGElement | undefined;
     const shapeEl = shape?.node as Element | undefined;
-    if (!shapeEl) return;
-    const bbox = this.svgManipulation.getShapeBBox(selected.id);
-    if (!bbox) return;
-    this.dragStartBbox = bbox;
-    const shapeScreenRect =
-      typeof (target as Element).getBoundingClientRect === 'function'
-        ? (target as Element).getBoundingClientRect()
-        : shapeEl.getBoundingClientRect();
-    this.svgManipulation.setShapeVisibility(selected.id, false);
-    this.createDragGhost(selected.id, bbox, shapeScreenRect);
+    if (selectedIds.length === 1) {
+      const bbox = this.svgManipulation.getShapeBBox(target.id);
+      if (!bbox) {
+        this.svgManipulation.setShapeVisibility(target.id, true);
+        return;
+      }
+      this.dragStartBbox = bbox;
+      const shapeScreenRect =
+        typeof (target as Element).getBoundingClientRect === 'function'
+          ? (target as Element).getBoundingClientRect()
+          : shapeEl!.getBoundingClientRect();
+      this.createDragGhost(target.id, bbox, shapeScreenRect);
+    } else {
+      const unionBbox = this.svgManipulation.getUnionBBox(selectedIds);
+      if (!unionBbox) {
+        for (const id of selectedIds) this.svgManipulation.setShapeVisibility(id, true);
+        return;
+      }
+      this.dragStartBbox = unionBbox;
+      this.createUnionDragGhost(unionBbox, selectedIds);
+    }
     this.isDraggingShape = true;
-    this.dragShapeId = selected.id;
+    this.dragShapeIds = selectedIds;
     this.dragStartSvg = { x: point.x, y: point.y };
     event.preventDefault();
   }
@@ -405,6 +427,55 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
+  private createUnionDragGhost(
+    unionBbox: { x: number; y: number; width: number; height: number },
+    selectedIds: string[]
+  ): void {
+    this.dragOverlayRect = this.svgBboxToOverlayPixels(unionBbox);
+    const overlayEl = this.highlightOverlayContainer()?.nativeElement;
+    const zoomEl = this.zoomWrapper()?.nativeElement;
+    const overlayRect = overlayEl?.getBoundingClientRect();
+    const zoomRect = zoomEl?.getBoundingClientRect();
+    // svgBboxToOverlayPixels returns offsets from the zoom wrapper; use it as origin so ghost aligns
+    const containerRect = zoomRect ?? overlayRect;
+    if (!containerRect) return;
+    const svgInstance = this.svgManipulation.getSVGInstance();
+    if (!svgInstance) return;
+    const ghostW = Math.max(1, this.dragOverlayRect.width);
+    const ghostH = Math.max(1, this.dragOverlayRect.height);
+    const wrapper = document.createElement('div');
+    wrapper.className = 'drag-ghost drag-ghost-union';
+    wrapper.style.position = 'fixed';
+    wrapper.style.pointerEvents = 'none';
+    wrapper.style.zIndex = '9999';
+    wrapper.style.left = `${containerRect.left + this.dragOverlayRect.x}px`;
+    wrapper.style.top = `${containerRect.top + this.dragOverlayRect.y}px`;
+    wrapper.style.width = `${ghostW}px`;
+    wrapper.style.height = `${ghostH}px`;
+    wrapper.style.overflow = 'visible';
+    // ViewBox (0,0, w, h) so translated clones at (0,0)-(w,h) fill the ghost; viewBox was (unionBbox.x, unionBbox.y, ...) which didn't match post-dmove content
+    const ghostSvg = SVG()
+      .addTo(wrapper)
+      .size(ghostW, ghostH)
+      .viewbox(0, 0, unionBbox.width, unionBbox.height)
+      .attr({ overflow: 'visible', preserveAspectRatio: 'none' });
+    const orderedIds = this.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    for (const id of orderedIds) {
+      const shape = svgInstance.findOne(`#${id}`) as SVGElement | undefined;
+      if (!shape?.node) continue;
+      const bbox = this.svgManipulation.getShapeBBox(id);
+      if (!bbox) continue;
+      const clone = shape.clone(true, true) as SVGElement;
+      if (typeof clone?.attr === 'function') {
+        clone.attr('visibility', 'visible').dmove(-unionBbox.x, -unionBbox.y);
+      }
+      ghostSvg.add(clone);
+    }
+    document.body.appendChild(wrapper);
+    this.dragGhostEl = wrapper;
+    this.cdr.detectChanges();
+  }
+
   private removeDragGhost(): void {
     if (this.dragGhostEl?.parentNode) {
       this.dragGhostEl.parentNode.removeChild(this.dragGhostEl);
@@ -416,9 +487,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const clickTarget = event.target as Element;
     if (this.dragJustEnded) {
       this.dragJustEnded = false;
-      if (clickTarget.tagName?.toLowerCase() === 'svg') {
-        return;
-      }
+      return;
     }
     if (this.editorTool.getCurrentTool() === 'pan') {
       return;
@@ -443,7 +512,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       clickTarget.id && (this.svgManipulation.getSVGInstance()?.findOne(`#${clickTarget.id}`) as SVGElement);
     if (svgElement) {
       const properties = this.svgManipulation.getShapeProperties(svgElement);
-      this.shapeSelection.selectShape(properties);
+      if (event.shiftKey) {
+        this.shapeSelection.toggleShapeInSelection(properties);
+      } else {
+        this.shapeSelection.selectShape(properties);
+      }
       this.svgManipulation.highlightShape(properties.id);
     } else {
       this.shapeSelection.clearSelection();

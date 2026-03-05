@@ -16,9 +16,10 @@ describe('ShapeSelectionService', () => {
 
   it('should initialize with no selection', () => {
     expect(service.getSelectedShape()).toBeNull();
+    expect(service.getSelectedShapes()).toEqual([]);
   });
 
-  it('should select a shape', () => {
+  it('should select a shape (selectedShapes has one, selectShape replaces)', () => {
     const testShape: ShapeProperties = {
       id: 'test-circle',
       type: 'circle',
@@ -29,11 +30,62 @@ describe('ShapeSelectionService', () => {
     };
 
     service.selectShape(testShape);
-    
+
     const selected = service.getSelectedShape();
     expect(selected?.id).toBe('test-circle');
     expect(selected?.type).toBe('circle');
     expect(selected?.fill).toBe('#FF0000');
+    expect(service.getSelectedShapes()).toHaveLength(1);
+    expect(service.getSelectedShapes()[0].id).toBe('test-circle');
+  });
+
+  it('should replace selection when selectShape is called with another shape', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const shapeB: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };
+    service.selectShape(shapeA);
+    service.selectShape(shapeB);
+    expect(service.getSelectedShapes()).toHaveLength(1);
+    expect(service.getSelectedShape()?.id).toBe('b');
+  });
+
+  it('should toggle shape into selection when not selected', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const shapeB: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };
+    service.selectShape(shapeA);
+    service.toggleShapeInSelection(shapeB);
+    expect(service.getSelectedShapes()).toHaveLength(2);
+    expect(service.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
+    expect(service.isShapeSelected('a')).toBe(true);
+    expect(service.isShapeSelected('b')).toBe(true);
+  });
+
+  it('should toggle shape out of selection when already selected', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const shapeB: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };
+    service.selectShape(shapeA);
+    service.toggleShapeInSelection(shapeB);
+    service.toggleShapeInSelection(shapeA);
+    expect(service.getSelectedShapes()).toHaveLength(1);
+    expect(service.getSelectedShapes()[0].id).toBe('b');
+    expect(service.isShapeSelected('a')).toBe(false);
+    expect(service.isShapeSelected('b')).toBe(true);
+  });
+
+  it('should have empty selection when last shape is toggled out', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    service.selectShape(shapeA);
+    service.toggleShapeInSelection(shapeA);
+    expect(service.getSelectedShapes()).toEqual([]);
+    expect(service.getSelectedShape()).toBeNull();
+    expect(service.isShapeSelected('a')).toBe(false);
+  });
+
+  it('should report isShapeSelected correctly', () => {
+    expect(service.isShapeSelected('x')).toBe(false);
+    const shape: ShapeProperties = { id: 'x', type: 'rect', fill: '#000' };
+    service.selectShape(shape);
+    expect(service.isShapeSelected('x')).toBe(true);
+    expect(service.isShapeSelected('y')).toBe(false);
   });
 
   it('should return currently selected shape', () => {
@@ -60,9 +112,11 @@ describe('ShapeSelectionService', () => {
 
     service.selectShape(testShape);
     expect(service.getSelectedShape()).not.toBeNull();
+    expect(service.getSelectedShapes()).toHaveLength(1);
 
     service.clearSelection();
     expect(service.getSelectedShape()).toBeNull();
+    expect(service.getSelectedShapes()).toEqual([]);
   });
 
   it('should update selected shape properties', () => {
@@ -90,7 +144,7 @@ describe('ShapeSelectionService', () => {
     expect(service.getSelectedShape()).toBeNull();
   });
 
-  it('should update signal when selection changes', () => {
+  it('should update signal when selection changes (selectedShape is first of selectedShapes)', () => {
     const testShape: ShapeProperties = {
       id: 'signal-test',
       type: 'path',
@@ -98,12 +152,15 @@ describe('ShapeSelectionService', () => {
     };
 
     expect(service.selectedShape()).toBeNull();
+    expect(service.selectedShapes()).toEqual([]);
 
     service.selectShape(testShape);
 
     expect(service.selectedShape()).toEqual(testShape);
+    expect(service.selectedShapes()).toHaveLength(1);
 
     service.clearSelection();
     expect(service.selectedShape()).toBeNull();
+    expect(service.selectedShapes()).toEqual([]);
   });
 });

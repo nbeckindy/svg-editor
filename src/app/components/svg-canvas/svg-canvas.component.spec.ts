@@ -406,6 +406,44 @@ describe('SvgCanvasComponent', () => {
     expect(highlightRectEl.getAttribute('height')).toBe('40');
   });
 
+  it('should show union bbox overlay when multiple shapes are selected', async () => {
+    vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 70,
+      height: 75
+    });
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/><rect id="b" x="50" y="60" width="20" height="15"/></svg>'
+    );
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    shapeSelectionService.selectShape({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.toggleShapeInSelection({
+      id: 'b',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+    expect(component.highlightRect).not.toBeNull();
+    expect(component.highlightRect!.width).toBe(70);
+    expect(component.highlightRect!.height).toBe(75);
+    expect(svgManipulationService.getUnionBBox).toHaveBeenCalledWith(['a', 'b']);
+  });
+
   it('should not show overlay rect when getShapeBBox returns null for selected shape', async () => {
     vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue(null);
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="50" height="40"/></svg>');
@@ -437,7 +475,8 @@ describe('SvgCanvasComponent', () => {
     const mockEvent = {
       target: { id: 'shape-1', tagName: 'rect' },
       clientX: 20,
-      clientY: 20
+      clientY: 20,
+      shiftKey: false
     } as unknown as MouseEvent;
     vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
       findOne: () => ({ id: () => 'shape-1' }),
@@ -455,6 +494,176 @@ describe('SvgCanvasComponent', () => {
     component.onCanvasClick(mockEvent);
 
     expect(highlightShapeSpy).toHaveBeenCalledWith('shape-1');
+  });
+
+  it('should replace selection on normal click on shape', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/><rect id="b" x="20" y="0" width="10" height="10"/></svg>'
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    const selectShapeSpy = vi.spyOn(shapeSelectionService, 'selectShape');
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: (sel: string) => (sel === '#b' ? { id: () => 'b' } : null),
+      find: () => []
+    } as any);
+    vi.spyOn(svgManipulationService, 'getShapeProperties').mockReturnValue({
+      id: 'b',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.selectShape({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+
+    component.onCanvasClick({
+      target: { id: 'b', tagName: 'rect' },
+      shiftKey: false
+    } as unknown as MouseEvent);
+
+    expect(selectShapeSpy).toHaveBeenCalledWith(
+      expect.objectContaining({ id: 'b' })
+    );
+    expect(shapeSelectionService.getSelectedShapes()).toHaveLength(1);
+    expect(shapeSelectionService.getSelectedShape()?.id).toBe('b');
+  });
+
+  it('should add to selection on shift-click on shape when another is selected', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/><rect id="b" x="20" y="0" width="10" height="10"/></svg>'
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    const toggleSpy = vi.spyOn(shapeSelectionService, 'toggleShapeInSelection');
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: (sel: string) => (sel === '#b' ? { id: () => 'b' } : null),
+      find: () => []
+    } as any);
+    vi.spyOn(svgManipulationService, 'getShapeProperties').mockReturnValue({
+      id: 'b',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.selectShape({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+
+    component.onCanvasClick({
+      target: { id: 'b', tagName: 'rect' },
+      shiftKey: true
+    } as unknown as MouseEvent);
+
+    expect(toggleSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
+    expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('should remove from selection on shift-click on already selected shape', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/><rect id="b" x="20" y="0" width="10" height="10"/></svg>'
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: (sel: string) => (sel === '#a' ? { id: () => 'a' } : null),
+      find: () => []
+    } as any);
+    vi.spyOn(svgManipulationService, 'getShapeProperties').mockReturnValue({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.selectShape({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.toggleShapeInSelection({
+      id: 'b',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+
+    component.onCanvasClick({
+      target: { id: 'a', tagName: 'rect' },
+      shiftKey: true
+    } as unknown as MouseEvent);
+
+    expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['b']);
+  });
+
+  it('should clear selection on normal click on empty canvas', () => {
+    const clearSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="10" width="10" height="10"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'r1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({ findOne: () => null, find: () => [] } as any);
+
+    component.onCanvasClick({
+      target: { tagName: 'svg', id: '' },
+      shiftKey: false
+    } as unknown as MouseEvent);
+
+    expect(clearSpy).toHaveBeenCalled();
+    expect(shapeSelectionService.getSelectedShapes()).toEqual([]);
+  });
+
+  it('should clear selection on shift-click on empty canvas', () => {
+    const clearSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="10" width="10" height="10"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'r1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({ findOne: () => null, find: () => [] } as any);
+
+    component.onCanvasClick({
+      target: { tagName: 'svg', id: '' },
+      shiftKey: true
+    } as unknown as MouseEvent);
+
+    expect(clearSpy).toHaveBeenCalled();
   });
 
   it('should start shape drag on mousedown when selected shape is clicked with selector tool', () => {
@@ -503,6 +712,130 @@ describe('SvgCanvasComponent', () => {
     component.onCanvasMouseDown(mousedownEvent);
     expect(component.isDraggingShape).toBe(true);
     expect(setVisibilitySpy).toHaveBeenCalledWith('drag-target', false);
+  });
+
+  it('should start drag when mousedown on one of multiple selected shapes', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="a" x="10" y="20" width="30" height="40"/><rect id="b" x="50" y="60" width="20" height="25"/></svg>'
+    );
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.toggleShapeInSelection({
+      id: 'b',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockImplementation((id: string) =>
+      id === 'a' ? { x: 10, y: 20, width: 30, height: 40 } : { x: 50, y: 60, width: 20, height: 25 }
+    );
+    const setVisibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
+    const shapeNode = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    vi.spyOn(shapeNode, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 30, 30, 40));
+    const mousedownEvent = {
+      button: 0,
+      target: { id: 'a', tagName: 'rect', getBoundingClientRect: () => new DOMRect(20, 30, 30, 40) },
+      clientX: 25,
+      clientY: 40,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: () => mockSvgJsShape('a', shapeNode)
+    } as any);
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
+    if (wrapperEl) {
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      });
+    }
+    component.onCanvasMouseDown(mousedownEvent);
+    expect(component.isDraggingShape).toBe(true);
+    expect(setVisibilitySpy).toHaveBeenCalledWith('a', false);
+    expect(setVisibilitySpy).toHaveBeenCalledWith('b', false);
+    expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('should translate all selected shapes on mouseup after group drag', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="shape-a" x="0" y="0" width="10" height="10"/><rect id="shape-b" x="20" y="20" width="10" height="10"/></svg>');
+    fixture.detectChanges();
+    const translateSpy = vi.spyOn(svgManipulationService, 'translateShape');
+    const setVisibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
+    component['isDraggingShape'] = true;
+    component['dragShapeIds'] = ['shape-a', 'shape-b'];
+    component['dragStartSvg'] = { x: 0, y: 0 };
+    const wrapperEl = component.svgContainer()?.nativeElement;
+    if (wrapperEl) {
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      });
+    }
+    vi.spyOn(canvasViewService, 'screenToSvg').mockReturnValue({ x: 10, y: 5 });
+    component.onDocumentMouseUp({
+      button: 0,
+      clientX: 10,
+      clientY: 5
+    } as MouseEvent);
+    expect(component.isDraggingShape).toBe(false);
+    expect(translateSpy).toHaveBeenCalledWith('shape-a', 10, 5);
+    expect(translateSpy).toHaveBeenCalledWith('shape-b', 10, 5);
+    expect(setVisibilitySpy).toHaveBeenCalledWith('shape-a', true);
+    expect(setVisibilitySpy).toHaveBeenCalledWith('shape-b', true);
+  });
+
+  it('should not start drag when mousedown on unselected shape', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="a" x="10" y="20" width="30" height="40"/><rect id="b" x="50" y="60" width="20" height="25"/></svg>'
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+
+    const mousedownEvent = {
+      button: 0,
+      target: { id: 'b', tagName: 'rect' },
+      clientX: 55,
+      clientY: 70,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    component.onCanvasMouseDown(mousedownEvent);
+    expect(component.isDraggingShape).toBe(false);
   });
 
   it('should not start shape drag when pan tool is active', () => {
@@ -707,7 +1040,7 @@ describe('SvgCanvasComponent', () => {
     const translateSpy = vi.spyOn(svgManipulationService, 'translateShape');
     const setVisibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
     component['isDraggingShape'] = true;
-    component['dragShapeId'] = 'drag-me';
+    component['dragShapeIds'] = ['drag-me'];
     component['dragStartSvg'] = { x: 25, y: 40 };
     component.onDocumentMouseUp({
       button: 0,
@@ -786,7 +1119,7 @@ describe('SvgCanvasComponent', () => {
       const outsideRect = svg?.querySelector('rect[data-editor-outside-rect]');
       expect(outsideRect).toBeTruthy();
       const fill = outsideRect?.getAttribute('fill')?.toLowerCase() ?? '';
-      expect(fill).toMatch(/^#?[dD]|gray|grey/);
+      expect(fill === '#bfbfbf' || fill.match(/gray|grey/)).toBeTruthy();
     });
   });
 });

@@ -164,6 +164,41 @@ describe('SvgManipulationService', () => {
     expect(service.getShapeBBox('any-id')).toBeNull();
   });
 
+  it('getUnionBBox should return null for empty array', () => {
+    const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+    service.initializeSVG(container, svgContent);
+    expect(service.getUnionBBox([])).toBeNull();
+  });
+
+  it('getUnionBBox should return single shape bbox for one id', () => {
+    const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const rectEl = container.querySelector('#r1');
+    if (rectEl && typeof (rectEl as SVGGraphicsElement).getBBox !== 'function') {
+      (rectEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 10, y: 20, width: 30, height: 40 } as DOMRect);
+    }
+    const union = service.getUnionBBox(['r1']);
+    expect(union).toEqual({ x: 10, y: 20, width: 30, height: 40 });
+  });
+
+  it('getUnionBBox should return union of two shapes', () => {
+    const svgContent =
+      '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/><rect id="b" x="50" y="60" width="20" height="15"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const elA = container.querySelector('#a');
+    const elB = container.querySelector('#b');
+    if (elA && typeof (elA as SVGGraphicsElement).getBBox !== 'function') {
+      (elA as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () => ({ x: 0, y: 0, width: 10, height: 10 } as DOMRect);
+    }
+    if (elB && typeof (elB as SVGGraphicsElement).getBBox !== 'function') {
+      (elB as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 50, y: 60, width: 20, height: 15 } as DOMRect);
+    }
+    const union = service.getUnionBBox(['a', 'b']);
+    expect(union).toEqual({ x: 0, y: 0, width: 70, height: 75 });
+  });
+
   it('highlightShape and clearHighlight should not modify SVG (no-op)', () => {
     const svgContent = '<svg><path id="noop-test" d="M10 10 L50 50"/></svg>';
     service.initializeSVG(container, svgContent);
