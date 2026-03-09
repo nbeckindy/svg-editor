@@ -5,6 +5,19 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { CanvasViewService } from '../../services/canvas-view.service';
 
+/** Target number of major ticks visible across the ruler at any zoom level. */
+const RULER_TICK_COUNT = 30;
+
+/** Round to nearest "nice" step (1, 2, 5 × 10^n) for readable labels. */
+function roundToNiceStep(value: number): number {
+  if (value <= 0 || !Number.isFinite(value)) return 1;
+  const exp = Math.floor(Math.log10(value));
+  const mag = Math.pow(10, exp);
+  const normalized = value / mag;
+  const nice = normalized <= 1.5 ? 1 : normalized <= 3.5 ? 2 : normalized <= 7.5 ? 5 : 10;
+  return mag * nice;
+}
+
 @Component({
   selector: 'app-svg-canvas',
   standalone: true,
@@ -19,20 +32,80 @@ import { CanvasViewService } from '../../services/canvas-view.service';
   }
 })
 export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
+  readonly RULER_SIZE = 24;
   readonly svgContent = input<string>('');
   readonly svgContainer = viewChild<ElementRef<HTMLElement>>('svgContainer');
   readonly zoomWrapper = viewChild<ElementRef<HTMLElement>>('zoomWrapper');
   readonly highlightOverlayContainer = viewChild<ElementRef<HTMLElement>>('highlightOverlayContainer');
+  readonly canvasViewport = viewChild<ElementRef<HTMLElement>>('canvasViewport');
   altKeyPressed = false;
   isPanning = false;
   overlayViewBox = '0 0 100 100';
   wrapperWidth = 0;
   wrapperHeight = 0;
+  /** Offset of zoom-wrapper (content) origin from viewport top-left; used so ruler 0,0 aligns with content 0,0. */
+  rulerOriginOffsetX = 0;
+  rulerOriginOffsetY = 0;
   get overlayWidthPx(): number {
     return this.wrapperWidth * this.canvasView.scale;
   }
   get overlayHeightPx(): number {
     return this.wrapperHeight * this.canvasView.scale;
+  }
+  /** Current zoom as percentage (100% = original SVG size). */
+  get zoomLevelPercent(): number {
+    return Math.round(this.canvasView.scale * 100);
+  }
+
+  /** Horizontal ruler ticks: position (px) and value (viewBox units). 0,0 aligns with content origin. */
+  get horizontalRulerTicks(): { position: number; value: number; major: boolean }[] {
+    const originX = this.rulerOriginOffsetX + this.canvasView.panX;
+    return this.getRulerTicks(
+      (0 - originX) / this.canvasView.scale,
+      (this.wrapperWidth - originX) / this.canvasView.scale,
+      this.canvasView.scale,
+      (svgVal) => this.rulerOriginOffsetX + this.canvasView.panX + svgVal * this.canvasView.scale,
+      this.wrapperWidth,
+      RULER_TICK_COUNT
+    );
+  }
+
+  /** Vertical ruler ticks (half as many as horizontal). */
+  get verticalRulerTicks(): { position: number; value: number; major: boolean }[] {
+    const originY = this.rulerOriginOffsetY + this.canvasView.panY;
+    return this.getRulerTicks(
+      (0 - originY) / this.canvasView.scale,
+      (this.wrapperHeight - originY) / this.canvasView.scale,
+      this.canvasView.scale,
+      (svgVal) => this.rulerOriginOffsetY + this.canvasView.panY + svgVal * this.canvasView.scale,
+      this.wrapperHeight,
+      Math.max(1, Math.floor(RULER_TICK_COUNT / 2))
+    );
+  }
+
+  private getRulerTicks(
+    minSvg: number,
+    maxSvg: number,
+    scale: number,
+    toPosition: (svgVal: number) => number,
+    sizePx: number,
+    tickCount: number
+  ): { position: number; value: number; major: boolean }[] {
+    if (sizePx <= 0 || scale <= 0 || tickCount <= 0) return [];
+    const visibleRangeSvg = sizePx / scale;
+    const rawStep = visibleRangeSvg / tickCount;
+    const step = roundToNiceStep(rawStep);
+    const minorStep = step / 2;
+    const first = Math.floor(minSvg / minorStep) * minorStep;
+    const out: { position: number; value: number; major: boolean }[] = [];
+    for (let v = first; v <= maxSvg + minorStep * 0.5; v += minorStep) {
+      const pos = toPosition(v);
+      if (pos >= -0.5 && pos <= sizePx + 0.5) {
+        const isMajor = Math.abs((v / step) - Math.round(v / step)) < 1e-6;
+        out.push({ position: pos, value: isMajor ? Math.round(v) : v, major: isMajor });
+      }
+    }
+    return out;
   }
   /** SVG-coordinate bbox of selected shape; overlay pixel rect is derived from this so zoom updates the highlight. */
   private lastBbox: { x: number; y: number; width: number; height: number } | null = null;
@@ -307,13 +380,28 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.overlayViewBox = `0 0 ${width} ${height}`;
     }
     const el = this.zoomWrapper()?.nativeElement;
-    const viewportEl = el?.closest('.canvas-container') as HTMLElement | undefined;
+    const viewportRef = this.canvasViewport()?.nativeElement;
+    const viewportEl =
+      (this.svgContent() && viewportRef && viewportRef.clientWidth > 0 && viewportRef.clientHeight > 0
+        ? viewportRef
+        : el?.closest('.canvas-container')) as HTMLElement | undefined;
     if (viewportEl && viewportEl.clientWidth > 0 && viewportEl.clientHeight > 0) {
       this.wrapperWidth = viewportEl.clientWidth;
       this.wrapperHeight = viewportEl.clientHeight;
+      if (this.svgContent() && el?.parentElement) {
+        const viewportRect = viewportEl.getBoundingClientRect();
+        const innerRect = el.parentElement.getBoundingClientRect();
+        this.rulerOriginOffsetX = innerRect.left - viewportRect.left;
+        this.rulerOriginOffsetY = innerRect.top - viewportRect.top;
+      } else {
+        this.rulerOriginOffsetX = 0;
+        this.rulerOriginOffsetY = 0;
+      }
     } else if (el && (el.offsetWidth > 0 || el.offsetHeight > 0)) {
       this.wrapperWidth = el.offsetWidth;
       this.wrapperHeight = el.offsetHeight;
+      this.rulerOriginOffsetX = 0;
+      this.rulerOriginOffsetY = 0;
     }
     if (this.svgManipulation.getSVGInstance() && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
       const vb = this.svgManipulation.getDocumentViewBox();
