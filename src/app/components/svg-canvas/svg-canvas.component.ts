@@ -59,6 +59,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   get viewBoxOverlayRect(): { x: number; y: number; width: number; height: number } | null {
     return this._viewBoxOverlayRect;
   }
+  /** Screen rect for zoom marquee overlay (position: fixed; left, top, width, height in px). */
+  get zoomMarqueeRect(): { left: number; top: number; width: number; height: number } | null {
+    if (!this.isZoomMarquee || !this.zoomMarqueeStart || !this.zoomMarqueeEnd) return null;
+    const left = Math.min(this.zoomMarqueeStart.clientX, this.zoomMarqueeEnd.clientX);
+    const top = Math.min(this.zoomMarqueeStart.clientY, this.zoomMarqueeEnd.clientY);
+    const width = Math.abs(this.zoomMarqueeEnd.clientX - this.zoomMarqueeStart.clientX);
+    const height = Math.abs(this.zoomMarqueeEnd.clientY - this.zoomMarqueeStart.clientY);
+    return { left, top, width, height };
+  }
   private panStartClientX = 0;
   private panStartClientY = 0;
   private panStartX = 0;
@@ -74,6 +83,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private dragStartBbox: { x: number; y: number; width: number; height: number } | null = null;
   private dragGhostEl: HTMLElement | null = null;
 
+  /** Zoom marquee: drag-to-rectangle zoom. */
+  isZoomMarquee = false;
+  private zoomMarqueeStart: { clientX: number; clientY: number } | null = null;
+  private zoomMarqueeEnd: { clientX: number; clientY: number } | null = null;
+  /** After marquee mouseup, ignore the next click so it doesn't zoom in. */
+  private zoomMarqueeJustEnded = false;
+  private static readonly ZOOM_MARQUEE_MIN_SIZE_PX = 5;
+
   onKeyDown(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
   }
@@ -83,6 +100,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   onDocumentMouseMove(event: MouseEvent): void {
+    if (this.isZoomMarquee) {
+      this.zoomMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
+      this.cdr.detectChanges();
+      return;
+    }
     if (this.isPanning) {
       this.canvasView.setPan(
         this.panStartX + (event.clientX - this.panStartClientX),
@@ -109,6 +131,66 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onDocumentMouseUp(event: MouseEvent): void {
     if (event.button !== 0) return;
+    if (this.isZoomMarquee && this.zoomMarqueeStart && this.zoomMarqueeEnd) {
+      const viewportEl = this.zoomWrapper()?.nativeElement?.closest('.canvas-container') as HTMLElement | undefined;
+      if (viewportEl && viewportEl.clientWidth > 0 && viewportEl.clientHeight > 0) {
+        this.wrapperWidth = viewportEl.clientWidth;
+        this.wrapperHeight = viewportEl.clientHeight;
+      }
+      const rawRect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
+      if (rawRect && this.svgContent() && this.canvasView.isInitialized()) {
+        const scale = this.canvasView.scale;
+        if (scale <= 0) {
+          this.isZoomMarquee = false;
+          this.zoomMarqueeStart = null;
+          this.zoomMarqueeEnd = null;
+          this.cdr.detectChanges();
+          return;
+        }
+        const startSvg = {
+          x: (this.zoomMarqueeStart.clientX - rawRect.left) / scale,
+          y: (this.zoomMarqueeStart.clientY - rawRect.top) / scale
+        };
+        const endSvg = {
+          x: (this.zoomMarqueeEnd.clientX - rawRect.left) / scale,
+          y: (this.zoomMarqueeEnd.clientY - rawRect.top) / scale
+        };
+        {
+          const x = Math.min(startSvg.x, endSvg.x);
+          const y = Math.min(startSvg.y, endSvg.y);
+          const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
+          const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
+          const screenW = Math.abs(this.zoomMarqueeEnd.clientX - this.zoomMarqueeStart.clientX);
+          const screenH = Math.abs(this.zoomMarqueeEnd.clientY - this.zoomMarqueeStart.clientY);
+          const isTinyDrag =
+            screenW < SvgCanvasComponent.ZOOM_MARQUEE_MIN_SIZE_PX &&
+            screenH < SvgCanvasComponent.ZOOM_MARQUEE_MIN_SIZE_PX;
+          if (isTinyDrag) {
+            this.zoomMarqueeJustEnded = false;
+          } else if (w > 0 && h > 0 && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
+            this.canvasView.zoomToFitRect(x, y, w, h, this.wrapperWidth, this.wrapperHeight);
+            const wrapperEl = this.zoomWrapper()?.nativeElement;
+            if (viewportEl && wrapperEl) {
+              const wrapperRect = wrapperEl.getBoundingClientRect();
+              const containerRect = viewportEl.getBoundingClientRect();
+              this.canvasView.panX += containerRect.left - wrapperRect.left;
+              this.canvasView.panY += containerRect.top - wrapperRect.top;
+            }
+            this.updateViewBoxOverlayRect();
+            this.zoomMarqueeJustEnded = true;
+          } else {
+            this.zoomMarqueeJustEnded = false;
+          }
+        }
+      } else {
+        this.zoomMarqueeJustEnded = false;
+      }
+      this.isZoomMarquee = false;
+      this.zoomMarqueeStart = null;
+      this.zoomMarqueeEnd = null;
+      this.cdr.detectChanges();
+      return;
+    }
     this.isPanning = false;
     if (this.isDraggingShape && this.dragShapeIds.length > 0 && this.dragStartSvg) {
       const rect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
@@ -225,7 +307,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.overlayViewBox = `0 0 ${width} ${height}`;
     }
     const el = this.zoomWrapper()?.nativeElement;
-    if (el && (el.offsetWidth > 0 || el.offsetHeight > 0)) {
+    const viewportEl = el?.closest('.canvas-container') as HTMLElement | undefined;
+    if (viewportEl && viewportEl.clientWidth > 0 && viewportEl.clientHeight > 0) {
+      this.wrapperWidth = viewportEl.clientWidth;
+      this.wrapperHeight = viewportEl.clientHeight;
+    } else if (el && (el.offsetWidth > 0 || el.offsetHeight > 0)) {
       this.wrapperWidth = el.offsetWidth;
       this.wrapperHeight = el.offsetHeight;
     }
@@ -331,6 +417,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onCanvasMouseDown(event: MouseEvent): void {
     if (event.button !== 0) return;
+    if (this.editorTool.getCurrentTool() === 'zoom') {
+      this.isZoomMarquee = true;
+      this.zoomMarqueeStart = { clientX: event.clientX, clientY: event.clientY };
+      this.zoomMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
+      event.preventDefault();
+      return;
+    }
     if (this.editorTool.getCurrentTool() === 'pan') {
       this.isPanning = true;
       this.panStartClientX = event.clientX;
@@ -493,6 +586,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (this.editorTool.getCurrentTool() === 'zoom') {
+      if (this.zoomMarqueeJustEnded) {
+        this.zoomMarqueeJustEnded = false;
+        return;
+      }
       if (!this.svgContent() || !this.canvasView.isInitialized()) return;
       const rect = this.svgContainer()!.nativeElement.getBoundingClientRect();
       const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
