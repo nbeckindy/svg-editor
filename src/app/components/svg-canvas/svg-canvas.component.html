@@ -4,8 +4,35 @@
   [class.zoom-mode-out]="editorTool.currentTool() === 'zoom' && altKeyPressed"
   [class.pan-mode]="editorTool.currentTool() === 'pan'"
   [class.pan-dragging]="isPanning">
-  <div class="svg-canvas" (click)="onCanvasClick($event)" (mousedown)="onCanvasMouseDown($event)">
-    <div class="canvas-inner">
+  @if (svgContent()) {
+    <div class="zoom-level" aria-label="Zoom level">{{ zoomLevelPercent }}%</div>
+  }
+  <div class="ruler-wrapper" [class.with-rulers]="!!svgContent()">
+    @if (svgContent()) {
+      <div class="ruler-corner" aria-hidden="true"></div>
+      <div class="ruler-top" aria-hidden="true">
+        <svg [attr.width]="wrapperWidth" [attr.height]="RULER_SIZE" class="ruler-svg">
+          @for (tick of horizontalRulerTicks; track tick.position + ',' + tick.value) {
+            <line [attr.x1]="tick.position" [attr.y1]="RULER_SIZE" [attr.x2]="tick.position" [attr.y2]="tick.major ? RULER_SIZE - 8 : RULER_SIZE - 4" stroke="#666"/>
+            @if (tick.major) {
+              <text [attr.x]="tick.position" [attr.y]="10" text-anchor="middle" class="ruler-text">{{ tick.value }}</text>
+            }
+          }
+        </svg>
+      </div>
+      <div class="ruler-left" aria-hidden="true">
+        <svg [attr.width]="RULER_SIZE" [attr.height]="wrapperHeight" class="ruler-svg">
+          @for (tick of verticalRulerTicks; track tick.position + ',' + tick.value) {
+            <line [attr.x1]="RULER_SIZE" [attr.y1]="tick.position" [attr.x2]="tick.major ? RULER_SIZE - 8 : RULER_SIZE - 4" [attr.y2]="tick.position" stroke="#666"/>
+            @if (tick.major) {
+              <text [attr.x]="12" [attr.y]="tick.position" text-anchor="middle" dominant-baseline="middle" class="ruler-text">{{ tick.value }}</text>
+            }
+          }
+        </svg>
+      </div>
+    }
+    <div class="svg-canvas" #canvasViewport (click)="onCanvasClick($event)" (mousedown)="onCanvasMouseDown($event)">
+      <div class="canvas-inner">
       <div
         #zoomWrapper
         class="svg-zoom-wrapper"
@@ -49,6 +76,15 @@
       </div>
     </div>
   </div>
+  </div>
+  @if (zoomMarqueeRect; as rect) {
+    <div
+      class="zoom-marquee"
+      [style.left.px]="rect.left"
+      [style.top.px]="rect.top"
+      [style.width.px]="rect.width"
+      [style.height.px]="rect.height"></div>
+  }
   @if (!svgContent()) {
     <div class="placeholder">
       <p>Load an SVG file to begin editing</p>
