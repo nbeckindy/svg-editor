@@ -267,6 +267,143 @@ describe('SvgCanvasComponent', () => {
     expect(clearHighlightSpy).not.toHaveBeenCalled();
   });
 
+  it('should start zoom marquee on mousedown when zoom tool is active', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('zoom');
+
+    const mousedownEvent = {
+      button: 0,
+      clientX: 50,
+      clientY: 60,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+
+    component.onCanvasMouseDown(mousedownEvent);
+
+    expect(component.isZoomMarquee).toBe(true);
+    expect(component.zoomMarqueeRect).not.toBeNull();
+    expect(component.zoomMarqueeRect?.left).toBe(50);
+    expect(component.zoomMarqueeRect?.top).toBe(60);
+    expect(mousedownEvent.preventDefault).toHaveBeenCalled();
+  });
+
+  it('should update zoom marquee end on document mousemove while dragging', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('zoom');
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 10,
+      clientY: 20,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    expect(component.isZoomMarquee).toBe(true);
+
+    component.onDocumentMouseMove({ clientX: 80, clientY: 90 } as MouseEvent);
+
+    expect(component.zoomMarqueeRect?.left).toBe(10);
+    expect(component.zoomMarqueeRect?.top).toBe(20);
+    expect(component.zoomMarqueeRect?.width).toBe(70);
+    expect(component.zoomMarqueeRect?.height).toBe(70);
+  });
+
+  it('should call zoomToFitRect on mouseup after non-tiny marquee drag', () => {
+    const zoomToFitRectSpy = vi.spyOn(canvasViewService, 'zoomToFitRect');
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+    fixture.detectChanges();
+    component.wrapperWidth = 200;
+    component.wrapperHeight = 200;
+    editorToolService.setTool('zoom');
+
+    const containerRect = new DOMRect(0, 0, 200, 200);
+    vi.spyOn(component.svgContainer()!.nativeElement, 'getBoundingClientRect').mockReturnValue(containerRect);
+    vi.spyOn(canvasViewService, 'screenToSvg').mockImplementation((clientX: number, clientY: number) => ({
+      x: clientX,
+      y: clientY
+    }));
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 50,
+      clientY: 50,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({ clientX: 150, clientY: 150 } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0 } as MouseEvent);
+
+    expect(component.isZoomMarquee).toBe(false);
+    expect(zoomToFitRectSpy).toHaveBeenCalledWith(50, 50, 100, 100, 200, 200);
+  });
+
+  it('should call zoomInAt on click after tiny marquee drag (not zoomToFitRect on mouseup)', () => {
+    const zoomToFitRectSpy = vi.spyOn(canvasViewService, 'zoomToFitRect');
+    const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+    fixture.detectChanges();
+    component.wrapperWidth = 200;
+    component.wrapperHeight = 200;
+    editorToolService.setTool('zoom');
+
+    const containerRect = new DOMRect(0, 0, 200, 200);
+    vi.spyOn(component.svgContainer()!.nativeElement, 'getBoundingClientRect').mockReturnValue(containerRect);
+    vi.spyOn(canvasViewService, 'screenToSvg').mockImplementation((clientX: number, clientY: number) => ({
+      x: clientX,
+      y: clientY
+    }));
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 50,
+      clientY: 50,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({ clientX: 52, clientY: 52 } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0 } as MouseEvent);
+    component.onCanvasClick({
+      target: { tagName: 'svg' },
+      clientX: 50,
+      clientY: 50
+    } as unknown as MouseEvent);
+
+    expect(zoomInAtSpy).toHaveBeenCalledWith(50, 50);
+    expect(zoomToFitRectSpy).not.toHaveBeenCalled();
+  });
+
+  it('should not zoom in on click after zoom marquee mouseup', () => {
+    const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+    fixture.detectChanges();
+    component.wrapperWidth = 200;
+    component.wrapperHeight = 200;
+    editorToolService.setTool('zoom');
+
+    vi.spyOn(component.svgContainer()!.nativeElement, 'getBoundingClientRect').mockReturnValue(
+      new DOMRect(0, 0, 200, 200)
+    );
+    vi.spyOn(canvasViewService, 'screenToSvg').mockImplementation((clientX: number, clientY: number) => ({
+      x: clientX,
+      y: clientY
+    }));
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 50,
+      clientY: 50,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({ clientX: 150, clientY: 150 } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0 } as MouseEvent);
+
+    component.onCanvasClick({
+      target: { tagName: 'svg' },
+      clientX: 100,
+      clientY: 100
+    } as unknown as MouseEvent);
+
+    expect(zoomInAtSpy).not.toHaveBeenCalled();
+  });
+
   it('should not clear selection or select shape when pan tool is active and user clicks canvas', () => {
     const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
     const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');

@@ -118,4 +118,45 @@ describe('CanvasViewService', () => {
   it('isInitialized should return false when no SVG instance', () => {
     expect(service.isInitialized()).toBe(false);
   });
+
+  it('zoomToFitRect should set scale to fit rect in viewport and center it', () => {
+    service.zoomToFitRect(0, 0, 100, 100, 200, 200);
+    expect(service.scale).toBe(2);
+    expect(service.panX).toBe(0);
+    expect(service.panY).toBe(0);
+  });
+
+  it('zoomToFitRect should center rect at (svgX, svgY) with size (svgW, svgH)', () => {
+    service.zoomToFitRect(10, 20, 80, 60, 160, 120);
+    expect(service.scale).toBe(2);
+    const centerX = 10 + 80 / 2;
+    const centerY = 20 + 60 / 2;
+    expect(service.panX).toBe(160 / 2 - centerX * 2);
+    expect(service.panY).toBe(120 / 2 - centerY * 2);
+    expect(service.panX).toBe(-20);
+    expect(service.panY).toBe(-40);
+  });
+
+  it('zoomToFitRect should use min of aspect ratios for scale', () => {
+    service.zoomToFitRect(0, 0, 100, 50, 200, 200);
+    expect(service.scale).toBe(2);
+    service.zoomToFitRect(0, 0, 50, 100, 200, 200);
+    expect(service.scale).toBe(2);
+  });
+
+  it('zoomToFitRect should do nothing when viewport or rect has zero size', () => {
+    service.zoomToFitRect(0, 0, 100, 100, 0, 200);
+    expect(service.scale).toBe(1);
+    expect(service.panX).toBe(0);
+    expect(service.panY).toBe(0);
+    service.zoomToFitRect(0, 0, 0, 100, 200, 200);
+    expect(service.scale).toBe(1);
+  });
+
+  it('zoomToFitRect should cap scale at maxScale', () => {
+    service.zoomToFitRect(0, 0, 1, 1, 200, 200, 64);
+    expect(service.scale).toBe(64);
+    service.zoomToFitRect(0, 0, 1, 1, 200, 200, 10);
+    expect(service.scale).toBe(10);
+  });
 });

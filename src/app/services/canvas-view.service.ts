@@ -73,6 +73,27 @@ export class CanvasViewService {
   }
 
   /**
+   * Zoom and pan so the given SVG rectangle fits and is centered in the viewport.
+   * Sets scale = min(viewportW/svgW, viewportH/svgH) and pans to center the rect.
+   */
+  zoomToFitRect(
+    svgX: number,
+    svgY: number,
+    svgW: number,
+    svgH: number,
+    viewportW: number,
+    viewportH: number,
+    maxScale = 64
+  ): void {
+    if (viewportW <= 0 || viewportH <= 0 || svgW <= 0 || svgH <= 0) return;
+    let scale = Math.min(viewportW / svgW, viewportH / svgH);
+    scale = Math.max(1, Math.min(scale, maxScale));
+    this.scale = scale;
+    this.panX = viewportW / 2 - (svgX + svgW / 2) * scale;
+    this.panY = viewportH / 2 - (svgY + svgH / 2) * scale;
+  }
+
+  /**
    * Whether an SVG is loaded (zoom is meaningful).
    */
   isInitialized(): boolean {
