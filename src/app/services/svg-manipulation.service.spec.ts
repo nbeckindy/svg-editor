@@ -389,4 +389,129 @@ describe('SvgManipulationService', () => {
       expect(after!.height).toBeCloseTo(100, 0);
     });
   });
+
+  describe('getShapePropertiesIntersectingRect', () => {
+    /** Marquee selection uses fill/stroke hit-testing; stub so jsdom rects behave like filled geometry. */
+    function stubPaintAlwaysHits(...elements: (Element | null | undefined)[]) {
+      for (const el of elements) {
+        if (!el) continue;
+        const g = el as SVGGeometryElement;
+        g.isPointInFill = () => true;
+        g.isPointInStroke = () => false;
+      }
+    }
+
+    it('returns empty array when not initialized', () => {
+      expect(service.getShapePropertiesIntersectingRect({ x: 0, y: 0, width: 100, height: 100 })).toEqual([]);
+    });
+
+    it('returns only shapes whose bbox intersects the marquee', () => {
+      const svgContent =
+        '<svg viewBox="0 0 100 100"><rect id="lefty" x="10" y="10" width="15" height="15"/><rect id="righty" x="60" y="60" width="15" height="15"/></svg>';
+      service.initializeSVG(container, svgContent);
+      for (const id of ['lefty', 'righty']) {
+        const el = container.querySelector(`#${id}`);
+        if (el && typeof (el as SVGGraphicsElement).getBBox !== 'function') {
+          const r = id === 'lefty' ? { x: 10, y: 10, width: 15, height: 15 } : { x: 60, y: 60, width: 15, height: 15 };
+          (el as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () => r as DOMRect;
+        }
+      }
+      stubPaintAlwaysHits(container.querySelector('#lefty'), container.querySelector('#righty'));
+      const hits = service.getShapePropertiesIntersectingRect({ x: 0, y: 0, width: 40, height: 40 });
+      expect(hits.map((h) => h.id)).toEqual(['lefty']);
+    });
+
+    it('returns all intersecting shapes in DOM order', () => {
+      const svgContent =
+        '<svg viewBox="0 0 100 100"><rect id="a" x="5" y="5" width="10" height="10"/><rect id="b" x="20" y="20" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      for (const id of ['a', 'b']) {
+        const el = container.querySelector(`#${id}`);
+        if (el && typeof (el as SVGGraphicsElement).getBBox !== 'function') {
+          const r = id === 'a' ? { x: 5, y: 5, width: 10, height: 10 } : { x: 20, y: 20, width: 10, height: 10 };
+          (el as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () => r as DOMRect;
+        }
+      }
+      stubPaintAlwaysHits(container.querySelector('#a'), container.querySelector('#b'));
+      const hits = service.getShapePropertiesIntersectingRect({ x: 0, y: 0, width: 100, height: 100 });
+      expect(hits.map((h) => h.id)).toEqual(['a', 'b']);
+    });
+
+    it('does not select shape when marquee overlaps bbox but no sample hits fill/stroke (e.g. hole)', () => {
+      const svgContent =
+        '<svg viewBox="0 0 100 100"><path id="compound" d="M0 0 H100 V100 H0 Z M40 40 H60 V60 H40 Z" fill-rule="evenodd" fill="#000"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const el = container.querySelector('#compound');
+      if (el && typeof (el as SVGGraphicsElement).getBBox !== 'function') {
+        (el as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+          ({ x: 0, y: 0, width: 100, height: 100 } as DOMRect);
+      }
+      const g = el as SVGGeometryElement;
+      g.isPointInFill = (p) => (p?.x ?? 0) >= 50;
+      g.isPointInStroke = () => false;
+      const hitsLeft = service.getShapePropertiesIntersectingRect({ x: 5, y: 5, width: 20, height: 20 });
+      expect(hitsLeft.map((h) => h.id)).toEqual([]);
+      const hitsRight = service.getShapePropertiesIntersectingRect({ x: 55, y: 5, width: 20, height: 20 });
+      expect(hitsRight.map((h) => h.id)).toEqual(['compound']);
+    });
+
+    it('selects shape when bbox is fully inside marquee even if no marquee sample hits paint', () => {
+      const svgContent =
+        '<svg viewBox="0 0 100 100"><rect id="tiny" x="45" y="45" width="2" height="2" fill="#000"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const el = container.querySelector('#tiny');
+      if (el && typeof (el as SVGGraphicsElement).getBBox !== 'function') {
+        (el as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+          ({ x: 45, y: 45, width: 2, height: 2 } as DOMRect);
+      }
+      const g = el as SVGGeometryElement;
+      g.isPointInFill = () => false;
+      g.isPointInStroke = () => false;
+      const hits = service.getShapePropertiesIntersectingRect({ x: 0, y: 0, width: 100, height: 100 });
+      expect(hits.map((h) => h.id)).toEqual(['tiny']);
+    });
+
+    it('selects when a marquee edge crosses painted geometry that interior grid misses', () => {
+      const svgContent =
+        '<svg viewBox="0 0 100 100"><rect id="sliver" x="0" y="0" width="100" height="100" fill="#000"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const el = container.querySelector('#sliver');
+      if (el && typeof (el as SVGGraphicsElement).getBBox !== 'function') {
+        (el as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+          ({ x: 0, y: 0, width: 100, height: 100 } as DOMRect);
+      }
+      const g = el as SVGGeometryElement;
+      g.isPointInFill = (p) => {
+        const x = p?.x ?? 0;
+        const y = p?.y ?? 0;
+        return x >= 10 && x <= 25 && y >= 1.5 && y <= 2.5;
+      };
+      g.isPointInStroke = () => false;
+      const hits = service.getShapePropertiesIntersectingRect({ x: 0, y: 2, width: 100, height: 96 });
+      expect(hits.map((h) => h.id)).toEqual(['sliver']);
+    });
+
+    it('partial marquee selects after translateShape when isPointInFill uses local coordinates', () => {
+      const svgContent =
+        '<svg viewBox="0 0 100 100"><rect id="moved" x="10" y="10" width="15" height="15" fill="#000"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.translateShape('moved', 30, 0);
+      // Re-resolve node after matrix update (svg.js may replace the underlying element).
+      const shapeWrapper = service.getSVGInstance()?.findOne('#moved') as { node: SVGGraphicsElement } | undefined;
+      const el = shapeWrapper?.node;
+      expect(el).toBeTruthy();
+      // Always stub local getBBox: jsdom's native value can break matrixified user-space bbox.
+      (el as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 10, y: 10, width: 15, height: 15 } as DOMRect);
+      const g = el as SVGGeometryElement;
+      g.isPointInFill = (p) => {
+        const x = p?.x ?? 0;
+        const y = p?.y ?? 0;
+        return x >= 10 && x <= 25 && y >= 10 && y <= 25;
+      };
+      g.isPointInStroke = () => false;
+      const hits = service.getShapePropertiesIntersectingRect({ x: 45, y: 12, width: 20, height: 6 });
+      expect(hits.map((h) => h.id)).toEqual(['moved']);
+    });
+  });
 });

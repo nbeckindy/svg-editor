@@ -2,9 +2,17 @@ import { Injectable } from '@angular/core';
 import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
 import { ShapeProperties } from '../models/shape-properties.interface';
 import { type ResizeCorner, oppositeCornerForHandle } from '../utils/selection-resize';
+import {
+  axisAlignedRectContains,
+  axisAlignedRectsIntersect,
+  marqueeEdgeSamplePoints,
+  marqueeSamplePoints,
+  type AxisAlignedRect
+} from '../utils/marquee-selection';
 
 /** Class name for the editor content group (shapes live here). */
 const EDITOR_CONTENT_GROUP_ID = 'data-editor-content-group';
+const CONTENT_SHAPE_SELECTOR = 'circle, rect, path, polygon, ellipse, line, polyline';
 /** Attribute to mark the viewBox rect (white fill, thin black stroke). */
 const EDITOR_VIEWBOX_RECT_ATTR = 'data-editor-viewbox-rect';
 /** Attribute to mark the light grey "outside" viewBox rect. */
@@ -143,7 +151,7 @@ export class SvgManipulationService {
     if (!this.svgInstance) return;
     const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
     const scope = contentGroup ?? this.svgInstance;
-    const shapes = scope.find('circle, rect, path, polygon, ellipse, line, polyline');
+    const shapes = scope.find(CONTENT_SHAPE_SELECTOR);
     shapes.forEach((shape: SVGElement) => {
       try {
         shape.css({ cursor: 'pointer' });
@@ -303,6 +311,112 @@ export class SvgManipulationService {
     const maxX = Math.max(...bboxes.map((b) => b.x + b.width));
     const maxY = Math.max(...bboxes.map((b) => b.y + b.height));
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+  }
+
+  /**
+   * User shapes the marquee should select (`rect` in editor SVG coordinates).
+   * - If the shape bbox is **fully inside** the marquee, it is selected (no paint sampling needed),
+   *   so thin or sparse geometry still selects when fully enclosed.
+   * - Otherwise, requires marquee–bbox overlap and a paint hit on **interior** samples and/or **points
+   *   along the four marquee edges** (`isPointInFill` / `isPointInStroke`) so edges crossing the shape
+   *   select it, while a marquee lying only in a hole (no edge through paint) does not.
+   */
+  getShapePropertiesIntersectingRect(rect: AxisAlignedRect): ShapeProperties[] {
+    if (!this.svgInstance) return [];
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    const scope = contentGroup ?? this.svgInstance;
+    const shapes = scope.find(CONTENT_SHAPE_SELECTOR) as SVGElement[];
+    const out: ShapeProperties[] = [];
+    for (const shape of shapes) {
+      const id = shape.id();
+      if (!id) continue;
+      const bbox = this.getShapeBBox(id);
+      if (!bbox || !axisAlignedRectsIntersect(rect, bbox)) continue;
+      if (axisAlignedRectContains(rect, bbox)) {
+        out.push(this.getShapeProperties(shape));
+        continue;
+      }
+      const node = shape.node as SVGGraphicsElement | undefined;
+      if (!node || !this.shapeMarqueeIntersectsPaint(shape, rect)) continue;
+      out.push(this.getShapeProperties(shape));
+    }
+    return out;
+  }
+
+  /**
+   * Map marquee sample points from **root SVG user space** (same as `getShapeBBox`) into the
+   * element-local space expected by `isPointInFill` / `isPointInStroke`. Prefer SVG.js `matrixify`
+   * (matches bbox math and works in jsdom); fall back to `getCTM().inverse()` in the browser.
+   */
+  private marqueePointToElementLocal(
+    shape: SVGElement,
+    node: SVGGraphicsElement
+  ): (p: { x: number; y: number }) => DOMPointInit {
+    try {
+      if (typeof shape.matrixify === 'function') {
+        const m = shape.matrixify();
+        if (m && typeof m.inverse === 'function') {
+          const inv = m.inverse();
+          const v = inv.valueOf() as { a: number; b: number; c: number; d: number; e: number; f: number };
+          return (p) => ({
+            x: v.a * p.x + v.c * p.y + v.e,
+            y: v.b * p.x + v.d * p.y + v.f
+          });
+        }
+      }
+    } catch {
+      /* try DOM CTM */
+    }
+    try {
+      const ctm = typeof node.getCTM === 'function' ? node.getCTM() : null;
+      if (ctm) {
+        const inv = ctm.inverse();
+        return (p) => ({
+          x: inv.a * p.x + inv.c * p.y + inv.e,
+          y: inv.b * p.x + inv.d * p.y + inv.f
+        });
+      }
+    } catch {
+      /* identity */
+    }
+    return (p) => p;
+  }
+
+  /**
+   * True if some interior or **edge** sample in `marquee` hits the element's fill or stroke.
+   */
+  private shapeMarqueeIntersectsPaint(shape: SVGElement, marquee: AxisAlignedRect): boolean {
+    const node = shape.node as SVGGraphicsElement;
+    const points = [...marqueeSamplePoints(marquee), ...marqueeEdgeSamplePoints(marquee)];
+    if (points.length === 0) return false;
+
+    const geom = node as SVGGeometryElement;
+    const hasFill = typeof geom.isPointInFill === 'function';
+    const hasStroke = typeof geom.isPointInStroke === 'function';
+    if (!hasFill && !hasStroke) {
+      return true;
+    }
+
+    const toLocal = this.marqueePointToElementLocal(shape, node);
+
+    for (const p of points) {
+      const pt = toLocal(p);
+      if (hasFill) {
+        try {
+          if (geom.isPointInFill(pt)) return true;
+        } catch {
+          /* ignore */
+        }
+      }
+      if (hasStroke) {
+        try {
+          if (geom.isPointInStroke(pt)) return true;
+        } catch {
+          /* ignore */
+        }
+      }
+    }
+    return false;
   }
 
   /**
