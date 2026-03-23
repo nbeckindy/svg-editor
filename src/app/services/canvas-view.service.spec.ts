@@ -24,12 +24,19 @@ describe('CanvasViewService', () => {
     expect(service.panY).toBe(0);
   });
 
-  it('screenToSvg should convert using rect and current pan/scale', () => {
+  it('screenToSvg should convert using rect and scale (pan is baked into rect from transforms)', () => {
     const rect = new DOMRect(10, 20, 100, 100);
     const point = service.screenToSvg(60, 70, rect);
     expect(point).not.toBeNull();
     expect(point!.x).toBe(50);
     expect(point!.y).toBe(50);
+    service.panX = 30;
+    service.panY = 40;
+    service.scale = 2;
+    const rect2 = new DOMRect(100, 200, 80, 80);
+    const p2 = service.screenToSvg(120, 220, rect2);
+    expect(p2!.x).toBeCloseTo(10);
+    expect(p2!.y).toBeCloseTo(10);
   });
 
   it('screenToSvg should return null when scale is 0', () => {

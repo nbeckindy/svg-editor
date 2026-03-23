@@ -41,13 +41,16 @@ export class CanvasViewService {
   }
 
   /**
-   * Convert screen click to SVG coordinates using wrapper rect and current pan/scale.
+   * Convert screen position to **layout** coordinates inside the zoomed SVG host (same space as
+   * zoom marquee: 0..wrapperWidth before parent `scale`, pan is already in `rect` from transforms).
+   * Do not subtract pan here — `rect` from `getBoundingClientRect()` on the host inside
+   * `.svg-zoom-wrapper` already includes `translate(panX, panY) scale(scale)`.
    */
   screenToSvg(clientX: number, clientY: number, rect: DOMRect): { x: number; y: number } | null {
     if (this.scale <= 0) return null;
     return {
-      x: (clientX - rect.left - this.panX) / this.scale,
-      y: (clientY - rect.top - this.panY) / this.scale
+      x: (clientX - rect.left) / this.scale,
+      y: (clientY - rect.top) / this.scale
     };
   }
 

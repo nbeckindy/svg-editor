@@ -17,6 +17,20 @@ function mockSvgJsShape(
   };
 }
 
+/** Match production mapping: pointer/ghost math uses main editor <svg> rect + overlayViewBox. */
+function stubEditorSvgScreenMapping(
+  component: SvgCanvasComponent,
+  domRect: DOMRect = new DOMRect(0, 0, 100, 100),
+  viewBox = '0 0 100 100'
+): void {
+  component.overlayViewBox = viewBox;
+  const host = component.svgContainer()?.nativeElement;
+  const mainSvg = host?.firstElementChild as SVGSVGElement | undefined;
+  if (mainSvg) {
+    vi.spyOn(mainSvg, 'getBoundingClientRect').mockReturnValue(domRect);
+  }
+}
+
 describe('SvgCanvasComponent', () => {
   let component: SvgCanvasComponent;
   let fixture: ComponentFixture<SvgCanvasComponent>;
@@ -846,6 +860,7 @@ describe('SvgCanvasComponent', () => {
         toJSON: () => {}
       });
     }
+    stubEditorSvgScreenMapping(component);
     component.onCanvasMouseDown(mousedownEvent);
     expect(component.isDraggingShape).toBe(true);
     expect(setVisibilitySpy).toHaveBeenCalledWith('drag-target', false);
@@ -906,6 +921,7 @@ describe('SvgCanvasComponent', () => {
         toJSON: () => {}
       });
     }
+    stubEditorSvgScreenMapping(component);
     component.onCanvasMouseDown(mousedownEvent);
     expect(component.isDraggingShape).toBe(true);
     expect(setVisibilitySpy).toHaveBeenCalledWith('a', false);
@@ -935,7 +951,7 @@ describe('SvgCanvasComponent', () => {
         toJSON: () => {}
       });
     }
-    vi.spyOn(canvasViewService, 'screenToSvg').mockReturnValue({ x: 10, y: 5 });
+    stubEditorSvgScreenMapping(component);
     component.onDocumentMouseUp({
       button: 0,
       clientX: 10,
@@ -1060,6 +1076,7 @@ describe('SvgCanvasComponent', () => {
         toJSON: () => {}
       });
     }
+    stubEditorSvgScreenMapping(component);
     component.onCanvasMouseDown(mousedownEvent);
     const ghostWrapper = document.body.querySelector('.drag-ghost') as HTMLElement;
     expect(ghostWrapper).toBeTruthy();
@@ -1105,6 +1122,7 @@ describe('SvgCanvasComponent', () => {
         toJSON: () => {}
       });
     }
+    stubEditorSvgScreenMapping(component);
     component.onCanvasMouseDown(mousedownEvent);
     const ghostSvg = document.body.querySelector('.drag-ghost svg');
     expect(ghostSvg).toBeTruthy();
@@ -1151,6 +1169,7 @@ describe('SvgCanvasComponent', () => {
         toJSON: () => {}
       });
     }
+    stubEditorSvgScreenMapping(component);
     component.onCanvasMouseDown(mousedownEvent);
     const ghostSvg = document.body.querySelector('.drag-ghost svg');
     expect(ghostSvg).toBeTruthy();
@@ -1179,6 +1198,7 @@ describe('SvgCanvasComponent', () => {
     component['isDraggingShape'] = true;
     component['dragShapeIds'] = ['drag-me'];
     component['dragStartSvg'] = { x: 25, y: 40 };
+    stubEditorSvgScreenMapping(component);
     component.onDocumentMouseUp({
       button: 0,
       clientX: 45,
@@ -1218,6 +1238,138 @@ describe('SvgCanvasComponent', () => {
     expect(component.highlightRect).toBeNull();
     const highlightRectEl = fixture.nativeElement.querySelector('.highlight-overlay rect[stroke="#2196F3"]');
     expect(highlightRectEl).toBeFalsy();
+  });
+
+  it('highlightRect should recompute when lastBbox size changes but x,y unchanged (cache includes w/h)', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="1" height="1"/></svg>');
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    const spy = vi.spyOn(component as unknown as { svgBboxToOverlayPixels: (b: unknown) => unknown }, 'svgBboxToOverlayPixels');
+    spy.mockImplementation((b: unknown) => {
+      const bbox = b as { x: number; y: number; width: number; height: number };
+      return {
+        x: bbox.x,
+        y: bbox.y,
+        width: bbox.width * 10,
+        height: bbox.height * 10
+      };
+    });
+    (component as unknown as { _highlightRectCacheKey: string; _highlightRectCache: unknown; lastBbox: unknown })._highlightRectCacheKey =
+      '';
+    (component as unknown as { _highlightRectCache: unknown })._highlightRectCache = null;
+    (component as unknown as { lastBbox: { x: number; y: number; width: number; height: number } }).lastBbox = {
+      x: 0,
+      y: 0,
+      width: 16,
+      height: 16
+    };
+    canvasViewService.scale = 1;
+    const r1 = component.highlightRect;
+    (component as unknown as { lastBbox: { x: number; y: number; width: number; height: number } }).lastBbox = {
+      x: 0,
+      y: 0,
+      width: 32,
+      height: 32
+    };
+    const r2 = component.highlightRect;
+    spy.mockRestore();
+    expect(r1?.width).toBe(160);
+    expect(r2?.width).toBe(320);
+  });
+
+  describe('selection resize (corner handles)', () => {
+    it('mousedown on handle starts resize; applyUnionScaleFromSnapshot runs once on mouseup not on move', async () => {
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
+        x: 10,
+        y: 20,
+        width: 30,
+        height: 40
+      });
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>');
+      component.wrapperWidth = 100;
+      component.wrapperHeight = 100;
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+      editorToolService.setTool('selector');
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+
+      vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
+      const snapSpy = vi.spyOn(svgManipulationService, 'snapshotSelectionTransforms').mockReturnValue(new Map());
+      const applySpy = vi.spyOn(svgManipulationService, 'applyUnionScaleFromSnapshot');
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
+      const shapeNode = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+        findOne: (sel: string) => {
+          if (sel === '#r1') return mockSvgJsShape('r1', shapeNode);
+          return null;
+        }
+      } as any);
+      const zoomEl = component.zoomWrapper()?.nativeElement as HTMLElement;
+      if (zoomEl) {
+        vi.spyOn(zoomEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+      const overlayEl = component.highlightOverlayContainer()?.nativeElement as HTMLElement;
+      if (overlayEl) {
+        vi.spyOn(overlayEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+
+      const handle = document.createElement('div');
+      handle.setAttribute('data-resize-handle', 'se');
+      const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      } as DOMRect);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        target: handle,
+        clientX: 50,
+        clientY: 50,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(component.isResizingSelection).toBe(true);
+      expect(component.isDraggingShape).toBe(false);
+      expect(snapSpy).toHaveBeenCalled();
+      expect(applySpy).not.toHaveBeenCalled();
+
+      canvasViewService.scale = 1;
+      canvasViewService.panX = 0;
+      canvasViewService.panY = 0;
+      component.onDocumentMouseMove({
+        clientX: 80,
+        clientY: 70
+      } as MouseEvent);
+      expect(applySpy).not.toHaveBeenCalled();
+
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 80,
+        clientY: 70
+      } as MouseEvent);
+      expect(applySpy).toHaveBeenCalledTimes(1);
+      expect(component.isResizingSelection).toBe(false);
+    });
   });
 
   describe('viewBox visibility in editor', () => {

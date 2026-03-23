@@ -72,6 +72,32 @@
               stroke="#2196F3"
               stroke-width="2"/>
           }
+          @if (showResizeHandles && highlightRect; as hr) {
+            <circle
+              class="selection-resize-handle selection-resize-nw"
+              r="5"
+              data-resize-handle="nw"
+              [attr.cx]="hr.x"
+              [attr.cy]="hr.y"/>
+            <circle
+              class="selection-resize-handle selection-resize-ne"
+              r="5"
+              data-resize-handle="ne"
+              [attr.cx]="hr.x + hr.width"
+              [attr.cy]="hr.y"/>
+            <circle
+              class="selection-resize-handle selection-resize-sw"
+              r="5"
+              data-resize-handle="sw"
+              [attr.cx]="hr.x"
+              [attr.cy]="hr.y + hr.height"/>
+            <circle
+              class="selection-resize-handle selection-resize-se"
+              r="5"
+              data-resize-handle="se"
+              [attr.cx]="hr.x + hr.width"
+              [attr.cy]="hr.y + hr.height"/>
+          }
         </svg>
       </div>
     </div>

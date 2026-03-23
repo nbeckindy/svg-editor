@@ -238,22 +238,60 @@ describe('SvgManipulationService', () => {
     }).not.toThrow();
   });
 
-  it('translateShape should move rect by dx, dy in SVG coordinates', () => {
+  it('translateShape should move rect bbox by dx, dy in SVG user space', () => {
     const svgContent = '<svg viewBox="0 0 100 100"><rect id="move-rect" x="10" y="20" width="30" height="40"/></svg>';
     service.initializeSVG(container, svgContent);
+    const rectEl = container.querySelector('#move-rect');
+    if (rectEl && typeof (rectEl as SVGGraphicsElement).getBBox !== 'function') {
+      (rectEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 10, y: 20, width: 30, height: 40 } as DOMRect);
+    }
+    const before = service.getShapeBBox('move-rect');
+    expect(before).toBeTruthy();
     service.translateShape('move-rect', 15, 25);
-    const rect = container.querySelector('#move-rect');
-    expect(rect?.getAttribute('x')).toBe('25');
-    expect(rect?.getAttribute('y')).toBe('45');
+    const after = service.getShapeBBox('move-rect');
+    expect(after!.x).toBeCloseTo(before!.x + 15, 5);
+    expect(after!.y).toBeCloseTo(before!.y + 25, 5);
+    expect(after!.width).toBeCloseTo(before!.width, 5);
+    expect(after!.height).toBeCloseTo(before!.height, 5);
   });
 
-  it('translateShape should move circle by dx, dy (cx, cy)', () => {
+  it('translateShape should move circle bbox by dx, dy in SVG user space', () => {
     const svgContent = '<svg viewBox="0 0 100 100"><circle id="move-circle" cx="50" cy="50" r="20"/></svg>';
     service.initializeSVG(container, svgContent);
+    const circleEl = container.querySelector('#move-circle');
+    if (circleEl && typeof (circleEl as SVGGraphicsElement).getBBox !== 'function') {
+      (circleEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 30, y: 30, width: 40, height: 40 } as DOMRect);
+    }
+    const before = service.getShapeBBox('move-circle');
+    expect(before).toBeTruthy();
     service.translateShape('move-circle', -10, 5);
-    const circle = container.querySelector('#move-circle');
-    expect(circle?.getAttribute('cx')).toBe('40');
-    expect(circle?.getAttribute('cy')).toBe('55');
+    const after = service.getShapeBBox('move-circle');
+    expect(after!.x).toBeCloseTo(before!.x - 10, 5);
+    expect(after!.y).toBeCloseTo(before!.y + 5, 5);
+  });
+
+  it('translateShape after proportional resize should move bbox by dx, dy in user space (matches drag ghost)', () => {
+    const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const unionBefore = { x: 10, y: 20, width: 100, height: 50 };
+    const unionAfter = { x: 10, y: 20, width: 200, height: 100 };
+    const snap = service.snapshotSelectionTransforms(['r1']);
+    service.applyUnionScaleFromSnapshot(['r1'], unionBefore, unionAfter, snap, 'se');
+    const rectEl = container.querySelector('#r1');
+    if (rectEl && typeof (rectEl as SVGGraphicsElement).getBBox !== 'function') {
+      (rectEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 10, y: 20, width: 100, height: 50 } as DOMRect);
+    }
+    const before = service.getShapeBBox('r1');
+    expect(before).toBeTruthy();
+    service.translateShape('r1', 7, -3);
+    const after = service.getShapeBBox('r1');
+    expect(after!.x).toBeCloseTo(before!.x + 7, 5);
+    expect(after!.y).toBeCloseTo(before!.y - 3, 5);
+    expect(after!.width).toBeCloseTo(before!.width, 5);
+    expect(after!.height).toBeCloseTo(before!.height, 5);
   });
 
   it('translateShape should do nothing when shape does not exist', () => {
@@ -307,6 +345,48 @@ describe('SvgManipulationService', () => {
       expect(exported).toContain('id="inside"');
       expect(exported).toContain('id="outside"');
       expect(exported).toContain('viewBox="0 0 100 100"');
+    });
+  });
+
+  describe('selection resize', () => {
+    it('snapshotSelectionTransforms should clone matrices', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r-scale" x="10" y="20" width="30" height="40"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const snap = service.snapshotSelectionTransforms(['r-scale']);
+      expect(snap.size).toBe(1);
+      const m = snap.get('r-scale');
+      expect(m).toBeDefined();
+      expect(m?.a).toBe(1);
+    });
+
+    it('applyUnionScaleFromSnapshot should scale rect from SE anchor (NW fixed)', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const unionBefore = { x: 10, y: 20, width: 100, height: 50 };
+      const unionAfter = { x: 10, y: 20, width: 200, height: 100 };
+      const snap = service.snapshotSelectionTransforms(['r1']);
+      service.applyUnionScaleFromSnapshot(['r1'], unionBefore, unionAfter, snap, 'se');
+      const rect = container.querySelector('#r1');
+      expect(rect?.getAttribute('transform')).toBeTruthy();
+    });
+
+    it('getShapeBBox should reflect transformed bounds after applyUnionScaleFromSnapshot', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const unionBefore = { x: 10, y: 20, width: 100, height: 50 };
+      const unionAfter = { x: 10, y: 20, width: 200, height: 100 };
+      const snap = service.snapshotSelectionTransforms(['r1']);
+      service.applyUnionScaleFromSnapshot(['r1'], unionBefore, unionAfter, snap, 'se');
+      // jsdom: stub *local* getBBox (pre-transform); getShapeBBox applies matrixify() so union matches 2× scale from SE.
+      const rectEl = container.querySelector('#r1');
+      if (rectEl && typeof (rectEl as SVGGraphicsElement).getBBox !== 'function') {
+        (rectEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+          ({ x: 10, y: 20, width: 100, height: 50 } as DOMRect);
+      }
+      const after = service.getShapeBBox('r1');
+      expect(after).toBeTruthy();
+      expect(after!.width).toBeCloseTo(200, 0);
+      expect(after!.height).toBeCloseTo(100, 0);
     });
   });
 });

@@ -1,6 +1,7 @@
 import { Injectable } from '@angular/core';
-import { SVG, Svg, Element as SVGElement } from '@svgdotjs/svg.js';
+import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
 import { ShapeProperties } from '../models/shape-properties.interface';
+import { type ResizeCorner, oppositeCornerForHandle } from '../utils/selection-resize';
 
 /** Class name for the editor content group (shapes live here). */
 const EDITOR_CONTENT_GROUP_ID = 'data-editor-content-group';
@@ -230,14 +231,19 @@ export class SvgManipulationService {
   }
 
   /**
-   * Move a shape by dx, dy in SVG coordinate space. Works for rect, circle, ellipse, path, etc.
+   * Move a shape by dx, dy in **root SVG user space** (same as selection bbox / pointer mapping).
+   *
+   * SVG.js `dmove` adjusts geometry attrs (x/y, cx/cy, path `d`, …) in **local** space. After a
+   * proportional resize we store scale in `transform`; local dmove no longer shifts the painted
+   * bbox by (dx,dy) in user space, so the drag ghost (bbox + delta) and the drop diverge.
+   * Prepending `translate(dx,dy)` to the element matrix matches user-space motion for any shape.
    */
   translateShape(shapeId: string, dx: number, dy: number): void {
     if (!this.svgInstance) return;
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
-    if (shape && typeof shape.dmove === 'function') {
-      shape.dmove(dx, dy);
-    }
+    if (!shape || typeof shape.matrix !== 'function') return;
+    const m = shape.matrix();
+    shape.matrix(new Matrix().translate(dx, dy).multiply(m));
   }
 
   /**
@@ -259,6 +265,25 @@ export class SvgManipulationService {
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
     if (!shape?.node) return null;
     const node = shape.node as SVGGraphicsElement;
+    // svg.js bbox() wraps DOM getBBox(), which is in the element's *local* space before this
+    // element's own `transform`. After resize we set transform via matrix(); multiply so union
+    // bbox matches painted geometry.
+    if (typeof shape.bbox === 'function' && typeof shape.matrixify === 'function') {
+      try {
+        const local = shape.bbox();
+        const m = shape.matrixify();
+        if (local && typeof local.isNulled === 'function' && !local.isNulled() && m) {
+          const tb = local.transform(m);
+          const w = tb.width ?? tb.w;
+          const h = tb.height ?? tb.h;
+          if (Number.isFinite(w) && Number.isFinite(h) && w >= 0 && h >= 0) {
+            return { x: tb.x, y: tb.y, width: w, height: h };
+          }
+        }
+      } catch {
+        // fall through to native getBBox
+      }
+    }
     if (typeof node.getBBox !== 'function') return null;
     const bbox = node.getBBox();
     return { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
@@ -325,5 +350,44 @@ export class SvgManipulationService {
       if (id && idSet.has(id)) ordered.push(id);
     }
     return ordered.length > 0 ? ordered : [...shapeIds];
+  }
+
+  /**
+   * Clone each shape's current transform matrix for resize commit (SVG.js).
+   */
+  snapshotSelectionTransforms(shapeIds: string[]): Map<string, Matrix> {
+    const map = new Map<string, Matrix>();
+    if (!this.svgInstance) return map;
+    for (const id of shapeIds) {
+      const shape = this.svgInstance.findOne(`#${id}`) as SVGElement | undefined;
+      if (shape && typeof shape.matrix === 'function') {
+        map.set(id, shape.matrix().clone());
+      }
+    }
+    return map;
+  }
+
+  /**
+   * Apply uniform scale about the fixed anchor (opposite corner) for proportional resize.
+   * Composes: newMatrix = scale(s,s,ax,ay) * snapshotMatrix
+   */
+  applyUnionScaleFromSnapshot(
+    shapeIds: string[],
+    unionBefore: { x: number; y: number; width: number; height: number },
+    unionAfter: { x: number; y: number; width: number; height: number },
+    snapshot: Map<string, Matrix>,
+    handle: ResizeCorner
+  ): void {
+    if (!this.svgInstance) return;
+    const s = unionAfter.width / unionBefore.width;
+    if (!Number.isFinite(s) || s <= 0) return;
+    const anchor = oppositeCornerForHandle(unionBefore, handle);
+    const T = new Matrix().scale(s, s, anchor.x, anchor.y);
+    for (const id of shapeIds) {
+      const shape = this.svgInstance.findOne(`#${id}`) as SVGElement | undefined;
+      const prev = snapshot.get(id);
+      if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
+      shape.matrix(T.multiply(prev));
+    }
   }
 }
