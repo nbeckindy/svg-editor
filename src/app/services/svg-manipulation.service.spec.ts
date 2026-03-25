@@ -114,6 +114,46 @@ describe('SvgManipulationService', () => {
     }
   });
 
+  it('getShapePropertiesInSameClipGroup returns all shapes under the clip-path ancestor', () => {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <defs><clipPath id="cp"><rect x="0" y="0" width="50" height="100"/></clipPath></defs>
+      <g clip-path="url(#cp)">
+        <rect id="r-a" x="0" y="0" width="5" height="5" fill="red"/>
+        <rect id="r-b" x="10" y="10" width="5" height="5" fill="blue"/>
+      </g>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    const svgInstance = service.getSVGInstance();
+    const shape = svgInstance?.findOne('#r-a') as any;
+    expect(shape).toBeTruthy();
+    const group = service.getShapePropertiesInSameClipGroup(shape);
+    expect(group.map((p) => p.id).sort()).toEqual(['r-a', 'r-b'].sort());
+  });
+
+  it('getShapePropertiesInSameClipGroup returns only the shape when not under clip-path', () => {
+    const svgContent = '<svg viewBox="0 0 100 100"><rect id="solo" x="0" y="0" width="10" height="10"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const shape = service.getSVGInstance()?.findOne('#solo') as any;
+    expect(shape).toBeTruthy();
+    const group = service.getShapePropertiesInSameClipGroup(shape);
+    expect(group).toHaveLength(1);
+    expect(group[0].id).toBe('solo');
+  });
+
+  it('expandSelectionByClipGroups merges clip siblings and dedupes', () => {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <defs><clipPath id="cp"><rect x="0" y="0" width="100" height="100"/></clipPath></defs>
+      <g clip-path="url(#cp)">
+        <rect id="x1" x="0" y="0" width="5" height="5"/>
+        <rect id="x2" x="10" y="0" width="5" height="5"/>
+      </g>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    const hit = service.getShapeProperties(service.getSVGInstance()!.findOne('#x1') as any);
+    const expanded = service.expandSelectionByClipGroups([hit]);
+    expect(expanded.map((p) => p.id).sort()).toEqual(['x1', 'x2'].sort());
+  });
+
   it('should update fill color', () => {
     const svgContent = '<svg><circle id="color-test" cx="50" cy="50" r="40" fill="#FF0000"/></svg>';
     
@@ -353,6 +393,40 @@ describe('SvgManipulationService', () => {
     const svgContent = '<svg><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
     service.initializeSVG(container, svgContent);
     expect(() => service.setShapeVisibility('nonexistent', false)).not.toThrow();
+  });
+
+  describe('documentRevision', () => {
+    it('should be 0 before initializeSVG', () => {
+      expect(service.documentRevision()).toBe(0);
+    });
+
+    it('should increment after successful initializeSVG', () => {
+      const svgContent = '<svg><circle cx="50" cy="50" r="40" fill="#FF0000"/></svg>';
+      service.initializeSVG(container, svgContent);
+      expect(service.documentRevision()).toBe(1);
+    });
+
+    it('should not increment when initializeSVG cannot find an svg root', () => {
+      service.initializeSVG(container, '<div/>');
+      expect(service.documentRevision()).toBe(0);
+    });
+
+    it('should increment after updateFillColor when shape exists', () => {
+      const svgContent =
+        '<svg><circle id="doc-rev-fill-target" cx="50" cy="50" r="40" fill="#FF0000"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const afterInit = service.documentRevision();
+      service.updateFillColor('doc-rev-fill-target', '#00FF00');
+      expect(service.documentRevision()).toBe(afterInit + 1);
+    });
+
+    it('should not increment for setShapeVisibility', () => {
+      const svgContent = '<svg><rect id="vis-test" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const afterInit = service.documentRevision();
+      service.setShapeVisibility('vis-test', false);
+      expect(service.documentRevision()).toBe(afterInit);
+    });
   });
 
   describe('viewBox visibility in editor', () => {

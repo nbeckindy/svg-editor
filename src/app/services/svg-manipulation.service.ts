@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { Injectable, signal } from '@angular/core';
 import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
 import { ShapeProperties } from '../models/shape-properties.interface';
 import { type ResizeCorner, oppositeCornerForHandle } from '../utils/selection-resize';
@@ -24,6 +24,9 @@ const OUTSIDE_VIEWBOX_FILL = '#bfbfbf';
   providedIn: 'root'
 })
 export class SvgManipulationService {
+  /** Bumped when logical document content changes (for debug / reactive views); not bumped for visibility-only changes during drag. */
+  readonly documentRevision = signal(0);
+
   private svgInstance: Svg | null = null;
   /** Stored document viewBox for export and overlay (e.g. "0 0 100 100"). */
   private documentViewBox = '0 0 100 100';
@@ -160,6 +163,11 @@ export class SvgManipulationService {
 
     this.svgInstance = SVG(container.firstElementChild as SVGSVGElement);
     this.makeShapesClickable();
+    this.bumpDocumentRevision();
+  }
+
+  private bumpDocumentRevision(): void {
+    this.documentRevision.update((n) => n + 1);
   }
 
   /**
@@ -260,6 +268,52 @@ export class SvgManipulationService {
   }
 
   /**
+   * All editor content shapes under the same nearest `clip-path` or `mask` ancestor as `shape`
+   * (so the clipped group moves/resizes as one). If none, returns only this shape.
+   */
+  getShapePropertiesInSameClipGroup(shape: SVGElement): ShapeProperties[] {
+    const node = shape.node as Element | null;
+    const single = (): ShapeProperties[] => [this.getShapeProperties(shape)];
+    if (!node || !this.svgInstance) return single();
+    if (typeof node.closest !== 'function') return single();
+    const contentRoot = node.closest(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    if (!contentRoot) return single();
+    const clipHost = node.closest('[clip-path], [mask]');
+    if (!clipHost || !contentRoot.contains(clipHost)) return single();
+    const domShapes = clipHost.querySelectorAll(CONTENT_SHAPE_SELECTOR);
+    if (domShapes.length === 0) return single();
+    const out: ShapeProperties[] = [];
+    domShapes.forEach((el) => {
+      const id = el.getAttribute('id');
+      if (!id) return;
+      const s = this.svgInstance!.findOne(`#${id}`) as SVGElement | undefined;
+      if (s) out.push(this.getShapeProperties(s));
+    });
+    return out.length > 0 ? out : single();
+  }
+
+  /**
+   * Expand each hit to its clip/mask group and dedupe (marquee order preserved).
+   */
+  expandSelectionByClipGroups(shapes: ShapeProperties[]): ShapeProperties[] {
+    if (shapes.length === 0) return [];
+    const seen = new Set<string>();
+    const result: ShapeProperties[] = [];
+    for (const s of shapes) {
+      const shape = this.svgInstance?.findOne(`#${s.id}`) as SVGElement | undefined;
+      if (!shape) continue;
+      const group = this.getShapePropertiesInSameClipGroup(shape);
+      for (const p of group) {
+        if (!seen.has(p.id)) {
+          seen.add(p.id);
+          result.push(p);
+        }
+      }
+    }
+    return result;
+  }
+
+  /**
    * Update fill color of a shape
    */
   updateFillColor(shapeId: string, color: string): void {
@@ -268,6 +322,7 @@ export class SvgManipulationService {
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
     if (shape) {
       shape.fill(color);
+      this.bumpDocumentRevision();
     }
   }
 
@@ -280,6 +335,7 @@ export class SvgManipulationService {
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
     if (shape) {
       shape.stroke({ color, width });
+      this.bumpDocumentRevision();
     }
   }
 
@@ -292,6 +348,7 @@ export class SvgManipulationService {
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
     if (shape) {
       shape.stroke('none');
+      this.bumpDocumentRevision();
     }
   }
 
@@ -304,6 +361,7 @@ export class SvgManipulationService {
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
     if (shape) {
       shape.stroke({ color });
+      this.bumpDocumentRevision();
     }
   }
 
@@ -316,6 +374,7 @@ export class SvgManipulationService {
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
     if (shape) {
       shape.opacity(opacity);
+      this.bumpDocumentRevision();
     }
   }
 
@@ -353,6 +412,7 @@ export class SvgManipulationService {
 
     const m = shape.matrix();
     shape.matrix(new Matrix().translate(localDx, localDy).multiply(m));
+    this.bumpDocumentRevision();
   }
 
   /**
@@ -563,6 +623,10 @@ export class SvgManipulationService {
 
   /**
    * Export the logical document (viewBox + content), not the editor-stage SVG.
+   *
+   * Note: consumers that re-parse this as strict XML (e.g. the SVG debug panel) can fail on
+   * Inkscape-style files when prefixed elements lose root `xmlns:*` declarations; see the future-work
+   * note in `svg-debug-xml.ts` (post-processing + user warning).
    */
   exportSVG(): string {
     if (!this.svgInstance) return '';
@@ -635,5 +699,6 @@ export class SvgManipulationService {
       if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
       shape.matrix(T.multiply(prev));
     }
+    this.bumpDocumentRevision();
   }
 }
