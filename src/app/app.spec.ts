@@ -21,13 +21,14 @@ describe('AppComponent', () => {
     expect(compiled.querySelector('header h1')?.textContent).toContain('Angular SVG Editor');
   });
 
-  it('should have file upload, canvas and properties panel', () => {
+  it('should have file upload, canvas, properties panel, and svg debug panel', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('app-file-upload')).toBeTruthy();
     expect(compiled.querySelector('app-svg-canvas')).toBeTruthy();
     expect(compiled.querySelector('app-properties-panel')).toBeTruthy();
+    expect(compiled.querySelector('app-svg-debug-panel')).toBeTruthy();
   });
 
   it('should update svgContent when onSVGLoaded is called', () => {

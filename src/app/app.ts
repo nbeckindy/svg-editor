@@ -5,6 +5,7 @@ import { IconPaletteComponent } from './components/icon-palette/icon-palette.com
 import { ToolStripComponent } from './components/tool-strip/tool-strip.component';
 import { SvgCanvasComponent } from './components/svg-canvas/svg-canvas.component';
 import { PropertiesPanelComponent } from './components/properties-panel/properties-panel.component';
+import { SvgDebugPanelComponent } from './components/svg-debug-panel/svg-debug-panel.component';
 
 @Component({
   selector: 'app-root',
@@ -15,7 +16,8 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
     FileUploadComponent,
     IconPaletteComponent,
     SvgCanvasComponent,
-    PropertiesPanelComponent
+    PropertiesPanelComponent,
+    SvgDebugPanelComponent
   ],
   template: `
     <div class="app-container">
@@ -30,11 +32,16 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
       </div>
 
       <div class="main-content">
-        <div class="canvas-area">
-          <app-svg-canvas [svgContent]="svgContent"></app-svg-canvas>
+        <div class="main-row">
+          <div class="canvas-area">
+            <app-svg-canvas [svgContent]="svgContent"></app-svg-canvas>
+          </div>
+          <div class="properties-area">
+            <app-properties-panel></app-properties-panel>
+          </div>
         </div>
-        <div class="properties-area">
-          <app-properties-panel></app-properties-panel>
+        <div class="debug-strip">
+          <app-svg-debug-panel></app-svg-debug-panel>
         </div>
       </div>
     </div>
@@ -73,9 +80,17 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
       min-width: 0;
     }
     .main-content {
+      display: flex;
+      flex-direction: column;
+      flex: 1;
+      min-height: 0;
+      overflow: hidden;
+    }
+    .main-row {
       display: grid;
       grid-template-columns: 1fr 300px;
       flex: 1;
+      min-height: 0;
       overflow: hidden;
     }
     .canvas-area {
@@ -84,6 +99,13 @@ import { PropertiesPanelComponent } from './components/properties-panel/properti
     }
     .properties-area {
       border-left: 1px solid #ddd;
+    }
+    .debug-strip {
+      flex-shrink: 0;
+      border-top: 1px solid #ddd;
+      min-height: 140px;
+      max-height: 40vh;
+      overflow: hidden;
     }
   `]
 })

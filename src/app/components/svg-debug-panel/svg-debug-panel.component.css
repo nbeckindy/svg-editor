@@ -1,0 +1,52 @@
+.debug-panel {
+  display: flex;
+  flex-direction: column;
+  height: 100%;
+  min-height: 0;
+  background: color-mix(in srgb, Canvas 96%, CanvasText 4%);
+  color: CanvasText;
+}
+
+.debug-panel-header {
+  flex-shrink: 0;
+  padding: 8px 12px;
+  border-bottom: 1px solid color-mix(in srgb, CanvasText 12%, transparent);
+}
+
+.debug-panel-header h3 {
+  margin: 0;
+  font-size: 0.875rem;
+  font-weight: 600;
+}
+
+.debug-panel-body {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+}
+
+.debug-panel-empty {
+  padding: 12px;
+  font-size: 0.875rem;
+  color: color-mix(in srgb, CanvasText 65%, transparent);
+}
+
+.debug-xml {
+  margin: 0;
+  padding: 8px 12px 12px;
+  font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
+  font-size: 0.75rem;
+  line-height: 1.45;
+  white-space: pre;
+  tab-size: 2;
+}
+
+.debug-xml code {
+  font: inherit;
+}
+
+.debug-xml .selected {
+  background: color-mix(in srgb, Highlight 28%, transparent);
+  outline: 1px solid color-mix(in srgb, Highlight 45%, transparent);
+  outline-offset: -1px;
+}

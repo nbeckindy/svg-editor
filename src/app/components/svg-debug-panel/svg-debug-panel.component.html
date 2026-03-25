@@ -1,0 +1,12 @@
+<div class="debug-panel">
+  <div class="debug-panel-header">
+    <h3>SVG (debug)</h3>
+  </div>
+  @if (segments(); as segs) {
+    <div class="debug-panel-body">
+      <pre class="debug-xml" aria-label="Exported SVG XML"><code>@for (seg of segs; track $index) {<span [class.selected]="seg.selected">{{ seg.text }}</span>}</code></pre>
+    </div>
+  } @else {
+    <div class="debug-panel-empty">Load an SVG to see exported document XML.</div>
+  }
+</div>
