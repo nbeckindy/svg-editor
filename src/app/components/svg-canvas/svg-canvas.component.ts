@@ -5,11 +5,22 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { CanvasViewService } from '../../services/canvas-view.service';
 import { computeProportionalResizedUnion, type BBox, type ResizeCorner } from '../../utils/selection-resize';
+import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
 /** SVG.js `.size()` must be > 0; wrapper CSS can be subpixel to match the blue overlay. */
 const GHOST_SVG_MIN_PX = 1e-6;
+
+const CONTENT_SHAPE_TAGS = new Set([
+  'circle',
+  'rect',
+  'path',
+  'polygon',
+  'ellipse',
+  'line',
+  'polyline'
+]);
 
 /** Round to nearest "nice" step (1, 2, 5 × 10^n) for readable labels. */
 function roundToNiceStep(value: number): number {
@@ -81,6 +92,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.shapeSelection.getSelectedShapes().length > 0 &&
       !this.isDraggingShape &&
       !this.isResizingSelection &&
+      !this.isSelectionMarquee &&
       this.wrapperWidth > 0 &&
       !!this.lastBbox
     );
@@ -159,6 +171,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const height = Math.abs(this.zoomMarqueeEnd.clientY - this.zoomMarqueeStart.clientY);
     return { left, top, width, height };
   }
+  /** Screen rect for selection marquee (selector tool). */
+  get selectionMarqueeRect(): { left: number; top: number; width: number; height: number } | null {
+    if (!this.isSelectionMarquee || !this.selectionMarqueeStart || !this.selectionMarqueeEnd) return null;
+    const left = Math.min(this.selectionMarqueeStart.clientX, this.selectionMarqueeEnd.clientX);
+    const top = Math.min(this.selectionMarqueeStart.clientY, this.selectionMarqueeEnd.clientY);
+    const width = Math.abs(this.selectionMarqueeEnd.clientX - this.selectionMarqueeStart.clientX);
+    const height = Math.abs(this.selectionMarqueeEnd.clientY - this.selectionMarqueeStart.clientY);
+    return { left, top, width, height };
+  }
   private panStartClientX = 0;
   private panStartClientY = 0;
   private panStartX = 0;
@@ -193,7 +214,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private zoomMarqueeEnd: { clientX: number; clientY: number } | null = null;
   /** After marquee mouseup, ignore the next click so it doesn't zoom in. */
   private zoomMarqueeJustEnded = false;
-  private static readonly ZOOM_MARQUEE_MIN_SIZE_PX = 5;
+
+  /** Selection marquee: drag-to-rectangle multi-select (selector tool). */
+  isSelectionMarquee = false;
+  private selectionMarqueeStart: { clientX: number; clientY: number } | null = null;
+  private selectionMarqueeEnd: { clientX: number; clientY: number } | null = null;
+  /** After selection marquee mouseup, ignore the next click so it doesn't clear selection. */
+  private selectionMarqueeJustEnded = false;
 
   onKeyDown(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
@@ -204,6 +231,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   onDocumentMouseMove(event: MouseEvent): void {
+    if (this.isSelectionMarquee) {
+      this.selectionMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
+      this.cdr.detectChanges();
+      return;
+    }
     if (this.isZoomMarquee) {
       this.zoomMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
       this.cdr.detectChanges();
@@ -242,6 +274,49 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onDocumentMouseUp(event: MouseEvent): void {
     if (event.button !== 0) return;
+    if (this.isSelectionMarquee && this.selectionMarqueeStart && this.selectionMarqueeEnd) {
+      const screenW = Math.abs(this.selectionMarqueeEnd.clientX - this.selectionMarqueeStart.clientX);
+      const screenH = Math.abs(this.selectionMarqueeEnd.clientY - this.selectionMarqueeStart.clientY);
+      const isTinyDrag =
+        screenW < MARQUEE_MIN_DRAG_PX && screenH < MARQUEE_MIN_DRAG_PX;
+      if (isTinyDrag) {
+        this.selectionMarqueeJustEnded = false;
+      } else {
+        const startSvg = this.clientToEditorSvgPoint(
+          this.selectionMarqueeStart.clientX,
+          this.selectionMarqueeStart.clientY
+        );
+        const endSvg = this.clientToEditorSvgPoint(
+          this.selectionMarqueeEnd.clientX,
+          this.selectionMarqueeEnd.clientY
+        );
+        if (startSvg && endSvg) {
+          const x = Math.min(startSvg.x, endSvg.x);
+          const y = Math.min(startSvg.y, endSvg.y);
+          const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
+          const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
+          const hits = this.svgManipulation.getShapePropertiesIntersectingRect({ x, y, width: w, height: h });
+          if (event.shiftKey) {
+            if (hits.length > 0) {
+              this.shapeSelection.mergeShapesIntoSelection(hits);
+            }
+          } else if (hits.length > 0) {
+            this.shapeSelection.selectShapes(hits);
+          } else {
+            this.shapeSelection.clearSelection();
+          }
+          this.svgManipulation.clearHighlight();
+          this.selectionMarqueeJustEnded = true;
+        } else {
+          this.selectionMarqueeJustEnded = false;
+        }
+      }
+      this.isSelectionMarquee = false;
+      this.selectionMarqueeStart = null;
+      this.selectionMarqueeEnd = null;
+      this.cdr.detectChanges();
+      return;
+    }
     if (this.isZoomMarquee && this.zoomMarqueeStart && this.zoomMarqueeEnd) {
       const viewportEl = this.zoomWrapper()?.nativeElement?.closest('.canvas-container') as HTMLElement | undefined;
       if (viewportEl && viewportEl.clientWidth > 0 && viewportEl.clientHeight > 0) {
@@ -274,8 +349,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
           const screenW = Math.abs(this.zoomMarqueeEnd.clientX - this.zoomMarqueeStart.clientX);
           const screenH = Math.abs(this.zoomMarqueeEnd.clientY - this.zoomMarqueeStart.clientY);
           const isTinyDrag =
-            screenW < SvgCanvasComponent.ZOOM_MARQUEE_MIN_SIZE_PX &&
-            screenH < SvgCanvasComponent.ZOOM_MARQUEE_MIN_SIZE_PX;
+            screenW < MARQUEE_MIN_DRAG_PX && screenH < MARQUEE_MIN_DRAG_PX;
           if (isTinyDrag) {
             this.zoomMarqueeJustEnded = false;
           } else if (w > 0 && h > 0 && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
@@ -702,6 +776,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         return;
       }
     }
+    if (!this.isEditorContentShapeTarget(target)) {
+      this.isSelectionMarquee = true;
+      this.selectionMarqueeStart = { clientX: event.clientX, clientY: event.clientY };
+      this.selectionMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
+      event.preventDefault();
+      return;
+    }
     if (target.tagName === 'svg' || !target.id) return;
     if (!this.shapeSelection.isShapeSelected(target.id)) return;
     const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
@@ -959,6 +1040,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
+    if (this.selectionMarqueeJustEnded) {
+      this.selectionMarqueeJustEnded = false;
+      return;
+    }
+
     const svgElement =
       clickTarget.id && (this.svgManipulation.getSVGInstance()?.findOne(`#${clickTarget.id}`) as SVGElement);
     if (svgElement) {
@@ -973,5 +1059,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.shapeSelection.clearSelection();
       this.svgManipulation.clearHighlight();
     }
+  }
+
+  /** True when the event target is a user shape inside the editor content group (not stage chrome). */
+  private isEditorContentShapeTarget(target: Element): boolean {
+    const tag = target.tagName?.toLowerCase?.() ?? '';
+    if (!CONTENT_SHAPE_TAGS.has(tag)) return false;
+    const id = target.id;
+    if (!id) return false;
+    if (typeof target.closest === 'function') {
+      const group = target.closest('[data-editor-content-group]');
+      return !!group?.contains(target);
+    }
+    const shape = this.svgManipulation.getSVGInstance()?.findOne(`#${id}`) as SVGElement | undefined;
+    const node = shape?.node as Element | undefined;
+    if (!node || typeof node.closest !== 'function') return false;
+    return !!node.closest('[data-editor-content-group]');
   }
 }

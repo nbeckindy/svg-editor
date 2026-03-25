@@ -153,6 +153,14 @@
   background: rgba(33, 150, 243, 0.1);
 }
 
+.selection-marquee {
+  position: fixed;
+  pointer-events: none;
+  z-index: 9998;
+  border: 2px dashed #4caf50;
+  background: rgba(76, 175, 80, 0.12);
+}
+
 .zoom-level {
   position: absolute;
   top: 8px;

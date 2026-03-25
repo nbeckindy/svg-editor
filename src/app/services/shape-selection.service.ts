@@ -19,6 +19,25 @@ export class ShapeSelectionService {
   }
 
   /**
+   * Replace selection with multiple shapes (marquee select).
+   */
+  selectShapes(shapes: ShapeProperties[]): void {
+    this.selectedShapes.set([...shapes]);
+  }
+
+  /**
+   * Add shapes that are not already selected (Shift + marquee). Preserves existing order, appends new ids in `shapes` order.
+   */
+  mergeShapesIntoSelection(shapes: ShapeProperties[]): void {
+    if (shapes.length === 0) return;
+    const current = this.selectedShapes();
+    const seen = new Set(current.map((s) => s.id));
+    const added = shapes.filter((s) => !seen.has(s.id));
+    if (added.length === 0) return;
+    this.selectedShapes.set([...current, ...added]);
+  }
+
+  /**
    * Clear current selection
    */
   clearSelection(): void {

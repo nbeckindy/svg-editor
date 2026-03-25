@@ -48,6 +48,30 @@ describe('ShapeSelectionService', () => {
     expect(service.getSelectedShape()?.id).toBe('b');
   });
 
+  it('should select multiple shapes with selectShapes', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const shapeB: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };
+    service.selectShapes([shapeA, shapeB]);
+    expect(service.getSelectedShapes()).toHaveLength(2);
+    expect(service.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('mergeShapesIntoSelection should add only new ids', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const shapeB: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };
+    const shapeC: ShapeProperties = { id: 'c', type: 'rect', fill: '#00f' };
+    service.selectShape(shapeA);
+    service.mergeShapesIntoSelection([shapeB, shapeA, shapeC]);
+    expect(service.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('mergeShapesIntoSelection should no-op when all already selected', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    service.selectShape(shapeA);
+    service.mergeShapesIntoSelection([shapeA]);
+    expect(service.getSelectedShapes()).toHaveLength(1);
+  });
+
   it('should toggle shape into selection when not selected', () => {
     const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
     const shapeB: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };

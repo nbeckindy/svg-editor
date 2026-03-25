@@ -418,6 +418,210 @@ describe('SvgCanvasComponent', () => {
     expect(zoomInAtSpy).not.toHaveBeenCalled();
   });
 
+  it('should start selection marquee on mousedown when selector tool and target is background svg', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="10" width="20" height="20"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+
+    const mousedownEvent = {
+      button: 0,
+      clientX: 50,
+      clientY: 60,
+      target: { tagName: 'svg' },
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+
+    component.onCanvasMouseDown(mousedownEvent);
+
+    expect(component.isSelectionMarquee).toBe(true);
+    expect(component.selectionMarqueeRect).not.toBeNull();
+    expect(component.selectionMarqueeRect?.left).toBe(50);
+    expect(component.selectionMarqueeRect?.top).toBe(60);
+    expect(mousedownEvent.preventDefault).toHaveBeenCalled();
+  });
+
+  it('should update selection marquee end on document mousemove while dragging', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 10,
+      clientY: 20,
+      target: { tagName: 'svg' },
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    expect(component.isSelectionMarquee).toBe(true);
+
+    component.onDocumentMouseMove({ clientX: 80, clientY: 90 } as MouseEvent);
+
+    expect(component.selectionMarqueeRect?.left).toBe(10);
+    expect(component.selectionMarqueeRect?.top).toBe(20);
+    expect(component.selectionMarqueeRect?.width).toBe(70);
+    expect(component.selectionMarqueeRect?.height).toBe(70);
+  });
+
+  it('should call selectShapes on mouseup after non-tiny selection marquee', () => {
+    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
+    const hitA = {
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    };
+    vi.spyOn(svgManipulationService, 'getShapePropertiesIntersectingRect').mockReturnValue([hitA]);
+
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    stubEditorSvgScreenMapping(component);
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      target: { tagName: 'svg' },
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({ clientX: 50, clientY: 50 } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0, shiftKey: false } as MouseEvent);
+
+    expect(component.isSelectionMarquee).toBe(false);
+    expect(selectShapesSpy).toHaveBeenCalledWith([hitA]);
+  });
+
+  it('should not call selectShapes on mouseup after tiny selection marquee', () => {
+    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
+    vi.spyOn(svgManipulationService, 'getShapePropertiesIntersectingRect');
+
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    stubEditorSvgScreenMapping(component);
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 50,
+      clientY: 50,
+      target: { tagName: 'svg' },
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({ clientX: 52, clientY: 52 } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0 } as MouseEvent);
+
+    expect(selectShapesSpy).not.toHaveBeenCalled();
+    component.onCanvasClick({
+      target: { tagName: 'svg' },
+      clientX: 50,
+      clientY: 50
+    } as unknown as MouseEvent);
+    expect(selectShapesSpy).not.toHaveBeenCalled();
+  });
+
+  it('should not clear selection on click after selection marquee mouseup', () => {
+    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+    const hitA = {
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    };
+    vi.spyOn(svgManipulationService, 'getShapePropertiesIntersectingRect').mockReturnValue([hitA]);
+
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    stubEditorSvgScreenMapping(component);
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      target: { tagName: 'svg' },
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({ clientX: 40, clientY: 40 } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0 } as MouseEvent);
+
+    const clearsAfterMarquee = clearSelectionSpy.mock.calls.length;
+
+    component.onCanvasClick({
+      target: { tagName: 'svg' },
+      clientX: 10,
+      clientY: 10
+    } as unknown as MouseEvent);
+
+    expect(clearSelectionSpy.mock.calls.length).toBe(clearsAfterMarquee);
+  });
+
+  it('should not start selection marquee when mousedown on unselected content shape', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="10" width="20" height="20"/></svg>'
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+
+    const host = component.svgContainer()?.nativeElement;
+    const rectEl = host?.querySelector('#r1') as Element | undefined;
+    expect(rectEl).toBeTruthy();
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 15,
+      clientY: 15,
+      target: rectEl,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+
+    expect(component.isSelectionMarquee).toBe(false);
+  });
+
+  it('should call mergeShapesIntoSelection when shift+mouseup after selection marquee', () => {
+    const mergeSpy = vi.spyOn(shapeSelectionService, 'mergeShapesIntoSelection');
+    const hitB = {
+      id: 'b',
+      type: 'rect',
+      fill: '#f00',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    };
+    vi.spyOn(svgManipulationService, 'getShapePropertiesIntersectingRect').mockReturnValue([hitB]);
+
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="5" height="5"/><rect id="b" x="50" y="50" width="5" height="5"/></svg>'
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    stubEditorSvgScreenMapping(component);
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      target: { tagName: 'svg' },
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({ clientX: 60, clientY: 60 } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0, shiftKey: true } as MouseEvent);
+
+    expect(mergeSpy).toHaveBeenCalledWith([hitB]);
+  });
+
   it('should not clear selection or select shape when pan tool is active and user clicks canvas', () => {
     const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
     const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
@@ -895,11 +1099,13 @@ describe('SvgCanvasComponent', () => {
       id === 'a' ? { x: 10, y: 20, width: 30, height: 40 } : { x: 50, y: 60, width: 20, height: 25 }
     );
     const setVisibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
-    const shapeNode = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    const shapeNode =
+      (component.svgContainer()?.nativeElement?.querySelector('#a') as SVGGraphicsElement | null) ??
+      document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     vi.spyOn(shapeNode, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 30, 30, 40));
     const mousedownEvent = {
       button: 0,
-      target: { id: 'a', tagName: 'rect', getBoundingClientRect: () => new DOMRect(20, 30, 30, 40) },
+      target: shapeNode,
       clientX: 25,
       clientY: 40,
       preventDefault: vi.fn()

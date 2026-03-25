@@ -111,6 +111,14 @@
       [style.width.px]="rect.width"
       [style.height.px]="rect.height"></div>
   }
+  @if (selectionMarqueeRect; as selRect) {
+    <div
+      class="selection-marquee"
+      [style.left.px]="selRect.left"
+      [style.top.px]="selRect.top"
+      [style.width.px]="selRect.width"
+      [style.height.px]="selRect.height"></div>
+  }
   @if (!svgContent()) {
     <div class="placeholder">
       <p>Load an SVG file to begin editing</p>
