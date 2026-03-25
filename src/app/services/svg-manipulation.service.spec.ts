@@ -39,6 +39,35 @@ describe('SvgManipulationService', () => {
     expect(circleElement?.getAttribute('cx')).toBe('50');
   });
 
+  it('should expand stage viewBox to match source aspect ratio (prevents squashing)', () => {
+    // Force a deterministic mismatch in `uW/uH`:
+    // source element is 100x50 (init ratio 2), but computed content bbox is 200x50 (current ratio 4).
+    const originalComputeContentBbox = (service as any).computeContentBbox;
+    (service as any).computeContentBbox = () => ({ x: 0, y: 0, width: 200, height: 50 });
+
+    try {
+      const svgContent = '<svg width="100" height="50"><rect x="0" y="0" width="200" height="50" fill="#000"/></svg>';
+      service.initializeSVG(container, svgContent);
+
+      const svgElement = container.querySelector('svg') as SVGSVGElement | null;
+      expect(svgElement).toBeTruthy();
+
+      const vb = svgElement?.getAttribute('viewBox');
+      expect(vb).toBeTruthy();
+
+      const parts = vb!.trim().split(/\s+/).map((n) => Number(n));
+      expect(parts.length).toBe(4);
+      const [_x, _y, vbW, vbH] = parts;
+
+      // Stage viewBox should be expanded so vbW/vbH matches initW/initH = 2.
+      expect(vbW / vbH).toBeCloseTo(2, 5);
+      expect(vbW).toBeCloseTo(200, 0);
+      expect(vbH).toBeCloseTo(100, 0);
+    } finally {
+      (service as any).computeContentBbox = originalComputeContentBbox;
+    }
+  });
+
   it('should get SVG instance after initialization', () => {
     const svgContent = '<svg><rect width="100" height="100"/></svg>';
     

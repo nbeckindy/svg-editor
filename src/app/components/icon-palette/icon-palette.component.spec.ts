@@ -24,7 +24,7 @@ describe('IconPaletteComponent', () => {
   it('should render test icons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('.icon-item');
-    expect(buttons.length).toBe(TEST_ICONS.length);
+    expect(buttons.length).toBe(component.icons.length);
   });
 
   it('should emit svgLoaded with icon svg string when an icon is clicked', () => {
@@ -36,13 +36,14 @@ describe('IconPaletteComponent', () => {
 
     component.selectIcon(icon);
 
-    expect(emittedContent).toBe(icon.svg);
+    // TEST_ICONS strings don't start with XML declarations, so marker is prepended.
+    expect(emittedContent).toBe(`<!--svg-editor-test-icon-->${icon.svg}`);
   });
 
   it('should display icon labels', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const labels = compiled.querySelectorAll('.icon-label');
-    TEST_ICONS.forEach((icon, index) => {
+    component.icons.forEach((icon, index) => {
       expect(labels[index].textContent?.trim()).toBe(icon.label);
     });
   });

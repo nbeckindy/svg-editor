@@ -22,6 +22,9 @@ const CONTENT_SHAPE_TAGS = new Set([
   'polyline'
 ]);
 
+/** After loading SVG, fit the editor stage in the canvas with this much inset (margin). */
+const INITIAL_LOAD_VIEWPORT_FIT_FRACTION = 0.88;
+
 /** Round to nearest "nice" step (1, 2, 5 × 10^n) for readable labels. */
 function roundToNiceStep(value: number): number {
   if (value <= 0 || !Number.isFinite(value)) return 1;
@@ -731,6 +734,79 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.lastBbox = null;
     }
     this._highlightRectCacheKey = '';
+    const content = this.svgContent();
+    // Only auto-fit when the svg came from the built-in icon palette.
+    // (File uploads should not unexpectedly change the editor viewport.)
+    if (content && content.includes('svg-editor-test-icon')) {
+      queueMicrotask(() => this.applyInitialFitToViewport());
+    }
+  }
+
+  /**
+   * Zoom/pan so the full editor SVG viewBox (stage: grey + page + content) fits in the canvas
+   * viewport with a small margin. Retries on the next frame if layout size is not ready yet.
+   */
+  private applyInitialFitToViewport(attempt = 0): void {
+    if (!this.svgContent() || !this.canvasView.isInitialized()) {
+      return;
+    }
+    // Avoid re-reading layout when the test already set wrapper dimensions.
+    if (this.wrapperWidth <= 0 || this.wrapperHeight <= 0) {
+      this.syncOverlayViewBox();
+    }
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) {
+      return;
+    }
+    const vw = this.wrapperWidth;
+    const vh = this.wrapperHeight;
+    if (vw <= 0 || vh <= 0) {
+      if (attempt < 4) {
+        requestAnimationFrame(() => this.applyInitialFitToViewport(attempt + 1));
+      }
+      return;
+    }
+
+    // Fit to the actual rendered SVG element size. `initializeSVG()` sizes the editor stage using
+    // the source SVG `width/height` (which may differ from the `viewBox`), and our zoom transform
+    // operates on the SVG element itself.
+    const wAttr = mainSvg.getAttribute('width');
+    const hAttr = mainSvg.getAttribute('height');
+    const svgWpx = wAttr && !wAttr.endsWith('%') ? Number(wAttr) : mainSvg.clientWidth || 0;
+    const svgHpx = hAttr && !hAttr.endsWith('%') ? Number(hAttr) : mainSvg.clientHeight || 0;
+    if (!Number.isFinite(svgWpx) || !Number.isFinite(svgHpx) || svgWpx <= 0 || svgHpx <= 0) {
+      return;
+    }
+
+    // The `.svg-canvas` container centers its inline-block children using flexbox. SVG transforms
+    // do not affect layout size, so the "layout center" depends on the *unscaled* SVG size.
+    // Our `zoomToFitRect()` computes pan as if the SVG starts at the viewport origin, so we
+    // subtract the flexbox centering offset here to keep the artwork in-bounds.
+    const layoutOffsetX = (vw - svgWpx) / 2;
+    const layoutOffsetY = (vh - svgHpx) / 2;
+
+    this.canvasView.zoomToFitRect(
+      0,
+      0,
+      svgWpx,
+      svgHpx,
+      vw,
+      vh,
+      64,
+      INITIAL_LOAD_VIEWPORT_FIT_FRACTION
+    );
+
+    this.canvasView.panX -= layoutOffsetX;
+    this.canvasView.panY -= layoutOffsetY;
+
+    // The viewBox border uses bounding boxes (getBoundingClientRect). Those can be computed
+    // against the old transform if we run synchronously right after updating pan/scale.
+    // Refresh on the next tick to eliminate the occasional stale border.
+    this.cdr.markForCheck();
+    setTimeout(() => {
+      this.updateViewBoxOverlayRect();
+      this.cdr.markForCheck();
+    }, 0);
   }
 
   onCanvasMouseDown(event: MouseEvent): void {
@@ -805,6 +881,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         typeof (target as Element).getBoundingClientRect === 'function'
           ? (target as Element).getBoundingClientRect()
           : shapeEl!.getBoundingClientRect();
+
       this.createDragGhost(target.id, bbox, shapeScreenRect);
     } else {
       const unionBbox = this.svgManipulation.getUnionBBox(selectedIds);
@@ -855,15 +932,58 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       .size(ghostWidth, ghostHeight)
       .viewbox(0, 0, bbox.width, bbox.height)
       .attr({ overflow: 'visible', preserveAspectRatio: 'none' });
+    const rootSvg = svgInstance.node as SVGSVGElement;
     const worldToBbox = ghostSvgInstance.group();
     worldToBbox.matrix(new Matrix().translate(-bbox.x, -bbox.y));
-    const ghostClone = shape.clone(true, true) as SVGElement;
-    if (typeof ghostClone?.attr === 'function') {
-      ghostClone.attr('visibility', 'visible');
+    const shapeNode = shape.node as Element;
+    const contentGroup = shapeNode.closest?.('[data-editor-content-group]');
+    const chain: Element[] = [];
+    let cur: Element | null = shapeNode;
+    while (cur && cur !== rootSvg && cur !== contentGroup) {
+      chain.push(cur);
+      cur = cur.parentElement;
     }
-    worldToBbox.add(ghostClone);
+    let subtree = chain[0]?.cloneNode(true) as Element | undefined;
+    for (let i = 1; i < chain.length; i++) {
+      const parentClone = chain[i].cloneNode(false) as Element;
+      parentClone.appendChild(subtree!);
+      subtree = parentClone;
+    }
+    if (subtree) {
+      // Preserve clip-path/mask references by copying referenced defs into ghost SVG.
+      const refs = new Set<string>();
+      const all = [subtree, ...Array.from(subtree.querySelectorAll('*'))];
+      all.forEach((el) => {
+        const cp = el.getAttribute('clip-path');
+        const mk = el.getAttribute('mask');
+        [cp, mk].forEach((val) => {
+          if (!val) return;
+          const m = val.match(/url\(#([^)]+)\)/i);
+          if (m?.[1]) refs.add(m[1]);
+        });
+      });
+      if (refs.size > 0) {
+        const defs = ghostSvgInstance.defs();
+        refs.forEach((id) => {
+          const src = rootSvg.querySelector(`#${id}`);
+          if (src) defs.node.appendChild(src.cloneNode(true));
+        });
+      }
+
+      // Original selected shapes are hidden during drag preview. Ensure the cloned ghost
+      // shape is visible so the preview is actually rendered.
+      const clonedShape = subtree.matches?.(`#${shapeId}`)
+        ? subtree
+        : (subtree.querySelector?.(`#${shapeId}`) as Element | null);
+      if (clonedShape) {
+        clonedShape.setAttribute('visibility', 'visible');
+      }
+
+      worldToBbox.node.appendChild(subtree);
+    }
     this.applyGhostWrapperSvgLayout(wrapper, ghostSvgInstance.node as SVGSVGElement);
     document.body.appendChild(wrapper);
+
     this.dragGhostEl = wrapper;
     this.dragOverlayRect = dragOverlayRect;
     this.cdr.detectChanges();
@@ -1034,8 +1154,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         } else {
           this.canvasView.zoomInAt(point.x, point.y);
         }
-        this.updateViewBoxOverlayRect();
-        this.cdr.detectChanges();
+        setTimeout(() => {
+          this.updateViewBoxOverlayRect();
+          this.cdr.detectChanges();
+        }, 0);
       }
       return;
     }

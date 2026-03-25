@@ -322,12 +322,14 @@ describe('SvgCanvasComponent', () => {
     expect(component.zoomMarqueeRect?.height).toBe(70);
   });
 
-  it('should call zoomToFitRect on mouseup after non-tiny marquee drag', () => {
+  it('should call zoomToFitRect on mouseup after non-tiny marquee drag', async () => {
     const zoomToFitRectSpy = vi.spyOn(canvasViewService, 'zoomToFitRect');
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     component.wrapperWidth = 200;
     component.wrapperHeight = 200;
+    await new Promise<void>((r) => setTimeout(r, 0));
+    zoomToFitRectSpy.mockClear();
     editorToolService.setTool('zoom');
 
     const containerRect = new DOMRect(0, 0, 200, 200);
@@ -350,13 +352,15 @@ describe('SvgCanvasComponent', () => {
     expect(zoomToFitRectSpy).toHaveBeenCalledWith(50, 50, 100, 100, 200, 200);
   });
 
-  it('should call zoomInAt on click after tiny marquee drag (not zoomToFitRect on mouseup)', () => {
+  it('should call zoomInAt on click after tiny marquee drag (not zoomToFitRect on mouseup)', async () => {
     const zoomToFitRectSpy = vi.spyOn(canvasViewService, 'zoomToFitRect');
     const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     component.wrapperWidth = 200;
     component.wrapperHeight = 200;
+    await new Promise<void>((r) => setTimeout(r, 0));
+    zoomToFitRectSpy.mockClear();
     editorToolService.setTool('zoom');
 
     const containerRect = new DOMRect(0, 0, 200, 200);
@@ -797,6 +801,71 @@ describe('SvgCanvasComponent', () => {
     expect(component.highlightRect!.width).toBe(70);
     expect(component.highlightRect!.height).toBe(75);
     expect(svgManipulationService.getUnionBBox).toHaveBeenCalledWith(['a', 'b']);
+  });
+
+  it('should auto-fit icon palette SVG using SVG width/height (not viewBox) to keep content in bounds', async () => {
+    // viewBox units (100x100) do NOT match the SVG element pixel size (200x200),
+    // which is what our editor stage ends up using.
+    const marker = '<!--svg-editor-test-icon-->';
+    const svgContent = `${marker}<svg viewBox="0 0 100 100" width="200" height="200"><rect x="0" y="0" width="100" height="100" fill="#000"/></svg>`;
+
+    component.wrapperWidth = 200;
+    component.wrapperHeight = 200;
+    fixture.componentRef.setInput('svgContent', svgContent);
+    fixture.detectChanges();
+
+    // Allow initializeSVG() microtask + applyInitialFitToViewport() to run.
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
+    // With fitFraction 0.88 and svgWpx=200, viewportW=200:
+    // scale = (200*0.88)/200 = 0.88
+    expect(canvasViewService.scale).toBeCloseTo(0.88, 3);
+    expect(canvasViewService.panX).toBeCloseTo(12, 3);
+    expect(canvasViewService.panY).toBeCloseTo(12, 3);
+  });
+
+  it('should refresh viewBox overlay after initial fit-to-view (race-free)', async () => {
+    const marker = '<!--svg-editor-test-icon-->';
+    const svgContent = `${marker}<svg viewBox="0 0 100 100" width="200" height="200"><rect x="0" y="0" width="100" height="100" fill="#000"/></svg>`;
+
+    component.wrapperWidth = 200;
+    component.wrapperHeight = 200;
+
+    const updateSpy = vi.spyOn(component as any, 'updateViewBoxOverlayRect');
+
+    fixture.componentRef.setInput('svgContent', svgContent);
+    fixture.detectChanges();
+
+    // Fit runs in microtask; overlay refresh is scheduled on next tick.
+    await new Promise((r) => setTimeout(r, 0));
+    // ...and may schedule another tick depending on microtask ordering in the test env.
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
+    expect(updateSpy).toHaveBeenCalled();
+  });
+
+  it('should compensate for flex centering offset when fitting to a smaller SVG', async () => {
+    const marker = '<!--svg-editor-test-icon-->';
+    // svg is smaller than viewport: flexbox centers it based on unscaled size.
+    const svgContent = `${marker}<svg viewBox="0 0 100 100" width="150" height="150"><rect x="0" y="0" width="100" height="100" fill="#000"/></svg>`;
+
+    component.wrapperWidth = 200;
+    component.wrapperHeight = 200;
+    fixture.componentRef.setInput('svgContent', svgContent);
+    fixture.detectChanges();
+
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
+    // scale = (viewport * fitFraction) / svgWpx = (200*0.88)/150
+    expect(canvasViewService.scale).toBeCloseTo(1.1733333333, 3);
+
+    // zoomToFitRect pan (no offset compensation) would be 12.
+    // layout offset = (viewport - svgWpx)/2 = 25, so final pan should be -13.
+    expect(canvasViewService.panX).toBeCloseTo(-13, 3);
+    expect(canvasViewService.panY).toBeCloseTo(-13, 3);
   });
 
   it('should not show overlay rect when getShapeBBox returns null for selected shape', async () => {

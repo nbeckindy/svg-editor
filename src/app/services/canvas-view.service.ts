@@ -1,6 +1,9 @@
 import { Injectable } from '@angular/core';
 import { SvgManipulationService } from './svg-manipulation.service';
 
+/** Minimum zoom (1/64 ≈ 1.56%); mirrors default `zoomToFitRect` maxScale of 64. */
+export const CANVAS_MIN_ZOOM_SCALE = 1 / 64;
+
 @Injectable({
   providedIn: 'root'
 })
@@ -65,11 +68,11 @@ export class CanvasViewService {
   }
 
   /**
-   * Zoom out 2x centered on the given SVG point. Does nothing if scale would go below 1.
+   * Zoom out 2x centered on the given SVG point. Stops at {@link CANVAS_MIN_ZOOM_SCALE}.
    */
   zoomOutAt(svgX: number, svgY: number): void {
-    if (this.scale <= 1) return;
-    const newScale = Math.max(1, this.scale / 2);
+    if (this.scale <= CANVAS_MIN_ZOOM_SCALE) return;
+    const newScale = Math.max(CANVAS_MIN_ZOOM_SCALE, this.scale / 2);
     this.panX = this.panX + svgX * (this.scale - newScale);
     this.panY = this.panY + svgY * (this.scale - newScale);
     this.scale = newScale;
@@ -77,7 +80,8 @@ export class CanvasViewService {
 
   /**
    * Zoom and pan so the given SVG rectangle fits and is centered in the viewport.
-   * Sets scale = min(viewportW/svgW, viewportH/svgH) and pans to center the rect.
+   * `fitFraction` (default 1) shrinks the effective viewport used for scale only, leaving margin
+   * around the fitted content (e.g. 0.9 uses 90% of width/height for the fit calculation).
    */
   zoomToFitRect(
     svgX: number,
@@ -86,11 +90,15 @@ export class CanvasViewService {
     svgH: number,
     viewportW: number,
     viewportH: number,
-    maxScale = 64
+    maxScale = 64,
+    fitFraction = 1
   ): void {
     if (viewportW <= 0 || viewportH <= 0 || svgW <= 0 || svgH <= 0) return;
-    let scale = Math.min(viewportW / svgW, viewportH / svgH);
-    scale = Math.max(1, Math.min(scale, maxScale));
+    const frac = Math.min(1, Math.max(0.05, fitFraction));
+    const vw = viewportW * frac;
+    const vh = viewportH * frac;
+    let scale = Math.min(vw / svgW, vh / svgH);
+    scale = Math.max(CANVAS_MIN_ZOOM_SCALE, Math.min(scale, maxScale));
     this.scale = scale;
     this.panX = viewportW / 2 - (svgX + svgW / 2) * scale;
     this.panY = viewportH / 2 - (svgY + svgH / 2) * scale;

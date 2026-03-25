@@ -44,8 +44,11 @@ export class SvgManipulationService {
     container.innerHTML = '';
     const parser = new DOMParser();
     const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+    const hasTestMarker = svgContent.includes('svg-editor-test-icon');
     const svgElement = doc.querySelector('svg');
-    if (!svgElement) return;
+    if (!svgElement) {
+      return;
+    }
 
     const vb = svgElement.getAttribute('viewBox');
     const par = svgElement.getAttribute('preserveAspectRatio');
@@ -66,12 +69,12 @@ export class SvgManipulationService {
     const vbH = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
 
     const contentBbox = this.computeContentBbox(svgElement);
-    const uMinX = Math.min(vbMinX, contentBbox.x);
-    const uMinY = Math.min(vbMinY, contentBbox.y);
+    let uMinX = Math.min(vbMinX, contentBbox.x);
+    let uMinY = Math.min(vbMinY, contentBbox.y);
     const uMaxX = Math.max(vbMinX + vbW, contentBbox.x + contentBbox.width);
     const uMaxY = Math.max(vbMinY + vbH, contentBbox.y + contentBbox.height);
-    const uW = uMaxX - uMinX || vbW;
-    const uH = uMaxY - uMinY || vbH;
+    let uW = uMaxX - uMinX || vbW;
+    let uH = uMaxY - uMinY || vbH;
 
     let initW = vbW;
     let initH = vbH;
@@ -84,6 +87,52 @@ export class SvgManipulationService {
     if (hAttr && !hAttr.endsWith('%')) {
       const n = Number(hAttr);
       if (!Number.isNaN(n)) initH = n;
+    }
+
+    const clipPathCount = svgElement.querySelectorAll('clipPath').length;
+    const maskCount = svgElement.querySelectorAll('mask').length;
+    const hasClipPathAttr = svgElement.querySelectorAll('[clip-path]').length > 0;
+    const hasMaskAttr = svgElement.querySelectorAll('[mask]').length > 0;
+
+    // If the source SVG does not declare a `viewBox`, we synthesize one from width/height.
+    // In that case, Inkscape/defs-based clips can produce `getBBox()` values that include
+    // geometry that is clipped away (invisible). That causes fit-to-view to center
+    // invisible regions. When clips/masks exist and there is no source viewBox, clamp the
+    // editor stage bounds to the synthesized viewBox so we only fit visible space.
+    const hasClippingOrMasking = clipPathCount > 0 || maskCount > 0 || hasClipPathAttr || hasMaskAttr;
+    if (!vb && hasClippingOrMasking) {
+      uMinX = vbMinX;
+      uMinY = vbMinY;
+      uW = vbW;
+      uH = vbH;
+    }
+
+    // Avoid visible distortion: editor stage uses SVG.js `preserveAspectRatio='none'`, which
+    // stretches viewBox X/Y independently to the element's pixel width/height (initW/initH).
+    // If our computed stage viewBox uW/uH ratio differs from initW/initH, the artwork will
+    // appear squashed/unsquashed. Expand the stage viewBox to match the element aspect ratio.
+    const desiredRatio = initW / initH;
+    const currentRatio = uW / uH;
+    if (
+      Number.isFinite(desiredRatio) &&
+      Number.isFinite(currentRatio) &&
+      desiredRatio > 0 &&
+      currentRatio > 0 &&
+      Math.abs(currentRatio - desiredRatio) > 1e-6
+    ) {
+      const cx = uMinX + uW / 2;
+      const cy = uMinY + uH / 2;
+      if (currentRatio > desiredRatio) {
+        // Too wide -> increase height
+        const newUHeight = uW / desiredRatio;
+        uMinY = cy - newUHeight / 2;
+        uH = newUHeight;
+      } else {
+        // Too tall -> increase width
+        const newUWidth = uH * desiredRatio;
+        uMinX = cx - newUWidth / 2;
+        uW = newUWidth;
+      }
     }
 
     const editorSvg = SVG()
@@ -118,30 +167,62 @@ export class SvgManipulationService {
    */
   private computeContentBbox(svgElement: Element): { x: number; y: number; width: number; height: number } {
     const shapeSelectors = 'circle, rect, path, polygon, ellipse, line, polyline';
-    const nodes = svgElement.querySelectorAll(shapeSelectors);
-    if (nodes.length === 0) {
+    const computeFromRoot = (root: Element): { x: number; y: number; width: number; height: number } | null => {
+      const nodes = root.querySelectorAll(shapeSelectors);
+      if (nodes.length === 0) return null;
+      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+      nodes.forEach((node) => {
+        const el = node as SVGGraphicsElement;
+        if (typeof el.getBBox !== 'function') return;
+        const b = el.getBBox();
+        minX = Math.min(minX, b.x);
+        minY = Math.min(minY, b.y);
+        maxX = Math.max(maxX, b.x + b.width);
+        maxY = Math.max(maxY, b.y + b.height);
+      });
+      if (minX === Infinity) return null;
+      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    };
+
+    const fallbackFromDocumentViewBox = (): { x: number; y: number; width: number; height: number } => {
       const parts = this.documentViewBox.split(/\s+/);
       const w = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
       const h = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
       return { x: 0, y: 0, width: w, height: h };
+    };
+
+    // First attempt: compute from the parsed (detached) DOM.
+    const first = computeFromRoot(svgElement);
+    if (first && Number.isFinite(first.width) && Number.isFinite(first.height) && first.width !== 0 && first.height !== 0) {
+      return first;
     }
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    nodes.forEach((node) => {
-      const el = node as SVGGraphicsElement;
-      if (typeof el.getBBox !== 'function') return;
-      const b = el.getBBox();
-      minX = Math.min(minX, b.x);
-      minY = Math.min(minY, b.y);
-      maxX = Math.max(maxX, b.x + b.width);
-      maxY = Math.max(maxY, b.y + b.height);
-    });
-    if (minX === Infinity) {
-      const parts = this.documentViewBox.split(/\s+/);
-      const w = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
-      const h = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
-      return { x: 0, y: 0, width: w, height: h };
+
+    // Second attempt (fix): getBBox() often returns empty/zero boxes for detached SVG nodes.
+    // Import the parsed SVG into the real DOM (offscreen) so bbox math can succeed.
+    if (typeof document !== 'undefined' && typeof document.body !== 'undefined') {
+      const tempHost = document.createElement('div');
+      tempHost.style.position = 'absolute';
+      tempHost.style.left = '-100000px';
+      tempHost.style.top = '-100000px';
+      tempHost.style.width = '0';
+      tempHost.style.height = '0';
+      tempHost.style.overflow = 'visible';
+      try {
+        const imported = document.importNode(svgElement, true) as Element;
+        tempHost.appendChild(imported);
+        document.body.appendChild(tempHost);
+        const second = computeFromRoot(imported);
+        if (second && Number.isFinite(second.width) && Number.isFinite(second.height) && second.width !== 0 && second.height !== 0) {
+          return second;
+        }
+      } catch {
+        // ignore and fall back
+      } finally {
+        tempHost.remove();
+      }
     }
-    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+
+    return fallbackFromDocumentViewBox();
   }
 
   /**
@@ -250,8 +331,28 @@ export class SvgManipulationService {
     if (!this.svgInstance) return;
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
     if (!shape || typeof shape.matrix !== 'function') return;
+    let localDx = dx;
+    let localDy = dy;
+
+    // Convert root-SVG delta into the shape's parent-space delta so ancestor transforms
+    // (e.g. scaled/flipped groups) don't amplify or flip movement on mouseup commit.
+    try {
+      const node = shape.node as SVGGraphicsElement;
+      const parent = node?.parentElement as unknown as SVGGraphicsElement | null;
+      const parentCtm = parent?.getCTM?.();
+      if (parentCtm) {
+        const det = parentCtm.a * parentCtm.d - parentCtm.b * parentCtm.c;
+        if (Number.isFinite(det) && Math.abs(det) > 1e-12) {
+          localDx = (parentCtm.d * dx - parentCtm.c * dy) / det;
+          localDy = (-parentCtm.b * dx + parentCtm.a * dy) / det;
+        }
+      }
+    } catch {
+      // fall back to raw delta if CTM math is unavailable
+    }
+
     const m = shape.matrix();
-    shape.matrix(new Matrix().translate(dx, dy).multiply(m));
+    shape.matrix(new Matrix().translate(localDx, localDy).multiply(m));
   }
 
   /**
@@ -273,6 +374,37 @@ export class SvgManipulationService {
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
     if (!shape?.node) return null;
     const node = shape.node as SVGGraphicsElement;
+    const rootSvg = this.svgInstance.node as SVGSVGElement | null;
+
+    // Prefer visual bounds from rendered client rects when available. This respects clip-path/mask
+    // and matches where the user actually sees and drags the shape.
+    if (rootSvg && typeof node.getBoundingClientRect === 'function' && typeof rootSvg.getBoundingClientRect === 'function') {
+      const rr = rootSvg.getBoundingClientRect();
+      const sr = node.getBoundingClientRect();
+      if (
+        rr.width > 0 &&
+        rr.height > 0 &&
+        sr.width > 0 &&
+        sr.height > 0 &&
+        Number.isFinite(sr.left) &&
+        Number.isFinite(sr.top)
+      ) {
+        const vbAttr = rootSvg.getAttribute('viewBox') || this.documentViewBox;
+        const parts = vbAttr.split(/\s+/);
+        const vbMinX = parts.length >= 4 ? Number(parts[0]) || 0 : 0;
+        const vbMinY = parts.length >= 4 ? Number(parts[1]) || 0 : 0;
+        const vbW = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
+        const vbH = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
+        const x = vbMinX + ((sr.left - rr.left) / rr.width) * vbW;
+        const y = vbMinY + ((sr.top - rr.top) / rr.height) * vbH;
+        const width = (sr.width / rr.width) * vbW;
+        const height = (sr.height / rr.height) * vbH;
+        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
+          return { x, y, width, height };
+        }
+      }
+    }
+
     // svg.js bbox() wraps DOM getBBox(), which is in the element's *local* space before this
     // element's own `transform`. After resize we set transform via matrix(); multiply so union
     // bbox matches painted geometry.

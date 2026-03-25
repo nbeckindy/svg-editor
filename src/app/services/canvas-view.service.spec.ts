@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { CanvasViewService } from './canvas-view.service';
+import { CANVAS_MIN_ZOOM_SCALE, CanvasViewService } from './canvas-view.service';
 import { SvgManipulationService } from './svg-manipulation.service';
 
 describe('CanvasViewService', () => {
@@ -55,14 +55,14 @@ describe('CanvasViewService', () => {
     expect(service.panY).toBe(-8);
   });
 
-  it('zoomOutAt should halve scale and update pan; no-op when scale is 1', () => {
+  it('zoomOutAt from scale 1 should halve to 50% and update pan so point stays under cursor', () => {
     service.scale = 1;
     service.panX = 10;
     service.panY = 20;
     service.zoomOutAt(8, 8);
-    expect(service.scale).toBe(1);
-    expect(service.panX).toBe(10);
-    expect(service.panY).toBe(20);
+    expect(service.scale).toBe(0.5);
+    expect(service.panX).toBe(14);
+    expect(service.panY).toBe(24);
 
     service.scale = 2;
     service.panX = -8;
@@ -83,12 +83,20 @@ describe('CanvasViewService', () => {
     expect(service.panY).toBe(-8);
   });
 
-  it('zoomOutAt should not reduce scale below 1', () => {
-    service.scale = 1.5;
+  it('zoomOutAt should not reduce scale below CANVAS_MIN_ZOOM_SCALE', () => {
+    service.scale = CANVAS_MIN_ZOOM_SCALE;
+    service.panX = 10;
+    service.panY = 20;
+    service.zoomOutAt(8, 8);
+    expect(service.scale).toBe(CANVAS_MIN_ZOOM_SCALE);
+    expect(service.panX).toBe(10);
+    expect(service.panY).toBe(20);
+
+    service.scale = CANVAS_MIN_ZOOM_SCALE * 1.5;
     service.panX = 0;
     service.panY = 0;
     service.zoomOutAt(0, 0);
-    expect(service.scale).toBe(1);
+    expect(service.scale).toBe(CANVAS_MIN_ZOOM_SCALE);
   });
 
   it('panBy should add delta to panX and panY', () => {
@@ -165,5 +173,19 @@ describe('CanvasViewService', () => {
     expect(service.scale).toBe(64);
     service.zoomToFitRect(0, 0, 1, 1, 200, 200, 10);
     expect(service.scale).toBe(10);
+  });
+
+  it('zoomToFitRect should allow scale below 100% when rect is larger than viewport', () => {
+    service.zoomToFitRect(0, 0, 400, 400, 200, 200);
+    expect(service.scale).toBe(0.5);
+    expect(service.panX).toBe(0);
+    expect(service.panY).toBe(0);
+  });
+
+  it('zoomToFitRect should use fitFraction only for scale so content has viewport margin', () => {
+    service.zoomToFitRect(0, 0, 100, 100, 200, 200, 64, 0.5);
+    expect(service.scale).toBe(1);
+    service.zoomToFitRect(0, 0, 200, 200, 200, 200, 64, 0.5);
+    expect(service.scale).toBe(0.5);
   });
 });
