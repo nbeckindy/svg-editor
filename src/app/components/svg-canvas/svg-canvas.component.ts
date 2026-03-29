@@ -299,12 +299,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
           const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
           const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
           const hits = this.svgManipulation.getShapePropertiesIntersectingRect({ x, y, width: w, height: h });
+          const expanded = this.svgManipulation.expandSelectionByClipGroups(hits);
           if (event.shiftKey) {
-            if (hits.length > 0) {
-              this.shapeSelection.mergeShapesIntoSelection(hits);
+            if (expanded.length > 0) {
+              this.shapeSelection.mergeShapesIntoSelection(expanded);
             }
-          } else if (hits.length > 0) {
-            this.shapeSelection.selectShapes(hits);
+          } else if (expanded.length > 0) {
+            this.shapeSelection.selectShapes(expanded);
           } else {
             this.shapeSelection.clearSelection();
           }
@@ -901,8 +902,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private createDragGhost(shapeId: string, bbox: { x: number; y: number; width: number; height: number }, shapeScreenRect: DOMRect): void {
     const svgInstance = this.svgManipulation.getSVGInstance();
     if (!svgInstance) return;
-    const shape = svgInstance.findOne(`#${shapeId}`) as SVGElement;
-    if (!shape?.node) return;
+    const rootSvg = svgInstance.node as SVGSVGElement;
+    const built = this.buildDragGhostShapeSubtree(shapeId, svgInstance, rootSvg);
+    if (!built) return;
     const ghostLeft = shapeScreenRect.left;
     const ghostTop = shapeScreenRect.top;
     const ghostWidth = shapeScreenRect.width;
@@ -932,61 +934,78 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       .size(ghostWidth, ghostHeight)
       .viewbox(0, 0, bbox.width, bbox.height)
       .attr({ overflow: 'visible', preserveAspectRatio: 'none' });
-    const rootSvg = svgInstance.node as SVGSVGElement;
     const worldToBbox = ghostSvgInstance.group();
     worldToBbox.matrix(new Matrix().translate(-bbox.x, -bbox.y));
-    const shapeNode = shape.node as Element;
-    const contentGroup = shapeNode.closest?.('[data-editor-content-group]');
-    const chain: Element[] = [];
-    let cur: Element | null = shapeNode;
-    while (cur && cur !== rootSvg && cur !== contentGroup) {
-      chain.push(cur);
-      cur = cur.parentElement;
-    }
-    let subtree = chain[0]?.cloneNode(true) as Element | undefined;
-    for (let i = 1; i < chain.length; i++) {
-      const parentClone = chain[i].cloneNode(false) as Element;
-      parentClone.appendChild(subtree!);
-      subtree = parentClone;
-    }
-    if (subtree) {
-      // Preserve clip-path/mask references by copying referenced defs into ghost SVG.
-      const refs = new Set<string>();
-      const all = [subtree, ...Array.from(subtree.querySelectorAll('*'))];
-      all.forEach((el) => {
-        const cp = el.getAttribute('clip-path');
-        const mk = el.getAttribute('mask');
-        [cp, mk].forEach((val) => {
-          if (!val) return;
-          const m = val.match(/url\(#([^)]+)\)/i);
-          if (m?.[1]) refs.add(m[1]);
-        });
-      });
-      if (refs.size > 0) {
-        const defs = ghostSvgInstance.defs();
-        refs.forEach((id) => {
-          const src = rootSvg.querySelector(`#${id}`);
-          if (src) defs.node.appendChild(src.cloneNode(true));
-        });
-      }
-
-      // Original selected shapes are hidden during drag preview. Ensure the cloned ghost
-      // shape is visible so the preview is actually rendered.
-      const clonedShape = subtree.matches?.(`#${shapeId}`)
-        ? subtree
-        : (subtree.querySelector?.(`#${shapeId}`) as Element | null);
-      if (clonedShape) {
-        clonedShape.setAttribute('visibility', 'visible');
-      }
-
-      worldToBbox.node.appendChild(subtree);
-    }
+    this.appendGhostDefClones(ghostSvgInstance, rootSvg, built.urlRefs);
+    worldToBbox.node.appendChild(built.subtree);
     this.applyGhostWrapperSvgLayout(wrapper, ghostSvgInstance.node as SVGSVGElement);
     document.body.appendChild(wrapper);
 
     this.dragGhostEl = wrapper;
     this.dragOverlayRect = dragOverlayRect;
     this.cdr.detectChanges();
+  }
+
+  /** Collect `url(#id)` targets from `clip-path` and `mask` attributes on `root` and its descendants. */
+  private collectClipAndMaskUrlRefsFromElementTree(root: Element): Set<string> {
+    const refs = new Set<string>();
+    const all = [root, ...Array.from(root.querySelectorAll('*'))];
+    all.forEach((el) => {
+      const cp = el.getAttribute('clip-path');
+      const mk = el.getAttribute('mask');
+      [cp, mk].forEach((val) => {
+        if (!val) return;
+        const m = val.match(/url\(#([^)]+)\)/i);
+        if (m?.[1]) refs.add(m[1]);
+      });
+    });
+    return refs;
+  }
+
+  /**
+   * Clone a shape plus the ancestor chain down to `[data-editor-content-group]` (same as single-shape drag ghost)
+   * so nested `transform` / `clip-path` on groups is preserved. Leaf-only clones collapse local path geometry to one origin.
+   */
+  private buildDragGhostShapeSubtree(
+    shapeId: string,
+    svgInstance: Svg,
+    rootSvg: SVGSVGElement
+  ): { subtree: Element; urlRefs: Set<string> } | null {
+    const shape = svgInstance.findOne(`#${shapeId}`) as SVGElement | undefined;
+    if (!shape?.node) return null;
+    const shapeNode = shape.node as Element;
+    const contentGroup = shapeNode.closest?.('[data-editor-content-group]');
+    if (!contentGroup) return null;
+    const chain: Element[] = [];
+    let cur: Element | null = shapeNode;
+    while (cur && cur !== rootSvg && cur !== contentGroup) {
+      chain.push(cur);
+      cur = cur.parentElement;
+    }
+    if (chain.length === 0) return null;
+    let subtree = chain[0].cloneNode(true) as Element;
+    for (let i = 1; i < chain.length; i++) {
+      const parentClone = chain[i].cloneNode(false) as Element;
+      parentClone.appendChild(subtree);
+      subtree = parentClone;
+    }
+    const urlRefs = this.collectClipAndMaskUrlRefsFromElementTree(subtree);
+    const clonedShape = subtree.matches?.(`#${shapeId}`)
+      ? subtree
+      : (subtree.querySelector?.(`#${shapeId}`) as Element | null);
+    if (clonedShape) {
+      clonedShape.setAttribute('visibility', 'visible');
+    }
+    return { subtree, urlRefs };
+  }
+
+  private appendGhostDefClones(ghostSvg: Svg, rootSvg: SVGSVGElement, urlRefs: Set<string>): void {
+    if (urlRefs.size === 0) return;
+    const defs = ghostSvg.defs();
+    urlRefs.forEach((id) => {
+      const src = rootSvg.querySelector(`#${id}`);
+      if (src) defs.node.appendChild(src.cloneNode(true));
+    });
   }
 
   private createUnionDragGhost(
@@ -1022,18 +1041,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       .attr({ overflow: 'visible', preserveAspectRatio: 'none' });
     const worldToUnion = ghostSvg.group();
     worldToUnion.matrix(new Matrix().translate(-unionBbox.x, -unionBbox.y));
+    const rootSvg = svgInstance.node as SVGSVGElement;
     const orderedIds = this.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const unionUrlRefs = new Set<string>();
     for (const id of orderedIds) {
-      const shape = svgInstance.findOne(`#${id}`) as SVGElement | undefined;
-      if (!shape?.node) continue;
       const bbox = this.svgManipulation.getShapeBBox(id);
       if (!bbox) continue;
-      const clone = shape.clone(true, true) as SVGElement;
-      if (typeof clone?.attr === 'function') {
-        clone.attr('visibility', 'visible');
-      }
-      worldToUnion.add(clone);
+      const built = this.buildDragGhostShapeSubtree(id, svgInstance, rootSvg);
+      if (!built) continue;
+      built.urlRefs.forEach((r) => unionUrlRefs.add(r));
+      worldToUnion.node.appendChild(built.subtree);
     }
+    this.appendGhostDefClones(ghostSvg, rootSvg, unionUrlRefs);
     this.applyGhostWrapperSvgLayout(wrapper, ghostSvg.node as SVGSVGElement);
     document.body.appendChild(wrapper);
     this.dragGhostEl = wrapper;
@@ -1076,18 +1095,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.resizeGhostInnerSvgEl = svgNode;
     const worldToUnion = ghostSvg.group();
     worldToUnion.matrix(new Matrix().translate(-unionBbox.x, -unionBbox.y));
+    const rootSvg = svgInstance.node as SVGSVGElement;
     const orderedIds = this.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const unionUrlRefs = new Set<string>();
     for (const id of orderedIds) {
-      const shape = svgInstance.findOne(`#${id}`) as SVGElement | undefined;
-      if (!shape?.node) continue;
       const bbox = this.svgManipulation.getShapeBBox(id);
       if (!bbox) continue;
-      const clone = shape.clone(true, true) as SVGElement;
-      if (typeof clone?.attr === 'function') {
-        clone.attr('visibility', 'visible');
-      }
-      worldToUnion.add(clone);
+      const built = this.buildDragGhostShapeSubtree(id, svgInstance, rootSvg);
+      if (!built) continue;
+      built.urlRefs.forEach((r) => unionUrlRefs.add(r));
+      worldToUnion.node.appendChild(built.subtree);
     }
+    this.appendGhostDefClones(ghostSvg, rootSvg, unionUrlRefs);
     this.applyGhostWrapperSvgLayout(wrapper, svgNode);
     document.body.appendChild(wrapper);
     this.resizeGhostEl = wrapper;
@@ -1170,13 +1189,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const svgElement =
       clickTarget.id && (this.svgManipulation.getSVGInstance()?.findOne(`#${clickTarget.id}`) as SVGElement);
     if (svgElement) {
-      const properties = this.svgManipulation.getShapeProperties(svgElement);
+      const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(svgElement);
       if (event.shiftKey) {
-        this.shapeSelection.toggleShapeInSelection(properties);
+        this.shapeSelection.toggleShapeGroupInSelection(expanded);
       } else {
-        this.shapeSelection.selectShape(properties);
+        this.shapeSelection.selectShapes(expanded);
       }
-      this.svgManipulation.highlightShape(properties.id);
+      this.svgManipulation.highlightShape(expanded[0]?.id ?? '');
     } else {
       this.shapeSelection.clearSelection();
       this.svgManipulation.clearHighlight();

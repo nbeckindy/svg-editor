@@ -45,6 +45,21 @@ export class ShapeSelectionService {
   }
 
   /**
+   * Toggle a clip/mask group as a unit (all shapes selected → remove all; otherwise merge in any missing).
+   */
+  toggleShapeGroupInSelection(shapes: ShapeProperties[]): void {
+    if (shapes.length === 0) return;
+    const idSet = new Set(shapes.map((s) => s.id));
+    const current = this.selectedShapes();
+    const allInGroupSelected = shapes.every((s) => current.some((c) => c.id === s.id));
+    if (allInGroupSelected) {
+      this.selectedShapes.set(current.filter((c) => !idSet.has(c.id)));
+    } else {
+      this.mergeShapesIntoSelection(shapes);
+    }
+  }
+
+  /**
    * Add shape to selection if not selected; remove if already selected
    */
   toggleShapeInSelection(shape: ShapeProperties): void {

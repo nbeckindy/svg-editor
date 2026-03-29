@@ -1,12 +1,22 @@
 <div class="debug-panel">
   <div class="debug-panel-header">
     <h3>SVG (debug)</h3>
+    <button
+      type="button"
+      class="debug-toggle"
+      (click)="toggleCollapsed()"
+      [attr.aria-expanded]="!isCollapsed()"
+      aria-controls="svg-debug-body">
+      {{ isCollapsed() ? 'Expand' : 'Collapse' }}
+    </button>
   </div>
-  @if (segments(); as segs) {
-    <div class="debug-panel-body">
-      <pre class="debug-xml" aria-label="Exported SVG XML"><code>@for (seg of segs; track $index) {<span [class.selected]="seg.selected">{{ seg.text }}</span>}</code></pre>
-    </div>
-  } @else {
-    <div class="debug-panel-empty">Load an SVG to see exported document XML.</div>
+  @if (!isCollapsed()) {
+    @if (segments(); as segs) {
+      <div id="svg-debug-body" class="debug-panel-body">
+        <pre class="debug-xml" aria-label="Exported SVG XML"><code>@for (seg of segs; track $index) {<span [class.selected]="seg.selected">{{ seg.text }}</span>}</code></pre>
+      </div>
+    } @else {
+      <div id="svg-debug-body" class="debug-panel-empty">Load an SVG to see exported document XML.</div>
+    }
   }
 </div>

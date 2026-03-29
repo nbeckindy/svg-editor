@@ -3,15 +3,17 @@ import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TEST_ICONS, TestIcon } from '../../data/test-icons';
 import {
-  docIcoSvg,
-  familyEatingClipArtSvg,
-  photoNgMobileSvg
+  brocSvg,
+  lemonSqueezeSvg,
+  photoNgMobileSvg,
+  svgFutureSvg
 } from '../../data/data-svg-strings';
 
 const DATA_SVG_ICONS: TestIcon[] = [
   { id: '201806-photo-ng-mobile', label: 'Photo NG mobile', svg: photoNgMobileSvg },
-  { id: 'doc-ico', label: 'Doc icon', svg: docIcoSvg },
-  { id: 'family-eating-clip-art', label: 'Family eating clip art', svg: familyEatingClipArtSvg }
+  { id: 'broc', label: 'Broc', svg: brocSvg },
+  { id: 'lemon-squeeze', label: 'Lemon squeeze', svg: lemonSqueezeSvg },
+  { id: 'svg-future', label: 'SVG future', svg: svgFutureSvg }
 ];
 
 @Component({

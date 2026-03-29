@@ -13,8 +13,11 @@ const outFile = path.join(dir, 'data-svg-strings.ts');
 
 const entries = [
   { key: 'photoNgMobileSvg', file: '201806_photoNG_mobile.svg' },
+  { key: 'brocSvg', file: 'broc.svg' },
   { key: 'docIcoSvg', file: 'Doc_ico.svg' },
-  { key: 'familyEatingClipArtSvg', file: 'Family_eating_clip_art.svg' }
+  { key: 'familyEatingClipArtSvg', file: 'Family_eating_clip_art.svg' },
+  { key: 'lemonSqueezeSvg', file: 'lemon-squeeze.svg' },
+  { key: 'svgFutureSvg', file: 'svg-future.svg' }
 ];
 
 let out =

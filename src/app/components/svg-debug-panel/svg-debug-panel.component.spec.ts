@@ -66,4 +66,27 @@ describe('SvgDebugPanelComponent', () => {
     const highlighted = el.querySelectorAll('.selected');
     expect(highlighted.length).toBeGreaterThan(0);
   });
+
+  it('should collapse and expand debug content', () => {
+    exportSVG.mockReturnValue(
+      '<svg xmlns="http://www.w3.org/2000/svg"><circle id="c1" cx="0" cy="0" r="1" /></svg>'
+    );
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    const button = el.querySelector('.debug-toggle') as HTMLButtonElement;
+    expect(button).toBeTruthy();
+    expect(el.querySelector('.debug-xml')).toBeTruthy();
+
+    button.click();
+    fixture.detectChanges();
+    expect(el.querySelector('.debug-xml')).toBeNull();
+    expect(button.textContent).toContain('Expand');
+
+    button.click();
+    fixture.detectChanges();
+    expect(el.querySelector('.debug-xml')).toBeTruthy();
+    expect(button.textContent).toContain('Collapse');
+  });
 });

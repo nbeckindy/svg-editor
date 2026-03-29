@@ -1,4 +1,4 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
@@ -14,6 +14,7 @@ import { formatSvgXmlWithHighlightSegments } from '../../utils/svg-debug-xml';
 export class SvgDebugPanelComponent {
   private shapeSelection = inject(ShapeSelectionService);
   private svgManipulation = inject(SvgManipulationService);
+  readonly isCollapsed = signal(false);
 
   readonly segments = computed(() => {
     this.svgManipulation.documentRevision();
@@ -24,4 +25,8 @@ export class SvgDebugPanelComponent {
     const ids = this.shapeSelection.selectedShapes().map((s) => s.id);
     return formatSvgXmlWithHighlightSegments(raw, ids);
   });
+
+  toggleCollapsed(): void {
+    this.isCollapsed.update((value) => !value);
+  }
 }

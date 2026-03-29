@@ -1,0 +1,29 @@
+<div class="layers-panel">
+  <div class="panel-header">
+    <h3>Layers</h3>
+  </div>
+
+  @if (layers().length > 0) {
+    <div class="layers-list">
+      @for (layer of layers(); track layer.id) {
+        <button
+          type="button"
+          class="layer-row"
+          [class.selected]="layer.selected"
+          [title]="layer.id"
+          (click)="onLayerClick(layer.id)">
+          <img class="layer-preview" [src]="layer.previewUrl" [alt]="layer.type + ' preview'" />
+          <div class="layer-meta">
+            <div class="layer-id">{{ layer.id }}</div>
+            <div class="layer-type">{{ layer.type }}</div>
+          </div>
+        </button>
+      }
+    </div>
+  } @else {
+    <div class="empty-state">
+      <p>No layers loaded</p>
+      <p class="hint">Load an SVG to inspect stack order</p>
+    </div>
+  }
+</div>
