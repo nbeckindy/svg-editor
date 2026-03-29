@@ -111,7 +111,84 @@ describe('SvgManipulationService', () => {
       expect(properties.stroke).toBe('#000000');
       expect(properties.strokeWidth).toBe(2);
       expect(properties.opacity).toBe(0.8);
+      expect(properties.fillSource?.kind).toBe('presentation-attr');
+      expect(properties.strokeSource?.kind).toBe('presentation-attr');
     }
+  });
+
+  it('getNearestGroupAncestorId returns first g ancestor with id inside content group', () => {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <g id="layer-a"><rect id="leaf" x="0" y="0" width="5" height="5" fill="red"/></g>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    expect(service.getNearestGroupAncestorId('leaf')).toBe('layer-a');
+  });
+
+  it('bakeEffectiveFillToLocal moves inline fill to presentation attribute', () => {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect id="child" x="0" y="0" width="5" height="5" style="fill: #00aa00"/>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    service.bakeEffectiveFillToLocal('child');
+    const rect = container.querySelector('#child') as HTMLElement | null;
+    expect(rect?.style.fill).toBe('');
+    const fillAttr = rect?.getAttribute('fill');
+    expect(fillAttr?.toLowerCase()).toBe('#00aa00');
+  });
+
+  it('getShapeProperties omits stroke when no stroke is painted (no UA rgb black noise)', () => {
+    const svgContent =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><circle id="no-stroke" cx="50" cy="50" r="40" fill="#FF0000"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const shape = service.getSVGInstance()?.findOne('#no-stroke') as any;
+    expect(shape).toBeTruthy();
+    const properties = service.getShapeProperties(shape);
+    expect(properties.stroke).toBeUndefined();
+    expect(properties.strokeWidth).toBe(0);
+  });
+
+  it('getShapeProperties omits fill when element has fill="none"', () => {
+    const svgContent =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="no-fill-rect" x="0" y="0" width="10" height="10" fill="none"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const shape = service.getSVGInstance()?.findOne('#no-fill-rect') as any;
+    expect(shape).toBeTruthy();
+    const properties = service.getShapeProperties(shape);
+    expect(properties.fill).toBeUndefined();
+    expect(properties.stroke).toBeUndefined();
+  });
+
+  it('getShapeProperties uses default fill source when no ancestor sets fill (not false inherited)', () => {
+    const svgContent =
+      '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100"><rect id="solo-fill" width="10" height="10"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const shape = service.getSVGInstance()?.findOne('#solo-fill') as any;
+    expect(shape).toBeTruthy();
+    const properties = service.getShapeProperties(shape);
+    expect(properties.fillSource?.kind).not.toBe('inherited');
+  });
+
+  it('getShapeProperties fill is inherited when a parent sets fill attribute', () => {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <g fill="#ff0000"><rect id="inherited-fill" width="10" height="10"/></g>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    const shape = service.getSVGInstance()?.findOne('#inherited-fill') as any;
+    expect(shape).toBeTruthy();
+    const properties = service.getShapeProperties(shape);
+    expect(properties.fillSource?.kind).toBe('inherited');
+  });
+
+  it('getShapeProperties detects inline style fill over presentation attribute', () => {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <circle id="inline-circle" style="fill: rgb(0, 0, 255)" cx="50" cy="50" r="40" fill="#ff0000"/>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    const shape = service.getSVGInstance()?.findOne('#inline-circle') as any;
+    expect(shape).toBeTruthy();
+    const properties = service.getShapeProperties(shape);
+    expect(properties.fillSource?.kind).toBe('inline-style');
+    expect(properties.fill).toBe('#0000FF');
   });
 
   it('getShapePropertiesInSameClipGroup returns all shapes under the clip-path ancestor', () => {
@@ -615,6 +692,23 @@ describe('SvgManipulationService', () => {
       g.isPointInStroke = () => false;
       const hits = service.getShapePropertiesIntersectingRect({ x: 45, y: 12, width: 20, height: 6 });
       expect(hits.map((h) => h.id)).toEqual(['moved']);
+    });
+  });
+
+  describe('getLayerStackItems', () => {
+    it('returns empty array when not initialized', () => {
+      expect(service.getLayerStackItems()).toEqual([]);
+    });
+
+    it('returns editable shapes in DOM order with id/type/markup', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="back-rect" x="0" y="0" width="20" height="20"/><g id="ignored"><rect width="1" height="1"/></g><circle id="front-circle" cx="30" cy="30" r="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+
+      const items = service.getLayerStackItems();
+      expect(items.map((item) => item.id)).toEqual(['back-rect', 'front-circle']);
+      expect(items.map((item) => item.type)).toEqual(['rect', 'circle']);
+      expect(items[0].elementMarkup).toContain('<rect');
+      expect(items[1].elementMarkup).toContain('<circle');
     });
   });
 });

@@ -493,7 +493,87 @@ describe('SvgCanvasComponent', () => {
     component.onDocumentMouseUp({ button: 0, shiftKey: false } as MouseEvent);
 
     expect(component.isSelectionMarquee).toBe(false);
-    expect(selectShapesSpy).toHaveBeenCalledWith([hitA]);
+    expect(selectShapesSpy).toHaveBeenCalledWith([expect.objectContaining({ id: 'a' })]);
+  });
+
+  it('should pass marquee hits through expandSelectionByClipGroups before selectShapes', () => {
+    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
+    const hitA = {
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    };
+    const hitB = {
+      id: 'b',
+      type: 'rect',
+      fill: '#111',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    };
+    vi.spyOn(svgManipulationService, 'getShapePropertiesIntersectingRect').mockReturnValue([hitA]);
+    const expandSpy = vi.spyOn(svgManipulationService, 'expandSelectionByClipGroups').mockReturnValue([hitA, hitB]);
+
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    stubEditorSvgScreenMapping(component);
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      target: { tagName: 'svg' },
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({ clientX: 50, clientY: 50 } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0, shiftKey: false } as MouseEvent);
+
+    expect(expandSpy).toHaveBeenCalledWith([hitA]);
+    expect(selectShapesSpy).toHaveBeenCalledWith([hitA, hitB]);
+  });
+
+  it('should expand a single marquee hit to all shapes in the same clip group (real manipulation)', () => {
+    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
+    const soloHit = {
+      id: 'mq-x1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    };
+    vi.spyOn(svgManipulationService, 'getShapePropertiesIntersectingRect').mockReturnValue([soloHit]);
+
+    fixture.componentRef.setInput(
+      'svgContent',
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+        <defs><clipPath id="cp-mq"><rect x="0" y="0" width="100" height="100"/></clipPath></defs>
+        <g clip-path="url(#cp-mq)">
+          <rect id="mq-x1" x="0" y="0" width="5" height="5"/>
+          <rect id="mq-x2" x="10" y="0" width="5" height="5"/>
+        </g>
+      </svg>`
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    stubEditorSvgScreenMapping(component);
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 0,
+      clientY: 0,
+      target: { tagName: 'svg' },
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({ clientX: 50, clientY: 50 } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0, shiftKey: false } as MouseEvent);
+
+    const arg = selectShapesSpy.mock.calls[0]?.[0];
+    expect(arg?.map((s) => s.id).sort()).toEqual(['mq-x1', 'mq-x2'].sort());
   });
 
   it('should not call selectShapes on mouseup after tiny selection marquee', () => {
@@ -623,13 +703,13 @@ describe('SvgCanvasComponent', () => {
     component.onDocumentMouseMove({ clientX: 60, clientY: 60 } as MouseEvent);
     component.onDocumentMouseUp({ button: 0, shiftKey: true } as MouseEvent);
 
-    expect(mergeSpy).toHaveBeenCalledWith([hitB]);
+    expect(mergeSpy).toHaveBeenCalledWith([expect.objectContaining({ id: 'b' })]);
   });
 
   it('should not clear selection or select shape when pan tool is active and user clicks canvas', () => {
     const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
     const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
-    const selectShapeSpy = vi.spyOn(shapeSelectionService, 'selectShape');
+    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
 
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="c1" cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
@@ -645,7 +725,7 @@ describe('SvgCanvasComponent', () => {
 
     expect(clearSelectionSpy).not.toHaveBeenCalled();
     expect(clearHighlightSpy).not.toHaveBeenCalled();
-    expect(selectShapeSpy).not.toHaveBeenCalled();
+    expect(selectShapesSpy).not.toHaveBeenCalled();
   });
 
   it('should start pan on mousedown when pan tool is active and left button', () => {
@@ -927,7 +1007,7 @@ describe('SvgCanvasComponent', () => {
     );
     fixture.detectChanges();
     editorToolService.setTool('selector');
-    const selectShapeSpy = vi.spyOn(shapeSelectionService, 'selectShape');
+    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
     vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
       findOne: (sel: string) => (sel === '#b' ? { id: () => 'b' } : null),
       find: () => []
@@ -954,9 +1034,9 @@ describe('SvgCanvasComponent', () => {
       shiftKey: false
     } as unknown as MouseEvent);
 
-    expect(selectShapeSpy).toHaveBeenCalledWith(
+    expect(selectShapesSpy).toHaveBeenCalledWith([
       expect.objectContaining({ id: 'b' })
-    );
+    ]);
     expect(shapeSelectionService.getSelectedShapes()).toHaveLength(1);
     expect(shapeSelectionService.getSelectedShape()?.id).toBe('b');
   });
@@ -968,7 +1048,7 @@ describe('SvgCanvasComponent', () => {
     );
     fixture.detectChanges();
     editorToolService.setTool('selector');
-    const toggleSpy = vi.spyOn(shapeSelectionService, 'toggleShapeInSelection');
+    const toggleSpy = vi.spyOn(shapeSelectionService, 'toggleShapeGroupInSelection');
     vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
       findOne: (sel: string) => (sel === '#b' ? { id: () => 'b' } : null),
       find: () => []
@@ -995,8 +1075,35 @@ describe('SvgCanvasComponent', () => {
       shiftKey: true
     } as unknown as MouseEvent);
 
-    expect(toggleSpy).toHaveBeenCalledWith(expect.objectContaining({ id: 'b' }));
+    expect(toggleSpy).toHaveBeenCalledWith([expect.objectContaining({ id: 'b' })]);
     expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('should select every shape under the same clip-path ancestor on click', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+        <defs><clipPath id="cp"><rect x="0" y="0" width="50" height="100"/></clipPath></defs>
+        <g clip-path="url(#cp)">
+          <rect id="r-in-1" x="5" y="5" width="10" height="10"/>
+          <rect id="r-in-2" x="25" y="25" width="10" height="10"/>
+        </g>
+        <rect id="r-out" x="60" y="5" width="10" height="10"/>
+      </svg>`
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    const host = component.svgContainer()?.nativeElement;
+    const rIn1 = host?.querySelector('#r-in-1');
+    expect(rIn1).toBeTruthy();
+
+    component.onCanvasClick({
+      target: rIn1,
+      shiftKey: false
+    } as unknown as MouseEvent);
+
+    const ids = shapeSelectionService.getSelectedShapes().map((s) => s.id).sort();
+    expect(ids).toEqual(['r-in-1', 'r-in-2'].sort());
   });
 
   it('should remove from selection on shift-click on already selected shape', () => {

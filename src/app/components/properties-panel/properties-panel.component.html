@@ -5,6 +5,10 @@
 
   @if (selectedShape(); as shape) {
     <div class="properties-content">
+      <p class="paint-effective-hint">
+        Colors match what you see on the canvas (computed from attributes, CSS, and inheritance).
+      </p>
+
       <div class="property-group">
         <label class="property-label">Shape Type</label>
         <div class="property-value readonly">{{ shape.type }}</div>
@@ -17,21 +21,77 @@
 
       <div class="property-group">
         <label class="property-label" for="fill-color">Fill Color</label>
+        @if (shape.fillSource) {
+          <div
+            class="paint-source-row"
+            [class.class-controlled]="isClassControlled(shape.fillSource)">
+            <span class="paint-source-badge">{{ paintSourceText(shape.fillSource) }}</span>
+            @if (shape.fillSource.classNames?.length) {
+              <span
+                class="paint-source-classes"
+                [attr.title]="(shape.fillSource.classNames ?? []).join(' ')">
+                {{ (shape.fillSource.classNames ?? []).join(' ') }}
+              </span>
+            }
+            @if (shouldOfferBakeFill(shape)) {
+              <button type="button" class="btn-paint-action" (click)="onBakeFillClick()">
+                Apply to this shape
+              </button>
+            }
+          </div>
+        }
         <div class="color-input-group">
-          <app-color-picker
-            [color]="shape.fill || '#000000'"
-            (colorChange)="onFillColorChange($event)">
-          </app-color-picker>
+          @if (hasFillColor(shape)) {
+            <app-color-picker
+              [color]="shape.fill!"
+              (colorChange)="onFillColorChange($event)">
+            </app-color-picker>
+          } @else {
+            <div class="no-paint-value">
+              <span class="no-paint-label">No fill</span>
+              <button type="button" class="btn-set-paint" (click)="onFillColorChange('#000000')">
+                Set fill
+              </button>
+            </div>
+          }
         </div>
       </div>
 
       <div class="property-group">
         <label class="property-label" for="stroke-color">Stroke Color</label>
+        @if (shape.strokeSource) {
+          <div
+            class="paint-source-row"
+            [class.class-controlled]="isClassControlled(shape.strokeSource)">
+            <span class="paint-source-badge">{{ paintSourceText(shape.strokeSource) }}</span>
+            @if (shape.strokeSource.classNames?.length) {
+              <span
+                class="paint-source-classes"
+                [attr.title]="(shape.strokeSource.classNames ?? []).join(' ')">
+                {{ (shape.strokeSource.classNames ?? []).join(' ') }}
+              </span>
+            }
+            @if (shouldOfferBakeStroke(shape)) {
+              <button type="button" class="btn-paint-action" (click)="onBakeStrokeClick()">
+                Apply to this shape
+              </button>
+            }
+          </div>
+        }
         <div class="color-input-group">
-          <app-color-picker
-            [color]="shape.stroke || '#000000'"
-            (colorChange)="onStrokeColorChange($event)">
-          </app-color-picker>
+          @if (hasStrokeColor(shape)) {
+            <app-color-picker
+              [color]="shape.stroke!"
+              (colorChange)="onStrokeColorChange($event)">
+            </app-color-picker>
+          } @else {
+            <div class="no-paint-value">
+              <span class="no-paint-label">No stroke</span>
+              <button type="button" class="btn-set-paint" (click)="onAddStrokeClick()">
+                Set stroke
+              </button>
+            </div>
+          }
         </div>
       </div>
 
@@ -57,6 +117,17 @@
             (change)="onStrokeWidthChange($event)">
         </div>
       </div>
+
+      @if (shouldOfferSelectParentGroup(shape)) {
+        <div class="paint-parent-row">
+          <button type="button" class="btn-paint-action secondary" (click)="onSelectParentGroupClick()">
+            Select parent group
+          </button>
+          @if (parentGroupId(shape); as pid) {
+            <span class="parent-id-hint" [attr.title]="pid">#{{ pid }}</span>
+          }
+        </div>
+      }
 
       <div class="property-group">
         <label class="property-label" for="opacity">Opacity</label>

@@ -95,6 +95,31 @@ describe('ShapeSelectionService', () => {
     expect(service.isShapeSelected('b')).toBe(true);
   });
 
+  it('toggleShapeGroupInSelection should merge missing group members', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const shapeB: ShapeProperties = { id: 'b', type: 'rect', fill: '#0f0' };
+    const shapeC: ShapeProperties = { id: 'c', type: 'rect', fill: '#00f' };
+    service.selectShape(shapeA);
+    service.toggleShapeGroupInSelection([shapeB, shapeC]);
+    expect(service.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('toggleShapeGroupInSelection should remove all group members when fully selected', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const shapeB: ShapeProperties = { id: 'b', type: 'rect', fill: '#0f0' };
+    service.selectShapes([shapeA, shapeB]);
+    service.toggleShapeGroupInSelection([shapeA, shapeB]);
+    expect(service.getSelectedShapes()).toEqual([]);
+  });
+
+  it('toggleShapeGroupInSelection with partial group membership should merge the rest', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const shapeB: ShapeProperties = { id: 'b', type: 'rect', fill: '#0f0' };
+    service.selectShape(shapeA);
+    service.toggleShapeGroupInSelection([shapeA, shapeB]);
+    expect(service.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
   it('should have empty selection when last shape is toggled out', () => {
     const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
     service.selectShape(shapeA);
@@ -159,6 +184,17 @@ describe('ShapeSelectionService', () => {
     expect(updated?.opacity).toBe(0.5);
     expect(updated?.id).toBe('test-ellipse'); // Other properties unchanged
     expect(updated?.type).toBe('ellipse');
+  });
+
+  it('updateSelectedShape updates only the first shape when multiple are selected', () => {
+    const a: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const b: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };
+    service.selectShapes([a, b]);
+    service.updateSelectedShape({ fill: '#00f' });
+    expect(service.getSelectedShapes()).toEqual([
+      { ...a, fill: '#00f' },
+      b
+    ]);
   });
 
   it('should not update if no shape is selected', () => {

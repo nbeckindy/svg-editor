@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
-import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
-import { ShapeProperties } from '../models/shape-properties.interface';
+import { SVG, Svg, Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
+import { PaintSourceInfo, ShapeProperties } from '../models/shape-properties.interface';
 import { type ResizeCorner, oppositeCornerForHandle } from '../utils/selection-resize';
 import {
   axisAlignedRectContains,
@@ -20,10 +20,224 @@ const EDITOR_OUTSIDE_RECT_ATTR = 'data-editor-outside-rect';
 /** 25% black fill for area outside document viewBox. */
 const OUTSIDE_VIEWBOX_FILL = '#bfbfbf';
 
+export interface LayerStackItem {
+  id: string;
+  type: string;
+  elementMarkup: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+}
+
+interface RenderedPaint {
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+}
+
 @Injectable({
   providedIn: 'root'
 })
 export class SvgManipulationService {
+  private getRenderedPaint(node: Element): RenderedPaint {
+    if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return {};
+    try {
+      const style = window.getComputedStyle(node as unknown as globalThis.Element);
+      const strokeWidth = Number.parseFloat(style.strokeWidth || '');
+      const opacity = Number.parseFloat(style.opacity || '');
+      return {
+        fill: style.fill || undefined,
+        stroke: style.stroke || undefined,
+        strokeWidth: Number.isFinite(strokeWidth) ? strokeWidth : undefined,
+        opacity: Number.isFinite(opacity) ? opacity : undefined
+      };
+    } catch {
+      return {};
+    }
+  }
+
+  /**
+   * Whether a stroke is actually painted. Browsers often report `stroke` as `rgb(0, 0, 0)` with
+   * `stroke-width: 1` from getComputedStyle even when the used value is `none`, so nothing is drawn.
+   */
+  private isStrokeVisiblyPainted(node: Element): boolean {
+    if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
+      return false;
+    }
+    try {
+      const raw = node.getAttribute('stroke');
+      const inlineSt = (node as SVGGraphicsElement).style?.getPropertyValue('stroke')?.trim() ?? '';
+      const hasPresentationOrInline =
+        (raw != null && raw !== '' && raw.toLowerCase() !== 'none') || inlineSt !== '';
+
+      if (hasPresentationOrInline) {
+        return true;
+      }
+
+      const stroke = window.getComputedStyle(node).getPropertyValue('stroke').trim();
+      const lower = stroke.toLowerCase();
+
+      if (!stroke || lower === 'none' || lower === 'transparent') {
+        return false;
+      }
+
+      const looksLikeUaBlackNoise =
+        /^rgba?\(\s*0\s*,\s*0\s*,\s*0\s*(,\s*1\s*)?\)$/i.test(lower) ||
+        lower === '#000' ||
+        lower === '#000000';
+
+      if (looksLikeUaBlackNoise) {
+        const cls = node.getAttribute('class');
+        if (cls) {
+          node.removeAttribute('class');
+          const strokeWithoutClass = window
+            .getComputedStyle(node)
+            .getPropertyValue('stroke')
+            .trim()
+            .toLowerCase();
+          node.setAttribute('class', cls);
+          const strokeWithClass = window
+            .getComputedStyle(node)
+            .getPropertyValue('stroke')
+            .trim()
+            .toLowerCase();
+          if (strokeWithoutClass !== strokeWithClass) {
+            return true;
+          }
+        }
+        return false;
+      }
+
+      return true;
+    } catch {
+      return false;
+    }
+  }
+
+  /**
+   * Normalize CSS color to `#RRGGBB` for `<input type="color">` and text fields.
+   */
+  private normalizeColorForPicker(cssColor: string | undefined, fallback: string): string {
+    if (!cssColor) return fallback;
+    const t = cssColor.trim();
+    if (t === 'none' || t === 'transparent') return fallback;
+    const rgb = t.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
+    if (rgb) {
+      const toHex = (n: number) =>
+        Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
+      const r = Number(rgb[1]);
+      const g = Number(rgb[2]);
+      const b = Number(rgb[3]);
+      return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
+    }
+    if (t.startsWith('#')) {
+      if (t.length === 4) {
+        return `#${t[1]}${t[1]}${t[2]}${t[2]}${t[3]}${t[3]}`.toUpperCase();
+      }
+      return t.length === 7 ? t.toUpperCase() : fallback;
+    }
+    return fallback;
+  }
+
+  /**
+   * True if some ancestor of `el` (walking `parentElement`) specifies this paint via a presentation
+   * attribute or inline style. Used to avoid labeling UA/default agreement as "inherited" when no
+   * author actually set fill/stroke up the tree (same computed value as the root &lt;svg&gt; defaults).
+   */
+  private ancestorChainSpecifiesAuthorPaint(el: Element, property: 'fill' | 'stroke'): boolean {
+    let current: Element | null = el.parentElement;
+    while (current && current.nodeType === 1) {
+      if (current.hasAttribute(property)) {
+        return true;
+      }
+      const svgEl = current as HTMLElement | SVGElement;
+      const inline = svgEl.style?.getPropertyValue(property)?.trim();
+      if (inline) {
+        return true;
+      }
+      current = current.parentElement;
+    }
+    return false;
+  }
+
+  /**
+   * Detect cascade source for `fill` / `stroke` using short DOM probes (inline > class/stylesheet > presentation attribute > inherited).
+   * `inherited` is only used when an ancestor specifies this property via attribute or inline style; otherwise matching parent computed values are `default` (UA defaults / “window”).
+   */
+  private getPaintSourceForProperty(dom: Element, property: 'fill' | 'stroke'): PaintSourceInfo {
+    if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
+      return this.getPaintSourceFallback(dom, property);
+    }
+    try {
+      const el = dom as HTMLElement | SVGElement;
+      const inline = el.style?.getPropertyValue(property)?.trim();
+      if (inline) {
+        return { kind: 'inline-style' };
+      }
+
+      const computedBefore = window.getComputedStyle(el).getPropertyValue(property);
+
+      const cls = el.getAttribute('class');
+      if (cls) {
+        el.removeAttribute('class');
+        const computedNoClass = window.getComputedStyle(el).getPropertyValue(property);
+        el.setAttribute('class', cls);
+        if (computedNoClass !== computedBefore) {
+          return { kind: 'class-or-stylesheet', classNames: cls.split(/\s+/).filter(Boolean) };
+        }
+      }
+
+      const attrVal = el.getAttribute(property);
+      if (attrVal !== null) {
+        el.removeAttribute(property);
+        const computedNoAttr = window.getComputedStyle(el).getPropertyValue(property);
+        el.setAttribute(property, attrVal);
+        if (computedNoAttr !== computedBefore) {
+          return { kind: 'presentation-attr' };
+        }
+      }
+
+      const parent = el.parentElement;
+      if (parent && parent.nodeType === 1) {
+        const parentVal = window.getComputedStyle(parent).getPropertyValue(property);
+        if (parentVal === computedBefore && !inline && attrVal === null) {
+          if (this.ancestorChainSpecifiesAuthorPaint(el, property)) {
+            return { kind: 'inherited' };
+          }
+          return { kind: 'default' };
+        }
+      }
+
+      return { kind: 'default' };
+    } catch {
+      // jsdom / some environments throw or omit SVG computed styles; use attribute/class heuristics.
+      return this.getPaintSourceFallback(dom, property);
+    }
+  }
+
+  /** When `getComputedStyle` is unavailable (e.g. some test environments), use coarse heuristics. */
+  private getPaintSourceFallback(dom: Element, property: 'fill' | 'stroke'): PaintSourceInfo {
+    const el = dom as HTMLElement | SVGElement;
+    const inline = el.style?.getPropertyValue(property)?.trim();
+    if (inline) {
+      return { kind: 'inline-style' };
+    }
+    const cls = el.getAttribute('class');
+    const classNames = cls ? cls.split(/\s+/).filter(Boolean) : [];
+    if (el.hasAttribute(property)) {
+      if (classNames.length > 0) {
+        return { kind: 'class-or-stylesheet', classNames };
+      }
+      return { kind: 'presentation-attr' };
+    }
+    if (classNames.length > 0) {
+      return { kind: 'class-or-stylesheet', classNames };
+    }
+    return { kind: 'unknown' };
+  }
+
   /** Bumped when logical document content changes (for debug / reactive views); not bumped for visibility-only changes during drag. */
   readonly documentRevision = signal(0);
 
@@ -241,7 +455,7 @@ export class SvgManipulationService {
     const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
     const scope = contentGroup ?? this.svgInstance;
     const shapes = scope.find(CONTENT_SHAPE_SELECTOR);
-    shapes.forEach((shape: SVGElement) => {
+    shapes.forEach((shape: SvgJsElement) => {
       try {
         shape.css({ cursor: 'pointer' });
       } catch {
@@ -256,14 +470,59 @@ export class SvgManipulationService {
   /**
    * Get shape properties by element
    */
-  getShapeProperties(element: SVGElement): ShapeProperties {
+  getShapeProperties(element: SvgJsElement): ShapeProperties {
+    const node = element.node as Element;
+    const rendered = this.getRenderedPaint(node);
+    const rawFill = (element.attr('fill') as string | null) ?? null;
+    const rawStroke = (element.attr('stroke') as string | null) ?? null;
+    const rawStrokeWidth = Number.parseFloat(String(element.attr('stroke-width') ?? ''));
+    const rawOpacity = Number.parseFloat(String(element.attr('opacity') ?? ''));
+
+    const fillCss =
+      rendered.fill && rendered.fill !== 'none'
+        ? rendered.fill
+        : rawFill && rawFill !== 'none'
+          ? rawFill
+          : '';
+    const fillForPicker = fillCss ? this.normalizeColorForPicker(fillCss, '#000000') : undefined;
+
+    const strokePainted = this.isStrokeVisiblyPainted(node);
+    const strokeRenderedPart = rendered.stroke ?? '';
+    const rawStrokeStr = rawStroke ?? '';
+    let strokeCss = '';
+    if (strokePainted) {
+      strokeCss =
+        strokeRenderedPart && strokeRenderedPart !== 'none'
+          ? strokeRenderedPart
+          : rawStrokeStr && rawStrokeStr !== 'none'
+            ? rawStrokeStr
+            : '';
+    }
+    const sw = Number.isFinite(rendered.strokeWidth ?? Number.NaN)
+      ? (rendered.strokeWidth as number)
+      : Number.isFinite(rawStrokeWidth)
+        ? rawStrokeWidth
+        : 0;
+    const strokeWidth = strokePainted && Number.isFinite(sw) ? sw : 0;
+    const strokeIsNone = !strokePainted || !strokeCss || strokeCss === 'none' || strokeWidth === 0;
+    const strokeForPicker = strokeIsNone ? undefined : this.normalizeColorForPicker(strokeCss, '#000000');
+
+    const opacity = Number.isFinite(rendered.opacity ?? Number.NaN)
+      ? (rendered.opacity as number)
+      : (Number.isFinite(rawOpacity) ? rawOpacity : 1);
+
+    const fillSource = this.getPaintSourceForProperty(node, 'fill');
+    const strokeSource = this.getPaintSourceForProperty(node, 'stroke');
+
     return {
       id: element.id() || '',
       type: element.type,
-      fill: element.attr('fill') || '#000000',
-      stroke: element.attr('stroke'),
-      strokeWidth: parseFloat(element.attr('stroke-width')) || 0,
-      opacity: parseFloat(element.attr('opacity')) || 1
+      fill: fillForPicker,
+      stroke: strokeForPicker,
+      strokeWidth,
+      opacity,
+      fillSource,
+      strokeSource
     };
   }
 
@@ -271,7 +530,7 @@ export class SvgManipulationService {
    * All editor content shapes under the same nearest `clip-path` or `mask` ancestor as `shape`
    * (so the clipped group moves/resizes as one). If none, returns only this shape.
    */
-  getShapePropertiesInSameClipGroup(shape: SVGElement): ShapeProperties[] {
+  getShapePropertiesInSameClipGroup(shape: SvgJsElement): ShapeProperties[] {
     const node = shape.node as Element | null;
     const single = (): ShapeProperties[] => [this.getShapeProperties(shape)];
     if (!node || !this.svgInstance) return single();
@@ -286,7 +545,7 @@ export class SvgManipulationService {
     domShapes.forEach((el) => {
       const id = el.getAttribute('id');
       if (!id) return;
-      const s = this.svgInstance!.findOne(`#${id}`) as SVGElement | undefined;
+      const s = this.svgInstance!.findOne(`#${id}`) as SvgJsElement | undefined;
       if (s) out.push(this.getShapeProperties(s));
     });
     return out.length > 0 ? out : single();
@@ -300,7 +559,7 @@ export class SvgManipulationService {
     const seen = new Set<string>();
     const result: ShapeProperties[] = [];
     for (const s of shapes) {
-      const shape = this.svgInstance?.findOne(`#${s.id}`) as SVGElement | undefined;
+      const shape = this.svgInstance?.findOne(`#${s.id}`) as SvgJsElement | undefined;
       if (!shape) continue;
       const group = this.getShapePropertiesInSameClipGroup(shape);
       for (const p of group) {
@@ -319,7 +578,7 @@ export class SvgManipulationService {
   updateFillColor(shapeId: string, color: string): void {
     if (!this.svgInstance) return;
     
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (shape) {
       shape.fill(color);
       this.bumpDocumentRevision();
@@ -332,7 +591,7 @@ export class SvgManipulationService {
   addStroke(shapeId: string, color: string, width: number): void {
     if (!this.svgInstance) return;
     
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (shape) {
       shape.stroke({ color, width });
       this.bumpDocumentRevision();
@@ -345,7 +604,7 @@ export class SvgManipulationService {
   removeStroke(shapeId: string): void {
     if (!this.svgInstance) return;
     
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (shape) {
       shape.stroke('none');
       this.bumpDocumentRevision();
@@ -358,7 +617,7 @@ export class SvgManipulationService {
   updateStrokeColor(shapeId: string, color: string): void {
     if (!this.svgInstance) return;
     
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (shape) {
       shape.stroke({ color });
       this.bumpDocumentRevision();
@@ -371,10 +630,78 @@ export class SvgManipulationService {
   updateOpacity(shapeId: string, opacity: number): void {
     if (!this.svgInstance) return;
     
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (shape) {
       shape.opacity(opacity);
       this.bumpDocumentRevision();
+    }
+  }
+
+  /**
+   * Nearest ancestor `<g>` with an `id` between this shape and the editor content group (for
+   * "select parent" when fill/stroke is inherited).
+   */
+  getNearestGroupAncestorId(shapeId: string): string | null {
+    if (!this.svgInstance) return null;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    const start = shape?.node as Element | null;
+    const contentRoot = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`)?.node as Element | null;
+    if (!start || !contentRoot) return null;
+    let current: Element | null = start.parentElement;
+    while (current && current !== contentRoot && contentRoot.contains(current)) {
+      if (current.tagName?.toLowerCase() === 'g' && (current as Element).id) {
+        return (current as Element).id;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  /**
+   * Bake the computed fill onto this element so it is editable as a local value: uses a
+   * presentation attribute when that is enough, or inline style when a stylesheet/class would
+   * override a presentation attribute.
+   */
+  bakeEffectiveFillToLocal(shapeId: string): void {
+    if (!this.svgInstance) return;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!shape?.node) return;
+    const props = this.getShapeProperties(shape);
+    if (!props.fill) return;
+    const kind = props.fillSource?.kind;
+    const node = shape.node as SVGGraphicsElement;
+    if (kind === 'inline-style') {
+      node.style.removeProperty('fill');
+      this.updateFillColor(shapeId, props.fill);
+    } else if (kind === 'class-or-stylesheet') {
+      node.style.setProperty('fill', props.fill);
+      this.bumpDocumentRevision();
+    } else {
+      this.updateFillColor(shapeId, props.fill);
+    }
+  }
+
+  /**
+   * Same as {@link bakeEffectiveFillToLocal} for stroke (and width).
+   */
+  bakeEffectiveStrokeToLocal(shapeId: string): void {
+    if (!this.svgInstance) return;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!shape?.node) return;
+    const props = this.getShapeProperties(shape);
+    if (!props.stroke || props.strokeWidth === undefined || props.strokeWidth <= 0) return;
+    const kind = props.strokeSource?.kind;
+    const node = shape.node as SVGGraphicsElement;
+    if (kind === 'inline-style') {
+      node.style.removeProperty('stroke');
+      node.style.removeProperty('stroke-width');
+      this.addStroke(shapeId, props.stroke, props.strokeWidth);
+    } else if (kind === 'class-or-stylesheet') {
+      node.style.setProperty('stroke', props.stroke);
+      node.style.setProperty('stroke-width', String(props.strokeWidth));
+      this.bumpDocumentRevision();
+    } else {
+      this.addStroke(shapeId, props.stroke, props.strokeWidth);
     }
   }
 
@@ -388,7 +715,7 @@ export class SvgManipulationService {
    */
   translateShape(shapeId: string, dx: number, dy: number): void {
     if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (!shape || typeof shape.matrix !== 'function') return;
     let localDx = dx;
     let localDy = dy;
@@ -420,7 +747,7 @@ export class SvgManipulationService {
    */
   setShapeVisibility(shapeId: string, visible: boolean): void {
     if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (shape) {
       shape.attr('visibility', visible ? 'visible' : 'hidden');
     }
@@ -431,7 +758,7 @@ export class SvgManipulationService {
    */
   getShapeBBox(shapeId: string): { x: number; y: number; width: number; height: number } | null {
     if (!this.svgInstance) return null;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (!shape?.node) return null;
     const node = shape.node as SVGGraphicsElement;
     const rootSvg = this.svgInstance.node as SVGSVGElement | null;
@@ -517,7 +844,7 @@ export class SvgManipulationService {
     if (!this.svgInstance) return [];
     const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
     const scope = contentGroup ?? this.svgInstance;
-    const shapes = scope.find(CONTENT_SHAPE_SELECTOR) as SVGElement[];
+    const shapes = scope.find(CONTENT_SHAPE_SELECTOR) as SvgJsElement[];
     const out: ShapeProperties[] = [];
     for (const shape of shapes) {
       const id = shape.id();
@@ -541,7 +868,7 @@ export class SvgManipulationService {
    * (matches bbox math and works in jsdom); fall back to `getCTM().inverse()` in the browser.
    */
   private marqueePointToElementLocal(
-    shape: SVGElement,
+    shape: SvgJsElement,
     node: SVGGraphicsElement
   ): (p: { x: number; y: number }) => DOMPointInit {
     try {
@@ -577,7 +904,7 @@ export class SvgManipulationService {
   /**
    * True if some interior or **edge** sample in `marquee` hits the element's fill or stroke.
    */
-  private shapeMarqueeIntersectsPaint(shape: SVGElement, marquee: AxisAlignedRect): boolean {
+  private shapeMarqueeIntersectsPaint(shape: SvgJsElement, marquee: AxisAlignedRect): boolean {
     const node = shape.node as SVGGraphicsElement;
     const points = [...marqueeSamplePoints(marquee), ...marqueeEdgeSamplePoints(marquee)];
     if (points.length === 0) return false;
@@ -645,6 +972,61 @@ export class SvgManipulationService {
   }
 
   /**
+   * Return all editable content shapes in DOM/painter order.
+   * First item is visually back-most, last item is front-most.
+   */
+  getLayerStackItems(): LayerStackItem[] {
+    if (!this.svgInstance) return [];
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    if (!contentGroup?.node) return [];
+    const children = Array.from((contentGroup.node as Element).children);
+    const out: LayerStackItem[] = [];
+    for (const child of children) {
+      const tagName = child.tagName?.toLowerCase?.() || '';
+      if (!tagName || !CONTENT_SHAPE_SELECTOR.split(', ').includes(tagName)) continue;
+      const id = (child as Element).id;
+      if (!id) continue;
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | null;
+      const renderedPaint = this.getRenderedPaint(child as Element);
+      const rawFill = shape ? (shape.attr('fill') as string | null) : null;
+      const rawStroke = shape ? (shape.attr('stroke') as string | null) : null;
+      const rawStrokeWidth = shape ? Number.parseFloat(String(shape.attr('stroke-width') ?? '')) : Number.NaN;
+      const rawOpacity = shape ? Number.parseFloat(String(shape.attr('opacity') ?? '')) : Number.NaN;
+      const fill = renderedPaint.fill ?? (rawFill || undefined);
+      const strokeVisible = this.isStrokeVisiblyPainted(child as Element);
+      let stroke: string | undefined;
+      let strokeWidth: number | undefined;
+      if (strokeVisible) {
+        stroke =
+          renderedPaint.stroke && renderedPaint.stroke !== 'none'
+            ? renderedPaint.stroke
+            : rawStroke && rawStroke !== 'none'
+              ? rawStroke
+              : undefined;
+        const w = Number.isFinite(renderedPaint.strokeWidth ?? Number.NaN)
+          ? (renderedPaint.strokeWidth as number)
+          : Number.isFinite(rawStrokeWidth)
+            ? rawStrokeWidth
+            : 0;
+        strokeWidth = Number.isFinite(w) ? w : 0;
+      }
+      const opacity = Number.isFinite(renderedPaint.opacity ?? Number.NaN)
+        ? renderedPaint.opacity
+        : (Number.isFinite(rawOpacity) ? rawOpacity : undefined);
+      out.push({
+        id,
+        type: tagName,
+        elementMarkup: (child as Element).outerHTML,
+        fill,
+        stroke,
+        strokeWidth,
+        opacity
+      });
+    }
+    return out;
+  }
+
+  /**
    * Return the given shape ids in DOM order (order of children in the editor content group).
    * Ids not found in the content group are omitted.
    */
@@ -669,7 +1051,7 @@ export class SvgManipulationService {
     const map = new Map<string, Matrix>();
     if (!this.svgInstance) return map;
     for (const id of shapeIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SVGElement | undefined;
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
       if (shape && typeof shape.matrix === 'function') {
         map.set(id, shape.matrix().clone());
       }
@@ -694,7 +1076,7 @@ export class SvgManipulationService {
     const anchor = oppositeCornerForHandle(unionBefore, handle);
     const T = new Matrix().scale(s, s, anchor.x, anchor.y);
     for (const id of shapeIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SVGElement | undefined;
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
       const prev = snapshot.get(id);
       if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
       shape.matrix(T.multiply(prev));
