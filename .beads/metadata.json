@@ -1,0 +1,7 @@
+{
+  "database": "dolt",
+  "backend": "dolt",
+  "dolt_mode": "embedded",
+  "dolt_database": "svg_editor",
+  "project_id": "49bf57a1-62ba-4825-9100-cea5d9800004"
+}
