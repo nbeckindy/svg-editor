@@ -1,5 +1,7 @@
-<div class="upload-container">
+<div class="upload-container" data-testid="file-upload">
   <div class="upload-zone"
+       data-testid="file-upload-zone"
+       aria-label="SVG file drop zone"
        (drop)="onDrop($event)"
        (dragover)="onDragOver($event)"
        (dragleave)="onDragLeave($event)"
@@ -7,10 +9,11 @@
     <input
       type="file"
       #fileInput
+      data-testid="file-upload-input"
       accept=".svg,image/svg+xml"
       (change)="onFileSelected($event)"
       style="display: none">
-    <button (click)="fileInput.click()" class="upload-button">
+    <button type="button" data-testid="file-upload-choose" (click)="fileInput.click()" class="upload-button">
       Choose SVG File
     </button>
     <p>or drag and drop here</p>

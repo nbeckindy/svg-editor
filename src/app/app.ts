@@ -22,31 +22,31 @@ import { LayersPanelComponent } from './components/layers-panel/layers-panel.com
     SvgDebugPanelComponent
   ],
   template: `
-    <div class="app-container">
+    <div class="app-container" data-testid="app-root">
       <header>
         <h1>Angular SVG Editor</h1>
       </header>
 
-      <div class="toolbar-row">
-        <app-tool-strip></app-tool-strip>
-        <app-file-upload (svgLoaded)="onSVGLoaded($event)"></app-file-upload>
-        <app-icon-palette (svgLoaded)="onSVGLoaded($event)"></app-icon-palette>
+      <div class="toolbar-row" data-testid="editor-toolbar">
+        <app-tool-strip data-testid="editor-tool-strip"></app-tool-strip>
+        <app-file-upload data-testid="editor-file-upload" (svgLoaded)="onSVGLoaded($event)"></app-file-upload>
+        <app-icon-palette data-testid="editor-icon-palette" (svgLoaded)="onSVGLoaded($event)"></app-icon-palette>
       </div>
 
-      <div class="main-content">
+      <div class="main-content" data-testid="editor-main">
         <div class="main-row">
-          <div class="canvas-area">
-            <app-svg-canvas [svgContent]="svgContent"></app-svg-canvas>
+          <div class="canvas-area" data-testid="editor-canvas-area">
+            <app-svg-canvas data-testid="editor-svg-canvas" [svgContent]="svgContent"></app-svg-canvas>
           </div>
-          <div class="layers-area">
-            <app-layers-panel></app-layers-panel>
+          <div class="layers-area" data-testid="editor-layers-area">
+            <app-layers-panel data-testid="editor-layers-panel"></app-layers-panel>
           </div>
-          <div class="properties-area">
-            <app-properties-panel></app-properties-panel>
+          <div class="properties-area" data-testid="editor-properties-area">
+            <app-properties-panel data-testid="editor-properties-panel"></app-properties-panel>
           </div>
         </div>
-        <div class="debug-strip">
-          <app-svg-debug-panel></app-svg-debug-panel>
+        <div class="debug-strip" data-testid="editor-debug-strip">
+          <app-svg-debug-panel data-testid="editor-svg-debug-panel"></app-svg-debug-panel>
         </div>
       </div>
     </div>

@@ -1,11 +1,12 @@
 <div
   class="canvas-container"
+  data-testid="canvas-root"
   [class.zoom-mode]="editorTool.currentTool() === 'zoom'"
   [class.zoom-mode-out]="editorTool.currentTool() === 'zoom' && altKeyPressed"
   [class.pan-mode]="editorTool.currentTool() === 'pan'"
   [class.pan-dragging]="isPanning">
   @if (svgContent()) {
-    <div class="zoom-level" aria-label="Zoom level">{{ zoomLevelPercent }}%</div>
+    <div class="zoom-level" data-testid="canvas-zoom-level" aria-label="Zoom level">{{ zoomLevelPercent }}%</div>
   }
   <div class="ruler-wrapper" [class.with-rulers]="!!svgContent()">
     @if (svgContent()) {
@@ -31,7 +32,14 @@
         </svg>
       </div>
     }
-    <div class="svg-canvas" #canvasViewport (click)="onCanvasClick($event)" (mousedown)="onCanvasMouseDown($event)">
+    <div
+      class="svg-canvas"
+      #canvasViewport
+      data-testid="canvas-viewport"
+      role="application"
+      aria-label="SVG drawing canvas"
+      (click)="onCanvasClick($event)"
+      (mousedown)="onCanvasMouseDown($event)">
       <div class="canvas-inner">
       <div
         #zoomWrapper
@@ -43,12 +51,15 @@
       <div
         #highlightOverlayContainer
         class="highlight-overlay-container"
+        data-testid="canvas-selection-overlay"
+        aria-hidden="true"
         [style.left.px]="canvasView.panX"
         [style.top.px]="canvasView.panY"
         [style.width.px]="overlayWidthPx"
         [style.height.px]="overlayHeightPx">
         <svg
           class="highlight-overlay"
+          data-testid="canvas-selection-overlay-svg"
           [attr.viewBox]="'0 0 ' + overlayWidthPx + ' ' + overlayHeightPx"
           preserveAspectRatio="none"
           overflow="visible">
@@ -62,41 +73,73 @@
               stroke="#000000"
               stroke-width="1"/>
           }
-          @if (highlightRect) {
-            <rect
-              [attr.x]="highlightRect.x"
-              [attr.y]="highlightRect.y"
-              [attr.width]="highlightRect.width"
-              [attr.height]="highlightRect.height"
-              fill="none"
-              stroke="#2196F3"
-              stroke-width="2"/>
+          @if (highlightRect; as hr) {
+            @if (isRotatingSelection) {
+              <g [attr.transform]="selectionRotateHighlightTransform(hr)">
+                <rect
+                  [attr.x]="hr.x"
+                  [attr.y]="hr.y"
+                  [attr.width]="hr.width"
+                  [attr.height]="hr.height"
+                  fill="none"
+                  stroke="#2196F3"
+                  stroke-width="2"/>
+              </g>
+            } @else {
+              <rect
+                [attr.x]="hr.x"
+                [attr.y]="hr.y"
+                [attr.width]="hr.width"
+                [attr.height]="hr.height"
+                fill="none"
+                stroke="#2196F3"
+                stroke-width="2"/>
+            }
           }
           @if (showResizeHandles && highlightRect; as hr) {
             <circle
               class="selection-resize-handle selection-resize-nw"
               r="5"
               data-resize-handle="nw"
+              data-testid="canvas-handle-resize-nw"
               [attr.cx]="hr.x"
               [attr.cy]="hr.y"/>
             <circle
               class="selection-resize-handle selection-resize-ne"
               r="5"
               data-resize-handle="ne"
+              data-testid="canvas-handle-resize-ne"
               [attr.cx]="hr.x + hr.width"
               [attr.cy]="hr.y"/>
             <circle
               class="selection-resize-handle selection-resize-sw"
               r="5"
               data-resize-handle="sw"
+              data-testid="canvas-handle-resize-sw"
               [attr.cx]="hr.x"
               [attr.cy]="hr.y + hr.height"/>
             <circle
               class="selection-resize-handle selection-resize-se"
               r="5"
               data-resize-handle="se"
+              data-testid="canvas-handle-resize-se"
               [attr.cx]="hr.x + hr.width"
               [attr.cy]="hr.y + hr.height"/>
+            <line
+              class="selection-rotate-stem"
+              data-testid="canvas-rotate-stem"
+              [attr.x1]="hr.x + hr.width / 2"
+              [attr.y1]="hr.y"
+              [attr.x2]="hr.x + hr.width / 2"
+              [attr.y2]="hr.y - rotateHandleOffset"
+              pointer-events="none"/>
+            <circle
+              class="selection-rotate-handle"
+              r="5"
+              data-rotate-handle=""
+              data-testid="canvas-handle-rotate"
+              [attr.cx]="hr.x + hr.width / 2"
+              [attr.cy]="hr.y - rotateHandleOffset"/>
           }
         </svg>
       </div>
@@ -106,6 +149,8 @@
   @if (zoomMarqueeRect; as rect) {
     <div
       class="zoom-marquee"
+      data-testid="canvas-zoom-marquee"
+      aria-hidden="true"
       [style.left.px]="rect.left"
       [style.top.px]="rect.top"
       [style.width.px]="rect.width"
@@ -114,13 +159,15 @@
   @if (selectionMarqueeRect; as selRect) {
     <div
       class="selection-marquee"
+      data-testid="canvas-selection-marquee"
+      aria-hidden="true"
       [style.left.px]="selRect.left"
       [style.top.px]="selRect.top"
       [style.width.px]="selRect.width"
       [style.height.px]="selRect.height"></div>
   }
   @if (!svgContent()) {
-    <div class="placeholder">
+    <div class="placeholder" data-testid="canvas-empty-placeholder">
       <p>Load an SVG file to begin editing</p>
     </div>
   }

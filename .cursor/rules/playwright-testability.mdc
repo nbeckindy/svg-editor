@@ -1,0 +1,30 @@
+---
+description: Add data-testid and ARIA labels for Playwright and accessibility
+globs: "**/*.html"
+alwaysApply: false
+---
+
+# UI testability (Playwright + a11y)
+
+When adding or editing **HTML templates**, include hooks so Playwright (and similar tools) can target stable nodes, and keep the accessibility tree meaningful.
+
+## data-testid
+
+- Add **`data-testid`** on meaningful regions and controls: app shell sections, toolbars, primary buttons, canvas/viewport wrappers, selection handles, upload zones, etc.
+- Use **kebab-case**, namespaced names (e.g. `canvas-handle-rotate`, `tool-selector`, `editor-canvas-area`) so IDs stay unique and readable.
+- Prefer test ids over brittle selectors (CSS classes used only for styling, or dynamic SVG structure alone).
+
+## ARIA and semantics
+
+- Add **`aria-label`** (or `aria-labelledby` / visible text) where control purpose isn’t obvious from visible text alone.
+- Use **`aria-hidden="true"`** on decorative-only UI (e.g. ruler chrome, purely visual overlay chrome) so snapshots stay focused on real controls.
+- For toolbar **toggle** tools, use **`[attr.aria-pressed]`** (or appropriate `role` / `aria-checked`) so pressed state is exposed.
+- Don’t duplicate: if a visible label is enough, you don’t need a redundant `aria-label`.
+
+## Inline templates
+
+If markup lives in a component’s **inline `template:`** string (e.g. `app.ts`), apply the same conventions there as in `*.html` files.
+
+## Playwright usage
+
+These attributes pair with **`page.getByTestId('…')`** and accessibility-based queries (`getByRole`, `getByLabel`), including Playwright MCP snapshots.
