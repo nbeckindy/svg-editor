@@ -28,6 +28,8 @@ function stubEditorSvgScreenMapping(
   const mainSvg = host?.firstElementChild as SVGSVGElement | undefined;
   if (mainSvg) {
     vi.spyOn(mainSvg, 'getBoundingClientRect').mockReturnValue(domRect);
+    // jsdom has no DOMMatrix / weak getScreenCTM — return null so pointer code uses legacy linear mapping.
+    (mainSvg as SVGSVGElement & { getScreenCTM: () => null }).getScreenCTM = () => null;
   }
 }
 
@@ -1223,9 +1225,6 @@ describe('SvgCanvasComponent', () => {
       clientY: 40,
       preventDefault: vi.fn()
     } as unknown as MouseEvent;
-    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
-      findOne: () => mockSvgJsShape('drag-target', shapeNode)
-    } as any);
     const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
@@ -1286,9 +1285,6 @@ describe('SvgCanvasComponent', () => {
       clientY: 40,
       preventDefault: vi.fn()
     } as unknown as MouseEvent;
-    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
-      findOne: () => mockSvgJsShape('a', shapeNode)
-    } as any);
     const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
@@ -1440,10 +1436,6 @@ describe('SvgCanvasComponent', () => {
       clientY: 40,
       preventDefault: vi.fn()
     } as unknown as MouseEvent;
-    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
-      findOne: () =>
-        mockSvgJsShape('ghost-vis', rect || document.createElementNS('http://www.w3.org/2000/svg', 'rect'))
-    } as any);
     const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
@@ -1460,9 +1452,10 @@ describe('SvgCanvasComponent', () => {
     }
     stubEditorSvgScreenMapping(component);
     component.onCanvasMouseDown(mousedownEvent);
-    const ghostWrapper = document.body.querySelector('.drag-ghost') as HTMLElement;
-    expect(ghostWrapper).toBeTruthy();
-    expect(ghostWrapper.style.overflow).toBe('visible');
+    const ghostHost = fixture.nativeElement.querySelector('[data-editor-ghost]') as SVGGElement | null;
+    expect(ghostHost).toBeTruthy();
+    const ghostInnerSvg = ghostHost?.querySelector('svg');
+    expect(ghostInnerSvg?.getAttribute('overflow')).toBe('visible');
   });
 
   it('when shape drag is started, ghost SVG should have overflow visible to prevent clipping', () => {
@@ -1486,10 +1479,6 @@ describe('SvgCanvasComponent', () => {
       clientY: 40,
       preventDefault: vi.fn()
     } as unknown as MouseEvent;
-    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
-      findOne: () =>
-        mockSvgJsShape('ghost-svg', rect || document.createElementNS('http://www.w3.org/2000/svg', 'rect'))
-    } as any);
     const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
@@ -1506,7 +1495,7 @@ describe('SvgCanvasComponent', () => {
     }
     stubEditorSvgScreenMapping(component);
     component.onCanvasMouseDown(mousedownEvent);
-    const ghostSvg = document.body.querySelector('.drag-ghost svg');
+    const ghostSvg = fixture.nativeElement.querySelector('[data-editor-ghost] svg');
     expect(ghostSvg).toBeTruthy();
     expect(ghostSvg?.getAttribute('overflow')).toBe('visible');
   });
@@ -1534,9 +1523,6 @@ describe('SvgCanvasComponent', () => {
       clientY: 40,
       preventDefault: vi.fn()
     } as unknown as MouseEvent;
-    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
-      findOne: () => mockSvgJsShape('ghost-pad', shapeNode)
-    } as any);
     const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
@@ -1553,7 +1539,7 @@ describe('SvgCanvasComponent', () => {
     }
     stubEditorSvgScreenMapping(component);
     component.onCanvasMouseDown(mousedownEvent);
-    const ghostSvg = document.body.querySelector('.drag-ghost svg');
+    const ghostSvg = fixture.nativeElement.querySelector('[data-editor-ghost] svg');
     expect(ghostSvg).toBeTruthy();
     const vb = ghostSvg?.getAttribute('viewBox') ?? '';
     const [vx, vy, vw, vh] = vb.split(/\s+/).map(Number);
@@ -1561,6 +1547,91 @@ describe('SvgCanvasComponent', () => {
     expect(vh).toBeGreaterThanOrEqual(40);
     expect(vx).toBeLessThanOrEqual(10);
     expect(vy).toBeLessThanOrEqual(20);
+  });
+
+  it('ghost preview clones must not reuse shape ids (translateShape would move the clone, then ghost removal loses the move)', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="solo" x="10" y="20" width="30" height="40"/></svg>');
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'solo',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
+    const rect = fixture.nativeElement.querySelector('#solo') as SVGGraphicsElement;
+    vi.spyOn(rect, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 30, 30, 40));
+    stubEditorSvgScreenMapping(component);
+    component.onCanvasMouseDown({
+      button: 0,
+      target: rect,
+      clientX: 25,
+      clientY: 40,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    expect(component.isDraggingShape).toBe(true);
+    const idsInsideGhost = fixture.nativeElement.querySelectorAll('[data-editor-ghost] [id]');
+    expect(idsInsideGhost.length).toBe(0);
+  });
+
+  it('in-document drag ghost is inserted before the dragged shape so later siblings still paint above', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="below" x="10" y="10" width="40" height="40" fill="red"/><rect id="above" x="30" y="30" width="40" height="40" fill="blue"/></svg>'
+    );
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'below',
+      type: 'rect',
+      fill: '#f00',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 40, height: 40 });
+    const below =
+      (fixture.nativeElement.querySelector('#below') as SVGGraphicsElement | null) ??
+      document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    vi.spyOn(below, 'getBoundingClientRect').mockReturnValue(new DOMRect(20, 20, 40, 40));
+    const mousedownEvent = {
+      button: 0,
+      target: below,
+      clientX: 25,
+      clientY: 25,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
+    if (wrapperEl) {
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      });
+    }
+    stubEditorSvgScreenMapping(component);
+    component.onCanvasMouseDown(mousedownEvent);
+    expect(component.isDraggingShape).toBe(true);
+
+    const ghost = fixture.nativeElement.querySelector('[data-editor-ghost]');
+    const above = fixture.nativeElement.querySelector('#above');
+    expect(ghost).toBeTruthy();
+    expect(above).toBeTruthy();
+    const pos = ghost!.compareDocumentPosition(above!);
+    expect((pos & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
   });
 
   it('should on mouseup after drag call translateShape with delta and show shape again', () => {
@@ -1660,6 +1731,49 @@ describe('SvgCanvasComponent', () => {
     expect(r2?.width).toBe(320);
   });
 
+  it('highlightRect recomputes DOM union when documentRevision bumps even if lastBbox is unchanged', async () => {
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
+      x: 10,
+      y: 20,
+      width: 50,
+      height: 40
+    });
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="50" height="40"/></svg>');
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    shapeSelectionService.selectShape({
+      id: 'r1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
+    const fromDomSpy = vi.spyOn(
+      component as unknown as { selectionHighlightOverlayFromDom: () => unknown },
+      'selectionHighlightOverlayFromDom'
+    );
+    fromDomSpy.mockReturnValue({ x: 0, y: 0, width: 20, height: 20 });
+    (component as unknown as { _highlightRectCacheKey: string })._highlightRectCacheKey = '';
+    (component as unknown as { _highlightRectCache: unknown })._highlightRectCache = null;
+
+    void component.highlightRect;
+    expect(fromDomSpy).toHaveBeenCalledTimes(1);
+    void component.highlightRect;
+    expect(fromDomSpy).toHaveBeenCalledTimes(1);
+
+    svgManipulationService.documentRevision.update((n) => n + 1);
+
+    void component.highlightRect;
+    expect(fromDomSpy).toHaveBeenCalledTimes(2);
+
+    fromDomSpy.mockRestore();
+  });
+
   describe('selection resize (corner handles)', () => {
     it('mousedown on handle starts resize; applyUnionScaleFromSnapshot runs once on mouseup not on move', async () => {
       vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
@@ -1690,13 +1804,6 @@ describe('SvgCanvasComponent', () => {
       const snapSpy = vi.spyOn(svgManipulationService, 'snapshotSelectionTransforms').mockReturnValue(new Map());
       const applySpy = vi.spyOn(svgManipulationService, 'applyUnionScaleFromSnapshot');
       vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
-      const shapeNode = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
-        findOne: (sel: string) => {
-          if (sel === '#r1') return mockSvgJsShape('r1', shapeNode);
-          return null;
-        }
-      } as any);
       const zoomEl = component.zoomWrapper()?.nativeElement as HTMLElement;
       if (zoomEl) {
         vi.spyOn(zoomEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
@@ -1720,6 +1827,8 @@ describe('SvgCanvasComponent', () => {
         y: 0,
         toJSON: () => {}
       } as DOMRect);
+
+      stubEditorSvgScreenMapping(component);
 
       component.onCanvasMouseDown({
         button: 0,
@@ -1751,6 +1860,94 @@ describe('SvgCanvasComponent', () => {
       } as MouseEvent);
       expect(applySpy).toHaveBeenCalledTimes(1);
       expect(component.isResizingSelection).toBe(false);
+    });
+  });
+
+  describe('selection rotate (handle)', () => {
+    it('mousedown on rotate handle starts rotate; applyUnionRotationFromSnapshot runs once on mouseup not on move', async () => {
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
+        x: 10,
+        y: 20,
+        width: 30,
+        height: 40
+      });
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="30" height="40"/></svg>');
+      component.wrapperWidth = 100;
+      component.wrapperHeight = 100;
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+      editorToolService.setTool('selector');
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+
+      vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
+      const snapSpy = vi.spyOn(svgManipulationService, 'snapshotSelectionTransforms').mockReturnValue(new Map());
+      const applySpy = vi.spyOn(svgManipulationService, 'applyUnionRotationFromSnapshot');
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 20, width: 30, height: 40 });
+      const zoomEl = component.zoomWrapper()?.nativeElement as HTMLElement;
+      if (zoomEl) {
+        vi.spyOn(zoomEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+      const overlayEl = component.highlightOverlayContainer()?.nativeElement as HTMLElement;
+      if (overlayEl) {
+        vi.spyOn(overlayEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+
+      const handle = document.createElement('div');
+      handle.setAttribute('data-rotate-handle', '');
+      const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      } as DOMRect);
+      stubEditorSvgScreenMapping(component);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        target: handle,
+        clientX: 50,
+        clientY: 50,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(component.isRotatingSelection).toBe(true);
+      expect(component.isResizingSelection).toBe(false);
+      expect(snapSpy).toHaveBeenCalled();
+      expect(applySpy).not.toHaveBeenCalled();
+
+      canvasViewService.scale = 1;
+      canvasViewService.panX = 0;
+      canvasViewService.panY = 0;
+      component.onDocumentMouseMove({
+        clientX: 80,
+        clientY: 70
+      } as MouseEvent);
+      expect(applySpy).not.toHaveBeenCalled();
+
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 80,
+        clientY: 70
+      } as MouseEvent);
+      expect(applySpy).toHaveBeenCalledTimes(1);
+      expect(component.isRotatingSelection).toBe(false);
     });
   });
 

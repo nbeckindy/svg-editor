@@ -5,7 +5,14 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { CanvasViewService } from '../../services/canvas-view.service';
 import { computeProportionalResizedUnion, type BBox, type ResizeCorner } from '../../utils/selection-resize';
+import {
+  unionRotationPivot,
+  rotationDeltaFromPointerMoveRad,
+  radiansToDegrees,
+  rotateGhostWorldToUnionMatrix
+} from '../../utils/selection-rotate';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
+import { screenPointToRootSvgUserPoint } from '../../utils/svg-screen-user';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
@@ -24,6 +31,15 @@ const CONTENT_SHAPE_TAGS = new Set([
 
 /** After loading SVG, fit the editor stage in the canvas with this much inset (margin). */
 const INITIAL_LOAD_VIEWPORT_FIT_FRACTION = 0.88;
+
+/** In-document preview clones (drag / resize / rotate); participates in SVG paint order. */
+const EDITOR_GHOST_ATTR = 'data-editor-ghost';
+
+type GhostPreviewFragment = {
+  outerGroup: SVGElement;
+  nestedSvg: Svg;
+  worldToUnion: SVGElement;
+};
 
 /** Round to nearest "nice" step (1, 2, 5 × 10^n) for readable labels. */
 function roundToNiceStep(value: number): number {
@@ -95,11 +111,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.shapeSelection.getSelectedShapes().length > 0 &&
       !this.isDraggingShape &&
       !this.isResizingSelection &&
+      !this.isRotatingSelection &&
       !this.isSelectionMarquee &&
       this.wrapperWidth > 0 &&
       !!this.lastBbox
     );
   }
+
+  /** Offset above selection (overlay SVG units) for the rotate handle. */
+  readonly rotateHandleOffset = 28;
 
   get verticalRulerTicks(): { position: number; value: number; major: boolean }[] {
     const originY = this.rulerOriginOffsetY + this.canvasView.panY;
@@ -144,22 +164,131 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   /** Cache key and result so the getter is stable across re-reads in the same CD cycle (avoids NG0100). */
   private _highlightRectCache: { x: number; y: number; width: number; height: number } | null = null;
   private _highlightRectCacheKey = '';
+  /**
+   * Axis-aligned selection frame in overlay pixel space (only right angles), matching typical design-tool UX.
+   * Prefer the tight screen-space union of selected elements’ `getBoundingClientRect()` so the box hugs
+   * **rendered** ink after rotation/transform; falls back to mapping `lastBbox` when DOM rects are unavailable.
+   */
   get highlightRect(): { x: number; y: number; width: number; height: number } | null {
     if (this.isResizingSelection && this.resizeOverlayRect) return this.resizeOverlayRect;
+    if (this.isRotatingSelection && this.rotateUnionStart && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
+      return this.svgBboxToOverlayPixels(this.rotateUnionStart);
+    }
     if (this.isDraggingShape && this.dragOverlayRect) return this.dragOverlayRect;
     if (!this.lastBbox || this.wrapperWidth <= 0 || this.wrapperHeight <= 0) {
       this._highlightRectCache = null;
       this._highlightRectCacheKey = '';
       return null;
     }
-    const key = `${this.lastBbox.x}-${this.lastBbox.y}-${this.lastBbox.width}-${this.lastBbox.height}-${this.wrapperWidth}-${this.wrapperHeight}-${this.canvasView.scale}`;
+    // Include documentRevision: lastBbox alone can match after different rotations (same user-space
+    // AABB) while getBoundingClientRect changes — caching only on lastBbox would reuse stale DOM union.
+    const key = `${this.lastBbox.x}-${this.lastBbox.y}-${this.lastBbox.width}-${this.lastBbox.height}-${this.wrapperWidth}-${this.wrapperHeight}-${this.canvasView.scale}-${this.canvasView.panX}-${this.canvasView.panY}-${this.svgManipulation.documentRevision()}`;
     if (this._highlightRectCacheKey === key) {
       return this._highlightRectCache;
     }
     this._highlightRectCacheKey = key;
-    this._highlightRectCache = this.svgBboxToOverlayPixels(this.lastBbox);
+    // Prefer screen-space union → overlay pixels so the frame matches painted bounds (same as
+    // getBoundingClientRect), avoiding user-space ↔ overlay rounding drift with preserveAspectRatio
+    // none + CSS zoom on the zoom wrapper.
+    const fromDom = this.selectionHighlightOverlayFromDom();
+    const resolved =
+      fromDom ?? this.svgBboxToOverlayPixels(this.lastBbox);
+    this._highlightRectCache = resolved;
+    this.logSelectionHighlightRecompute(
+      fromDom != null ? 'dom-union' : 'lastBbox-fallback',
+      fromDom,
+      resolved
+    );
     return this._highlightRectCache;
   }
+
+  /** Debug: filter DevTools console with `[selection-highlight]`. */
+  private logSelectionHighlightRecompute(
+    source: 'dom-union' | 'lastBbox-fallback',
+    fromDom: { x: number; y: number; width: number; height: number } | null,
+    resolvedOverlay: { x: number; y: number; width: number; height: number }
+  ): void {
+    const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const svg = this.svgManipulation.getSVGInstance();
+    const perId: Record<string, { left: number; top: number; width: number; height: number }> = {};
+    if (svg) {
+      for (const id of ids) {
+        const el = svg.findOne(`#${id}`);
+        const node = el?.node as unknown as SVGGraphicsElement | undefined;
+        if (!node || typeof node.getBoundingClientRect !== 'function') {
+          perId[id] = { left: NaN, top: NaN, width: NaN, height: NaN };
+          continue;
+        }
+        const r = node.getBoundingClientRect();
+        perId[id] = { left: r.left, top: r.top, width: r.width, height: r.height };
+      }
+    }
+    console.debug('[selection-highlight]', {
+      source,
+      selectedIds: ids,
+      selectedCount: ids.length,
+      fromDomOverlay: fromDom,
+      lastBboxUserSpace: this.lastBbox,
+      resolvedOverlay,
+      fallbackWouldBeLastBboxMapping: source === 'lastBbox-fallback',
+      perIdClientRect: perId,
+      documentRevision: this.svgManipulation.documentRevision()
+    });
+  }
+
+  /**
+   * Union of selected shapes’ client rects relative to the highlight overlay — i.e. the smallest axis-aligned
+   * rectangle in **screen pixels** that contains the painted bounds (tight AABB of what the browser draws).
+   */
+  private selectionHighlightOverlayFromDom(): { x: number; y: number; width: number; height: number } | null {
+    const overlayEl = this.highlightOverlayContainer()?.nativeElement;
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!overlayEl || !svg) return null;
+    const ocr = overlayEl.getBoundingClientRect();
+    if (ocr.width <= 0 || ocr.height <= 0) return null;
+    const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
+    if (ids.length === 0) return null;
+    let minL = Infinity;
+    let minT = Infinity;
+    let maxR = -Infinity;
+    let maxB = -Infinity;
+    let any = false;
+    for (const id of ids) {
+      const el = svg.findOne(`#${id}`);
+      const node = el?.node as unknown as SVGGraphicsElement | undefined;
+      if (!node || typeof node.getBoundingClientRect !== 'function') continue;
+      const r = node.getBoundingClientRect();
+      if (r.width <= 0 && r.height <= 0) continue;
+      any = true;
+      minL = Math.min(minL, r.left);
+      minT = Math.min(minT, r.top);
+      maxR = Math.max(maxR, r.right);
+      maxB = Math.max(maxB, r.bottom);
+    }
+    if (!any || !Number.isFinite(minL)) return null;
+    const w = maxR - minL;
+    const h = maxB - minT;
+    if (w <= 0 || h <= 0) return null;
+    return {
+      x: minL - ocr.left,
+      y: minT - ocr.top,
+      width: w,
+      height: h
+    };
+  }
+
+  /** SVG `transform` for the blue selection frame while rotating (union center, same angle as commit). */
+  selectionRotateHighlightTransform(_hr: { x: number; y: number; width: number; height: number }): string {
+    if (!this.isRotatingSelection || !this.rotatePivotDoc) return '';
+    const po = this.svgBboxToOverlayPixels({
+      x: this.rotatePivotDoc.x,
+      y: this.rotatePivotDoc.y,
+      width: 0,
+      height: 0
+    });
+    return `rotate(${radiansToDegrees(this.rotateAccumulatedRad)},${po.x},${po.y})`;
+  }
+
   /** Set only in syncOverlayViewBox so it stays stable during CD. Document viewBox stroke drawn in overlay so it stays constant width at any zoom. */
   private _viewBoxOverlayRect: { x: number; y: number; width: number; height: number } | null = null;
   get viewBoxOverlayRect(): { x: number; y: number; width: number; height: number } | null {
@@ -196,7 +325,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private dragJustEnded = false;
   private dragStartSvg: { x: number; y: number } | null = null;
   private dragStartBbox: { x: number; y: number; width: number; height: number } | null = null;
-  private dragGhostEl: HTMLElement | null = null;
+  private dragGhostFragments: GhostPreviewFragment[] = [];
 
   /** Proportional resize from corner handles (ghost preview; DOM updates on mouseup). */
   isResizingSelection = false;
@@ -204,12 +333,25 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private resizeUnionStart: BBox | null = null;
   private resizeLastUnion: BBox | null = null;
   private resizeSnapshot: Map<string, Matrix> = new Map();
-  private resizeGhostEl: HTMLElement | null = null;
-  private resizeGhostInnerSvgEl: SVGSVGElement | null = null;
+  private resizeGhostFragments: GhostPreviewFragment[] = [];
   /** Overlay pixels for selection outline during resize (matches ghost). */
   private resizeOverlayRect: { x: number; y: number; width: number; height: number } | null = null;
   /** After resize mouseup, ignore next canvas click so selection is not cleared. */
   private resizeJustEnded = false;
+
+  /** Rotation from selection handle (ghost preview; DOM updates on mouseup). */
+  isRotatingSelection = false;
+  private rotateSnapshot: Map<string, Matrix> = new Map();
+  private rotateUnionStart: BBox | null = null;
+  private rotatePivotDoc: { x: number; y: number } | null = null;
+  private rotateAccumulatedRad = 0;
+  private rotateLastPointerSvg: { x: number; y: number } | null = null;
+  private rotateGhostFragments: GhostPreviewFragment[] = [];
+  private rotateJustEnded = false;
+
+  /** Prefixed def clones in root `<defs>` so nested ghost SVGs can reference `url(#id)` uniquely. */
+  private ghostDefPrefix: string | null = null;
+  private ghostDefElements: Element[] = [];
 
   /** Zoom marquee: drag-to-rectangle zoom. */
   isZoomMarquee = false;
@@ -244,7 +386,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.cdr.detectChanges();
       return;
     }
-    if (this.isResizingSelection && this.resizeHandle && this.resizeUnionStart && this.resizeGhostEl) {
+    if (this.isResizingSelection && this.resizeHandle && this.resizeUnionStart && this.resizeGhostFragments.length > 0) {
       const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
       if (point) {
         const unionAfter = computeProportionalResizedUnion(this.resizeUnionStart, this.resizeHandle, point);
@@ -254,12 +396,29 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.cdr.detectChanges();
       return;
     }
+    if (
+      this.isRotatingSelection &&
+      this.rotateGhostFragments.length > 0 &&
+      this.rotateUnionStart &&
+      this.rotatePivotDoc &&
+      this.rotateLastPointerSvg
+    ) {
+      const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+      if (point) {
+        const d = rotationDeltaFromPointerMoveRad(this.rotatePivotDoc, this.rotateLastPointerSvg, point);
+        this.rotateAccumulatedRad += d;
+        this.rotateLastPointerSvg = point;
+        this.updateRotateGhost(this.rotateAccumulatedRad);
+      }
+      this.cdr.detectChanges();
+      return;
+    }
     if (this.isPanning) {
       this.canvasView.setPan(
         this.panStartX + (event.clientX - this.panStartClientX),
         this.panStartY + (event.clientY - this.panStartClientY)
       );
-    } else if (this.isDraggingShape && this.dragGhostEl && this.dragStartSvg && this.dragStartBbox) {
+    } else if (this.isDraggingShape && this.dragGhostFragments.length > 0 && this.dragStartSvg && this.dragStartBbox) {
       const currentSvg = this.clientToEditorSvgPoint(event.clientX, event.clientY);
       if (currentSvg) {
         const dx = currentSvg.x - this.dragStartSvg.x;
@@ -400,13 +559,40 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.resizeLastUnion = null;
       this.resizeSnapshot = new Map();
       this.resizeOverlayRect = null;
-      this.resizeGhostInnerSvgEl = null;
       const unionBbox = this.svgManipulation.getUnionBBox(ids);
       if (unionBbox) {
         this.lastBbox = unionBbox;
         this._highlightRectCacheKey = '';
       }
       this.resizeJustEnded = true;
+      this.cdr.detectChanges();
+      return;
+    }
+    if (this.isRotatingSelection && this.rotateUnionStart && this.rotatePivotDoc) {
+      const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
+      const committedRotateRad = this.rotateAccumulatedRad;
+      this.svgManipulation.applyUnionRotationFromSnapshot(
+        ids,
+        this.rotatePivotDoc,
+        radiansToDegrees(committedRotateRad),
+        this.rotateSnapshot
+      );
+      for (const id of ids) {
+        this.svgManipulation.setShapeVisibility(id, true);
+      }
+      this.removeRotateGhost();
+      this.isRotatingSelection = false;
+      this.rotateUnionStart = null;
+      this.rotatePivotDoc = null;
+      this.rotateAccumulatedRad = 0;
+      this.rotateLastPointerSvg = null;
+      this.rotateSnapshot = new Map();
+      const unionBbox = this.svgManipulation.getUnionBBox(ids);
+      if (unionBbox) {
+        this.lastBbox = unionBbox;
+        this._highlightRectCacheKey = '';
+      }
+      this.rotateJustEnded = true;
       this.cdr.detectChanges();
       return;
     }
@@ -441,19 +627,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private updateDragGhostAndOverlay(currentBbox: { x: number; y: number; width: number; height: number }): void {
     this.dragOverlayRect = this.svgBboxToOverlayPixels(currentBbox);
-    if (!this.dragGhostEl) return;
-    const scr =
-      this.overlayPixelsToFixedScreenRect(this.dragOverlayRect) ??
-      this.svgDocumentBboxToFixedScreenRect(currentBbox);
-    if (!scr) return;
-    const w = Number.isFinite(scr.width) ? Math.max(0, scr.width) : 0;
-    const h = Number.isFinite(scr.height) ? Math.max(0, scr.height) : 0;
-    this.dragGhostEl.style.left = `${scr.left}px`;
-    this.dragGhostEl.style.top = `${scr.top}px`;
-    this.dragGhostEl.style.width = `${w}px`;
-    this.dragGhostEl.style.height = `${h}px`;
-    const innerSvg = this.dragGhostEl.querySelector('svg');
-    this.applyGhostWrapperSvgLayout(this.dragGhostEl, innerSvg);
+    if (this.dragGhostFragments.length === 0 || !this.dragStartBbox) return;
+    // Move the outer <g> only. Updating nested <svg> x/y/viewBox/size + inner matrix every frame
+    // can fail to apply visually with SVG.js; translate is stable and matches fixed-screen drag.
+    const dx = currentBbox.x - this.dragStartBbox.x;
+    const dy = currentBbox.y - this.dragStartBbox.y;
+    const m = new Matrix().translate(dx, dy);
+    for (const f of this.dragGhostFragments) {
+      (f.outerGroup as Svg).matrix(m);
+    }
     this.cdr.detectChanges();
   }
 
@@ -652,11 +834,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
    * and matches non-uniform viewBox ↔ pixel mapping.
    */
   private clientToEditorSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null {
-    const vb = this.parseOverlayViewBox();
     const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
-    if (!vb || !mainSvg) return null;
+    if (!mainSvg) return null;
+    const fromCtm = screenPointToRootSvgUserPoint(mainSvg, clientX, clientY);
+    if (fromCtm) return fromCtm;
+    const vb = this.parseOverlayViewBox();
     const r = mainSvg.getBoundingClientRect();
-    if (r.width <= 0 || r.height <= 0) return null;
+    if (!vb || r.width <= 0 || r.height <= 0) return null;
     const { vbMinX, vbMinY, vbW, vbH } = vb;
     return {
       x: vbMinX + ((clientX - r.left) / r.width) * vbW,
@@ -708,19 +892,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       width: o.width,
       height: o.height
     };
-  }
-
-  /**
-   * Ghost wrappers are fixed-position divs with an inner root SVG from SVG.js. Default `display:inline`
-   * on SVG participates in line-box / baseline layout; when width/height are tiny, the painted SVG
-   * shifts vertically vs overlay geometry (looks like “downward drift”).
-   */
-  private applyGhostWrapperSvgLayout(wrapper: HTMLElement, innerSvg: SVGSVGElement | null): void {
-    wrapper.style.lineHeight = '0';
-    if (innerSvg) {
-      innerSvg.style.display = 'block';
-      innerSvg.style.verticalAlign = 'top';
-    }
   }
 
   private initializeSVG(): void {
@@ -853,6 +1024,48 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         return;
       }
     }
+    const rotateEl = target.closest?.('[data-rotate-handle]');
+    if (rotateEl) {
+      const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
+      if (selectedIds.length === 0) return;
+      const union = this.svgManipulation.getUnionBBox(selectedIds);
+      if (!union) return;
+      const unionCenterPivot = unionRotationPivot(union);
+      const geomPivot = this.svgManipulation.getSelectionRotationPivot(selectedIds);
+      const pivot = geomPivot ?? unionCenterPivot;
+      this.rotateUnionStart = union;
+      this.rotatePivotDoc = pivot;
+      this.rotateAccumulatedRad = 0;
+      this.rotateSnapshot = this.svgManipulation.snapshotSelectionTransforms(selectedIds);
+      for (const id of selectedIds) {
+        this.svgManipulation.setShapeVisibility(id, false);
+      }
+      const p0 = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+      if (!p0) {
+        for (const id of selectedIds) {
+          this.svgManipulation.setShapeVisibility(id, true);
+        }
+        this.rotateUnionStart = null;
+        this.rotatePivotDoc = null;
+        this.rotateSnapshot = new Map();
+        return;
+      }
+      this.rotateLastPointerSvg = p0;
+      if (!this.createRotateGhost(union, selectedIds)) {
+        for (const id of selectedIds) {
+          this.svgManipulation.setShapeVisibility(id, true);
+        }
+        this.rotateUnionStart = null;
+        this.rotatePivotDoc = null;
+        this.rotateSnapshot = new Map();
+        this.rotateLastPointerSvg = null;
+        return;
+      }
+      this.isRotatingSelection = true;
+      event.preventDefault();
+      event.stopPropagation();
+      return;
+    }
     if (!this.isEditorContentShapeTarget(target)) {
       this.isSelectionMarquee = true;
       this.selectionMarqueeStart = { clientX: event.clientX, clientY: event.clientY };
@@ -893,6 +1106,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.dragStartBbox = unionBbox;
       this.createUnionDragGhost(unionBbox, selectedIds);
     }
+    if (this.dragGhostFragments.length === 0) {
+      for (const id of selectedIds) {
+        this.svgManipulation.setShapeVisibility(id, true);
+      }
+      return;
+    }
     this.isDraggingShape = true;
     this.dragShapeIds = selectedIds;
     this.dragStartSvg = { x: point.x, y: point.y };
@@ -905,12 +1124,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const rootSvg = svgInstance.node as SVGSVGElement;
     const built = this.buildDragGhostShapeSubtree(shapeId, svgInstance, rootSvg);
     if (!built) return;
-    const ghostLeft = shapeScreenRect.left;
-    const ghostTop = shapeScreenRect.top;
-    const ghostWidth = shapeScreenRect.width;
-    const ghostHeight = shapeScreenRect.height;
+    const contentGroupEl = this.getEditorContentGroupEl(svgInstance);
+    const shapeNode = svgInstance.findOne(`#${shapeId}`)?.node as Element | undefined;
+    if (!contentGroupEl || !shapeNode) return;
+
+    this.installGhostSessionDefs(rootSvg, built.urlRefs);
+    const prefix = this.ghostDefPrefix ?? '';
+    if (built.urlRefs.size > 0) {
+      this.rewriteGhostUrlRefs(built.subtree, prefix, built.urlRefs);
+    }
+
+    const frag = this.mountGhostFragment(svgInstance, contentGroupEl, shapeNode, bbox, built.subtree);
+    this.dragGhostFragments = [frag];
+
     const overlayContainer = this.highlightOverlayContainer()?.nativeElement;
-    const dragOverlayRect = overlayContainer
+    this.dragOverlayRect = overlayContainer
       ? {
           x: shapeScreenRect.left - overlayContainer.getBoundingClientRect().left,
           y: shapeScreenRect.top - overlayContainer.getBoundingClientRect().top,
@@ -918,31 +1146,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
           height: shapeScreenRect.height
         }
       : this.svgBboxToOverlayPixels(bbox);
-    const wrapper = document.createElement('div');
-    wrapper.className = 'drag-ghost';
-    wrapper.style.position = 'fixed';
-    wrapper.style.pointerEvents = 'none';
-    wrapper.style.zIndex = '9999';
-    wrapper.style.overflow = 'visible';
-    wrapper.style.left = ghostLeft + 'px';
-    wrapper.style.top = ghostTop + 'px';
-    wrapper.style.width = ghostWidth + 'px';
-    wrapper.style.height = ghostHeight + 'px';
-    
-    const ghostSvgInstance = SVG()
-      .addTo(wrapper)
-      .size(ghostWidth, ghostHeight)
-      .viewbox(0, 0, bbox.width, bbox.height)
-      .attr({ overflow: 'visible', preserveAspectRatio: 'none' });
-    const worldToBbox = ghostSvgInstance.group();
-    worldToBbox.matrix(new Matrix().translate(-bbox.x, -bbox.y));
-    this.appendGhostDefClones(ghostSvgInstance, rootSvg, built.urlRefs);
-    worldToBbox.node.appendChild(built.subtree);
-    this.applyGhostWrapperSvgLayout(wrapper, ghostSvgInstance.node as SVGSVGElement);
-    document.body.appendChild(wrapper);
-
-    this.dragGhostEl = wrapper;
-    this.dragOverlayRect = dragOverlayRect;
     this.cdr.detectChanges();
   }
 
@@ -996,16 +1199,136 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (clonedShape) {
       clonedShape.setAttribute('visibility', 'visible');
     }
+    // Ghost clones must not reuse document ids or `findOne('#id')` / translate commit target the clone.
+    this.stripIdsFromGhostSubtree(subtree);
     return { subtree, urlRefs };
   }
 
-  private appendGhostDefClones(ghostSvg: Svg, rootSvg: SVGSVGElement, urlRefs: Set<string>): void {
+  private stripIdsFromGhostSubtree(root: Element): void {
+    const walk = (el: Element) => {
+      el.removeAttribute('id');
+      el.removeAttribute('xml:id');
+      for (const c of Array.from(el.children)) walk(c);
+    };
+    walk(root);
+  }
+
+  private getEditorContentGroupEl(svgInstance: Svg): Element | null {
+    const cg = svgInstance.findOne('[data-editor-content-group]');
+    return cg?.node ? (cg.node as Element) : null;
+  }
+
+  private clearGhostSessionDefs(): void {
+    for (const el of this.ghostDefElements) {
+      el.parentNode?.removeChild(el);
+    }
+    this.ghostDefElements = [];
+    this.ghostDefPrefix = null;
+  }
+
+  private installGhostSessionDefs(rootSvg: SVGSVGElement, urlRefs: Set<string>): void {
     if (urlRefs.size === 0) return;
-    const defs = ghostSvg.defs();
+    if (!this.ghostDefPrefix) {
+      this.ghostDefPrefix = `__eg_${Math.random().toString(36).slice(2)}_`;
+    }
+    const prefix = this.ghostDefPrefix;
+    const defs = SVG(rootSvg).defs();
     urlRefs.forEach((id) => {
-      const src = rootSvg.querySelector(`#${id}`);
-      if (src) defs.node.appendChild(src.cloneNode(true));
+      const src = rootSvg.getElementById(id);
+      if (!src) return;
+      const clone = src.cloneNode(true) as Element;
+      clone.id = `${prefix}${id}`;
+      defs.node.appendChild(clone);
+      this.ghostDefElements.push(clone);
     });
+  }
+
+  private rewriteGhostUrlRefs(root: Element, prefix: string, urlRefIds: Set<string>): void {
+    if (urlRefIds.size === 0) return;
+    const rewrite = (val: string): string => {
+      let out = val;
+      for (const id of urlRefIds) {
+        out = out.split(`url(#${id})`).join(`url(#${prefix}${id})`);
+      }
+      return out;
+    };
+    const walk = (el: Element) => {
+      for (const name of ['clip-path', 'mask', 'fill', 'stroke', 'filter']) {
+        const v = el.getAttribute(name);
+        if (v) el.setAttribute(name, rewrite(v));
+      }
+      const st = el.getAttribute('style');
+      if (st) el.setAttribute('style', rewrite(st));
+      for (const c of Array.from(el.children)) walk(c);
+    };
+    walk(root);
+  }
+
+  /**
+   * One nested &lt;svg&gt; per selected shape, inserted **before** that shape, so SVG paint order
+   * matches non-selected siblings between the selection.
+   */
+  private mountGhostFragment(
+    svgInstance: Svg,
+    contentGroupEl: Element,
+    insertBefore: Element,
+    unionBbox: { x: number; y: number; width: number; height: number },
+    subtree: Element
+  ): GhostPreviewFragment {
+    const outer = SVG().group();
+    outer.attr(EDITOR_GHOST_ATTR, 'true');
+    outer.attr('pointer-events', 'none');
+
+    const uw = Math.max(unionBbox.width, GHOST_SVG_MIN_PX);
+    const uh = Math.max(unionBbox.height, GHOST_SVG_MIN_PX);
+    const nested = SVG().addTo(outer) as Svg;
+    nested
+      .attr({ x: unionBbox.x, y: unionBbox.y, width: uw, height: uh, overflow: 'visible', preserveAspectRatio: 'none' })
+      .viewbox(0, 0, unionBbox.width, unionBbox.height)
+      .size(uw, uh);
+    const innerEl = nested.node as SVGSVGElement;
+    innerEl.style.display = 'block';
+    innerEl.style.verticalAlign = 'top';
+
+    const worldToUnion = nested.group();
+    worldToUnion.matrix(new Matrix().translate(-unionBbox.x, -unionBbox.y));
+    worldToUnion.node.appendChild(subtree);
+
+    contentGroupEl.insertBefore(outer.node, insertBefore);
+    return { outerGroup: outer, nestedSvg: nested, worldToUnion };
+  }
+
+  private buildGhostFragmentsForUnion(svgInstance: Svg, unionBbox: BBox, selectedIds: string[]): GhostPreviewFragment[] {
+    const rootSvg = svgInstance.node as SVGSVGElement;
+    const contentGroupEl = this.getEditorContentGroupEl(svgInstance);
+    if (!contentGroupEl) return [];
+
+    const orderedIds = this.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const unionUrlRefs = new Set<string>();
+    const builtList: { id: string; subtree: Element; urlRefs: Set<string> }[] = [];
+
+    for (const id of orderedIds) {
+      const built = this.buildDragGhostShapeSubtree(id, svgInstance, rootSvg);
+      if (!built) continue;
+      built.urlRefs.forEach((r) => unionUrlRefs.add(r));
+      builtList.push({ id, subtree: built.subtree, urlRefs: built.urlRefs });
+    }
+
+    if (builtList.length === 0) return [];
+
+    this.installGhostSessionDefs(rootSvg, unionUrlRefs);
+    const prefix = this.ghostDefPrefix ?? '';
+
+    const frags: GhostPreviewFragment[] = [];
+    for (const { id, subtree } of builtList) {
+      if (unionUrlRefs.size > 0) {
+        this.rewriteGhostUrlRefs(subtree, prefix, unionUrlRefs);
+      }
+      const shapeNode = svgInstance.findOne(`#${id}`)?.node as Element | undefined;
+      if (!shapeNode) continue;
+      frags.push(this.mountGhostFragment(svgInstance, contentGroupEl, shapeNode, unionBbox, subtree));
+    }
+    return frags;
   }
 
   private createUnionDragGhost(
@@ -1013,137 +1336,78 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     selectedIds: string[]
   ): void {
     this.dragOverlayRect = this.svgBboxToOverlayPixels(unionBbox);
-    const scr =
-      this.overlayPixelsToFixedScreenRect(this.dragOverlayRect) ??
-      this.svgDocumentBboxToFixedScreenRect(unionBbox);
-    if (!scr) return;
     const svgInstance = this.svgManipulation.getSVGInstance();
     if (!svgInstance) return;
-    const ghostW = Number.isFinite(scr.width) ? Math.max(0, scr.width) : 0;
-    const ghostH = Number.isFinite(scr.height) ? Math.max(0, scr.height) : 0;
-    const svgW = ghostW > 0 ? ghostW : GHOST_SVG_MIN_PX;
-    const svgH = ghostH > 0 ? ghostH : GHOST_SVG_MIN_PX;
-    const wrapper = document.createElement('div');
-    wrapper.className = 'drag-ghost drag-ghost-union';
-    wrapper.style.position = 'fixed';
-    wrapper.style.pointerEvents = 'none';
-    wrapper.style.zIndex = '9999';
-    wrapper.style.left = `${scr.left}px`;
-    wrapper.style.top = `${scr.top}px`;
-    wrapper.style.width = `${ghostW}px`;
-    wrapper.style.height = `${ghostH}px`;
-    wrapper.style.overflow = 'visible';
-    // ViewBox (0,0, w, h) so translated clones at (0,0)-(w,h) fill the ghost; viewBox was (unionBbox.x, unionBbox.y, ...) which didn't match post-dmove content
-    const ghostSvg = SVG()
-      .addTo(wrapper)
-      .size(svgW, svgH)
-      .viewbox(0, 0, unionBbox.width, unionBbox.height)
-      .attr({ overflow: 'visible', preserveAspectRatio: 'none' });
-    const worldToUnion = ghostSvg.group();
-    worldToUnion.matrix(new Matrix().translate(-unionBbox.x, -unionBbox.y));
-    const rootSvg = svgInstance.node as SVGSVGElement;
-    const orderedIds = this.svgManipulation.getShapeIdsInDomOrder(selectedIds);
-    const unionUrlRefs = new Set<string>();
-    for (const id of orderedIds) {
-      const bbox = this.svgManipulation.getShapeBBox(id);
-      if (!bbox) continue;
-      const built = this.buildDragGhostShapeSubtree(id, svgInstance, rootSvg);
-      if (!built) continue;
-      built.urlRefs.forEach((r) => unionUrlRefs.add(r));
-      worldToUnion.node.appendChild(built.subtree);
-    }
-    this.appendGhostDefClones(ghostSvg, rootSvg, unionUrlRefs);
-    this.applyGhostWrapperSvgLayout(wrapper, ghostSvg.node as SVGSVGElement);
-    document.body.appendChild(wrapper);
-    this.dragGhostEl = wrapper;
+    this.dragGhostFragments = this.buildGhostFragmentsForUnion(svgInstance, unionBbox, selectedIds);
     this.cdr.detectChanges();
   }
 
   private removeDragGhost(): void {
-    if (this.dragGhostEl?.parentNode) {
-      this.dragGhostEl.parentNode.removeChild(this.dragGhostEl);
+    for (const f of this.dragGhostFragments) {
+      f.outerGroup.remove();
     }
-    this.dragGhostEl = null;
+    this.dragGhostFragments = [];
+    this.clearGhostSessionDefs();
   }
 
   private createResizeGhost(unionBbox: BBox, selectedIds: string[]): void {
-    const o = this.svgBboxToOverlayPixels(unionBbox);
-    const scr = this.overlayPixelsToFixedScreenRect(o) ?? this.svgDocumentBboxToFixedScreenRect(unionBbox);
-    if (!scr) return;
     const svgInstance = this.svgManipulation.getSVGInstance();
     if (!svgInstance) return;
-    const ghostW = Number.isFinite(scr.width) ? Math.max(0, scr.width) : 0;
-    const ghostH = Number.isFinite(scr.height) ? Math.max(0, scr.height) : 0;
-    const svgW = ghostW > 0 ? ghostW : GHOST_SVG_MIN_PX;
-    const svgH = ghostH > 0 ? ghostH : GHOST_SVG_MIN_PX;
-    const wrapper = document.createElement('div');
-    wrapper.className = 'drag-ghost resize-ghost';
-    wrapper.style.position = 'fixed';
-    wrapper.style.pointerEvents = 'none';
-    wrapper.style.zIndex = '9999';
-    wrapper.style.left = `${scr.left}px`;
-    wrapper.style.top = `${scr.top}px`;
-    wrapper.style.width = `${ghostW}px`;
-    wrapper.style.height = `${ghostH}px`;
-    wrapper.style.overflow = 'visible';
-    const ghostSvg = SVG()
-      .addTo(wrapper)
-      .size(svgW, svgH)
-      .viewbox(0, 0, unionBbox.width, unionBbox.height)
-      .attr({ overflow: 'visible', preserveAspectRatio: 'none' });
-    const svgNode = ghostSvg.node as SVGSVGElement;
-    this.resizeGhostInnerSvgEl = svgNode;
-    const worldToUnion = ghostSvg.group();
-    worldToUnion.matrix(new Matrix().translate(-unionBbox.x, -unionBbox.y));
-    const rootSvg = svgInstance.node as SVGSVGElement;
-    const orderedIds = this.svgManipulation.getShapeIdsInDomOrder(selectedIds);
-    const unionUrlRefs = new Set<string>();
-    for (const id of orderedIds) {
-      const bbox = this.svgManipulation.getShapeBBox(id);
-      if (!bbox) continue;
-      const built = this.buildDragGhostShapeSubtree(id, svgInstance, rootSvg);
-      if (!built) continue;
-      built.urlRefs.forEach((r) => unionUrlRefs.add(r));
-      worldToUnion.node.appendChild(built.subtree);
-    }
-    this.appendGhostDefClones(ghostSvg, rootSvg, unionUrlRefs);
-    this.applyGhostWrapperSvgLayout(wrapper, svgNode);
-    document.body.appendChild(wrapper);
-    this.resizeGhostEl = wrapper;
+    this.resizeGhostFragments = this.buildGhostFragmentsForUnion(svgInstance, unionBbox, selectedIds);
     this.cdr.detectChanges();
   }
 
   private updateResizeGhost(unionAfter: BBox): void {
     this.resizeOverlayRect = this.svgBboxToOverlayPixels(unionAfter);
-    if (!this.resizeGhostEl || !this.resizeGhostInnerSvgEl) return;
+    if (this.resizeGhostFragments.length === 0) return;
     if (!this.resizeOverlayRect) return;
-    const scr =
-      this.overlayPixelsToFixedScreenRect(this.resizeOverlayRect) ??
-      this.svgDocumentBboxToFixedScreenRect(unionAfter);
-    if (!scr) return;
-    const w = Number.isFinite(scr.width) ? Math.max(0, scr.width) : 0;
-    const h = Number.isFinite(scr.height) ? Math.max(0, scr.height) : 0;
-    const svgW = w > 0 ? w : GHOST_SVG_MIN_PX;
-    const svgH = h > 0 ? h : GHOST_SVG_MIN_PX;
-    this.resizeGhostEl.style.left = `${scr.left}px`;
-    this.resizeGhostEl.style.top = `${scr.top}px`;
-    this.resizeGhostEl.style.width = `${w}px`;
-    this.resizeGhostEl.style.height = `${h}px`;
-    // Match inner <svg> pixel size to the wrapper. CSS scale()+transform-origin on a small svg
-    // used the svg's box, not the resized wrapper — wrong anchor for nw/ne/sw (se was OK).
-    (SVG(this.resizeGhostInnerSvgEl) as Svg).size(svgW, svgH);
-    this.resizeGhostInnerSvgEl.style.transform = '';
-    this.resizeGhostInnerSvgEl.style.transformOrigin = '';
-    this.applyGhostWrapperSvgLayout(this.resizeGhostEl, this.resizeGhostInnerSvgEl);
+    const uw = Math.max(unionAfter.width, GHOST_SVG_MIN_PX);
+    const uh = Math.max(unionAfter.height, GHOST_SVG_MIN_PX);
+    const m = new Matrix().translate(-unionAfter.x, -unionAfter.y);
+    for (const f of this.resizeGhostFragments) {
+      f.nestedSvg.attr({ x: unionAfter.x, y: unionAfter.y, width: uw, height: uh });
+      f.nestedSvg.viewbox(0, 0, unionAfter.width, unionAfter.height);
+      (f.nestedSvg as Svg).size(uw, uh);
+      f.worldToUnion.matrix(m);
+    }
     this.cdr.detectChanges();
   }
 
   private removeResizeGhost(): void {
-    if (this.resizeGhostEl?.parentNode) {
-      this.resizeGhostEl.parentNode.removeChild(this.resizeGhostEl);
+    for (const f of this.resizeGhostFragments) {
+      f.outerGroup.remove();
     }
-    this.resizeGhostEl = null;
-    this.resizeGhostInnerSvgEl = null;
+    this.resizeGhostFragments = [];
+    this.clearGhostSessionDefs();
+  }
+
+  /** @returns true if the ghost was created and appended */
+  private createRotateGhost(unionBbox: BBox, selectedIds: string[]): boolean {
+    const svgInstance = this.svgManipulation.getSVGInstance();
+    if (!svgInstance) return false;
+    this.rotateGhostFragments = this.buildGhostFragmentsForUnion(svgInstance, unionBbox, selectedIds);
+    if (this.rotateGhostFragments.length === 0) return false;
+    this.cdr.detectChanges();
+    return true;
+  }
+
+  private updateRotateGhost(accumulatedRad: number): void {
+    if (!this.rotateUnionStart || this.rotateGhostFragments.length === 0 || !this.rotatePivotDoc) {
+      return;
+    }
+    const T = rotateGhostWorldToUnionMatrix(this.rotateUnionStart, this.rotatePivotDoc, accumulatedRad);
+    for (const f of this.rotateGhostFragments) {
+      f.worldToUnion.matrix(T);
+    }
+    this.cdr.detectChanges();
+  }
+
+  private removeRotateGhost(): void {
+    for (const f of this.rotateGhostFragments) {
+      f.outerGroup.remove();
+    }
+    this.rotateGhostFragments = [];
+    this.clearGhostSessionDefs();
   }
 
   onCanvasClick(event: MouseEvent): void {
@@ -1154,6 +1418,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     if (this.resizeJustEnded) {
       this.resizeJustEnded = false;
+      return;
+    }
+    if (this.rotateJustEnded) {
+      this.rotateJustEnded = false;
       return;
     }
     if (this.editorTool.getCurrentTool() === 'pan') {
