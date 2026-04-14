@@ -19,3 +19,20 @@
   border-radius: 4px;
   font-family: monospace;
 }
+
+.color-picker.indeterminate .color-input {
+  opacity: 0.65;
+  background: repeating-linear-gradient(
+    45deg,
+    #e8e8e8,
+    #e8e8e8 4px,
+    #f4f4f4 4px,
+    #f4f4f4 8px
+  );
+}
+
+.color-text.mixed-text {
+  color: #666;
+  font-style: italic;
+  cursor: default;
+}

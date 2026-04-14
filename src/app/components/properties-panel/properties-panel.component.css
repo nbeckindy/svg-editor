@@ -45,6 +45,38 @@
   color: #777;
 }
 
+.multi-select-hint {
+  margin: 0 0 12px 0;
+  padding: 10px 12px;
+  font-size: 13px;
+  line-height: 1.4;
+  color: #444;
+  background: #e8f4fc;
+  border: 1px solid #b3d9f2;
+  border-radius: 6px;
+}
+
+.paint-multi-hint {
+  margin: 0 0 8px 0;
+  font-size: 12px;
+  line-height: 1.35;
+  color: #666;
+}
+
+.mixed-value-hint {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-style: italic;
+  color: #888;
+}
+
+.range-slider.mixed-control,
+.range-number.mixed-control {
+  opacity: 0.75;
+}
+
 .paint-parent-row {
   display: flex;
   flex-wrap: wrap;

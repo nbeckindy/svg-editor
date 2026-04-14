@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal, WritableSignal } from '@angular/core';
+import { computed, signal, WritableSignal } from '@angular/core';
 import { PropertiesPanelComponent } from './properties-panel.component';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
@@ -11,20 +11,29 @@ describe('PropertiesPanelComponent', () => {
   let fixture: ComponentFixture<PropertiesPanelComponent>;
   let shapeSelectionService: ShapeSelectionService;
   let svgManipulationService: SvgManipulationService;
-  let selectedShapeSignal: WritableSignal<ShapeProperties | null>;
+  let selectedShapesSignal: WritableSignal<ShapeProperties[]>;
 
   beforeEach(async () => {
-    selectedShapeSignal = signal<ShapeProperties | null>(null);
+    selectedShapesSignal = signal<ShapeProperties[]>([]);
 
     const shapeSelectionServiceMock = {
-      selectedShape: selectedShapeSignal,
+      selectedShapes: selectedShapesSignal,
+      selectedShape: computed(() => {
+        const shapes = selectedShapesSignal();
+        return shapes.length > 0 ? shapes[0] : null;
+      }),
+      selectionCount: computed(() => selectedShapesSignal().length),
+      getSelectedShapes: () => selectedShapesSignal(),
       updateSelectedShape: vi.fn((updates: Partial<ShapeProperties>) => {
-        const current = selectedShapeSignal();
-        if (current) {
-          selectedShapeSignal.set({ ...current, ...updates });
+        const current = selectedShapesSignal();
+        if (current.length > 0) {
+          selectedShapesSignal.set([{ ...current[0], ...updates }, ...current.slice(1)]);
         }
       }),
-      clearSelection: vi.fn()
+      patchAllSelected: vi.fn((updates: Partial<ShapeProperties>) => {
+        selectedShapesSignal.update((arr) => arr.map((s) => ({ ...s, ...updates })));
+      }),
+      clearSelection: vi.fn(() => selectedShapesSignal.set([]))
     };
 
     const svgManipulationServiceMock = {
@@ -64,7 +73,7 @@ describe('PropertiesPanelComponent', () => {
   it('should display empty state when no shape is selected', () => {
     const compiled = fixture.nativeElement;
     const emptyState = compiled.querySelector('.empty-state');
-    
+
     expect(emptyState).toBeTruthy();
     expect(emptyState.textContent).toContain('No shape selected');
   });
@@ -79,7 +88,7 @@ describe('PropertiesPanelComponent', () => {
       opacity: 0.8
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement;
@@ -99,7 +108,7 @@ describe('PropertiesPanelComponent', () => {
       strokeSource: { kind: 'presentation-attr' }
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement;
@@ -118,7 +127,7 @@ describe('PropertiesPanelComponent', () => {
       fill: '#ff0000'
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     const newColor = '#00ff00';
@@ -127,10 +136,24 @@ describe('PropertiesPanelComponent', () => {
     fixture.detectChanges();
 
     expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('shape-1', newColor);
-    expect(shapeSelectionService.updateSelectedShape).toHaveBeenCalledWith({
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       fill: newColor,
       fillSource: { kind: 'presentation-attr' }
     });
+  });
+
+  it('should apply fill change to every shape when multiple are selected', () => {
+    selectedShapesSignal.set([
+      { id: 'a', type: 'rect', fill: '#f00' },
+      { id: 'b', type: 'circle', fill: '#0f0' }
+    ]);
+    fixture.detectChanges();
+
+    component.onFillColorChange('#123456');
+
+    expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('a', '#123456');
+    expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('b', '#123456');
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalled();
   });
 
   it('should update stroke color when color picker changes', () => {
@@ -141,7 +164,7 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 2
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     const newColor = '#0000ff';
@@ -150,7 +173,7 @@ describe('PropertiesPanelComponent', () => {
     fixture.detectChanges();
 
     expect(svgManipulationService.updateStrokeColor).toHaveBeenCalledWith('shape-1', newColor);
-    expect(shapeSelectionService.updateSelectedShape).toHaveBeenCalledWith({
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       stroke: newColor,
       strokeSource: { kind: 'presentation-attr' }
     });
@@ -164,14 +187,14 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 2
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     component.onStrokeColorChange('none');
     fixture.detectChanges();
 
     expect(svgManipulationService.removeStroke).toHaveBeenCalledWith('shape-1');
-    expect(shapeSelectionService.updateSelectedShape).toHaveBeenCalledWith({
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       stroke: undefined,
       strokeWidth: 0,
       strokeSource: { kind: 'default' }
@@ -186,17 +209,17 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 2
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     const newWidth = 5;
     const event = { target: { value: newWidth.toString() } } as unknown as Event;
-    
+
     component.onStrokeWidthChange(event);
     fixture.detectChanges();
 
     expect(svgManipulationService.addStroke).toHaveBeenCalledWith('shape-1', '#000000', newWidth);
-    expect(shapeSelectionService.updateSelectedShape).toHaveBeenCalledWith({
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       strokeWidth: newWidth,
       strokeSource: { kind: 'presentation-attr' }
     });
@@ -210,16 +233,16 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 2
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     const event = { target: { value: '0' } } as unknown as Event;
-    
+
     component.onStrokeWidthChange(event);
     fixture.detectChanges();
 
     expect(svgManipulationService.removeStroke).toHaveBeenCalledWith('shape-1');
-    expect(shapeSelectionService.updateSelectedShape).toHaveBeenCalledWith({
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       strokeWidth: 0,
       stroke: undefined,
       strokeSource: { kind: 'default' }
@@ -233,17 +256,17 @@ describe('PropertiesPanelComponent', () => {
       opacity: 1
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     const newOpacity = 0.5;
     const event = { target: { value: newOpacity.toString() } } as unknown as Event;
-    
+
     component.onOpacityChange(event);
     fixture.detectChanges();
 
     expect(svgManipulationService.updateOpacity).toHaveBeenCalledWith('shape-1', newOpacity);
-    expect(shapeSelectionService.updateSelectedShape).toHaveBeenCalledWith({ opacity: newOpacity });
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({ opacity: newOpacity });
   });
 
   it('should clear selection when clear button is clicked', () => {
@@ -252,7 +275,7 @@ describe('PropertiesPanelComponent', () => {
       type: 'rect'
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     component.onClearSelection();
@@ -271,7 +294,7 @@ describe('PropertiesPanelComponent', () => {
 
     expect(component.selectedShape()).toBeNull();
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     expect(component.selectedShape()).toEqual(mockShape);
@@ -284,12 +307,12 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 0
     };
 
-    selectedShapeSignal.set(mockShape);
+    selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
     const newWidth = 3;
     const event = { target: { value: newWidth.toString() } } as unknown as Event;
-    
+
     component.onStrokeWidthChange(event);
     fixture.detectChanges();
 
@@ -333,11 +356,13 @@ describe('PropertiesPanelComponent', () => {
   });
 
   it('shows No fill and No stroke instead of color pickers when paint is absent', () => {
-    selectedShapeSignal.set({
-      id: 'shape-1',
-      type: 'rect',
-      strokeWidth: 0
-    });
+    selectedShapesSignal.set([
+      {
+        id: 'shape-1',
+        type: 'rect',
+        strokeWidth: 0
+      }
+    ]);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('No fill');
@@ -346,21 +371,30 @@ describe('PropertiesPanelComponent', () => {
   });
 
   it('Set fill button applies black fill via manipulation service', () => {
-    selectedShapeSignal.set({ id: 'shape-1', type: 'rect' });
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect' }]);
     fixture.detectChanges();
     component.onFillColorChange('#000000');
     expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('shape-1', '#000000');
   });
 
   it('Set stroke button adds stroke with width 1', () => {
-    selectedShapeSignal.set({ id: 'shape-1', type: 'rect', strokeWidth: 0 });
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect', strokeWidth: 0 }]);
     fixture.detectChanges();
     component.onAddStrokeClick();
     expect(svgManipulationService.addStroke).toHaveBeenCalledWith('shape-1', '#000000', 1);
-    expect(shapeSelectionService.updateSelectedShape).toHaveBeenCalledWith({
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       stroke: '#000000',
       strokeWidth: 1,
       strokeSource: { kind: 'presentation-attr' }
     });
+  });
+
+  it('reports fillMixed when two selected shapes have different fills', () => {
+    selectedShapesSignal.set([
+      { id: 'a', type: 'rect', fill: '#ff0000' },
+      { id: 'b', type: 'rect', fill: '#00ff00' }
+    ]);
+    fixture.detectChanges();
+    expect(component.fillMixed()).toBe(true);
   });
 });

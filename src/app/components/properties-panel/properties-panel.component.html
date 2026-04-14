@@ -5,23 +5,29 @@
 
   @if (selectedShape(); as shape) {
     <div class="properties-content">
+      @if (selectionCount() > 1) {
+        <p class="multi-select-hint">
+          {{ selectionCount() }} shapes selected. Edits apply to every selected shape.
+        </p>
+      }
+
       <p class="paint-effective-hint">
         Colors match what you see on the canvas (computed from attributes, CSS, and inheritance).
       </p>
 
       <div class="property-group">
         <label class="property-label">Shape Type</label>
-        <div class="property-value readonly">{{ shape.type }}</div>
+        <div class="property-value readonly">{{ shapeTypeLabel(shape) }}</div>
       </div>
 
       <div class="property-group">
         <label class="property-label">ID</label>
-        <div class="property-value readonly">{{ shape.id }}</div>
+        <div class="property-value readonly">{{ idLabel(shape) }}</div>
       </div>
 
       <div class="property-group">
         <label class="property-label" for="fill-color">Fill Color</label>
-        @if (shape.fillSource) {
+        @if (selectionCount() === 1 && shape.fillSource) {
           <div
             class="paint-source-row"
             [class.class-controlled]="isClassControlled(shape.fillSource)">
@@ -39,27 +45,37 @@
               </button>
             }
           </div>
+        } @else if (selectionCount() > 1) {
+          <p class="paint-multi-hint">
+            Paint source details are hidden for multi-selection; fill edits update every selected shape.
+          </p>
+          @if (shouldOfferBakeFillOnAny()) {
+            <button type="button" class="btn-paint-action" (click)="onBakeFillClick()">
+              Bake effective fill on all selected
+            </button>
+          }
         }
         <div class="color-input-group">
-          @if (hasFillColor(shape)) {
-            <app-color-picker
-              [color]="shape.fill!"
-              (colorChange)="onFillColorChange($event)">
-            </app-color-picker>
-          } @else {
+          @if (allSelectedLackFill(shape)) {
             <div class="no-paint-value">
               <span class="no-paint-label">No fill</span>
               <button type="button" class="btn-set-paint" (click)="onFillColorChange('#000000')">
                 Set fill
               </button>
             </div>
+          } @else {
+            <app-color-picker
+              [color]="fillPickerColor(shape)"
+              [indeterminate]="fillMixed()"
+              (colorChange)="onFillColorChange($event)">
+            </app-color-picker>
           }
         </div>
       </div>
 
       <div class="property-group">
         <label class="property-label" for="stroke-color">Stroke Color</label>
-        @if (shape.strokeSource) {
+        @if (selectionCount() === 1 && shape.strokeSource) {
           <div
             class="paint-source-row"
             [class.class-controlled]="isClassControlled(shape.strokeSource)">
@@ -77,43 +93,59 @@
               </button>
             }
           </div>
+        } @else if (selectionCount() > 1) {
+          <p class="paint-multi-hint">
+            Stroke source details are hidden for multi-selection; stroke edits update every selected shape.
+          </p>
+          @if (shouldOfferBakeStrokeOnAny()) {
+            <button type="button" class="btn-paint-action" (click)="onBakeStrokeClick()">
+              Bake effective stroke on all selected
+            </button>
+          }
         }
         <div class="color-input-group">
-          @if (hasStrokeColor(shape)) {
-            <app-color-picker
-              [color]="shape.stroke!"
-              (colorChange)="onStrokeColorChange($event)">
-            </app-color-picker>
-          } @else {
+          @if (allSelectedLackStroke(shape)) {
             <div class="no-paint-value">
               <span class="no-paint-label">No stroke</span>
               <button type="button" class="btn-set-paint" (click)="onAddStrokeClick()">
                 Set stroke
               </button>
             </div>
+          } @else {
+            <app-color-picker
+              [color]="strokePickerColor(shape)"
+              [indeterminate]="strokeMixed()"
+              (colorChange)="onStrokeColorChange($event)">
+            </app-color-picker>
           }
         </div>
       </div>
 
       <div class="property-group">
         <label class="property-label" for="stroke-width">Stroke Width</label>
+        @if (strokeWidthsMixed()) {
+          <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+        }
         <div class="range-input-group">
           <input
             type="range"
             id="stroke-width"
             class="range-slider"
+            [class.mixed-control]="strokeWidthsMixed()"
             min="0"
             max="20"
             step="0.5"
-            [value]="shape.strokeWidth || 0"
+            [value]="strokeWidthsMixed() ? 0 : (shape.strokeWidth || 0)"
             (input)="onStrokeWidthChange($event)">
           <input
             type="number"
             class="range-number"
+            [class.mixed-control]="strokeWidthsMixed()"
             min="0"
             max="100"
             step="0.5"
-            [value]="shape.strokeWidth || 0"
+            [value]="strokeWidthsMixed() ? '' : (shape.strokeWidth || 0)"
+            [attr.placeholder]="strokeWidthsMixed() ? '—' : ''"
             (change)="onStrokeWidthChange($event)">
         </div>
       </div>
@@ -131,23 +163,29 @@
 
       <div class="property-group">
         <label class="property-label" for="opacity">Opacity</label>
+        @if (opacitiesMixed()) {
+          <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+        }
         <div class="range-input-group">
           <input
             type="range"
             id="opacity"
             class="range-slider"
+            [class.mixed-control]="opacitiesMixed()"
             min="0"
             max="1"
             step="0.01"
-            [value]="shape.opacity || 1"
+            [value]="opacitiesMixed() ? 1 : (shape.opacity || 1)"
             (input)="onOpacityChange($event)">
           <input
             type="number"
             class="range-number"
+            [class.mixed-control]="opacitiesMixed()"
             min="0"
             max="1"
             step="0.01"
-            [value]="shape.opacity || 1"
+            [value]="opacitiesMixed() ? '' : (shape.opacity || 1)"
+            [attr.placeholder]="opacitiesMixed() ? '—' : ''"
             (change)="onOpacityChange($event)">
         </div>
       </div>

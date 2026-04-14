@@ -117,4 +117,13 @@ export class ShapeSelectionService {
       this.selectedShapes.set([updated, ...current.slice(1)]);
     }
   }
+
+  /**
+   * Merge `updates` into every selected shape (batch property edits from the properties panel).
+   */
+  patchAllSelected(updates: Partial<ShapeProperties>): void {
+    const current = this.selectedShapes();
+    if (current.length === 0) return;
+    this.selectedShapes.set(current.map((s) => ({ ...s, ...updates })));
+  }
 }

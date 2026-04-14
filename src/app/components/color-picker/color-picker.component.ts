@@ -11,6 +11,8 @@ import { FormsModule } from '@angular/forms';
 })
 export class ColorPickerComponent {
   readonly color = input<string>('#000000');
+  /** When true, shows a mixed state until the user picks a color (multi-selection with differing values). */
+  readonly indeterminate = input(false);
   readonly colorChange = output<string>();
 
   onColorChange(event: Event): void {

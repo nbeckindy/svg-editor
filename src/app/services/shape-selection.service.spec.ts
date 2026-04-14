@@ -213,6 +213,17 @@ describe('ShapeSelectionService', () => {
     ]);
   });
 
+  it('patchAllSelected merges updates into every selected shape', () => {
+    const a: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const b: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };
+    service.selectShapes([a, b]);
+    service.patchAllSelected({ opacity: 0.4 });
+    expect(service.getSelectedShapes()).toEqual([
+      { ...a, opacity: 0.4 },
+      { ...b, opacity: 0.4 }
+    ]);
+  });
+
   it('should not update if no shape is selected', () => {
     service.clearSelection();
     service.updateSelectedShape({ fill: '#FFFFFF' });

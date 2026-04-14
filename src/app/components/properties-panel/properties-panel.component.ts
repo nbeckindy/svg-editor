@@ -17,10 +17,109 @@ import { ColorPickerComponent } from '../color-picker/color-picker.component';
 export class PropertiesPanelComponent {
   private shapeSelectionService = inject(ShapeSelectionService);
   readonly selectedShape = this.shapeSelectionService.selectedShape;
+  readonly selectionCount = this.shapeSelectionService.selectionCount;
   private svgManipulationService = inject(SvgManipulationService);
 
   /** SVG.js `fill()` / `stroke()` write presentation attributes on the element. */
   private static readonly OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
+
+  /** Neutral value for native `<input type="color">` when the selection is mixed (not shown as the real fill). */
+  readonly mixedColorPickerFallback = '#888888';
+
+  private static readonly PAINT_NONE = '__none__';
+
+  private selectedShapesList(): ShapeProperties[] {
+    return this.shapeSelectionService.getSelectedShapes();
+  }
+
+  private normalizeColorKey(c: string | undefined): string {
+    if (!c || !c.trim()) return PropertiesPanelComponent.PAINT_NONE;
+    const t = c.trim().toLowerCase();
+    if (t === 'none') return PropertiesPanelComponent.PAINT_NONE;
+    if (/^#[0-9a-f]{3}$/.test(t)) {
+      const r = t[1];
+      const g = t[2];
+      const b = t[3];
+      return `#${r}${r}${g}${g}${b}${b}`;
+    }
+    return t;
+  }
+
+  private fillKey(shape: ShapeProperties): string {
+    if (!this.hasFillColor(shape)) return PropertiesPanelComponent.PAINT_NONE;
+    return this.normalizeColorKey(shape.fill);
+  }
+
+  private strokeKey(shape: ShapeProperties): string {
+    if (!this.hasStrokeColor(shape)) return PropertiesPanelComponent.PAINT_NONE;
+    return this.normalizeColorKey(shape.stroke);
+  }
+
+  /** True when two or more selected shapes disagree on resolved fill (including some with vs without fill). */
+  fillMixed(): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const keys = new Set(shapes.map((s) => this.fillKey(s)));
+    return keys.size > 1;
+  }
+
+  /** True when two or more selected shapes disagree on resolved stroke color. */
+  strokeMixed(): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const keys = new Set(shapes.map((s) => this.strokeKey(s)));
+    return keys.size > 1;
+  }
+
+  strokeWidthsMixed(): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const keys = new Set(shapes.map((s) => String(s.strokeWidth ?? 0)));
+    return keys.size > 1;
+  }
+
+  opacitiesMixed(): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const keys = new Set(shapes.map((s) => String(s.opacity ?? 1)));
+    return keys.size > 1;
+  }
+
+  /** All selected shapes have no visible fill — show “No fill” only in this case (not when mixed). */
+  allSelectedLackFill(shape: ShapeProperties): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return !this.hasFillColor(shape);
+    return shapes.every((s) => !this.hasFillColor(s));
+  }
+
+  allSelectedLackStroke(shape: ShapeProperties): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return !this.hasStrokeColor(shape);
+    return shapes.every((s) => !this.hasStrokeColor(s));
+  }
+
+  fillPickerColor(shape: ShapeProperties): string {
+    if (this.fillMixed()) return this.mixedColorPickerFallback;
+    return shape.fill ?? this.mixedColorPickerFallback;
+  }
+
+  strokePickerColor(shape: ShapeProperties): string {
+    if (this.strokeMixed()) return this.mixedColorPickerFallback;
+    return shape.stroke ?? this.mixedColorPickerFallback;
+  }
+
+  shapeTypeLabel(shape: ShapeProperties): string {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return shape.type;
+    const types = new Set(shapes.map((s) => s.type));
+    return types.size > 1 ? 'Various' : shape.type;
+  }
+
+  idLabel(shape: ShapeProperties): string {
+    const n = this.selectionCount();
+    if (n <= 1) return shape.id;
+    return `${n} shapes selected`;
+  }
 
   /**
    * Short label for where the effective (computed) paint comes from — tuned for a direct-editing UX.
@@ -63,7 +162,16 @@ export class PropertiesPanelComponent {
     );
   }
 
+  shouldOfferBakeFillOnAny(): boolean {
+    return this.selectedShapesList().some((s) => this.shouldOfferBakeFill(s));
+  }
+
+  shouldOfferBakeStrokeOnAny(): boolean {
+    return this.selectedShapesList().some((s) => this.shouldOfferBakeStroke(s));
+  }
+
   shouldOfferSelectParentGroup(shape: ShapeProperties): boolean {
+    if (this.selectionCount() > 1) return false;
     const inheritedFill = shape.fillSource?.kind === 'inherited';
     const inheritedStroke = shape.strokeSource?.kind === 'inherited';
     if (!inheritedFill && !inheritedStroke) return false;
@@ -75,20 +183,25 @@ export class PropertiesPanelComponent {
   }
 
   onBakeFillClick(): void {
-    const shape = this.selectedShape();
-    if (!shape) return;
-    this.svgManipulationService.bakeEffectiveFillToLocal(shape.id);
-    this.syncFirstSelectedShapeFromDom(shape.id);
+    for (const s of this.selectedShapesList()) {
+      if (this.shouldOfferBakeFill(s)) {
+        this.svgManipulationService.bakeEffectiveFillToLocal(s.id);
+      }
+    }
+    this.syncAllSelectedFromDom();
   }
 
   onBakeStrokeClick(): void {
-    const shape = this.selectedShape();
-    if (!shape) return;
-    this.svgManipulationService.bakeEffectiveStrokeToLocal(shape.id);
-    this.syncFirstSelectedShapeFromDom(shape.id);
+    for (const s of this.selectedShapesList()) {
+      if (this.shouldOfferBakeStroke(s)) {
+        this.svgManipulationService.bakeEffectiveStrokeToLocal(s.id);
+      }
+    }
+    this.syncAllSelectedFromDom();
   }
 
   onSelectParentGroupClick(): void {
+    if (this.selectionCount() !== 1) return;
     const shape = this.selectedShape();
     if (!shape) return;
     const parentId = this.svgManipulationService.getNearestGroupAncestorId(shape.id);
@@ -101,12 +214,14 @@ export class PropertiesPanelComponent {
     this.svgManipulationService.highlightShape(parentId);
   }
 
-  private syncFirstSelectedShapeFromDom(shapeId: string): void {
-    const all = this.shapeSelectionService.getSelectedShapes();
-    const el = this.svgManipulationService.getSVGInstance()?.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (!el || all.length === 0 || all[0].id !== shapeId) return;
-    const next = this.svgManipulationService.getShapeProperties(el);
-    this.shapeSelectionService.selectShapes([next, ...all.slice(1)]);
+  private syncAllSelectedFromDom(): void {
+    const svg = this.svgManipulationService.getSVGInstance();
+    if (!svg) return;
+    const next = this.selectedShapesList().map((s) => {
+      const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
+      return el ? this.svgManipulationService.getShapeProperties(el) : s;
+    });
+    this.shapeSelectionService.selectShapes(next);
   }
 
   /** True when the shape has a visible fill we can edit as a hex color (not `none` / missing). */
@@ -122,79 +237,82 @@ export class PropertiesPanelComponent {
   }
 
   onAddStrokeClick(): void {
-    const shape = this.selectedShape();
-    if (!shape) return;
     const color = '#000000';
-    this.svgManipulationService.addStroke(shape.id, color, 1);
-    this.shapeSelectionService.updateSelectedShape({
+    const width = 1;
+    for (const s of this.selectedShapesList()) {
+      this.svgManipulationService.addStroke(s.id, color, width);
+    }
+    this.shapeSelectionService.patchAllSelected({
       stroke: color,
-      strokeWidth: 1,
+      strokeWidth: width,
       strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
     });
   }
 
   onFillColorChange(color: string): void {
-    const shape = this.selectedShape();
-    if (shape) {
-      this.svgManipulationService.updateFillColor(shape.id, color);
-      this.shapeSelectionService.updateSelectedShape({
-        fill: color,
-        fillSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
-      });
+    for (const s of this.selectedShapesList()) {
+      this.svgManipulationService.updateFillColor(s.id, color);
     }
+    this.shapeSelectionService.patchAllSelected({
+      fill: color,
+      fillSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
+    });
   }
 
   onStrokeColorChange(color: string): void {
-    const shape = this.selectedShape();
-    if (shape) {
-      if (color === 'none' || color === '') {
-        this.svgManipulationService.removeStroke(shape.id);
-        this.shapeSelectionService.updateSelectedShape({
-          stroke: undefined,
-          strokeWidth: 0,
-          strokeSource: { kind: 'default' }
-        });
-      } else {
-        this.svgManipulationService.updateStrokeColor(shape.id, color);
-        this.shapeSelectionService.updateSelectedShape({
-          stroke: color,
-          strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
-        });
+    if (color === 'none' || color === '') {
+      for (const s of this.selectedShapesList()) {
+        this.svgManipulationService.removeStroke(s.id);
       }
+      this.shapeSelectionService.patchAllSelected({
+        stroke: undefined,
+        strokeWidth: 0,
+        strokeSource: { kind: 'default' }
+      });
+    } else {
+      for (const s of this.selectedShapesList()) {
+        this.svgManipulationService.updateStrokeColor(s.id, color);
+      }
+      this.shapeSelectionService.patchAllSelected({
+        stroke: color,
+        strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
+      });
     }
   }
 
   onStrokeWidthChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const width = parseFloat(target.value);
-    const shape = this.selectedShape();
-    if (shape) {
+    for (const s of this.selectedShapesList()) {
       if (width === 0) {
-        this.svgManipulationService.removeStroke(shape.id);
-        this.shapeSelectionService.updateSelectedShape({
-          strokeWidth: 0,
-          stroke: undefined,
-          strokeSource: { kind: 'default' }
-        });
+        this.svgManipulationService.removeStroke(s.id);
       } else {
-        const color = shape.stroke || '#000000';
-        this.svgManipulationService.addStroke(shape.id, color, width);
-        this.shapeSelectionService.updateSelectedShape({
-          strokeWidth: width,
-          strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
-        });
+        const color = this.hasStrokeColor(s) ? s.stroke! : '#000000';
+        this.svgManipulationService.addStroke(s.id, color, width);
       }
+    }
+    if (width === 0) {
+      this.shapeSelectionService.patchAllSelected({
+        strokeWidth: 0,
+        stroke: undefined,
+        strokeSource: { kind: 'default' }
+      });
+    } else {
+      this.shapeSelectionService.patchAllSelected({
+        strokeWidth: width,
+        strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
+      });
+      this.syncAllSelectedFromDom();
     }
   }
 
   onOpacityChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const opacity = parseFloat(target.value);
-    const shape = this.selectedShape();
-    if (shape) {
-      this.svgManipulationService.updateOpacity(shape.id, opacity);
-      this.shapeSelectionService.updateSelectedShape({ opacity });
+    for (const s of this.selectedShapesList()) {
+      this.svgManipulationService.updateOpacity(s.id, opacity);
     }
+    this.shapeSelectionService.patchAllSelected({ opacity });
   }
 
   onClearSelection(): void {

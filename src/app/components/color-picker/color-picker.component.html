@@ -1,13 +1,16 @@
-<div class="color-picker">
+<div class="color-picker" [class.indeterminate]="indeterminate()">
   <input
     type="color"
     [value]="color()"
     (input)="onColorChange($event)"
-    class="color-input">
+    class="color-input"
+    [attr.aria-label]="indeterminate() ? 'Choose color to apply to selection' : 'Color'">
   <input
     type="text"
-    [value]="color()"
+    [value]="indeterminate() ? '' : color()"
+    [attr.placeholder]="indeterminate() ? 'Mixed' : '#000000'"
     (input)="onTextChange($event)"
     class="color-text"
-    placeholder="#000000">
+    [readonly]="indeterminate()"
+    [class.mixed-text]="indeterminate()">
 </div>
