@@ -19,6 +19,11 @@
 | SI-3 | Properties panel behavior for multi-selection | `story` | Mixed fill/stroke shows indeterminate or batch apply; no silent wrong writes. | SI-2 | 180 |
 | SI-4 | Keyboard shortcuts for selection and edit actions | `task` | Documented shortcuts (e.g. select all, deselect, delete) with graceful no-op when unsupported; does not break typing in inputs. | SI-2 | 120 |
 | SI-5 | Tests for multi-select and shortcuts | `task` | Unit tests for selection service; component tests or harness tests where appropriate. | SI-3, SI-4 | 150 |
+| SI-6 | Layers panel: sync with multi-selection from canvas | `story` | Layer clicks and canvas multi-select stay consistent; behavior documented. | SI-2 (`svg-editor-3b7.2`) | 120 |
+| SI-7 | Pointer: Ctrl/Meta+click additive selection on canvas | `story` | Modifier+click adds/removes shapes without breaking Shift marquee or clip-group rules. | SI-2 | 180 |
+| SI-8 | Selection highlight API: implement or remove no-op | `task` | Implement `highlightShape` to match overlay or remove API and update callers/tests. | SI-2 | 90 |
+
+**Beads IDs:** SI-1 `svg-editor-3b7.1` (closed); SI-2 `svg-editor-3b7.2` (closed); SI-3 … SI-5 `svg-editor-3b7.3`–`3b7.5`; SI-6 `svg-editor-3b7.6`; SI-7 `svg-editor-3b7.7`; SI-8 `svg-editor-3b7.8`.
 
 ## Exit criteria
 

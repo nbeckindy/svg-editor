@@ -85,6 +85,19 @@
                   stroke="#2196F3"
                   stroke-width="2"/>
               </g>
+            } @else if (multiSelectionOutlineRects.length >= 2) {
+              @for (r of multiSelectionOutlineRects; track r.id) {
+                <rect
+                  [attr.x]="r.x"
+                  [attr.y]="r.y"
+                  [attr.width]="r.width"
+                  [attr.height]="r.height"
+                  fill="none"
+                  stroke="#2196F3"
+                  stroke-width="1.5"
+                  stroke-dasharray="4 3"
+                  vector-effect="non-scaling-stroke"/>
+              }
             } @else {
               <rect
                 [attr.x]="hr.x"

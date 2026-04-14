@@ -182,7 +182,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     // Include documentRevision: lastBbox alone can match after different rotations (same user-space
     // AABB) while getBoundingClientRect changes — caching only on lastBbox would reuse stale DOM union.
-    const key = `${this.lastBbox.x}-${this.lastBbox.y}-${this.lastBbox.width}-${this.lastBbox.height}-${this.wrapperWidth}-${this.wrapperHeight}-${this.canvasView.scale}-${this.canvasView.panX}-${this.canvasView.panY}-${this.svgManipulation.documentRevision()}`;
+    // Include selected ids so switching selection without bbox change still invalidates.
+    const idKey = this.shapeSelection.getSelectedShapes().map((s) => s.id).join(',');
+    const key = `${this.lastBbox.x}-${this.lastBbox.y}-${this.lastBbox.width}-${this.lastBbox.height}-${this.wrapperWidth}-${this.wrapperHeight}-${this.canvasView.scale}-${this.canvasView.panX}-${this.canvasView.panY}-${this.svgManipulation.documentRevision()}-${idKey}`;
     if (this._highlightRectCacheKey === key) {
       return this._highlightRectCache;
     }
@@ -275,6 +277,38 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       width: w,
       height: h
     };
+  }
+
+  /**
+   * Overlay-space rect per selected shape (for multi-select: one outline each so every item reads as selected).
+   * Empty when 0–1 shapes, while transforming, or when overlay/DOM is unavailable (falls back to union `highlightRect`).
+   */
+  get multiSelectionOutlineRects(): { x: number; y: number; width: number; height: number; id: string }[] {
+    if (this.isDraggingShape || this.isResizingSelection || this.isRotatingSelection) return [];
+    if (this.wrapperWidth <= 0 || this.wrapperHeight <= 0) return [];
+    const shapes = this.shapeSelection.getSelectedShapes();
+    if (shapes.length <= 1) return [];
+    const overlayEl = this.highlightOverlayContainer()?.nativeElement;
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!overlayEl || !svg) return [];
+    const ocr = overlayEl.getBoundingClientRect();
+    if (ocr.width <= 0 || ocr.height <= 0) return [];
+    const out: { x: number; y: number; width: number; height: number; id: string }[] = [];
+    for (const s of shapes) {
+      const el = svg.findOne(`#${s.id}`);
+      const node = el?.node as unknown as SVGGraphicsElement | undefined;
+      if (!node || typeof node.getBoundingClientRect !== 'function') continue;
+      const r = node.getBoundingClientRect();
+      if (r.width <= 0 && r.height <= 0) continue;
+      out.push({
+        id: s.id,
+        x: r.left - ocr.left,
+        y: r.top - ocr.top,
+        width: r.width,
+        height: r.height
+      });
+    }
+    return out.length >= 2 ? out : [];
   }
 
   /** SVG `transform` for the blue selection frame while rotating (union center, same angle as commit). */

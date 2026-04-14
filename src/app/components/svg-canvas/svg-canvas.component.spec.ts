@@ -883,6 +883,13 @@ describe('SvgCanvasComponent', () => {
     expect(component.highlightRect!.width).toBe(70);
     expect(component.highlightRect!.height).toBe(75);
     expect(svgManipulationService.getUnionBBox).toHaveBeenCalledWith(['a', 'b']);
+    // Multi-select: per-shape outlines when DOM rects resolve for at least two shapes
+    const outlineRects = component.multiSelectionOutlineRects;
+    if (outlineRects.length >= 2) {
+      expect(outlineRects.map((r) => r.id).sort()).toEqual(['a', 'b']);
+      const blue = fixture.nativeElement.querySelectorAll('.highlight-overlay rect[stroke="#2196F3"]');
+      expect(blue.length).toBe(2);
+    }
   });
 
   it('should auto-fit icon palette SVG using SVG width/height (not viewBox) to keep content in bounds', async () => {

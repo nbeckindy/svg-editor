@@ -6,6 +6,14 @@ import { ShapeProperties } from '../models/shape-properties.interface';
 })
 export class ShapeSelectionService {
   readonly selectedShapes = signal<ShapeProperties[]>([]);
+
+  /** Number of selected shapes (0 when empty). */
+  readonly selectionCount = computed(() => this.selectedShapes().length);
+
+  /**
+   * First selected shape — **primary** for panels and legacy call sites that edit one object at a time.
+   * For the full set, use `selectedShapes()` / `getSelectedShapes()`.
+   */
   readonly selectedShape = computed(() => {
     const shapes = this.selectedShapes();
     return shapes.length > 0 ? shapes[0] : null;
@@ -19,10 +27,15 @@ export class ShapeSelectionService {
   }
 
   /**
-   * Replace selection with multiple shapes (marquee select).
+   * Replace selection with multiple shapes (canonical multi-select setter).
    */
   selectShapes(shapes: ShapeProperties[]): void {
     this.selectedShapes.set([...shapes]);
+  }
+
+  /** Replace the current selection with this list (alias of `selectShapes`). */
+  replaceSelection(shapes: ShapeProperties[]): void {
+    this.selectShapes(shapes);
   }
 
   /**
@@ -81,7 +94,7 @@ export class ShapeSelectionService {
   }
 
   /**
-   * Get currently selected shape (first of selection, for backward compatibility)
+   * Primary selected shape (first in `selectedShapes`), or null.
    */
   getSelectedShape(): ShapeProperties | null {
     return this.selectedShape();

@@ -56,6 +56,22 @@ describe('ShapeSelectionService', () => {
     expect(service.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
   });
 
+  it('replaceSelection should match selectShapes', () => {
+    const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
+    const shapeB: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };
+    service.replaceSelection([shapeA, shapeB]);
+    expect(service.selectionCount()).toBe(2);
+    expect(service.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('selectionCount tracks selectedShapes', () => {
+    expect(service.selectionCount()).toBe(0);
+    service.selectShape({ id: 'x', type: 'rect', fill: '#000' });
+    expect(service.selectionCount()).toBe(1);
+    service.clearSelection();
+    expect(service.selectionCount()).toBe(0);
+  });
+
   it('mergeShapesIntoSelection should add only new ids', () => {
     const shapeA: ShapeProperties = { id: 'a', type: 'rect', fill: '#f00' };
     const shapeB: ShapeProperties = { id: 'b', type: 'circle', fill: '#0f0' };
