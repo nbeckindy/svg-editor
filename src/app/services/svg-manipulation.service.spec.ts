@@ -570,6 +570,67 @@ describe('SvgManipulationService', () => {
     });
   });
 
+  describe('selection rotate', () => {
+    it('applyUnionRotationFromSnapshot should rotate rect 90° about union center; bbox width/height swap', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const union = { x: 10, y: 20, width: 100, height: 50 };
+      const pivot = { x: union.x + union.width / 2, y: union.y + union.height / 2 };
+      const snap = service.snapshotSelectionTransforms(['r1']);
+      service.applyUnionRotationFromSnapshot(['r1'], pivot, 90, snap);
+      const rectEl = container.querySelector('#r1');
+      if (rectEl && typeof (rectEl as SVGGraphicsElement).getBBox !== 'function') {
+        (rectEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+          ({ x: 10, y: 20, width: 100, height: 50 } as DOMRect);
+      }
+      const after = service.getShapeBBox('r1');
+      expect(after).toBeTruthy();
+      expect(after!.width).toBeCloseTo(50, 0);
+      expect(after!.height).toBeCloseTo(100, 0);
+    });
+
+    it('applyUnionRotationFromSnapshot full turn should leave bbox similar (mod floating point)', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const union = { x: 10, y: 20, width: 100, height: 50 };
+      const pivot = { x: union.x + union.width / 2, y: union.y + union.height / 2 };
+      const snap = service.snapshotSelectionTransforms(['r1']);
+      service.applyUnionRotationFromSnapshot(['r1'], pivot, 360, snap);
+      const rectEl = container.querySelector('#r1');
+      if (rectEl && typeof (rectEl as SVGGraphicsElement).getBBox !== 'function') {
+        (rectEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+          ({ x: 10, y: 20, width: 100, height: 50 } as DOMRect);
+      }
+      const after = service.getShapeBBox('r1');
+      expect(after).toBeTruthy();
+      expect(after!.width).toBeCloseTo(100, 0);
+      expect(after!.height).toBeCloseTo(50, 0);
+    });
+
+    it('applyUnionRotationFromSnapshot should not throw when shape missing', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const snap = new Map();
+      expect(() =>
+        service.applyUnionRotationFromSnapshot(['nope'], { x: 5, y: 5 }, 15, snap)
+      ).not.toThrow();
+    });
+
+    it('getSelectionRotationPivot returns union center when local bbox path unavailable (e.g. jsdom)', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const rectEl = container.querySelector('#r1');
+      if (rectEl && typeof (rectEl as SVGGraphicsElement).getBBox !== 'function') {
+        (rectEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+          ({ x: 10, y: 20, width: 100, height: 50 } as DOMRect);
+      }
+      const p = service.getSelectionRotationPivot(['r1']);
+      const u = service.getUnionBBox(['r1']);
+      expect(u).toBeTruthy();
+      expect(p).toEqual({ x: u!.x + u!.width / 2, y: u!.y + u!.height / 2 });
+    });
+  });
+
   describe('getShapePropertiesIntersectingRect', () => {
     /** Marquee selection uses fill/stroke hit-testing; stub so jsdom rects behave like filled geometry. */
     function stubPaintAlwaysHits(...elements: (Element | null | undefined)[]) {

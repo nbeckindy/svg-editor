@@ -9,6 +9,7 @@ import {
   marqueeSamplePoints,
   type AxisAlignedRect
 } from '../utils/marquee-selection';
+import { localBBoxToRootUserAabb, screenRectToRootSvgUserRect } from '../utils/svg-screen-user';
 
 /** Class name for the editor content group (shapes live here). */
 const EDITOR_CONTENT_GROUP_ID = 'data-editor-content-group';
@@ -754,18 +755,29 @@ export class SvgManipulationService {
   }
 
   /**
-   * Get shape bounding box in SVG coordinate space. Does not modify the SVG.
+   * @param preferScreenBounds When true (default), use **painted** screen bounds first (clip/mask,
+   *   stroke, letterboxing via root CTM). Falls back to local `getBBox()` ×
+   *   `getTransformToElement(root)`, then SVG.js bbox × `matrixify()` (e.g. hidden during rotate when
+   *   `getBoundingClientRect` is zero).
    */
-  getShapeBBox(shapeId: string): { x: number; y: number; width: number; height: number } | null {
+  getShapeBBox(
+    shapeId: string,
+    options?: { preferScreenBounds?: boolean }
+  ): { x: number; y: number; width: number; height: number } | null {
+    const preferScreenBounds = options?.preferScreenBounds !== false;
     if (!this.svgInstance) return null;
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (!shape?.node) return null;
     const node = shape.node as SVGGraphicsElement;
     const rootSvg = this.svgInstance.node as SVGSVGElement | null;
 
-    // Prefer visual bounds from rendered client rects when available. This respects clip-path/mask
-    // and matches where the user actually sees and drags the shape.
-    if (rootSvg && typeof node.getBoundingClientRect === 'function' && typeof rootSvg.getBoundingClientRect === 'function') {
+    // Painted bounds (default): `getBBox()` ignores clip-path; screen rect matches what the user sees.
+    if (
+      preferScreenBounds &&
+      rootSvg &&
+      typeof node.getBoundingClientRect === 'function' &&
+      typeof rootSvg.getBoundingClientRect === 'function'
+    ) {
       const rr = rootSvg.getBoundingClientRect();
       const sr = node.getBoundingClientRect();
       if (
@@ -776,6 +788,11 @@ export class SvgManipulationService {
         Number.isFinite(sr.left) &&
         Number.isFinite(sr.top)
       ) {
+        const fromCtm = screenRectToRootSvgUserRect(rootSvg, sr);
+        if (fromCtm) {
+          return fromCtm;
+        }
+        // Legacy linear map (wrong for letterboxed `meet` / non-uniform `none`); kept if CTM APIs are missing.
         const vbAttr = rootSvg.getAttribute('viewBox') || this.documentViewBox;
         const parts = vbAttr.split(/\s+/);
         const vbMinX = parts.length >= 4 ? Number(parts[0]) || 0 : 0;
@@ -792,9 +809,28 @@ export class SvgManipulationService {
       }
     }
 
-    // svg.js bbox() wraps DOM getBBox(), which is in the element's *local* space before this
-    // element's own `transform`. After resize we set transform via matrix(); multiply so union
-    // bbox matches painted geometry.
+    // Local `getBBox()` × `getTransformToElement(root)`: full chain to root SVG user space
+    // (parent `<g>` transforms, not only this node’s `transform` — unlike SVG.js `matrixify()`).
+    if (rootSvg && typeof node.getBBox === 'function') {
+      try {
+        const local = node.getBBox();
+        const fromDom = localBBoxToRootUserAabb(node, rootSvg, local);
+        if (
+          fromDom &&
+          Number.isFinite(fromDom.width) &&
+          Number.isFinite(fromDom.height) &&
+          fromDom.width >= 0 &&
+          fromDom.height >= 0
+        ) {
+          return fromDom;
+        }
+      } catch {
+        // fall through: e.g. jsdom / detached node
+      }
+    }
+
+    // svg.js bbox() × matrixify(): fallback when `getTransformToElement` is unavailable (no full
+    // ancestor chain), same as before.
     if (typeof shape.bbox === 'function' && typeof shape.matrixify === 'function') {
       try {
         const local = shape.bbox();
@@ -818,10 +854,14 @@ export class SvgManipulationService {
 
   /**
    * Union of bounding boxes for the given shape ids. Returns null if no valid bboxes.
+   * @see getShapeBBox for `options.preferScreenBounds`
    */
-  getUnionBBox(shapeIds: string[]): { x: number; y: number; width: number; height: number } | null {
+  getUnionBBox(
+    shapeIds: string[],
+    options?: { preferScreenBounds?: boolean }
+  ): { x: number; y: number; width: number; height: number } | null {
     const bboxes = shapeIds
-      .map((id) => this.getShapeBBox(id))
+      .map((id) => this.getShapeBBox(id, options))
       .filter((b): b is { x: number; y: number; width: number; height: number } => b != null);
     if (bboxes.length === 0) return null;
     if (bboxes.length === 1) return bboxes[0];
@@ -1045,6 +1085,45 @@ export class SvgManipulationService {
   }
 
   /**
+   * Rotation pivot in root SVG user space: average of each shape's local bbox center
+   * (`shape.bbox()` → cx/cy) transformed by {@link SvgJsElement#matrixify}. Unlike the axis-aligned
+   * union bbox center, this stays aligned with the painted rotation center after prior rotations
+   * (the union AABB center drifts for non-square selections).
+   */
+  getSelectionRotationPivot(shapeIds: string[]): { x: number; y: number } | null {
+    if (!this.svgInstance || shapeIds.length === 0) return null;
+    const pts: { x: number; y: number }[] = [];
+    for (const id of shapeIds) {
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      if (!shape || typeof shape.bbox !== 'function' || typeof shape.matrixify !== 'function') continue;
+      try {
+        const local = shape.bbox();
+        const m = shape.matrixify();
+        if (!local || !m) continue;
+        const w = local.w ?? local.width;
+        const h = local.h ?? local.height;
+        if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) continue;
+        const cx = Number.isFinite(local.cx) ? local.cx : local.x + w / 2;
+        const cy = Number.isFinite(local.cy) ? local.cy : local.y + h / 2;
+        const v = m.valueOf() as { a: number; b: number; c: number; d: number; e: number; f: number };
+        pts.push({
+          x: v.a * cx + v.c * cy + v.e,
+          y: v.b * cx + v.d * cy + v.f
+        });
+      } catch {
+        /* skip */
+      }
+    }
+    if (pts.length === 0) {
+      const u = this.getUnionBBox(shapeIds);
+      return u ? { x: u.x + u.width / 2, y: u.y + u.height / 2 } : null;
+    }
+    const sx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
+    const sy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
+    return { x: sx, y: sy };
+  }
+
+  /**
    * Clone each shape's current transform matrix for resize commit (SVG.js).
    */
   snapshotSelectionTransforms(shapeIds: string[]): Map<string, Matrix> {
@@ -1075,6 +1154,28 @@ export class SvgManipulationService {
     if (!Number.isFinite(s) || s <= 0) return;
     const anchor = oppositeCornerForHandle(unionBefore, handle);
     const T = new Matrix().scale(s, s, anchor.x, anchor.y);
+    for (const id of shapeIds) {
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      const prev = snapshot.get(id);
+      if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
+      shape.matrix(T.multiply(prev));
+    }
+    this.bumpDocumentRevision();
+  }
+
+  /**
+   * Apply rotation about a pivot in root SVG user space (same as union bbox / pointer mapping).
+   * Composes: newMatrix = rotate(deg,cx,cy) * snapshotMatrix (`angleDeg` in degrees, SVG.js convention).
+   */
+  applyUnionRotationFromSnapshot(
+    shapeIds: string[],
+    pivot: { x: number; y: number },
+    angleDeg: number,
+    snapshot: Map<string, Matrix>
+  ): void {
+    if (!this.svgInstance) return;
+    if (!Number.isFinite(angleDeg)) return;
+    const T = new Matrix().rotate(angleDeg, pivot.x, pivot.y);
     for (const id of shapeIds) {
       const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
       const prev = snapshot.get(id);

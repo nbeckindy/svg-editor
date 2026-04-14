@@ -5,6 +5,7 @@
       <button
         type="button"
         class="icon-item"
+        [attr.data-testid]="'icon-palette-' + icon.id"
         (click)="selectIcon(icon)"
         [title]="icon.label">
         <span class="icon-preview" [innerHTML]="getSafeSvg(icon.svg)"></span>

@@ -120,6 +120,21 @@
   cursor: se-resize;
 }
 
+.selection-rotate-stem {
+  stroke: #2196f3;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.selection-rotate-handle {
+  pointer-events: all;
+  fill: #ffffff;
+  stroke: #2196f3;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  cursor: grab;
+}
+
 .placeholder {
   position: absolute;
   top: 50%;
