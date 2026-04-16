@@ -989,6 +989,27 @@ export class SvgManipulationService {
   clearHighlight(): void {}
 
   /**
+   * Remove shapes from the document. Selection/marquee rules apply: ids are expanded to the same
+   * clip-path/mask groups as {@link expandSelectionByClipGroups} so a clipped set is removed together.
+   */
+  removeShapes(shapeIds: string[]): void {
+    if (!this.svgInstance || shapeIds.length === 0) return;
+    const props: ShapeProperties[] = [];
+    for (const id of shapeIds) {
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      if (shape) props.push(this.getShapeProperties(shape));
+    }
+    if (props.length === 0) return;
+    const expanded = this.expandSelectionByClipGroups(props);
+    const toRemove = [...new Set(expanded.map((p) => p.id))];
+    for (const id of toRemove) {
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      if (shape) shape.remove();
+    }
+    if (toRemove.length > 0) this.bumpDocumentRevision();
+  }
+
+  /**
    * Export the logical document (viewBox + content), not the editor-stage SVG.
    *
    * Note: consumers that re-parse this as strict XML (e.g. the SVG debug panel) can fail on

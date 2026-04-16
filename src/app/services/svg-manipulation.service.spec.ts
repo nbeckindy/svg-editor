@@ -284,6 +284,27 @@ describe('SvgManipulationService', () => {
     expect(stroke).toBe('none');
   });
 
+  it('removeShapes removes elements and bumps documentRevision', () => {
+    const svgContent =
+      '<svg viewBox="0 0 100 100"><rect id="ra" x="0" y="0" width="10" height="10"/><rect id="rb" x="20" y="0" width="10" height="10"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const before = service.documentRevision();
+    service.removeShapes(['ra']);
+    expect(service.documentRevision()).toBe(before + 1);
+    expect(container.querySelector('#ra')).toBeNull();
+    expect(container.querySelector('#rb')).not.toBeNull();
+  });
+
+  it('removeShapes is a no-op for empty or unknown ids', () => {
+    const svgContent = '<svg viewBox="0 0 100 100"><rect id="only" x="0" y="0" width="10" height="10"/></svg>';
+    service.initializeSVG(container, svgContent);
+    const rev = service.documentRevision();
+    service.removeShapes([]);
+    service.removeShapes(['nope']);
+    expect(service.documentRevision()).toBe(rev);
+    expect(container.querySelector('#only')).not.toBeNull();
+  });
+
   it('getShapeBBox should return bounding box in SVG coordinates', () => {
     const svgContent = '<svg viewBox="0 0 100 100"><rect id="bbox-test" x="10" y="20" width="30" height="40"/></svg>';
     service.initializeSVG(container, svgContent);

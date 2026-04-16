@@ -13,6 +13,7 @@ import {
 } from '../../utils/selection-rotate';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
 import { screenPointToRootSvgUserPoint } from '../../utils/svg-screen-user';
+import { ShapeProperties } from '../../models/shape-properties.interface';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
@@ -401,12 +402,97 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   /** After selection marquee mouseup, ignore the next click so it doesn't clear selection. */
   private selectionMarqueeJustEnded = false;
 
+  /**
+   * Document keyboard shortcuts for the canvas (see `shouldIgnoreKeyboardShortcuts`):
+   * - **Ctrl/Cmd+A** (selector tool): select all shapes in paint order; clip/mask groups expanded like marquee.
+   * - **Escape**: cancel selection or zoom marquee if active; otherwise clear selection.
+   * - **Delete / Backspace** (selector tool): remove selected shapes (clip/mask groups expanded); no-op if nothing selected.
+   */
   onKeyDown(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
+    if (this.shouldIgnoreKeyboardShortcuts(event)) return;
+
+    const selectorActive = this.editorTool.getCurrentTool() === 'selector';
+
+    if (event.key === 'Escape') {
+      if (this.isSelectionMarquee || this.isZoomMarquee) {
+        this.cancelActiveMarquees();
+        event.preventDefault();
+        return;
+      }
+      if (this.shapeSelection.getSelectedShapes().length > 0) {
+        this.shapeSelection.clearSelection();
+        this.svgManipulation.clearHighlight();
+        event.preventDefault();
+      }
+      return;
+    }
+
+    if (!this.svgContent()) return;
+
+    const mod = event.ctrlKey || event.metaKey;
+    if (selectorActive && mod && (event.key === 'a' || event.key === 'A')) {
+      this.selectAllShapesFromDocument();
+      event.preventDefault();
+      return;
+    }
+
+    if (
+      selectorActive &&
+      (event.key === 'Delete' || event.key === 'Backspace') &&
+      this.shapeSelection.getSelectedShapes().length > 0
+    ) {
+      const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
+      this.svgManipulation.removeShapes(ids);
+      this.shapeSelection.clearSelection();
+      this.svgManipulation.clearHighlight();
+      event.preventDefault();
+    }
   }
 
   onKeyUp(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
+  }
+
+  private shouldIgnoreKeyboardShortcuts(event: KeyboardEvent): boolean {
+    const t = event.target;
+    if (!t || !(t instanceof HTMLElement)) return false;
+    if (t.isContentEditable) return true;
+    const tag = t.tagName;
+    return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  }
+
+  private cancelActiveMarquees(): void {
+    let changed = false;
+    if (this.isSelectionMarquee) {
+      this.isSelectionMarquee = false;
+      this.selectionMarqueeStart = null;
+      this.selectionMarqueeEnd = null;
+      changed = true;
+    }
+    if (this.isZoomMarquee) {
+      this.isZoomMarquee = false;
+      this.zoomMarqueeStart = null;
+      this.zoomMarqueeEnd = null;
+      changed = true;
+    }
+    if (changed) this.cdr.detectChanges();
+  }
+
+  private selectAllShapesFromDocument(): void {
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg) return;
+    const items = this.svgManipulation.getLayerStackItems();
+    if (items.length === 0) return;
+    const shapes: ShapeProperties[] = [];
+    for (const item of items) {
+      const el = svg.findOne(`#${item.id}`) as SVGElement | undefined;
+      if (el) shapes.push(this.svgManipulation.getShapeProperties(el));
+    }
+    if (shapes.length === 0) return;
+    const expanded = this.svgManipulation.expandSelectionByClipGroups(shapes);
+    this.shapeSelection.selectShapes(expanded);
+    this.svgManipulation.clearHighlight();
   }
 
   onDocumentMouseMove(event: MouseEvent): void {
