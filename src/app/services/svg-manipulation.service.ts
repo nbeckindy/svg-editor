@@ -979,11 +979,6 @@ export class SvgManipulationService {
   }
 
   /**
-   * Highlight selected shape (no-op: highlight is drawn by canvas overlay, not by modifying SVG).
-   */
-  highlightShape(_shapeId: string): void {}
-
-  /**
    * Clear shape highlight (no-op: overlay is driven by selection state).
    */
   clearHighlight(): void {}

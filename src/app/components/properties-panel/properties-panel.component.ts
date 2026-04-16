@@ -211,7 +211,6 @@ export class PropertiesPanelComponent {
     if (!el) return;
     const props = this.svgManipulationService.getShapeProperties(el);
     this.shapeSelectionService.selectShape(props);
-    this.svgManipulationService.highlightShape(parentId);
   }
 
   private syncAllSelectedFromDom(): void {

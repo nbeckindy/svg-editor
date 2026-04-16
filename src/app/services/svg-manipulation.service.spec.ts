@@ -366,18 +366,6 @@ describe('SvgManipulationService', () => {
     expect(union).toEqual({ x: 0, y: 0, width: 70, height: 75 });
   });
 
-  it('highlightShape and clearHighlight should not modify SVG (no-op)', () => {
-    const svgContent = '<svg><path id="noop-test" d="M10 10 L50 50"/></svg>';
-    service.initializeSVG(container, svgContent);
-    const pathBefore = container.querySelector('#noop-test');
-    expect(pathBefore?.classList.contains('selected-shape')).toBe(false);
-    service.highlightShape('noop-test');
-    const pathAfter = container.querySelector('#noop-test');
-    expect(pathAfter?.classList.contains('selected-shape')).toBe(false);
-    service.clearHighlight();
-    expect(pathAfter?.classList.contains('selected-shape')).toBe(false);
-  });
-
   it('should export SVG as string', () => {
     const svgContent = '<svg><circle cx="50" cy="50" r="40"/></svg>';
     
@@ -400,7 +388,6 @@ describe('SvgManipulationService', () => {
       service.addStroke('test', '#000000', 2);
       service.removeStroke('test');
       service.updateStrokeColor('test', '#0000FF');
-      service.highlightShape('test');
       service.clearHighlight();
     }).not.toThrow();
   });

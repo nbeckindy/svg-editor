@@ -13,7 +13,6 @@ describe('LayersPanelComponent', () => {
   let getLayerStackItems: ReturnType<typeof vi.fn>;
   let selectShapes: ReturnType<typeof vi.fn>;
   let toggleShapeGroupInSelection: ReturnType<typeof vi.fn>;
-  let highlightShape: ReturnType<typeof vi.fn>;
   let getSVGInstance: ReturnType<typeof vi.fn>;
   let getShapePropertiesInSameClipGroup: ReturnType<typeof vi.fn>;
 
@@ -23,7 +22,6 @@ describe('LayersPanelComponent', () => {
     getLayerStackItems = vi.fn<() => LayerStackItem[]>(() => []);
     selectShapes = vi.fn();
     toggleShapeGroupInSelection = vi.fn();
-    highlightShape = vi.fn();
     getShapePropertiesInSameClipGroup = vi.fn();
     getSVGInstance = vi.fn(() => ({ findOne: vi.fn() }));
 
@@ -36,8 +34,7 @@ describe('LayersPanelComponent', () => {
             documentRevision,
             getLayerStackItems,
             getSVGInstance,
-            getShapePropertiesInSameClipGroup,
-            highlightShape
+            getShapePropertiesInSameClipGroup
           }
         },
         { provide: ShapeSelectionService, useValue: { selectedShapes, selectShapes, toggleShapeGroupInSelection } }
@@ -116,7 +113,6 @@ describe('LayersPanelComponent', () => {
       { id: 'shape-a', type: 'path' },
       { id: 'shape-b', type: 'rect' }
     ]);
-    expect(highlightShape).toHaveBeenCalledWith('shape-a');
   });
 
   it('toggle-merges selection when modifier click is used on a layer row', () => {

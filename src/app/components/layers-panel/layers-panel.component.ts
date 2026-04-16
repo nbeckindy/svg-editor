@@ -50,7 +50,6 @@ export class LayersPanelComponent {
     } else {
       this.shapeSelection.selectShapes(expanded);
     }
-    this.svgManipulation.highlightShape(expanded[0]?.id ?? layerId);
   }
 
   private createPreviewDataUrl(layer: LayerStackItem): string {

@@ -47,8 +47,7 @@ describe('PropertiesPanelComponent', () => {
       bakeEffectiveFillToLocal: vi.fn(),
       bakeEffectiveStrokeToLocal: vi.fn(),
       getSVGInstance: vi.fn(),
-      getShapeProperties: vi.fn(),
-      highlightShape: vi.fn()
+      getShapeProperties: vi.fn()
     };
 
     await TestBed.configureTestingModule({

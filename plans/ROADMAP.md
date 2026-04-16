@@ -4,13 +4,13 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 
 ## Epic order
 
-| Order | Epic | Slug | Depends on |
-|------:|------|------|------------|
-| 1 | Multi-select and keyboard shortcuts | [selection-interaction](./epics/selection-interaction.md) | — |
-| 2 | Undo and redo | [editing-history](./epics/editing-history.md) | Selection model stable (epic 1 in progress or done) |
-| 3 | Shape transforms (rotate, scale, skew) | [shape-transforms](./epics/shape-transforms.md) | Multi-select useful but not strictly required; depends on selection APIs |
-| 4 | Groups and layer management | [groups-layers](./epics/groups-layers.md) | Selection; transforms help with group bounds |
-| 5 | Advanced stroke and fill | [advanced-styling](./epics/advanced-styling.md) | Core manipulation patterns from earlier epics |
+| Order | Epic | Slug | Current bd status | Progress | Depends on |
+|------:|------|------|-------------------|---------:|------------|
+| 1 | Multi-select and keyboard shortcuts | [selection-interaction](./epics/selection-interaction.md) | `CLOSED` | 8/8 (100%) | — |
+| 2 | Undo and redo | [editing-history](./epics/editing-history.md) | `OPEN` | 0/5 (0%) | Selection model stable (epic 1 in progress or done) |
+| 3 | Shape transforms (rotate, scale, skew) | [shape-transforms](./epics/shape-transforms.md) | `OPEN` | 0/5 (0%) | Multi-select useful but not strictly required; depends on selection APIs |
+| 4 | Groups and layer management | [groups-layers](./epics/groups-layers.md) | `OPEN` | 0/5 (0%) | Selection; transforms help with group bounds |
+| 5 | Advanced stroke and fill | [advanced-styling](./epics/advanced-styling.md) | `OPEN` | 0/5 (0%) | Core manipulation patterns from earlier epics |
 
 ```mermaid
 flowchart LR
@@ -29,14 +29,15 @@ flowchart LR
 ## Beads epic references
 
 Epic issues in `bd` (see `bd list -t epic` or `bd show <id>` if this table drifts).
+Status/progress below is current as of 2026-04-15.
 
-| Slug | bd epic ID | Title |
-|------|------------|--------|
-| selection-interaction | `svg-editor-3b7` | Multi-select and keyboard shortcuts |
-| editing-history | `svg-editor-bbc` | Undo and redo |
-| shape-transforms | `svg-editor-2zo` | Shape transforms |
-| groups-layers | `svg-editor-0l4` | Groups and layer management |
-| advanced-styling | `svg-editor-v77` | Advanced stroke and fill |
+| Slug | bd epic ID | Title | Status | Progress |
+|------|------------|--------|--------|----------|
+| selection-interaction | `svg-editor-3b7` | Multi-select and keyboard shortcuts | `CLOSED` | 8/8 |
+| editing-history | `svg-editor-bbc` | Undo and redo | `OPEN` | 0/5 |
+| shape-transforms | `svg-editor-2zo` | Shape transforms | `OPEN` | 0/5 |
+| groups-layers | `svg-editor-0l4` | Groups and layer management | `OPEN` | 0/5 |
+| advanced-styling | `svg-editor-v77` | Advanced stroke and fill | `OPEN` | 0/5 |
 
 ## How to use this roadmap
 

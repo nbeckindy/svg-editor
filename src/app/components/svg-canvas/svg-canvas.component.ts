@@ -1585,7 +1585,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       } else {
         this.shapeSelection.selectShapes(expanded);
       }
-      this.svgManipulation.highlightShape(expanded[0]?.id ?? '');
     } else {
       this.shapeSelection.clearSelection();
       this.svgManipulation.clearHighlight();

@@ -979,36 +979,6 @@ describe('SvgCanvasComponent', () => {
     expect(highlightRectEl).toBeFalsy();
   });
 
-  it('should call highlightShape when a shape is clicked with selector tool', () => {
-    const highlightShapeSpy = vi.spyOn(svgManipulationService, 'highlightShape');
-    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="shape-1" x="10" y="10" width="20" height="20"/></svg>');
-    fixture.detectChanges();
-    editorToolService.setTool('selector');
-
-    const mockEvent = {
-      target: { id: 'shape-1', tagName: 'rect' },
-      clientX: 20,
-      clientY: 20,
-      shiftKey: false
-    } as unknown as MouseEvent;
-    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
-      findOne: () => ({ id: () => 'shape-1' }),
-      find: () => []
-    } as any);
-    vi.spyOn(svgManipulationService, 'getShapeProperties').mockReturnValue({
-      id: 'shape-1',
-      type: 'rect',
-      fill: '#000',
-      stroke: undefined,
-      strokeWidth: 0,
-      opacity: 1
-    });
-
-    component.onCanvasClick(mockEvent);
-
-    expect(highlightShapeSpy).toHaveBeenCalledWith('shape-1');
-  });
-
   it('should replace selection on normal click on shape', () => {
     fixture.componentRef.setInput(
       'svgContent',
