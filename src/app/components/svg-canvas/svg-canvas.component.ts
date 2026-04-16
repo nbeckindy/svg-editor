@@ -1578,7 +1578,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       clickTarget.id && (this.svgManipulation.getSVGInstance()?.findOne(`#${clickTarget.id}`) as SVGElement);
     if (svgElement) {
       const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(svgElement);
-      if (event.shiftKey) {
+      const additive = event.shiftKey || event.ctrlKey || event.metaKey;
+      if (additive) {
         this.shapeSelection.toggleShapeGroupInSelection(expanded);
       } else {
         this.shapeSelection.selectShapes(expanded);

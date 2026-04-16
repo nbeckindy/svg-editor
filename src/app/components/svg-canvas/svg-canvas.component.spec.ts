@@ -1088,6 +1088,88 @@ describe('SvgCanvasComponent', () => {
     expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
   });
 
+  it('should add to selection on ctrl-click on shape when another is selected', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/><rect id="b" x="20" y="0" width="10" height="10"/></svg>'
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    const toggleSpy = vi.spyOn(shapeSelectionService, 'toggleShapeGroupInSelection');
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: (sel: string) => (sel === '#b' ? { id: () => 'b' } : null),
+      find: () => []
+    } as any);
+    vi.spyOn(svgManipulationService, 'getShapeProperties').mockReturnValue({
+      id: 'b',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.selectShape({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+
+    component.onCanvasClick({
+      target: { id: 'b', tagName: 'rect' },
+      ctrlKey: true
+    } as unknown as MouseEvent);
+
+    expect(toggleSpy).toHaveBeenCalledWith([expect.objectContaining({ id: 'b' })]);
+    expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['a', 'b']);
+  });
+
+  it('should remove from selection on meta-click on already selected shape', () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/><rect id="b" x="20" y="0" width="10" height="10"/></svg>'
+    );
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    vi.spyOn(svgManipulationService, 'getSVGInstance').mockReturnValue({
+      findOne: (sel: string) => (sel === '#a' ? { id: () => 'a' } : null),
+      find: () => []
+    } as any);
+    vi.spyOn(svgManipulationService, 'getShapeProperties').mockReturnValue({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.selectShape({
+      id: 'a',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.toggleShapeInSelection({
+      id: 'b',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+
+    component.onCanvasClick({
+      target: { id: 'a', tagName: 'rect' },
+      metaKey: true
+    } as unknown as MouseEvent);
+
+    expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['b']);
+  });
+
   it('should select every shape under the same clip-path ancestor on click', () => {
     fixture.componentRef.setInput(
       'svgContent',
