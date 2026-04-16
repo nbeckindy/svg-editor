@@ -2079,5 +2079,97 @@ describe('SvgCanvasComponent', () => {
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       expect(shapeSelectionService.getSelectedShapes().length).toBe(0);
     });
+
+    it('Cmd/Meta+A selects all shapes when selector tool is active', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/><circle id="c1" cx="50" cy="50" r="5"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'a', metaKey: true, bubbles: true }));
+      expect(shapeSelectionService.getSelectedShapes().length).toBe(2);
+    });
+
+    it('does not select all on Ctrl/Cmd+A when selector tool is not active', async () => {
+      editorToolService.setTool('zoom');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/><circle id="c1" cx="50" cy="50" r="5"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'a', ctrlKey: true, bubbles: true }));
+      expect(shapeSelectionService.getSelectedShapes().length).toBe(0);
+    });
+
+    it('Backspace removes selected shapes like Delete', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const removeSpy = vi.spyOn(svgManipulationService, 'removeShapes');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+
+      expect(removeSpy).toHaveBeenCalledWith(['r1']);
+      expect(shapeSelectionService.getSelectedShapes().length).toBe(0);
+      removeSpy.mockRestore();
+    });
+
+    it('Delete removes every selected shape id', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="20" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      shapeSelectionService.selectShapes([
+        {
+          id: 'r1',
+          type: 'rect',
+          fill: '#000',
+          stroke: undefined,
+          strokeWidth: 0,
+          opacity: 1
+        },
+        {
+          id: 'r2',
+          type: 'rect',
+          fill: '#111',
+          stroke: undefined,
+          strokeWidth: 0,
+          opacity: 1
+        }
+      ]);
+      const removeSpy = vi.spyOn(svgManipulationService, 'removeShapes');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+
+      expect(removeSpy).toHaveBeenCalledWith(['r1', 'r2']);
+      expect(shapeSelectionService.getSelectedShapes().length).toBe(0);
+      removeSpy.mockRestore();
+    });
   });
 });
