@@ -1195,6 +1195,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     if (target.tagName === 'svg' || !target.id) return;
     if (!this.shapeSelection.isShapeSelected(target.id)) return;
+    if (event.shiftKey || event.ctrlKey || event.metaKey) return;
     const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
     if (!point) return;
     const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
