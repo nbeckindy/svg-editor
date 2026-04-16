@@ -37,14 +37,20 @@ export class LayersPanelComponent {
       }));
   });
 
-  onLayerClick(layerId: string): void {
+  onLayerClick(layerId: string, event?: MouseEvent): void {
     const svgInstance = this.svgManipulation.getSVGInstance();
     if (!svgInstance) return;
     const shape = svgInstance.findOne(`#${layerId}`) as SVGElement | null;
     if (!shape) return;
-    const shapeProps = this.svgManipulation.getShapeProperties(shape);
-    this.shapeSelection.selectShape(shapeProps);
-    this.svgManipulation.highlightShape(layerId);
+    const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(shape);
+    if (expanded.length === 0) return;
+    const additive = Boolean(event?.shiftKey || event?.ctrlKey || event?.metaKey);
+    if (additive) {
+      this.shapeSelection.toggleShapeGroupInSelection(expanded);
+    } else {
+      this.shapeSelection.selectShapes(expanded);
+    }
+    this.svgManipulation.highlightShape(expanded[0]?.id ?? layerId);
   }
 
   private createPreviewDataUrl(layer: LayerStackItem): string {

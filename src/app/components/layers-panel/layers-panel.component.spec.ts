@@ -11,18 +11,20 @@ describe('LayersPanelComponent', () => {
   let documentRevision: WritableSignal<number>;
   let selectedShapes: WritableSignal<ShapeProperties[]>;
   let getLayerStackItems: ReturnType<typeof vi.fn>;
-  let selectShape: ReturnType<typeof vi.fn>;
+  let selectShapes: ReturnType<typeof vi.fn>;
+  let toggleShapeGroupInSelection: ReturnType<typeof vi.fn>;
   let highlightShape: ReturnType<typeof vi.fn>;
   let getSVGInstance: ReturnType<typeof vi.fn>;
-  let getShapeProperties: ReturnType<typeof vi.fn>;
+  let getShapePropertiesInSameClipGroup: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     documentRevision = signal(0);
     selectedShapes = signal<ShapeProperties[]>([]);
     getLayerStackItems = vi.fn<() => LayerStackItem[]>(() => []);
-    selectShape = vi.fn();
+    selectShapes = vi.fn();
+    toggleShapeGroupInSelection = vi.fn();
     highlightShape = vi.fn();
-    getShapeProperties = vi.fn();
+    getShapePropertiesInSameClipGroup = vi.fn();
     getSVGInstance = vi.fn(() => ({ findOne: vi.fn() }));
 
     await TestBed.configureTestingModule({
@@ -30,9 +32,15 @@ describe('LayersPanelComponent', () => {
       providers: [
         {
           provide: SvgManipulationService,
-          useValue: { documentRevision, getLayerStackItems, getSVGInstance, getShapeProperties, highlightShape }
+          useValue: {
+            documentRevision,
+            getLayerStackItems,
+            getSVGInstance,
+            getShapePropertiesInSameClipGroup,
+            highlightShape
+          }
         },
-        { provide: ShapeSelectionService, useValue: { selectedShapes, selectShape } }
+        { provide: ShapeSelectionService, useValue: { selectedShapes, selectShapes, toggleShapeGroupInSelection } }
       ]
     }).compileComponents();
 
@@ -76,20 +84,24 @@ describe('LayersPanelComponent', () => {
 
   it('marks selected layer rows', () => {
     getLayerStackItems.mockReturnValue([
-      { id: 'shape-a', type: 'path', elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' }
+      { id: 'shape-a', type: 'path', elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' },
+      { id: 'shape-b', type: 'rect', elementMarkup: '<rect id="shape-b" x="0" y="0" width="5" height="5" />' }
     ]);
-    selectedShapes.set([{ id: 'shape-a', type: 'path' }]);
+    selectedShapes.set([{ id: 'shape-a', type: 'path' }, { id: 'shape-b', type: 'rect' }]);
     documentRevision.set(1);
     fixture.detectChanges();
 
-    const selectedRow = (fixture.nativeElement as HTMLElement).querySelector('.layer-row.selected');
-    expect(selectedRow).toBeTruthy();
+    const selectedRows = (fixture.nativeElement as HTMLElement).querySelectorAll('.layer-row.selected');
+    expect(selectedRows.length).toBe(2);
   });
 
-  it('selects shape when layer row is clicked', () => {
+  it('replaces selection with clip-group members when layer row is clicked', () => {
     const findOne = vi.fn(() => ({ id: () => 'shape-a', type: 'path', attr: vi.fn(() => null) }));
     getSVGInstance.mockReturnValue({ findOne });
-    getShapeProperties.mockReturnValue({ id: 'shape-a', type: 'path' });
+    getShapePropertiesInSameClipGroup.mockReturnValue([
+      { id: 'shape-a', type: 'path' },
+      { id: 'shape-b', type: 'rect' }
+    ]);
     getLayerStackItems.mockReturnValue([
       { id: 'shape-a', type: 'path', elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' }
     ]);
@@ -100,7 +112,27 @@ describe('LayersPanelComponent', () => {
     row.click();
 
     expect(findOne).toHaveBeenCalledWith('#shape-a');
-    expect(selectShape).toHaveBeenCalledWith({ id: 'shape-a', type: 'path' });
+    expect(selectShapes).toHaveBeenCalledWith([
+      { id: 'shape-a', type: 'path' },
+      { id: 'shape-b', type: 'rect' }
+    ]);
     expect(highlightShape).toHaveBeenCalledWith('shape-a');
+  });
+
+  it('toggle-merges selection when modifier click is used on a layer row', () => {
+    const findOne = vi.fn(() => ({ id: () => 'shape-a', type: 'path', attr: vi.fn(() => null) }));
+    getSVGInstance.mockReturnValue({ findOne });
+    getShapePropertiesInSameClipGroup.mockReturnValue([{ id: 'shape-a', type: 'path' }]);
+    getLayerStackItems.mockReturnValue([
+      { id: 'shape-a', type: 'path', elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const row = (fixture.nativeElement as HTMLElement).querySelector('.layer-row') as HTMLButtonElement;
+    row.dispatchEvent(new MouseEvent('click', { bubbles: true, ctrlKey: true }));
+
+    expect(toggleShapeGroupInSelection).toHaveBeenCalledWith([{ id: 'shape-a', type: 'path' }]);
+    expect(selectShapes).not.toHaveBeenCalled();
   });
 });

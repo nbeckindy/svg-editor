@@ -11,7 +11,7 @@
           class="layer-row"
           [class.selected]="layer.selected"
           [title]="layer.id"
-          (click)="onLayerClick(layer.id)">
+          (click)="onLayerClick(layer.id, $event)">
           <img class="layer-preview" [src]="layer.previewUrl" [alt]="layer.type + ' preview'" />
           <div class="layer-meta">
             <div class="layer-id">{{ layer.id }}</div>
