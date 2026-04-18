@@ -1,0 +1,42 @@
+---
+description: Avoid SVG APIs that crash in jsdom during unit tests
+globs: "src/**/*.ts"
+alwaysApply: false
+---
+
+# jsdom SVG compatibility
+
+Unit tests run in **jsdom** (via vitest). jsdom's SVG support is incomplete, so avoid certain patterns in service/component code that needs to be testable.
+
+## Use `el.attr()` instead of `el.css()` for SVG presentation properties
+
+SVG elements in jsdom often lack a `.style` object, so `el.css('display', 'none')` throws. Use SVG presentation attributes instead:
+
+```typescript
+// ❌ Crashes in jsdom
+el.css('display', 'none');
+
+// ✅ Works everywhere — uses SVG presentation attribute
+el.attr('display', 'none');
+el.attr('display', null); // remove to restore
+```
+
+## Reading visibility/display state
+
+When checking whether an element is hidden, check **both** the attribute and the style (with optional chaining):
+
+```typescript
+private isNodeHidden(node: Element): boolean {
+  if (node.getAttribute('display') === 'none') return true;
+  const display = (node as HTMLElement | SVGElement).style?.getPropertyValue('display')?.trim();
+  if (display === 'none') return true;
+  // ... similar for visibility
+  return false;
+}
+```
+
+## Other jsdom SVG gaps
+
+- `getBBox()`, `getCTM()`, `getScreenCTM()` return zeros or throw — mock them in tests if needed.
+- `SVGElement.style` may be `undefined` — always use optional chaining (`?.`).
+- `createElementNS` works but the resulting elements have limited API surface.

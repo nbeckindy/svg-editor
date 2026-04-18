@@ -16,11 +16,12 @@ Example `@Component`:
 ```typescript
 @Component({
   selector: 'app-my-feature',
-  standalone: true,
   imports: [/* ... */],
   templateUrl: './my-feature.component.html',
   styleUrl: './my-feature.component.css'
 })
 ```
+
+Do **not** include `standalone: true` — it is the default in Angular 21+ and the compiler warns about it.
 
 Do **not** use inline `template: \`...\`` or `styles: [\`...\`]` for new or refactored components. This keeps markup and styles easier to edit, lint, and format in separate files.

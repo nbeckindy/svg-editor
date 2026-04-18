@@ -1,0 +1,34 @@
+---
+description: Distinguish user groups from clip-path/mask carrier groups in SVG
+globs: "src/**/*.ts"
+alwaysApply: false
+---
+
+# SVG group types: user groups vs clip/mask carriers
+
+Not all `<g>` elements are user-created groups. The editor must distinguish between them.
+
+## Clip/mask carrier groups
+
+A `<g>` is a **clip/mask carrier** if it has a `clip-path` or `mask` attribute (e.g. `<g clip-path="url(#...)">`). These are structural — the user didn't create them and shouldn't select or ungroup them as a unit.
+
+```typescript
+private isGroupAClipMaskCarrier(groupId: string): boolean {
+  const el = svg.findOne(`#${groupId}`)?.node as Element | null;
+  if (!el) return false;
+  return el.hasAttribute('clip-path') || el.hasAttribute('mask');
+}
+```
+
+## Selection behavior
+
+- **Click on a shape inside a user group** → select the **group** (not the leaf shape).
+- **Click on a shape inside a clip/mask carrier** → select the **leaf shape** directly (treat the carrier as transparent).
+- **Double-click on a selected group** → drill into the group so subsequent clicks select individual children.
+- Track drill-in state (e.g. `drilledIntoGroupId`) and reset it on: selection clear, undo/redo, group/ungroup.
+
+## Layer tree
+
+- Include `<g>` elements in the layer tree as collapsible nodes with `children`.
+- Skip `<defs>`, `<clipPath>`, `<mask>`, `<title>`, `<desc>`, `<metadata>`, and `<style>` when building the layer tree.
+- Use `data-name` attributes for human-readable layer names; fall back to `id` then tag name.

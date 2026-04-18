@@ -1,0 +1,36 @@
+---
+description: Follow the EditorCommand pattern for undo/redo when adding new editing operations
+globs: src/app/models/editor-commands.ts
+alwaysApply: false
+---
+
+# EditorCommand pattern (undo/redo)
+
+Every user-visible mutation to the SVG must be wrapped in an `EditorCommand` and dispatched through `EditorHistoryService.pushAndExecute(cmd)` so undo/redo works.
+
+## Structure
+
+```typescript
+export class MyCommand implements EditorCommand {
+  readonly description = 'What the user did';
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    // capture old state in constructor so undo can restore it
+    private readonly oldValue: T,
+    private readonly newValue: T
+  ) {}
+
+  execute(): void { /* apply newValue via svc */ }
+  undo(): void    { /* restore oldValue via svc */ }
+}
+```
+
+## Rules
+
+- **Capture old state in the constructor**, not in `execute()`. The command is created *before* execution.
+- **Keep commands stateless after construction** — `execute()` and `undo()` should be idempotent and reentrant (redo calls `execute()` again).
+- **Delegate to `SvgManipulationService`** — commands should not manipulate the DOM directly; call service methods that use SVG.js.
+- **Use `CompositeCommand`** to batch related commands (e.g. multi-shape property change) into a single undo step.
+- **Toggle commands** (like visibility) can call the same service method in both `execute()` and `undo()` only when the operation is self-inverse.
+- When undo requires restoring exact DOM positions (reorder, delete), store insertion indices or serialized markup in the constructor.

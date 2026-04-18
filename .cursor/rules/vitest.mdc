@@ -1,0 +1,31 @@
+---
+description: Vitest testing conventions for this Angular project
+globs: "src/**/*.spec.ts"
+alwaysApply: false
+---
+
+# Vitest testing conventions
+
+Tests use **vitest** with `@analogjs/vite-plugin-angular` and a jsdom environment.
+
+## Running tests
+
+```bash
+npx vitest run                    # all tests, single run
+npx vitest run --reporter=dot     # compact output
+npx vitest run -- path/to/file    # single file
+```
+
+## Setup
+
+- Config: `vitest.config.ts` (uses `@analogjs/vite-plugin-angular`)
+- Setup file: `src/test-setup.js` (calls `setupTestBed({ zoneless: true })`)
+- Environment: `jsdom` — see `jsdom-svg-compat` rule for SVG limitations
+
+## Conventions
+
+- **Mocking:** Use `vi.fn()` for spy/mock functions. Provide service mocks via `TestBed.overrideProvider` or `{ provide: Svc, useValue: mockSvc }`.
+- **Signal mocks:** When mocking a service that exposes signals, use real `signal()` / `computed()` values in the mock so template bindings resolve.
+- **DOM assertions:** Use `fixture.nativeElement.querySelector('[data-testid="..."]')` for stable queries; prefer `data-testid` over class/tag selectors.
+- **Fixture lifecycle:** Call `fixture.detectChanges()` after setup and after programmatic signal/input changes to trigger Angular's change detection.
+- **TypeScript compilation check:** Run `npx tsc --noEmit` before or after test runs to catch type errors that vitest may not surface.
