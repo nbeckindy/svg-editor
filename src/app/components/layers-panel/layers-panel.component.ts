@@ -1,14 +1,34 @@
 import { CommonModule } from '@angular/common';
-import { Component, computed, inject } from '@angular/core';
-import { Element as SVGElement } from '@svgdotjs/svg.js';
+import { Component, computed, inject, signal } from '@angular/core';
+import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
-import { LayerStackItem, SvgManipulationService } from '../../services/svg-manipulation.service';
+import { LayerTreeNode, SvgManipulationService } from '../../services/svg-manipulation.service';
+import { EditorHistoryService } from '../../services/editor-history.service';
+import {
+  ReorderCommand,
+  ToggleVisibilityCommand,
+  GroupCommand,
+  UngroupCommand
+} from '../../models/editor-commands';
 
-interface LayerRowViewModel {
+interface LayerTreeViewModel {
   id: string;
   type: string;
-  previewUrl: string;
+  name: string;
+  depth: number;
+  isGroup: boolean;
+  isExpanded: boolean;
+  visible: boolean;
   selected: boolean;
+  previewUrl: string;
+}
+
+interface PreviewPaintData {
+  elementMarkup: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
 }
 
 @Component({
@@ -21,45 +41,176 @@ interface LayerRowViewModel {
 export class LayersPanelComponent {
   private readonly svgManipulation = inject(SvgManipulationService);
   private readonly shapeSelection = inject(ShapeSelectionService);
+  private readonly editorHistory = inject(EditorHistoryService);
 
-  readonly layers = computed<LayerRowViewModel[]>(() => {
-    this.svgManipulation.documentRevision();
-    const selectedIds = new Set(this.shapeSelection.selectedShapes().map((shape) => shape.id));
-    return this.svgManipulation
-      .getLayerStackItems()
-      .slice()
-      .reverse()
-      .map((layer) => ({
-        id: layer.id,
-        type: layer.type,
-        previewUrl: this.createPreviewDataUrl(layer),
-        selected: selectedIds.has(layer.id)
-      }));
+  readonly collapsedGroups = signal(new Set<string>());
+
+  readonly selectionCount = computed(() => this.shapeSelection.selectedShapes().length);
+
+  readonly canUngroup = computed(() => {
+    const shapes = this.shapeSelection.selectedShapes();
+    return shapes.length === 1 && shapes[0].type === 'g';
   });
+
+  readonly flattenedLayers = computed<LayerTreeViewModel[]>(() => {
+    this.svgManipulation.documentRevision();
+    const tree = this.svgManipulation.getLayerTree();
+    const selectedIds = new Set(this.shapeSelection.selectedShapes().map((s) => s.id));
+    const collapsed = this.collapsedGroups();
+    return this.flattenTree(tree, 0, collapsed, selectedIds, false);
+  });
+
+  toggleGroupExpanded(groupId: string): void {
+    this.collapsedGroups.update((prev) => {
+      const next = new Set(prev);
+      if (next.has(groupId)) {
+        next.delete(groupId);
+      } else {
+        next.add(groupId);
+      }
+      return next;
+    });
+  }
+
+  onVisibilityToggle(layerId: string): void {
+    this.editorHistory.pushAndExecute(
+      new ToggleVisibilityCommand(this.svgManipulation, layerId)
+    );
+  }
+
+  onMoveForward(layerId: string): void {
+    this.editorHistory.pushAndExecute(
+      new ReorderCommand(this.svgManipulation, layerId, 'forward')
+    );
+  }
+
+  onMoveBackward(layerId: string): void {
+    this.editorHistory.pushAndExecute(
+      new ReorderCommand(this.svgManipulation, layerId, 'backward')
+    );
+  }
+
+  onGroupSelected(): void {
+    const selected = this.shapeSelection.selectedShapes();
+    if (selected.length < 2) return;
+    const ids = selected.map((s) => s.id);
+    this.editorHistory.pushAndExecute(
+      new GroupCommand(this.svgManipulation, ids)
+    );
+  }
+
+  onUngroupSelected(): void {
+    const selected = this.shapeSelection.selectedShapes();
+    if (selected.length !== 1 || selected[0].type !== 'g') return;
+    this.editorHistory.pushAndExecute(
+      new UngroupCommand(this.svgManipulation, selected[0].id)
+    );
+    this.shapeSelection.clearSelection();
+  }
 
   onLayerClick(layerId: string, event?: MouseEvent): void {
     const svgInstance = this.svgManipulation.getSVGInstance();
     if (!svgInstance) return;
-    const shape = svgInstance.findOne(`#${layerId}`) as SVGElement | null;
+    const shape = svgInstance.findOne(`#${layerId}`) as SvgJsElement | null;
     if (!shape) return;
-    const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(shape);
-    if (expanded.length === 0) return;
+
     const additive = Boolean(event?.shiftKey || event?.ctrlKey || event?.metaKey);
-    if (additive) {
-      this.shapeSelection.toggleShapeGroupInSelection(expanded);
+    const tree = this.svgManipulation.getLayerTree();
+    const node = this.findNodeInTree(tree, layerId);
+    const isGroup = node?.type === 'g' && Array.isArray(node.children);
+
+    if (isGroup) {
+      const leafIds = this.collectLeafIds(node!.children!);
+      const leafShapes = leafIds
+        .map((id) => svgInstance.findOne(`#${id}`) as SvgJsElement | null)
+        .filter((el): el is SvgJsElement => el != null)
+        .map((el) => this.svgManipulation.getShapeProperties(el));
+
+      if (additive) {
+        this.shapeSelection.toggleShapeGroupInSelection(leafShapes);
+      } else {
+        this.shapeSelection.selectShapes(leafShapes);
+      }
     } else {
-      this.shapeSelection.selectShapes(expanded);
+      const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(shape);
+      if (expanded.length === 0) return;
+      if (additive) {
+        this.shapeSelection.toggleShapeGroupInSelection(expanded);
+      } else {
+        this.shapeSelection.selectShapes(expanded);
+      }
     }
   }
 
-  private createPreviewDataUrl(layer: LayerStackItem): string {
+  private flattenTree(
+    nodes: LayerTreeNode[],
+    depth: number,
+    collapsed: Set<string>,
+    selectedIds: Set<string>,
+    ancestorSelected: boolean
+  ): LayerTreeViewModel[] {
+    const result: LayerTreeViewModel[] = [];
+    const reversed = [...nodes].reverse();
+
+    for (const node of reversed) {
+      const isGroup = node.type === 'g' && Array.isArray(node.children);
+      const isExpanded = isGroup && !collapsed.has(node.id);
+      const directlySelected = selectedIds.has(node.id);
+      const selected = directlySelected || ancestorSelected;
+
+      result.push({
+        id: node.id,
+        type: node.type,
+        name: node.name,
+        depth,
+        isGroup,
+        isExpanded,
+        visible: node.visible,
+        selected,
+        previewUrl: this.createPreviewDataUrl(node)
+      });
+
+      if (isGroup && isExpanded && node.children) {
+        result.push(
+          ...this.flattenTree(node.children, depth + 1, collapsed, selectedIds, selected)
+        );
+      }
+    }
+
+    return result;
+  }
+
+  private findNodeInTree(nodes: LayerTreeNode[], id: string): LayerTreeNode | null {
+    for (const node of nodes) {
+      if (node.id === id) return node;
+      if (node.children) {
+        const found = this.findNodeInTree(node.children, id);
+        if (found) return found;
+      }
+    }
+    return null;
+  }
+
+  private collectLeafIds(nodes: LayerTreeNode[]): string[] {
+    const ids: string[] = [];
+    for (const node of nodes) {
+      if (node.type === 'g' && node.children) {
+        ids.push(...this.collectLeafIds(node.children));
+      } else {
+        ids.push(node.id);
+      }
+    }
+    return ids;
+  }
+
+  private createPreviewDataUrl(layer: PreviewPaintData): string {
     const normalizedMarkup = this.applyPreviewStyleOverrides(layer);
     const viewBox = this.computePreviewViewBox(normalizedMarkup);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="32" height="24" preserveAspectRatio="xMidYMid meet">${normalizedMarkup}</svg>`;
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
   }
 
-  private applyPreviewStyleOverrides(layer: LayerStackItem): string {
+  private applyPreviewStyleOverrides(layer: PreviewPaintData): string {
     if (typeof DOMParser === 'undefined' || typeof XMLSerializer === 'undefined') {
       return layer.elementMarkup;
     }
@@ -68,7 +219,6 @@ export class LayersPanelComponent {
       const doc = parser.parseFromString(layer.elementMarkup, 'image/svg+xml');
       const el = doc.documentElement;
       if (!el || el.tagName.toLowerCase() === 'parsererror') return layer.elementMarkup;
-      // Force explicit paint attrs so thumbnail keeps visible fill/stroke exactly like canvas.
       if (layer.fill) el.setAttribute('fill', layer.fill);
       if (layer.stroke) el.setAttribute('stroke', layer.stroke);
       if (typeof layer.strokeWidth === 'number') el.setAttribute('stroke-width', String(layer.strokeWidth));

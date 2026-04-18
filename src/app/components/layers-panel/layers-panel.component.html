@@ -1,21 +1,70 @@
 <div class="layers-panel">
   <div class="panel-header">
     <h3>Layers</h3>
+    <div class="panel-actions">
+      <button type="button" class="panel-action-btn" title="Group selected"
+              data-testid="layers-group-btn"
+              aria-label="Group selected layers"
+              [disabled]="selectionCount() < 2"
+              (click)="onGroupSelected()">
+        <span aria-hidden="true">⊞</span>
+      </button>
+      <button type="button" class="panel-action-btn" title="Ungroup"
+              data-testid="layers-ungroup-btn"
+              aria-label="Ungroup selected group"
+              [disabled]="!canUngroup()"
+              (click)="onUngroupSelected()">
+        <span aria-hidden="true">⊟</span>
+      </button>
+    </div>
   </div>
 
-  @if (layers().length > 0) {
-    <div class="layers-list">
-      @for (layer of layers(); track layer.id) {
+  @if (flattenedLayers().length > 0) {
+    <div class="layers-list" data-testid="layers-list">
+      @for (layer of flattenedLayers(); track layer.id) {
         <button
           type="button"
           class="layer-row"
           [class.selected]="layer.selected"
-          [title]="layer.id"
+          [class.group-row]="layer.isGroup"
+          [class.hidden-layer]="!layer.visible"
+          [style.padding-left.px]="12 + layer.depth * 16"
+          [title]="layer.name"
+          [attr.data-testid]="'layer-row-' + layer.id"
+          [attr.aria-label]="layer.name + ' (' + layer.type + ')'"
           (click)="onLayerClick(layer.id, $event)">
+
+          @if (layer.isGroup) {
+            <span class="group-chevron"
+                  [class.expanded]="layer.isExpanded"
+                  (click)="toggleGroupExpanded(layer.id); $event.stopPropagation()"
+                  data-testid="layer-group-toggle"
+                  aria-hidden="true">▶</span>
+          }
+
+          <button type="button" class="visibility-toggle"
+                  [attr.aria-label]="layer.visible ? 'Hide ' + layer.name : 'Show ' + layer.name"
+                  [attr.data-testid]="'layer-visibility-' + layer.id"
+                  (click)="onVisibilityToggle(layer.id); $event.stopPropagation()">
+            <span aria-hidden="true">{{ layer.visible ? '●' : '○' }}</span>
+          </button>
+
           <img class="layer-preview" [src]="layer.previewUrl" [alt]="layer.type + ' preview'" />
+
           <div class="layer-meta">
-            <div class="layer-id">{{ layer.id }}</div>
+            <div class="layer-name">{{ layer.name }}</div>
             <div class="layer-type">{{ layer.type }}</div>
+          </div>
+
+          <div class="reorder-controls" (click)="$event.stopPropagation()">
+            <button type="button" class="reorder-btn" title="Move forward"
+                    [attr.data-testid]="'layer-forward-' + layer.id"
+                    aria-label="Move layer forward"
+                    (click)="onMoveForward(layer.id)">↑</button>
+            <button type="button" class="reorder-btn" title="Move backward"
+                    [attr.data-testid]="'layer-backward-' + layer.id"
+                    aria-label="Move layer backward"
+                    (click)="onMoveBackward(layer.id)">↓</button>
           </div>
         </button>
       }
