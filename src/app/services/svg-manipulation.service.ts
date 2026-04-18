@@ -13,7 +13,7 @@ import { localBBoxToRootUserAabb, screenRectToRootSvgUserRect } from '../utils/s
 
 /** Class name for the editor content group (shapes live here). */
 const EDITOR_CONTENT_GROUP_ID = 'data-editor-content-group';
-const CONTENT_SHAPE_SELECTOR = 'circle, rect, path, polygon, ellipse, line, polyline';
+const CONTENT_SHAPE_SELECTOR = 'circle, rect, path, polygon, ellipse, line, polyline, text, image, use';
 /** Attribute to mark the viewBox rect (white fill, thin black stroke). */
 const EDITOR_VIEWBOX_RECT_ATTR = 'data-editor-viewbox-rect';
 /** Attribute to mark the light grey "outside" viewBox rect. */
@@ -30,6 +30,22 @@ export interface LayerStackItem {
   strokeWidth?: number;
   opacity?: number;
 }
+
+export interface LayerTreeNode {
+  id: string;
+  type: string;
+  name: string;
+  children?: LayerTreeNode[];
+  visible: boolean;
+  elementMarkup: string;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+  opacity?: number;
+}
+
+/** Tags skipped when building the layer tree (non-content structural elements). */
+const LAYER_TREE_SKIP_TAGS = new Set(['defs', 'clippath', 'mask', 'style', 'title', 'desc']);
 
 interface RenderedPaint {
   fill?: string;
@@ -389,7 +405,7 @@ export class SvgManipulationService {
    * Compute union bbox of all shape elements in the given SVG element (document coordinates).
    */
   private computeContentBbox(svgElement: Element): { x: number; y: number; width: number; height: number } {
-    const shapeSelectors = 'circle, rect, path, polygon, ellipse, line, polyline';
+    const shapeSelectors = CONTENT_SHAPE_SELECTOR;
     const computeFromRoot = (root: Element): { x: number; y: number; width: number; height: number } | null => {
       const nodes = root.querySelectorAll(shapeSelectors);
       if (nodes.length === 0) return null;
@@ -456,6 +472,13 @@ export class SvgManipulationService {
     const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
     const scope = contentGroup ?? this.svgInstance;
     const shapes = scope.find(CONTENT_SHAPE_SELECTOR);
+
+    const usedIds = new Set<string>();
+    scope.find('*').forEach((el: SvgJsElement) => {
+      const id = el.id();
+      if (id) usedIds.add(id);
+    });
+
     shapes.forEach((shape: SvgJsElement) => {
       try {
         shape.css({ cursor: 'pointer' });
@@ -463,7 +486,12 @@ export class SvgManipulationService {
         // jsdom or detached nodes may not support style.setProperty
       }
       if (!shape.id()) {
-        shape.id(`shape-${Math.random().toString(36).substr(2, 9)}`);
+        let newId: string;
+        do {
+          newId = `shape-${Math.random().toString(36).substr(2, 9)}`;
+        } while (usedIds.has(newId));
+        usedIds.add(newId);
+        shape.id(newId);
       }
     });
   }
@@ -1035,50 +1063,58 @@ export class SvgManipulationService {
     if (!this.svgInstance) return [];
     const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
     if (!contentGroup?.node) return [];
-    const children = Array.from((contentGroup.node as Element).children);
     const out: LayerStackItem[] = [];
-    for (const child of children) {
-      const tagName = child.tagName?.toLowerCase?.() || '';
-      if (!tagName || !CONTENT_SHAPE_SELECTOR.split(', ').includes(tagName)) continue;
-      const id = (child as Element).id;
-      if (!id) continue;
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | null;
-      const renderedPaint = this.getRenderedPaint(child as Element);
-      const rawFill = shape ? (shape.attr('fill') as string | null) : null;
-      const rawStroke = shape ? (shape.attr('stroke') as string | null) : null;
-      const rawStrokeWidth = shape ? Number.parseFloat(String(shape.attr('stroke-width') ?? '')) : Number.NaN;
-      const rawOpacity = shape ? Number.parseFloat(String(shape.attr('opacity') ?? '')) : Number.NaN;
-      const fill = renderedPaint.fill ?? (rawFill || undefined);
-      const strokeVisible = this.isStrokeVisiblyPainted(child as Element);
-      let stroke: string | undefined;
-      let strokeWidth: number | undefined;
-      if (strokeVisible) {
-        stroke =
-          renderedPaint.stroke && renderedPaint.stroke !== 'none'
-            ? renderedPaint.stroke
-            : rawStroke && rawStroke !== 'none'
-              ? rawStroke
-              : undefined;
-        const w = Number.isFinite(renderedPaint.strokeWidth ?? Number.NaN)
-          ? (renderedPaint.strokeWidth as number)
-          : Number.isFinite(rawStrokeWidth)
-            ? rawStrokeWidth
-            : 0;
-        strokeWidth = Number.isFinite(w) ? w : 0;
+    const contentShapeTags = new Set(CONTENT_SHAPE_SELECTOR.split(', '));
+
+    const walk = (parent: Element): void => {
+      for (const child of Array.from(parent.children)) {
+        const tagName = child.tagName?.toLowerCase?.() || '';
+        if (tagName === 'g') {
+          walk(child);
+          continue;
+        }
+        if (!contentShapeTags.has(tagName)) continue;
+        const id = (child as Element).id;
+        if (!id) continue;
+        const shape = this.svgInstance!.findOne(`#${id}`) as SvgJsElement | null;
+        const renderedPaint = this.getRenderedPaint(child as Element);
+        const rawFill = shape ? (shape.attr('fill') as string | null) : null;
+        const rawStroke = shape ? (shape.attr('stroke') as string | null) : null;
+        const rawStrokeWidth = shape ? Number.parseFloat(String(shape.attr('stroke-width') ?? '')) : Number.NaN;
+        const rawOpacity = shape ? Number.parseFloat(String(shape.attr('opacity') ?? '')) : Number.NaN;
+        const fill = renderedPaint.fill ?? (rawFill || undefined);
+        const strokeVisible = this.isStrokeVisiblyPainted(child as Element);
+        let stroke: string | undefined;
+        let strokeWidth: number | undefined;
+        if (strokeVisible) {
+          stroke =
+            renderedPaint.stroke && renderedPaint.stroke !== 'none'
+              ? renderedPaint.stroke
+              : rawStroke && rawStroke !== 'none'
+                ? rawStroke
+                : undefined;
+          const w = Number.isFinite(renderedPaint.strokeWidth ?? Number.NaN)
+            ? (renderedPaint.strokeWidth as number)
+            : Number.isFinite(rawStrokeWidth)
+              ? rawStrokeWidth
+              : 0;
+          strokeWidth = Number.isFinite(w) ? w : 0;
+        }
+        const opacity = Number.isFinite(renderedPaint.opacity ?? Number.NaN)
+          ? renderedPaint.opacity
+          : (Number.isFinite(rawOpacity) ? rawOpacity : undefined);
+        out.push({
+          id,
+          type: tagName,
+          elementMarkup: (child as Element).outerHTML,
+          fill,
+          stroke,
+          strokeWidth,
+          opacity
+        });
       }
-      const opacity = Number.isFinite(renderedPaint.opacity ?? Number.NaN)
-        ? renderedPaint.opacity
-        : (Number.isFinite(rawOpacity) ? rawOpacity : undefined);
-      out.push({
-        id,
-        type: tagName,
-        elementMarkup: (child as Element).outerHTML,
-        fill,
-        stroke,
-        strokeWidth,
-        opacity
-      });
-    }
+    };
+    walk(contentGroup.node as Element);
     return out;
   }
 
@@ -1092,11 +1128,19 @@ export class SvgManipulationService {
     if (!contentGroup?.node) return [...shapeIds];
     const idSet = new Set(shapeIds);
     const ordered: string[] = [];
-    const children = Array.from((contentGroup.node as Element).children);
-    for (const child of children) {
-      const id = (child as Element).id;
-      if (id && idSet.has(id)) ordered.push(id);
-    }
+
+    const walk = (parent: Element): void => {
+      for (const child of Array.from(parent.children)) {
+        const tagName = child.tagName?.toLowerCase?.() || '';
+        if (tagName === 'g') {
+          walk(child);
+          continue;
+        }
+        const id = (child as Element).id;
+        if (id && idSet.has(id)) ordered.push(id);
+      }
+    };
+    walk(contentGroup.node as Element);
     return ordered.length > 0 ? ordered : [...shapeIds];
   }
 
@@ -1199,5 +1243,265 @@ export class SvgManipulationService {
       shape.matrix(T.multiply(prev));
     }
     this.bumpDocumentRevision();
+  }
+
+  /**
+   * Build a hierarchical tree of the content group. Groups appear as branch nodes with `children`;
+   * leaves are shapes. DOM order (first child = back-most in paint order).
+   */
+  getLayerTree(): LayerTreeNode[] {
+    if (!this.svgInstance) return [];
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    if (!contentGroup?.node) return [];
+    const contentShapeTags = new Set(CONTENT_SHAPE_SELECTOR.split(', '));
+
+    const buildNode = (child: Element): LayerTreeNode | null => {
+      const tagName = child.tagName?.toLowerCase?.() || '';
+      if (LAYER_TREE_SKIP_TAGS.has(tagName)) return null;
+
+      const id = child.id || '';
+      const name = child.getAttribute('data-name') || id || tagName;
+      const visible = !this.isNodeHidden(child);
+      const elementMarkup = child.outerHTML;
+
+      if (tagName === 'g') {
+        const children: LayerTreeNode[] = [];
+        for (const grandchild of Array.from(child.children)) {
+          const node = buildNode(grandchild);
+          if (node) children.push(node);
+        }
+        const paint = this.getRenderedPaint(child);
+        return { id, type: 'g', name, children, visible, elementMarkup, ...paint };
+      }
+
+      if (!contentShapeTags.has(tagName)) return null;
+      if (!id) return null;
+
+      const shape = this.svgInstance!.findOne(`#${id}`) as SvgJsElement | null;
+      const renderedPaint = this.getRenderedPaint(child);
+      const rawFill = shape ? (shape.attr('fill') as string | null) : null;
+      const rawStroke = shape ? (shape.attr('stroke') as string | null) : null;
+      const rawStrokeWidth = shape ? Number.parseFloat(String(shape.attr('stroke-width') ?? '')) : Number.NaN;
+      const rawOpacity = shape ? Number.parseFloat(String(shape.attr('opacity') ?? '')) : Number.NaN;
+      const fill = renderedPaint.fill ?? (rawFill || undefined);
+      const strokePainted = this.isStrokeVisiblyPainted(child);
+      let stroke: string | undefined;
+      let strokeWidth: number | undefined;
+      if (strokePainted) {
+        stroke =
+          renderedPaint.stroke && renderedPaint.stroke !== 'none'
+            ? renderedPaint.stroke
+            : rawStroke && rawStroke !== 'none'
+              ? rawStroke
+              : undefined;
+        const w = Number.isFinite(renderedPaint.strokeWidth ?? Number.NaN)
+          ? (renderedPaint.strokeWidth as number)
+          : Number.isFinite(rawStrokeWidth)
+            ? rawStrokeWidth
+            : 0;
+        strokeWidth = Number.isFinite(w) ? w : 0;
+      }
+      const opacity = Number.isFinite(renderedPaint.opacity ?? Number.NaN)
+        ? renderedPaint.opacity
+        : (Number.isFinite(rawOpacity) ? rawOpacity : undefined);
+
+      return { id, type: tagName, name, visible, elementMarkup, fill, stroke, strokeWidth, opacity };
+    };
+
+    const root = contentGroup.node as Element;
+    const result: LayerTreeNode[] = [];
+    for (const child of Array.from(root.children)) {
+      const node = buildNode(child);
+      if (node) result.push(node);
+    }
+    return result;
+  }
+
+  /** Whether a DOM node is hidden via `display:none` or `visibility:hidden`. */
+  private isNodeHidden(node: Element): boolean {
+    const displayAttr = node.getAttribute('display');
+    if (displayAttr === 'none') return true;
+    const display = (node as HTMLElement | SVGElement).style?.getPropertyValue('display')?.trim();
+    if (display === 'none') return true;
+    const visibility = node.getAttribute('visibility');
+    if (visibility === 'hidden') return true;
+    const visStyle = (node as HTMLElement | SVGElement).style?.getPropertyValue('visibility')?.trim();
+    if (visStyle === 'hidden') return true;
+    return false;
+  }
+
+  /**
+   * Move the element one position forward in its parent's children (swap with next sibling).
+   * Returns true if moved.
+   */
+  moveElementForward(elementId: string): boolean {
+    if (!this.svgInstance) return false;
+    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return false;
+    const node = el.node as Element;
+    const next = node.nextElementSibling;
+    if (!next || !node.parentNode) return false;
+    node.parentNode.insertBefore(next, node);
+    this.bumpDocumentRevision();
+    return true;
+  }
+
+  /**
+   * Move the element one position backward in its parent's children (swap with previous sibling).
+   * Returns true if moved.
+   */
+  moveElementBackward(elementId: string): boolean {
+    if (!this.svgInstance) return false;
+    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return false;
+    const node = el.node as Element;
+    const prev = node.previousElementSibling;
+    if (!prev || !node.parentNode) return false;
+    node.parentNode.insertBefore(node, prev);
+    this.bumpDocumentRevision();
+    return true;
+  }
+
+  /** Move element to last child of its parent (front-most in paint order). */
+  moveElementToFront(elementId: string): boolean {
+    if (!this.svgInstance) return false;
+    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return false;
+    const node = el.node as Element;
+    const parent = node.parentNode;
+    if (!parent) return false;
+    if (node === parent.lastElementChild) return false;
+    parent.appendChild(node);
+    this.bumpDocumentRevision();
+    return true;
+  }
+
+  /** Move element to first child of its parent (back-most in paint order). */
+  moveElementToBack(elementId: string): boolean {
+    if (!this.svgInstance) return false;
+    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return false;
+    const node = el.node as Element;
+    const parent = node.parentNode;
+    if (!parent) return false;
+    if (node === parent.firstElementChild) return false;
+    parent.insertBefore(node, parent.firstElementChild);
+    this.bumpDocumentRevision();
+    return true;
+  }
+
+  /**
+   * Toggle visibility of an element (shape or group).
+   * If currently visible, set `display: none`. If hidden, remove `display: none`.
+   * Returns the new visibility state (true = now visible).
+   */
+  toggleLayerVisibility(elementId: string): boolean {
+    if (!this.svgInstance) return true;
+    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return true;
+    const hidden = this.isNodeHidden(el.node as Element);
+    if (hidden) {
+      el.attr('display', null);
+      try { (el.node as SVGElement).style?.removeProperty('display'); } catch { /* jsdom */ }
+      el.attr('visibility', null);
+    } else {
+      el.attr('display', 'none');
+    }
+    this.bumpDocumentRevision();
+    return hidden;
+  }
+
+  /** Check if an element has `display:none` or `visibility:hidden`. */
+  isElementVisible(elementId: string): boolean {
+    if (!this.svgInstance) return true;
+    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return true;
+    return !this.isNodeHidden(el.node as Element);
+  }
+
+  /**
+   * Create a new `<g>` element containing the given elements. The group is inserted at the
+   * position of the first element in DOM order; elements are moved into it preserving relative
+   * order. Returns the new group id or null on failure.
+   */
+  groupSelectedElements(elementIds: string[]): string | null {
+    if (!this.svgInstance || elementIds.length === 0) return null;
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    if (!contentGroup?.node) return null;
+
+    const elements: { el: SvgJsElement; node: Element }[] = [];
+    for (const id of elementIds) {
+      const el = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      if (el?.node) elements.push({ el, node: el.node as Element });
+    }
+    if (elements.length === 0) return null;
+
+    // Sort into DOM order by comparing document position
+    elements.sort((a, b) => {
+      const pos = a.node.compareDocumentPosition(b.node);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      return 0;
+    });
+
+    const firstNode = elements[0].node;
+    const parent = firstNode.parentNode;
+    if (!parent) return null;
+
+    const groupId = `group-${Math.random().toString(36).substr(2, 9)}`;
+    const svgNs = 'http://www.w3.org/2000/svg';
+    const gEl = document.createElementNS(svgNs, 'g');
+    gEl.setAttribute('id', groupId);
+
+    parent.insertBefore(gEl, firstNode);
+    for (const { node } of elements) {
+      gEl.appendChild(node);
+    }
+
+    this.bumpDocumentRevision();
+    return groupId;
+  }
+
+  /**
+   * Ungroup: move children of a `<g>` to its parent (at the group's position), then remove
+   * the empty `<g>`. Returns the ids of the ungrouped children.
+   */
+  ungroupElement(groupId: string): string[] {
+    if (!this.svgInstance) return [];
+    const el = this.svgInstance.findOne(`#${groupId}`) as SvgJsElement | undefined;
+    if (!el?.node) return [];
+    const node = el.node as Element;
+    if (node.tagName?.toLowerCase() !== 'g') return [];
+    const parent = node.parentNode;
+    if (!parent) return [];
+
+    const childIds: string[] = [];
+    const children = Array.from(node.children);
+    for (const child of children) {
+      if (child.id) childIds.push(child.id);
+      parent.insertBefore(child, node);
+    }
+    parent.removeChild(node);
+    this.bumpDocumentRevision();
+    return childIds;
+  }
+
+  /** Set a `data-name` attribute on the element for display in the layer panel. */
+  renameElement(elementId: string, newName: string): void {
+    if (!this.svgInstance) return;
+    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (el) {
+      el.attr('data-name', newName);
+      this.bumpDocumentRevision();
+    }
+  }
+
+  /** Return `data-name` attribute if set, else the element id. */
+  getElementName(elementId: string): string {
+    if (!this.svgInstance) return elementId;
+    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el) return elementId;
+    const name = el.attr('data-name') as string | null;
+    return name || el.id() || elementId;
   }
 }

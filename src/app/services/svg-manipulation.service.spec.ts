@@ -770,14 +770,425 @@ describe('SvgManipulationService', () => {
     });
 
     it('returns editable shapes in DOM order with id/type/markup', () => {
-      const svgContent = '<svg viewBox="0 0 100 100"><rect id="back-rect" x="0" y="0" width="20" height="20"/><g id="ignored"><rect width="1" height="1"/></g><circle id="front-circle" cx="30" cy="30" r="10"/></svg>';
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="back-rect" x="0" y="0" width="20" height="20"/><g id="group1"><rect id="nested-rect" width="1" height="1"/></g><circle id="front-circle" cx="30" cy="30" r="10"/></svg>';
       service.initializeSVG(container, svgContent);
 
       const items = service.getLayerStackItems();
-      expect(items.map((item) => item.id)).toEqual(['back-rect', 'front-circle']);
-      expect(items.map((item) => item.type)).toEqual(['rect', 'circle']);
+      expect(items.map((item) => item.id)).toEqual(['back-rect', 'nested-rect', 'front-circle']);
+      expect(items.map((item) => item.type)).toEqual(['rect', 'rect', 'circle']);
       expect(items[0].elementMarkup).toContain('<rect');
-      expect(items[1].elementMarkup).toContain('<circle');
+      expect(items[2].elementMarkup).toContain('<circle');
+    });
+  });
+
+  describe('getLayerTree', () => {
+    it('returns empty array when not initialized', () => {
+      expect(service.getLayerTree()).toEqual([]);
+    });
+
+    it('returns flat list of shapes at top level (no groups)', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+        <circle id="c1" cx="50" cy="50" r="5"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree.length).toBe(2);
+      expect(tree[0].id).toBe('r1');
+      expect(tree[0].type).toBe('rect');
+      expect(tree[1].id).toBe('c1');
+      expect(tree[1].type).toBe('circle');
+      expect(tree[0].children).toBeUndefined();
+      expect(tree[1].children).toBeUndefined();
+    });
+
+    it('returns groups with children array', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="layer1">
+          <rect id="r1" x="0" y="0" width="10" height="10"/>
+          <circle id="c1" cx="50" cy="50" r="5"/>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree.length).toBe(1);
+      expect(tree[0].type).toBe('g');
+      expect(tree[0].id).toBe('layer1');
+      expect(tree[0].children).toBeDefined();
+      expect(tree[0].children!.length).toBe(2);
+      expect(tree[0].children![0].id).toBe('r1');
+      expect(tree[0].children![1].id).toBe('c1');
+    });
+
+    it('nested groups create nested children', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="outer">
+          <g id="inner">
+            <rect id="r1" x="0" y="0" width="10" height="10"/>
+          </g>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree.length).toBe(1);
+      expect(tree[0].id).toBe('outer');
+      expect(tree[0].children!.length).toBe(1);
+      expect(tree[0].children![0].id).toBe('inner');
+      expect(tree[0].children![0].children!.length).toBe(1);
+      expect(tree[0].children![0].children![0].id).toBe('r1');
+    });
+
+    it('skips defs, clipPath, mask elements', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs><clipPath id="cp"><rect x="0" y="0" width="50" height="50"/></clipPath></defs>
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree.length).toBe(1);
+      expect(tree[0].id).toBe('r1');
+    });
+
+    it('includes visibility info', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="vis" x="0" y="0" width="10" height="10"/>
+        <rect id="hid" x="20" y="0" width="10" height="10" visibility="hidden"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree.length).toBe(2);
+      expect(tree[0].visible).toBe(true);
+      expect(tree[1].visible).toBe(false);
+    });
+  });
+
+  describe('moveElementForward / moveElementBackward', () => {
+    it('moveElementForward swaps with next sibling', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="a" x="0" y="0" width="10" height="10"/>
+        <rect id="b" x="20" y="0" width="10" height="10"/>
+        <rect id="c" x="40" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const result = service.moveElementForward('a');
+      expect(result).toBe(true);
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
+      expect(ids).toEqual(['b', 'a', 'c']);
+    });
+
+    it('moveElementBackward swaps with previous sibling', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="a" x="0" y="0" width="10" height="10"/>
+        <rect id="b" x="20" y="0" width="10" height="10"/>
+        <rect id="c" x="40" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const result = service.moveElementBackward('c');
+      expect(result).toBe(true);
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
+      expect(ids).toEqual(['a', 'c', 'b']);
+    });
+
+    it('moveElementForward returns false when already last', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="a" x="0" y="0" width="10" height="10"/>
+        <rect id="b" x="20" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.moveElementForward('b')).toBe(false);
+    });
+
+    it('moveElementBackward returns false when already first', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="a" x="0" y="0" width="10" height="10"/>
+        <rect id="b" x="20" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.moveElementBackward('a')).toBe(false);
+    });
+
+    it('bumps documentRevision on success', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="a" x="0" y="0" width="10" height="10"/>
+        <rect id="b" x="20" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      service.moveElementForward('a');
+      expect(service.documentRevision()).toBe(before + 1);
+    });
+  });
+
+  describe('moveElementToFront / moveElementToBack', () => {
+    it('moveElementToFront moves to last child', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="a" x="0" y="0" width="10" height="10"/>
+        <rect id="b" x="20" y="0" width="10" height="10"/>
+        <rect id="c" x="40" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const result = service.moveElementToFront('a');
+      expect(result).toBe(true);
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
+      expect(ids).toEqual(['b', 'c', 'a']);
+    });
+
+    it('moveElementToBack moves to first child', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="a" x="0" y="0" width="10" height="10"/>
+        <rect id="b" x="20" y="0" width="10" height="10"/>
+        <rect id="c" x="40" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const result = service.moveElementToBack('c');
+      expect(result).toBe(true);
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
+      expect(ids).toEqual(['c', 'a', 'b']);
+    });
+
+    it('moveElementToFront returns false when already at position', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="a" x="0" y="0" width="10" height="10"/>
+        <rect id="b" x="20" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.moveElementToFront('b')).toBe(false);
+    });
+
+    it('moveElementToBack returns false when already at position', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="a" x="0" y="0" width="10" height="10"/>
+        <rect id="b" x="20" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.moveElementToBack('a')).toBe(false);
+    });
+  });
+
+  describe('toggleLayerVisibility', () => {
+    it('toggles from visible to hidden (adds display:none)', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const nowVisible = service.toggleLayerVisibility('r1');
+      expect(nowVisible).toBe(false);
+      const el = container.querySelector('#r1');
+      expect(el?.getAttribute('display')).toBe('none');
+    });
+
+    it('toggles from hidden to visible (removes display:none)', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.toggleLayerVisibility('r1');
+      const nowVisible = service.toggleLayerVisibility('r1');
+      expect(nowVisible).toBe(true);
+      const el = container.querySelector('#r1');
+      expect(el?.getAttribute('display')).not.toBe('none');
+    });
+
+    it('returns new visibility state', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.toggleLayerVisibility('r1')).toBe(false);
+      expect(service.toggleLayerVisibility('r1')).toBe(true);
+      expect(service.toggleLayerVisibility('r1')).toBe(false);
+    });
+
+    it('bumps documentRevision', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      service.toggleLayerVisibility('r1');
+      expect(service.documentRevision()).toBe(before + 1);
+    });
+  });
+
+  describe('isElementVisible', () => {
+    it('returns true for visible element', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.isElementVisible('r1')).toBe(true);
+    });
+
+    it('returns false for display:none element', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10" display="none"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.isElementVisible('r1')).toBe(false);
+    });
+
+    it('returns false for visibility:hidden element', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10" visibility="hidden"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.isElementVisible('r1')).toBe(false);
+    });
+  });
+
+  describe('groupSelectedElements', () => {
+    it('creates a <g> element wrapping the given shapes', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+        <circle id="c1" cx="50" cy="50" r="5"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const groupId = service.groupSelectedElements(['r1', 'c1']);
+      expect(groupId).toBeTruthy();
+      const group = container.querySelector(`#${groupId}`);
+      expect(group?.tagName.toLowerCase()).toBe('g');
+      expect(group?.querySelector('#r1')).toBeTruthy();
+      expect(group?.querySelector('#c1')).toBeTruthy();
+    });
+
+    it('group is inserted at position of first element in DOM order', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="stay" x="0" y="0" width="5" height="5"/>
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+        <circle id="c1" cx="50" cy="50" r="5"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const groupId = service.groupSelectedElements(['r1', 'c1']);
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const topChildren = Array.from(contentGroup.children);
+      const groupIndex = topChildren.findIndex((el) => el.id === groupId);
+      const stayIndex = topChildren.findIndex((el) => el.id === 'stay');
+      expect(groupIndex).toBe(stayIndex + 1);
+    });
+
+    it('returns the new group id', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const groupId = service.groupSelectedElements(['r1']);
+      expect(groupId).toBeTruthy();
+      expect(typeof groupId).toBe('string');
+      expect(groupId!.startsWith('group-')).toBe(true);
+    });
+
+    it('elements inside group maintain relative order', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+        <rect id="r2" x="20" y="0" width="10" height="10"/>
+        <rect id="r3" x="40" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const groupId = service.groupSelectedElements(['r3', 'r1', 'r2']);
+      const group = container.querySelector(`#${groupId}`)!;
+      const childIds = Array.from(group.children).map((el) => el.id);
+      expect(childIds).toEqual(['r1', 'r2', 'r3']);
+    });
+
+    it('returns null for empty array', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.groupSelectedElements([])).toBeNull();
+    });
+
+    it('bumps documentRevision', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+        <circle id="c1" cx="50" cy="50" r="5"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      service.groupSelectedElements(['r1', 'c1']);
+      expect(service.documentRevision()).toBe(before + 1);
+    });
+  });
+
+  describe('ungroupElement', () => {
+    it('moves children to parent at group position', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="before" x="0" y="0" width="5" height="5"/>
+        <g id="grp">
+          <rect id="r1" x="0" y="0" width="10" height="10"/>
+          <circle id="c1" cx="50" cy="50" r="5"/>
+        </g>
+        <rect id="after" x="80" y="0" width="5" height="5"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.ungroupElement('grp');
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
+      expect(ids).toEqual(['before', 'r1', 'c1', 'after']);
+    });
+
+    it('removes the empty group', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="grp"><rect id="r1" x="0" y="0" width="10" height="10"/></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.ungroupElement('grp');
+      expect(container.querySelector('#grp')).toBeNull();
+    });
+
+    it('returns child ids', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="grp">
+          <rect id="r1" x="0" y="0" width="10" height="10"/>
+          <circle id="c1" cx="50" cy="50" r="5"/>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const ids = service.ungroupElement('grp');
+      expect(ids).toEqual(['r1', 'c1']);
+    });
+
+    it('returns empty array for non-group element', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.ungroupElement('r1')).toEqual([]);
+    });
+
+    it('bumps documentRevision', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="grp"><rect id="r1" x="0" y="0" width="10" height="10"/></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      service.ungroupElement('grp');
+      expect(service.documentRevision()).toBe(before + 1);
+    });
+  });
+
+  describe('renameElement / getElementName', () => {
+    it('sets and gets data-name attribute', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.renameElement('r1', 'My Rectangle');
+      expect(service.getElementName('r1')).toBe('My Rectangle');
+      const el = container.querySelector('#r1');
+      expect(el?.getAttribute('data-name')).toBe('My Rectangle');
+    });
+
+    it('falls back to element id when no data-name', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.getElementName('r1')).toBe('r1');
     });
   });
 });

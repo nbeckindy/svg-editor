@@ -21,7 +21,9 @@ import {
   TranslateCommand,
   UnionScaleCommand,
   UnionRotateCommand,
-  RemoveShapesCommand
+  RemoveShapesCommand,
+  GroupCommand,
+  UngroupCommand
 } from '../../models/editor-commands';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
@@ -36,7 +38,11 @@ const CONTENT_SHAPE_TAGS = new Set([
   'polygon',
   'ellipse',
   'line',
-  'polyline'
+  'polyline',
+  'text',
+  'image',
+  'use',
+  'g'
 ]);
 
 /** After loading SVG, fit the editor stage in the canvas with this much inset (margin). */
@@ -405,6 +411,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   /** After marquee mouseup, ignore the next click so it doesn't zoom in. */
   private zoomMarqueeJustEnded = false;
 
+  /** Which group the user has drilled into (double-click); children are individually selectable. */
+  drilledIntoGroupId: string | null = null;
+
   /** Selection marquee: drag-to-rectangle multi-select (selector tool). */
   isSelectionMarquee = false;
   private selectionMarqueeStart: { clientX: number; clientY: number } | null = null;
@@ -433,6 +442,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       if (this.shapeSelection.getSelectedShapes().length > 0) {
         this.shapeSelection.clearSelection();
         this.svgManipulation.clearHighlight();
+        this.drilledIntoGroupId = null;
         event.preventDefault();
       }
       return;
@@ -455,6 +465,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     if (selectorActive && mod && (event.key === 'a' || event.key === 'A')) {
       this.selectAllShapesFromDocument();
+      event.preventDefault();
+      return;
+    }
+
+    if (selectorActive && mod && (event.key === 'g' || event.key === 'G') && !event.shiftKey) {
+      this.groupSelectedShapes();
+      event.preventDefault();
+      return;
+    }
+
+    if (selectorActive && mod && (event.key === 'g' || event.key === 'G') && event.shiftKey) {
+      this.ungroupSelectedShape();
       event.preventDefault();
       return;
     }
@@ -516,6 +538,49 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const expanded = this.svgManipulation.expandSelectionByClipGroups(shapes);
     this.shapeSelection.selectShapes(expanded);
     this.svgManipulation.clearHighlight();
+  }
+
+  private groupSelectedShapes(): void {
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length < 2) return;
+    const ids = selected.map((s) => s.id);
+    const cmd = new GroupCommand(this.svgManipulation, ids);
+    this.editorHistory.pushAndExecute(cmd);
+    const newGroupId = this.svgManipulation.getNearestGroupAncestorId(ids[0]);
+    if (newGroupId) {
+      const svg = this.svgManipulation.getSVGInstance();
+      const groupEl = svg?.findOne(`#${newGroupId}`) as SVGElement | undefined;
+      if (groupEl) {
+        const groupProps = this.svgManipulation.getShapeProperties(groupEl);
+        this.shapeSelection.selectShapes([groupProps]);
+      }
+    }
+    this.drilledIntoGroupId = null;
+  }
+
+  private ungroupSelectedShape(): void {
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length !== 1) return;
+    const groupId = selected[0].id;
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg) return;
+    const groupNode = svg.findOne(`#${groupId}`)?.node as Element | null;
+    if (!groupNode || groupNode.tagName?.toLowerCase() !== 'g') return;
+    const childIds: string[] = [];
+    for (const child of Array.from(groupNode.children)) {
+      if (child.id) childIds.push(child.id);
+    }
+    const cmd = new UngroupCommand(this.svgManipulation, groupId);
+    this.editorHistory.pushAndExecute(cmd);
+    const childShapes: ShapeProperties[] = [];
+    for (const id of childIds) {
+      const el = svg.findOne(`#${id}`) as SVGElement | undefined;
+      if (el) childShapes.push(this.svgManipulation.getShapeProperties(el));
+    }
+    if (childShapes.length > 0) {
+      this.shapeSelection.selectShapes(childShapes);
+    }
+    this.drilledIntoGroupId = null;
   }
 
   onDocumentMouseMove(event: MouseEvent): void {
@@ -801,6 +866,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     });
     effect(() => {
       this.editorHistory.revision();
+      this.drilledIntoGroupId = null;
       setTimeout(() => this.syncSelectionFromDom(), 0);
     });
     effect(() => {
@@ -1247,7 +1313,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (target.tagName === 'svg' || !target.id) return;
-    if (!this.shapeSelection.isShapeSelected(target.id)) return;
+    let effectiveDragId = target.id;
+    if (!this.shapeSelection.isShapeSelected(target.id)) {
+      const nearestGroupId = this.svgManipulation.getNearestGroupAncestorId(target.id);
+      if (nearestGroupId && this.shapeSelection.isShapeSelected(nearestGroupId)) {
+        effectiveDragId = nearestGroupId;
+      } else {
+        return;
+      }
+    }
     if (event.shiftKey || event.ctrlKey || event.metaKey) return;
     const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
     if (!point) return;
@@ -1256,21 +1330,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.svgManipulation.setShapeVisibility(id, false);
     }
     const svgInstance = this.svgManipulation.getSVGInstance();
-    const shape = svgInstance?.findOne(`#${target.id}`) as SVGElement | undefined;
-    const shapeEl = shape?.node as Element | undefined;
+    const effectiveEl = svgInstance?.findOne(`#${effectiveDragId}`) as SVGElement | undefined;
+    const effectiveNode = effectiveEl?.node as Element | undefined;
     if (selectedIds.length === 1) {
-      const bbox = this.svgManipulation.getShapeBBox(target.id);
+      const bbox = this.svgManipulation.getShapeBBox(effectiveDragId);
       if (!bbox) {
-        this.svgManipulation.setShapeVisibility(target.id, true);
+        for (const id of selectedIds) this.svgManipulation.setShapeVisibility(id, true);
         return;
       }
       this.dragStartBbox = bbox;
       const shapeScreenRect =
-        typeof (target as Element).getBoundingClientRect === 'function'
-          ? (target as Element).getBoundingClientRect()
-          : shapeEl!.getBoundingClientRect();
+        effectiveNode && typeof effectiveNode.getBoundingClientRect === 'function'
+          ? effectiveNode.getBoundingClientRect()
+          : (target as Element).getBoundingClientRect();
 
-      this.createDragGhost(target.id, bbox, shapeScreenRect);
+      this.createDragGhost(effectiveDragId, bbox, shapeScreenRect);
     } else {
       const unionBbox = this.svgManipulation.getUnionBBox(selectedIds);
       if (!unionBbox) {
@@ -1629,20 +1703,78 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
+    const svgInstance = this.svgManipulation.getSVGInstance();
     const svgElement =
-      clickTarget.id && (this.svgManipulation.getSVGInstance()?.findOne(`#${clickTarget.id}`) as SVGElement);
+      clickTarget.id && (svgInstance?.findOne(`#${clickTarget.id}`) as SVGElement);
     if (svgElement) {
-      const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(svgElement);
       const additive = event.shiftKey || event.ctrlKey || event.metaKey;
-      if (additive) {
-        this.shapeSelection.toggleShapeGroupInSelection(expanded);
+      const nearestGroupId = this.svgManipulation.getNearestGroupAncestorId(clickTarget.id);
+      const groupIsClipCarrier = nearestGroupId ? this.isGroupAClipMaskCarrier(nearestGroupId) : false;
+
+      if (nearestGroupId && !groupIsClipCarrier) {
+        if (this.drilledIntoGroupId === nearestGroupId) {
+          const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(svgElement);
+          if (additive) {
+            this.shapeSelection.toggleShapeGroupInSelection(expanded);
+          } else {
+            this.shapeSelection.selectShapes(expanded);
+          }
+        } else {
+          const groupEl = svgInstance?.findOne(`#${nearestGroupId}`) as SVGElement | undefined;
+          if (groupEl) {
+            const groupProps = this.svgManipulation.getShapeProperties(groupEl);
+            if (additive) {
+              this.shapeSelection.toggleShapeGroupInSelection([groupProps]);
+            } else {
+              this.shapeSelection.selectShapes([groupProps]);
+            }
+            this.drilledIntoGroupId = null;
+          }
+        }
       } else {
-        this.shapeSelection.selectShapes(expanded);
+        const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(svgElement);
+        if (additive) {
+          this.shapeSelection.toggleShapeGroupInSelection(expanded);
+        } else {
+          this.shapeSelection.selectShapes(expanded);
+        }
       }
     } else {
       this.shapeSelection.clearSelection();
       this.svgManipulation.clearHighlight();
+      this.drilledIntoGroupId = null;
     }
+  }
+
+  onCanvasDoubleClick(event: MouseEvent): void {
+    if (this.editorTool.getCurrentTool() !== 'selector') return;
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length !== 1) return;
+    const selectedId = selected[0].id;
+    const svgInstance = this.svgManipulation.getSVGInstance();
+    if (!svgInstance) return;
+    const selectedEl = svgInstance.findOne(`#${selectedId}`)?.node as Element | null;
+    if (!selectedEl || selectedEl.tagName?.toLowerCase() !== 'g') return;
+
+    this.drilledIntoGroupId = selectedId;
+
+    const clickTarget = event.target as Element;
+    if (clickTarget.id) {
+      const childEl = svgInstance.findOne(`#${clickTarget.id}`) as SVGElement | undefined;
+      if (childEl) {
+        const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(childEl);
+        this.shapeSelection.selectShapes(expanded);
+      }
+    }
+  }
+
+  /** True when the `<g>` element carries `clip-path` or `mask` (clip/mask group, not a user group). */
+  private isGroupAClipMaskCarrier(groupId: string): boolean {
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg) return false;
+    const el = svg.findOne(`#${groupId}`)?.node as Element | null;
+    if (!el) return false;
+    return el.hasAttribute('clip-path') || el.hasAttribute('mask');
   }
 
   /** True when the event target is a user shape inside the editor content group (not stage chrome). */
