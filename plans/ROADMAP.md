@@ -7,7 +7,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | Order | Epic | Slug | Current bd status | Progress | Depends on |
 |------:|------|------|-------------------|---------:|------------|
 | 1 | Multi-select and keyboard shortcuts | [selection-interaction](./epics/selection-interaction.md) | `CLOSED` | 8/8 (100%) | — |
-| 2 | Undo and redo | [editing-history](./epics/editing-history.md) | `OPEN` | 0/5 (0%) | Selection model stable (epic 1 in progress or done) |
+| 2 | Undo and redo | [editing-history](./epics/editing-history.md) | `CLOSED` | 5/5 (100%) | Selection model stable (epic 1 in progress or done) |
 | 3 | Shape transforms (rotate, scale, skew) | [shape-transforms](./epics/shape-transforms.md) | `OPEN` | 0/5 (0%) | Multi-select useful but not strictly required; depends on selection APIs |
 | 4 | Groups and layer management | [groups-layers](./epics/groups-layers.md) | `OPEN` | 0/5 (0%) | Selection; transforms help with group bounds |
 | 5 | Advanced stroke and fill | [advanced-styling](./epics/advanced-styling.md) | `OPEN` | 0/5 (0%) | Core manipulation patterns from earlier epics |
@@ -29,12 +29,12 @@ flowchart LR
 ## Beads epic references
 
 Epic issues in `bd` (see `bd list -t epic` or `bd show <id>` if this table drifts).
-Status/progress below is current as of 2026-04-15.
+Status/progress below is current as of 2026-04-17.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
 | selection-interaction | `svg-editor-3b7` | Multi-select and keyboard shortcuts | `CLOSED` | 8/8 |
-| editing-history | `svg-editor-bbc` | Undo and redo | `OPEN` | 0/5 |
+| editing-history | `svg-editor-bbc` | Undo and redo | `CLOSED` | 5/5 |
 | shape-transforms | `svg-editor-2zo` | Shape transforms | `OPEN` | 0/5 |
 | groups-layers | `svg-editor-0l4` | Groups and layer management | `OPEN` | 0/5 |
 | advanced-styling | `svg-editor-v77` | Advanced stroke and fill | `OPEN` | 0/5 |

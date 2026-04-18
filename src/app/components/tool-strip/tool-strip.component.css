@@ -44,3 +44,16 @@
 .tool-label {
   font-size: 14px;
 }
+
+.tool-btn:disabled {
+  opacity: 0.4;
+  cursor: default;
+  pointer-events: none;
+}
+
+.tool-separator {
+  width: 1px;
+  height: 24px;
+  background: #ddd;
+  margin: 0 4px;
+}

@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ToolStripComponent } from './tool-strip.component';
 import { EditorToolService } from '../../services/editor-tool.service';
+import { EditorHistoryService } from '../../services/editor-history.service';
 
 describe('ToolStripComponent', () => {
   let component: ToolStripComponent;
@@ -10,7 +11,7 @@ describe('ToolStripComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ToolStripComponent],
-      providers: [EditorToolService]
+      providers: [EditorToolService, EditorHistoryService]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ToolStripComponent);
@@ -32,13 +33,15 @@ describe('ToolStripComponent', () => {
     expect(selectorBtn?.classList.contains('active')).toBe(true);
   });
 
-  it('should display Selector, Zoom, and Pan buttons', () => {
+  it('should display Undo, Redo, Selector, Zoom, and Pan buttons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('.tool-btn');
-    expect(buttons.length).toBe(3);
-    expect((buttons[0] as HTMLElement).textContent?.trim()).toBe('Selector');
-    expect((buttons[1] as HTMLElement).textContent?.trim()).toBe('Zoom');
-    expect((buttons[2] as HTMLElement).textContent?.trim()).toContain('Pan');
+    expect(buttons.length).toBe(5);
+    expect((buttons[0] as HTMLElement).textContent?.trim()).toContain('Undo');
+    expect((buttons[1] as HTMLElement).textContent?.trim()).toContain('Redo');
+    expect((buttons[2] as HTMLElement).textContent?.trim()).toBe('Selector');
+    expect((buttons[3] as HTMLElement).textContent?.trim()).toBe('Zoom');
+    expect((buttons[4] as HTMLElement).textContent?.trim()).toContain('Pan');
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {

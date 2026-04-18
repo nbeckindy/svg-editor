@@ -4,6 +4,7 @@ import { SvgManipulationService } from '../../services/svg-manipulation.service'
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { CanvasViewService } from '../../services/canvas-view.service';
+import { EditorHistoryService } from '../../services/editor-history.service';
 import { computeProportionalResizedUnion, type BBox, type ResizeCorner } from '../../utils/selection-resize';
 import {
   unionRotationPivot,
@@ -14,6 +15,14 @@ import {
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
 import { screenPointToRootSvgUserPoint } from '../../utils/svg-screen-user';
 import { ShapeProperties } from '../../models/shape-properties.interface';
+import {
+  EditorCommand,
+  CompositeCommand,
+  TranslateCommand,
+  UnionScaleCommand,
+  UnionRotateCommand,
+  RemoveShapesCommand
+} from '../../models/editor-commands';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
@@ -360,6 +369,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private dragJustEnded = false;
   private dragStartSvg: { x: number; y: number } | null = null;
   private dragStartBbox: { x: number; y: number; width: number; height: number } | null = null;
+  private dragSnapshot: Map<string, Matrix> = new Map();
   private dragGhostFragments: GhostPreviewFragment[] = [];
 
   /** Proportional resize from corner handles (ghost preview; DOM updates on mouseup). */
@@ -431,6 +441,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!this.svgContent()) return;
 
     const mod = event.ctrlKey || event.metaKey;
+
+    if (mod && (event.key === 'z' || event.key === 'Z') && !event.shiftKey) {
+      this.editorHistory.undo();
+      event.preventDefault();
+      return;
+    }
+    if (mod && ((event.key === 'z' || event.key === 'Z') && event.shiftKey || event.key === 'y' || event.key === 'Y')) {
+      this.editorHistory.redo();
+      event.preventDefault();
+      return;
+    }
+
     if (selectorActive && mod && (event.key === 'a' || event.key === 'A')) {
       this.selectAllShapesFromDocument();
       event.preventDefault();
@@ -443,7 +465,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.shapeSelection.getSelectedShapes().length > 0
     ) {
       const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-      this.svgManipulation.removeShapes(ids);
+      const cmd = new RemoveShapesCommand(this.svgManipulation, ids);
+      this.editorHistory.pushAndExecute(cmd);
       this.shapeSelection.clearSelection();
       this.svgManipulation.clearHighlight();
       event.preventDefault();
@@ -662,13 +685,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.isPanning = false;
     if (this.isResizingSelection && this.resizeHandle && this.resizeUnionStart && this.resizeLastUnion) {
       const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-      this.svgManipulation.applyUnionScaleFromSnapshot(
-        ids,
-        this.resizeUnionStart,
-        this.resizeLastUnion,
-        this.resizeSnapshot,
-        this.resizeHandle
+      const cmd = new UnionScaleCommand(
+        this.svgManipulation, ids,
+        this.resizeUnionStart, this.resizeLastUnion,
+        this.resizeSnapshot, this.resizeHandle
       );
+      this.editorHistory.pushAndExecute(cmd);
       for (const id of ids) {
         this.svgManipulation.setShapeVisibility(id, true);
       }
@@ -691,12 +713,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (this.isRotatingSelection && this.rotateUnionStart && this.rotatePivotDoc) {
       const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
       const committedRotateRad = this.rotateAccumulatedRad;
-      this.svgManipulation.applyUnionRotationFromSnapshot(
-        ids,
-        this.rotatePivotDoc,
-        radiansToDegrees(committedRotateRad),
+      const cmd = new UnionRotateCommand(
+        this.svgManipulation, ids,
+        this.rotatePivotDoc, radiansToDegrees(committedRotateRad),
         this.rotateSnapshot
       );
+      this.editorHistory.pushAndExecute(cmd);
       for (const id of ids) {
         this.svgManipulation.setShapeVisibility(id, true);
       }
@@ -724,8 +746,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         dx = point.x - this.dragStartSvg.x;
         dy = point.y - this.dragStartSvg.y;
       }
+      const dragCmds: EditorCommand[] = this.dragShapeIds.map(
+        (id) => new TranslateCommand(this.svgManipulation, id, dx, dy, this.dragSnapshot)
+      );
+      this.editorHistory.pushAndExecute(
+        dragCmds.length === 1 ? dragCmds[0] : new CompositeCommand(dragCmds, 'Move shapes')
+      );
       for (const shapeId of this.dragShapeIds) {
-        this.svgManipulation.translateShape(shapeId, dx, dy);
         this.svgManipulation.setShapeVisibility(shapeId, true);
       }
       this.removeDragGhost();
@@ -734,6 +761,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.dragShapeIds = [];
       this.dragStartSvg = null;
       this.dragStartBbox = null;
+      this.dragSnapshot = new Map();
       this.dragJustEnded = true;
       const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
       const unionBbox = this.svgManipulation.getUnionBBox(selectedIds);
@@ -764,11 +792,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     private shapeSelection: ShapeSelectionService,
     public editorTool: EditorToolService,
     public canvasView: CanvasViewService,
-    private cdr: ChangeDetectorRef
+    private cdr: ChangeDetectorRef,
+    private editorHistory: EditorHistoryService
   ) {
     effect(() => {
       this.svgContent();
       this.canvasView.resetZoom();
+    });
+    effect(() => {
+      this.editorHistory.revision();
+      setTimeout(() => this.syncSelectionFromDom(), 0);
     });
     effect(() => {
       const shapes = this.shapeSelection.selectedShapes();
@@ -1014,7 +1047,27 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     };
   }
 
+  private syncSelectionFromDom(): void {
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg) return;
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length === 0) return;
+    const refreshed = selected.map((s) => {
+      const el = svg.findOne(`#${s.id}`) as SVGElement | undefined;
+      return el ? this.svgManipulation.getShapeProperties(el) : s;
+    });
+    this.shapeSelection.selectShapes(refreshed);
+    const ids = refreshed.map((s) => s.id);
+    const unionBbox = this.svgManipulation.getUnionBBox(ids);
+    if (unionBbox) {
+      this.lastBbox = unionBbox;
+      this._highlightRectCacheKey = '';
+    }
+    this.cdr.detectChanges();
+  }
+
   private initializeSVG(): void {
+    this.editorHistory.clear();
     this.svgManipulation.initializeSVG(this.svgContainer()!.nativeElement, this.svgContent());
     this.canvasView.init();
     this.syncOverlayViewBox();
@@ -1236,6 +1289,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.isDraggingShape = true;
     this.dragShapeIds = selectedIds;
     this.dragStartSvg = { x: point.x, y: point.y };
+    this.dragSnapshot = this.svgManipulation.snapshotSelectionTransforms(selectedIds);
     event.preventDefault();
   }
 

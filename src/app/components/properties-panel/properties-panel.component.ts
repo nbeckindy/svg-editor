@@ -4,8 +4,19 @@ import { FormsModule } from '@angular/forms';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { EditorHistoryService } from '../../services/editor-history.service';
 import { PaintSourceInfo, ShapeProperties } from '../../models/shape-properties.interface';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
+import {
+  EditorCommand,
+  CompositeCommand,
+  FillColorCommand,
+  StrokeColorCommand,
+  AddStrokeCommand,
+  RemoveStrokeCommand,
+  SetStrokeCommand,
+  OpacityCommand
+} from '../../models/editor-commands';
 
 @Component({
   selector: 'app-properties-panel',
@@ -19,6 +30,14 @@ export class PropertiesPanelComponent {
   readonly selectedShape = this.shapeSelectionService.selectedShape;
   readonly selectionCount = this.shapeSelectionService.selectionCount;
   private svgManipulationService = inject(SvgManipulationService);
+  private editorHistory = inject(EditorHistoryService);
+
+  private pushCommand(commands: EditorCommand[], fallbackDescription?: string): void {
+    if (commands.length === 0) return;
+    this.editorHistory.pushAndExecute(
+      commands.length === 1 ? commands[0] : new CompositeCommand(commands, fallbackDescription)
+    );
+  }
 
   /** SVG.js `fill()` / `stroke()` write presentation attributes on the element. */
   private static readonly OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
@@ -238,9 +257,10 @@ export class PropertiesPanelComponent {
   onAddStrokeClick(): void {
     const color = '#000000';
     const width = 1;
-    for (const s of this.selectedShapesList()) {
-      this.svgManipulationService.addStroke(s.id, color, width);
-    }
+    const commands = this.selectedShapesList().map(
+      (s) => new AddStrokeCommand(this.svgManipulationService, s.id, color, width)
+    );
+    this.pushCommand(commands, 'Add stroke');
     this.shapeSelectionService.patchAllSelected({
       stroke: color,
       strokeWidth: width,
@@ -249,9 +269,10 @@ export class PropertiesPanelComponent {
   }
 
   onFillColorChange(color: string): void {
-    for (const s of this.selectedShapesList()) {
-      this.svgManipulationService.updateFillColor(s.id, color);
-    }
+    const commands = this.selectedShapesList().map(
+      (s) => new FillColorCommand(this.svgManipulationService, s.id, s.fill ?? '', color)
+    );
+    this.pushCommand(commands, `Change fill to ${color}`);
     this.shapeSelectionService.patchAllSelected({
       fill: color,
       fillSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
@@ -260,18 +281,20 @@ export class PropertiesPanelComponent {
 
   onStrokeColorChange(color: string): void {
     if (color === 'none' || color === '') {
-      for (const s of this.selectedShapesList()) {
-        this.svgManipulationService.removeStroke(s.id);
-      }
+      const commands = this.selectedShapesList().map(
+        (s) => new RemoveStrokeCommand(this.svgManipulationService, s.id, s.stroke ?? '#000000', s.strokeWidth ?? 1)
+      );
+      this.pushCommand(commands, 'Remove stroke');
       this.shapeSelectionService.patchAllSelected({
         stroke: undefined,
         strokeWidth: 0,
         strokeSource: { kind: 'default' }
       });
     } else {
-      for (const s of this.selectedShapesList()) {
-        this.svgManipulationService.updateStrokeColor(s.id, color);
-      }
+      const commands = this.selectedShapesList().map(
+        (s) => new StrokeColorCommand(this.svgManipulationService, s.id, s.stroke ?? '', color)
+      );
+      this.pushCommand(commands, `Change stroke to ${color}`);
       this.shapeSelectionService.patchAllSelected({
         stroke: color,
         strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
@@ -282,14 +305,18 @@ export class PropertiesPanelComponent {
   onStrokeWidthChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const width = parseFloat(target.value);
-    for (const s of this.selectedShapesList()) {
+    const commands: EditorCommand[] = this.selectedShapesList().map((s) => {
       if (width === 0) {
-        this.svgManipulationService.removeStroke(s.id);
-      } else {
-        const color = this.hasStrokeColor(s) ? s.stroke! : '#000000';
-        this.svgManipulationService.addStroke(s.id, color, width);
+        return new RemoveStrokeCommand(this.svgManipulationService, s.id, s.stroke ?? '#000000', s.strokeWidth ?? 1);
       }
-    }
+      const color = this.hasStrokeColor(s) ? s.stroke! : '#000000';
+      return new SetStrokeCommand(
+        this.svgManipulationService, s.id,
+        this.hasStrokeColor(s), s.stroke ?? '#000000', s.strokeWidth ?? 0,
+        color, width
+      );
+    });
+    this.pushCommand(commands, width === 0 ? 'Remove stroke' : `Set stroke width ${width}`);
     if (width === 0) {
       this.shapeSelectionService.patchAllSelected({
         strokeWidth: 0,
@@ -308,9 +335,10 @@ export class PropertiesPanelComponent {
   onOpacityChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const opacity = parseFloat(target.value);
-    for (const s of this.selectedShapesList()) {
-      this.svgManipulationService.updateOpacity(s.id, opacity);
-    }
+    const commands = this.selectedShapesList().map(
+      (s) => new OpacityCommand(this.svgManipulationService, s.id, s.opacity ?? 1, opacity)
+    );
+    this.pushCommand(commands, `Change opacity to ${opacity}`);
     this.shapeSelectionService.patchAllSelected({ opacity });
   }
 
