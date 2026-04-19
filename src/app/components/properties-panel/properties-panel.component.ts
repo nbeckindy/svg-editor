@@ -5,7 +5,7 @@ import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
-import { PaintSourceInfo, ShapeProperties } from '../../models/shape-properties.interface';
+import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-properties.interface';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
 import {
   EditorCommand,
@@ -17,7 +17,9 @@ import {
   SetStrokeCommand,
   OpacityCommand,
   BakeFillCommand,
-  BakeStrokeCommand
+  BakeStrokeCommand,
+  StrokeDashArrayCommand,
+  StrokeDashOffsetCommand
 } from '../../models/editor-commands';
 
 @Component({
@@ -242,6 +244,35 @@ export class PropertiesPanelComponent {
     this.shapeSelectionService.selectShapes(next);
   }
 
+  /** True when the fill is a url(#...) reference (gradient or pattern) that the hex picker can't edit. */
+  isGradientOrPatternFill(shape: ShapeProperties): boolean {
+    return shape.fillPaintType === 'gradient' || shape.fillPaintType === 'pattern';
+  }
+
+  isGradientOrPatternStroke(shape: ShapeProperties): boolean {
+    return shape.strokePaintType === 'gradient' || shape.strokePaintType === 'pattern';
+  }
+
+  paintTypeLabel(paintType: PaintType | undefined): string {
+    switch (paintType) {
+      case 'gradient': return 'Gradient';
+      case 'pattern': return 'Pattern';
+      default: return 'Reference';
+    }
+  }
+
+  private static readonly NO_FILL_TYPES = new Set(['line', 'polyline']);
+
+  /** True when the shape type supports fill editing (line and polyline do not). */
+  supportsFill(shape: ShapeProperties): boolean {
+    if (this.selectionCount() > 1) {
+      return this.selectedShapesList().some(
+        (s) => !PropertiesPanelComponent.NO_FILL_TYPES.has(s.type)
+      );
+    }
+    return !PropertiesPanelComponent.NO_FILL_TYPES.has(shape.type);
+  }
+
   /** True when the shape has a visible fill we can edit as a hex color (not `none` / missing). */
   hasFillColor(shape: ShapeProperties): boolean {
     const f = shape.fill;
@@ -340,6 +371,90 @@ export class PropertiesPanelComponent {
     );
     this.pushCommand(commands, `Change opacity to ${opacity}`);
     this.shapeSelectionService.patchAllSelected({ opacity });
+  }
+
+  readonly dashPresets: { label: string; value: string }[] = [
+    { label: 'Solid', value: '' },
+    { label: 'Dashed', value: '8,4' },
+    { label: 'Dotted', value: '2,4' },
+    { label: 'Dash-dot', value: '8,4,2,4' },
+    { label: 'Long dash', value: '16,6' },
+    { label: 'Custom', value: '__custom__' }
+  ];
+
+  /** True when selected shapes have different dash patterns. */
+  dashArraysMixed(): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const keys = new Set(shapes.map((s) => s.strokeDasharray ?? ''));
+    return keys.size > 1;
+  }
+
+  dashOffsetsMixed(): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const keys = new Set(shapes.map((s) => String(s.strokeDashoffset ?? 0)));
+    return keys.size > 1;
+  }
+
+  /** Returns the preset value matching the current dasharray, or `'__custom__'` if none match. */
+  currentDashPreset(shape: ShapeProperties): string {
+    if (this.dashArraysMixed()) return '';
+    const current = shape.strokeDasharray ?? '';
+    if (!current) return '';
+    const normalized = current.replace(/\s+/g, '').replace(/,+/g, ',');
+    const match = this.dashPresets.find((p) => p.value === normalized);
+    return match ? match.value : '__custom__';
+  }
+
+  /** Whether the custom dasharray text input should be shown. */
+  showCustomDashInput(shape: ShapeProperties): boolean {
+    return this.currentDashPreset(shape) === '__custom__';
+  }
+
+  /** True when any selected shape has a visible stroke (dash controls are only relevant with stroke). */
+  hasAnyStroke(): boolean {
+    return this.selectedShapesList().some((s) => this.hasStrokeColor(s));
+  }
+
+  onDashPresetChange(event: Event): void {
+    const value = (event.target as HTMLSelectElement).value;
+    if (value === '__custom__') return;
+    this.applyDashArray(value);
+  }
+
+  onCustomDashArrayChange(event: Event): void {
+    const raw = (event.target as HTMLInputElement).value.trim();
+    if (!this.isValidDashArray(raw)) return;
+    this.applyDashArray(raw);
+  }
+
+  onDashOffsetChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    const offset = parseFloat(target.value);
+    if (!Number.isFinite(offset)) return;
+    const commands = this.selectedShapesList().map(
+      (s) => new StrokeDashOffsetCommand(this.svgManipulationService, s.id, s.strokeDashoffset ?? 0, offset)
+    );
+    this.pushCommand(commands, `Set dash offset to ${offset}`);
+    this.shapeSelectionService.patchAllSelected({ strokeDashoffset: offset });
+  }
+
+  /** Validate a custom dasharray string: comma/space-separated positive numbers. */
+  isValidDashArray(value: string): boolean {
+    if (!value.trim()) return true;
+    return /^(\d+(\.\d+)?)([\s,]+\d+(\.\d+)?)*$/.test(value.trim());
+  }
+
+  private applyDashArray(dasharray: string): void {
+    const commands = this.selectedShapesList().map(
+      (s) => new StrokeDashArrayCommand(this.svgManipulationService, s.id, s.strokeDasharray ?? '', dasharray)
+    );
+    this.pushCommand(commands, dasharray ? `Set dash pattern ${dasharray}` : 'Remove dash pattern');
+    this.shapeSelectionService.patchAllSelected({
+      strokeDasharray: dasharray || undefined,
+      strokeDashoffset: dasharray ? undefined : 0
+    });
   }
 
   onClearSelection(): void {

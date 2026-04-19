@@ -1191,4 +1191,207 @@ describe('SvgManipulationService', () => {
       expect(service.getElementName('r1')).toBe('r1');
     });
   });
+
+  describe('stroke dash array', () => {
+    it('getShapeProperties reads stroke-dasharray from presentation attribute', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2" stroke-dasharray="5,3"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.strokeDasharray).toBe('5,3');
+    });
+
+    it('getShapeProperties returns undefined strokeDasharray when no dash is set', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.strokeDasharray).toBeUndefined();
+    });
+
+    it('getShapeProperties reads stroke-dashoffset', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2" stroke-dasharray="5,3" stroke-dashoffset="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.strokeDashoffset).toBe(10);
+    });
+
+    it('getShapeProperties returns 0 strokeDashoffset when unset', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.strokeDashoffset).toBe(0);
+    });
+
+    it('updateStrokeDasharray sets stroke-dasharray attribute', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.updateStrokeDasharray('r1', '8,4');
+      const el = container.querySelector('#r1');
+      expect(el?.getAttribute('stroke-dasharray')).toBe('8,4');
+    });
+
+    it('updateStrokeDasharray removes dasharray when set to none', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2" stroke-dasharray="5,3"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.updateStrokeDasharray('r1', 'none');
+      const el = container.querySelector('#r1');
+      expect(el?.getAttribute('stroke-dasharray')).toBeNull();
+    });
+
+    it('updateStrokeDasharray removes dasharray when set to empty string', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2" stroke-dasharray="5,3"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.updateStrokeDasharray('r1', '');
+      const el = container.querySelector('#r1');
+      expect(el?.getAttribute('stroke-dasharray')).toBeNull();
+    });
+
+    it('updateStrokeDashoffset sets stroke-dashoffset attribute', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2" stroke-dasharray="5,3"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.updateStrokeDashoffset('r1', 7);
+      const el = container.querySelector('#r1');
+      expect(el?.getAttribute('stroke-dashoffset')).toBe('7');
+    });
+
+    it('updateStrokeDashoffset removes attribute when set to 0', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2" stroke-dashoffset="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.updateStrokeDashoffset('r1', 0);
+      const el = container.querySelector('#r1');
+      expect(el?.getAttribute('stroke-dashoffset')).toBeNull();
+    });
+
+    it('updateStrokeDasharray bumps documentRevision', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#000" stroke-width="2"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      service.updateStrokeDasharray('r1', '5,3');
+      expect(service.documentRevision()).toBeGreaterThan(before);
+    });
+  });
+
+  describe('paint type classification (gradient/pattern/solid)', () => {
+    it('getShapeProperties sets fillPaintType to solid for hex fill', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" fill="#FF0000"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.fillPaintType).toBe('solid');
+      expect(props.fillUrl).toBeUndefined();
+    });
+
+    it('getShapeProperties sets fillPaintType to none when fill is none', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" fill="none"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.fillPaintType).toBe('none');
+    });
+
+    it('getShapeProperties detects gradient fill from url(#...)', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="grad1">
+            <stop offset="0%" stop-color="#FF0000"/>
+            <stop offset="100%" stop-color="#0000FF"/>
+          </linearGradient>
+        </defs>
+        <rect id="r1" x="0" y="0" width="50" height="50" fill="url(#grad1)"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.fillPaintType).toBe('gradient');
+      expect(props.fillUrl).toContain('url(#grad1)');
+      expect(props.fill).toBeUndefined();
+    });
+
+    it('getShapeProperties detects pattern fill from url(#...)', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <pattern id="pat1" width="10" height="10" patternUnits="userSpaceOnUse">
+            <circle cx="5" cy="5" r="3" fill="red"/>
+          </pattern>
+        </defs>
+        <rect id="r1" x="0" y="0" width="50" height="50" fill="url(#pat1)"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.fillPaintType).toBe('pattern');
+      expect(props.fillUrl).toContain('url(#pat1)');
+      expect(props.fill).toBeUndefined();
+    });
+
+    it('getShapeProperties returns solid strokePaintType for hex stroke', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="50" stroke="#00FF00" stroke-width="2"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.strokePaintType).toBe('solid');
+    });
+  });
+
+  describe('line/polyline fill behavior', () => {
+    it('getShapeProperties for line still returns fill info from DOM', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <line id="l1" x1="0" y1="0" x2="50" y2="50" stroke="#000" stroke-width="2"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#l1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.type).toBe('line');
+    });
+
+    it('getShapeProperties for polyline returns type polyline', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <polyline id="pl1" points="0,0 50,50 100,0" stroke="#000" stroke-width="2" fill="none"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#pl1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.type).toBe('polyline');
+    });
+  });
 });

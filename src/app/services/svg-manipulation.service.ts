@@ -1,6 +1,6 @@
 import { Injectable, signal } from '@angular/core';
 import { SVG, Svg, Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
-import { PaintSourceInfo, ShapeProperties } from '../models/shape-properties.interface';
+import { PaintSourceInfo, PaintType, ShapeProperties } from '../models/shape-properties.interface';
 import { type ResizeCorner, oppositeCornerForHandle } from '../utils/selection-resize';
 import {
   axisAlignedRectContains,
@@ -253,6 +253,78 @@ export class SvgManipulationService {
       return { kind: 'class-or-stylesheet', classNames };
     }
     return { kind: 'unknown' };
+  }
+
+  private static readonly URL_PAINT_RE = /^\s*url\(\s*(['"]?)#([^)'"]+)\1\s*\)/i;
+
+  /**
+   * Classify a raw fill/stroke value as solid, gradient, pattern, or none.
+   * Also extracts the `url(#id)` reference when present so the UI can display it.
+   */
+  private classifyPaint(rawValue: string | null | undefined): { type: PaintType; url?: string } {
+    if (!rawValue || rawValue.trim() === '' || rawValue.trim().toLowerCase() === 'none') {
+      return { type: 'none' };
+    }
+    const urlMatch = rawValue.match(SvgManipulationService.URL_PAINT_RE);
+    if (urlMatch) {
+      const refId = urlMatch[2];
+      const refEl = this.svgInstance?.findOne(`#${refId}`)?.node as Element | undefined;
+      const tag = refEl?.tagName?.toLowerCase?.() ?? '';
+      if (tag === 'lineargradient' || tag === 'radialgradient') {
+        return { type: 'gradient', url: rawValue.trim() };
+      }
+      if (tag === 'pattern') {
+        return { type: 'pattern', url: rawValue.trim() };
+      }
+      return { type: 'gradient', url: rawValue.trim() };
+    }
+    return { type: 'solid' };
+  }
+
+  /**
+   * Read effective `stroke-dasharray` from the element: presentation attribute, inline style, or
+   * computed style, in cascade priority. Returns `undefined` when no dash is set (or `none`).
+   */
+  private readStrokeDasharray(element: SvgJsElement, node: Element): string | undefined {
+    const inline = (node as SVGElement).style?.getPropertyValue('stroke-dasharray')?.trim();
+    if (inline && inline.toLowerCase() !== 'none') return inline;
+    const attr = element.attr('stroke-dasharray') as string | null;
+    if (attr && attr.trim().toLowerCase() !== 'none' && attr.trim() !== '') return attr.trim();
+    if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+      try {
+        const computed = window.getComputedStyle(node as unknown as globalThis.Element)
+          .getPropertyValue('stroke-dasharray')?.trim();
+        if (computed && computed.toLowerCase() !== 'none') return computed;
+      } catch { /* ignore */ }
+    }
+    return undefined;
+  }
+
+  /**
+   * Read effective `stroke-dashoffset`. Returns `0` when unset.
+   */
+  private readStrokeDashoffset(element: SvgJsElement, node: Element): number {
+    const inline = (node as SVGElement).style?.getPropertyValue('stroke-dashoffset')?.trim();
+    if (inline) {
+      const n = Number.parseFloat(inline);
+      if (Number.isFinite(n)) return n;
+    }
+    const attr = element.attr('stroke-dashoffset');
+    if (attr != null) {
+      const n = Number.parseFloat(String(attr));
+      if (Number.isFinite(n)) return n;
+    }
+    if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+      try {
+        const computed = window.getComputedStyle(node as unknown as globalThis.Element)
+          .getPropertyValue('stroke-dashoffset')?.trim();
+        if (computed) {
+          const n = Number.parseFloat(computed);
+          if (Number.isFinite(n)) return n;
+        }
+      } catch { /* ignore */ }
+    }
+    return 0;
   }
 
   /** Bumped when logical document content changes (for debug / reactive views); not bumped for visibility-only changes during drag. */
@@ -513,7 +585,21 @@ export class SvgManipulationService {
         : rawFill && rawFill !== 'none'
           ? rawFill
           : '';
-    const fillForPicker = fillCss ? this.normalizeColorForPicker(fillCss, '#000000') : undefined;
+
+    const fillClassification = this.classifyPaint(fillCss || rawFill);
+    let fillForPicker: string | undefined;
+    let fillPaintType: PaintType = fillClassification.type;
+    let fillUrl: string | undefined;
+
+    if (fillPaintType === 'gradient' || fillPaintType === 'pattern') {
+      fillUrl = fillClassification.url;
+      fillForPicker = undefined;
+    } else if (fillPaintType === 'none') {
+      fillForPicker = undefined;
+    } else {
+      fillForPicker = fillCss ? this.normalizeColorForPicker(fillCss, '#000000') : undefined;
+      if (!fillForPicker) fillPaintType = 'none';
+    }
 
     const strokePainted = this.isStrokeVisiblyPainted(node);
     const strokeRenderedPart = rendered.stroke ?? '';
@@ -534,7 +620,20 @@ export class SvgManipulationService {
         : 0;
     const strokeWidth = strokePainted && Number.isFinite(sw) ? sw : 0;
     const strokeIsNone = !strokePainted || !strokeCss || strokeCss === 'none' || strokeWidth === 0;
-    const strokeForPicker = strokeIsNone ? undefined : this.normalizeColorForPicker(strokeCss, '#000000');
+
+    const strokeClassification = this.classifyPaint(strokeCss || rawStroke);
+    let strokeForPicker: string | undefined;
+    let strokePaintType: PaintType = strokeIsNone ? 'none' : strokeClassification.type;
+    let strokeUrl: string | undefined;
+
+    if (strokePaintType === 'gradient' || strokePaintType === 'pattern') {
+      strokeUrl = strokeClassification.url;
+      strokeForPicker = undefined;
+    } else if (strokePaintType === 'none') {
+      strokeForPicker = undefined;
+    } else {
+      strokeForPicker = strokeIsNone ? undefined : this.normalizeColorForPicker(strokeCss, '#000000');
+    }
 
     const opacity = Number.isFinite(rendered.opacity ?? Number.NaN)
       ? (rendered.opacity as number)
@@ -543,13 +642,22 @@ export class SvgManipulationService {
     const fillSource = this.getPaintSourceForProperty(node, 'fill');
     const strokeSource = this.getPaintSourceForProperty(node, 'stroke');
 
+    const rawDasharray = this.readStrokeDasharray(element, node);
+    const rawDashoffset = this.readStrokeDashoffset(element, node);
+
     return {
       id: element.id() || '',
       type: element.type,
       fill: fillForPicker,
       stroke: strokeForPicker,
       strokeWidth,
+      strokeDasharray: rawDasharray,
+      strokeDashoffset: rawDashoffset,
       opacity,
+      fillPaintType,
+      fillUrl,
+      strokePaintType,
+      strokeUrl,
       fillSource,
       strokeSource
     };
@@ -651,6 +759,37 @@ export class SvgManipulationService {
       shape.stroke({ color });
       this.bumpDocumentRevision();
     }
+  }
+
+  /**
+   * Update `stroke-dasharray` on a shape. Pass `'none'` or `''` to remove dashing.
+   */
+  updateStrokeDasharray(shapeId: string, dasharray: string): void {
+    if (!this.svgInstance) return;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
+    if (!shape) return;
+    const normalized = dasharray.trim();
+    if (!normalized || normalized.toLowerCase() === 'none') {
+      shape.attr('stroke-dasharray', null);
+    } else {
+      shape.attr('stroke-dasharray', normalized);
+    }
+    this.bumpDocumentRevision();
+  }
+
+  /**
+   * Update `stroke-dashoffset` on a shape. Pass `0` to reset.
+   */
+  updateStrokeDashoffset(shapeId: string, dashoffset: number): void {
+    if (!this.svgInstance) return;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
+    if (!shape) return;
+    if (dashoffset === 0) {
+      shape.attr('stroke-dashoffset', null);
+    } else {
+      shape.attr('stroke-dashoffset', dashoffset);
+    }
+    this.bumpDocumentRevision();
   }
 
   /**

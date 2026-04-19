@@ -217,6 +217,12 @@
   font-style: italic;
 }
 
+.paint-ref-label {
+  font-size: 14px;
+  color: #6a1b9a;
+  font-weight: 500;
+}
+
 .btn-set-paint {
   padding: 6px 12px;
   font-size: 13px;
@@ -248,6 +254,37 @@
   border-radius: 4px;
   font-size: 14px;
   font-family: 'Courier New', monospace;
+}
+
+.dash-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  color: #333;
+  background: #fff;
+  cursor: pointer;
+}
+
+.dash-select.mixed-control {
+  opacity: 0.75;
+}
+
+.dash-custom-input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+  color: #333;
+}
+
+.dash-custom-input:invalid,
+.dash-custom-input.invalid {
+  border-color: #e53935;
 }
 
 .range-input-group {

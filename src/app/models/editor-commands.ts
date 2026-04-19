@@ -215,6 +215,62 @@ export class OpacityCommand implements CoalesceableCommand {
   }
 }
 
+export class StrokeDashArrayCommand implements CoalesceableCommand {
+  readonly description: string;
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly shapeId: string,
+    private readonly oldDasharray: string,
+    private readonly newDasharray: string
+  ) {
+    this.description = newDasharray ? `Set dash pattern ${newDasharray}` : 'Remove dash pattern';
+    this.coalesceKey = `stroke-dasharray:${shapeId}`;
+  }
+
+  execute(): void {
+    this.svc.updateStrokeDasharray(this.shapeId, this.newDasharray);
+  }
+
+  undo(): void {
+    this.svc.updateStrokeDasharray(this.shapeId, this.oldDasharray);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as StrokeDashArrayCommand;
+    return new StrokeDashArrayCommand(this.svc, this.shapeId, this.oldDasharray, n.newDasharray);
+  }
+}
+
+export class StrokeDashOffsetCommand implements CoalesceableCommand {
+  readonly description: string;
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly shapeId: string,
+    private readonly oldOffset: number,
+    private readonly newOffset: number
+  ) {
+    this.description = `Set dash offset to ${newOffset}`;
+    this.coalesceKey = `stroke-dashoffset:${shapeId}`;
+  }
+
+  execute(): void {
+    this.svc.updateStrokeDashoffset(this.shapeId, this.newOffset);
+  }
+
+  undo(): void {
+    this.svc.updateStrokeDashoffset(this.shapeId, this.oldOffset);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as StrokeDashOffsetCommand;
+    return new StrokeDashOffsetCommand(this.svc, this.shapeId, this.oldOffset, n.newOffset);
+  }
+}
+
 export class TranslateCommand implements EditorCommand {
   readonly description: string;
 

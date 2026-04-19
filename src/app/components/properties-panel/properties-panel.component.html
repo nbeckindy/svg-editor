@@ -25,53 +25,66 @@
         <div class="property-value readonly">{{ idLabel(shape) }}</div>
       </div>
 
-      <div class="property-group">
-        <label class="property-label" for="fill-color">Fill Color</label>
-        @if (selectionCount() === 1 && shape.fillSource) {
-          <div
-            class="paint-source-row"
-            [class.class-controlled]="isClassControlled(shape.fillSource)">
-            <span class="paint-source-badge">{{ paintSourceText(shape.fillSource) }}</span>
-            @if (shape.fillSource.classNames?.length) {
-              <span
-                class="paint-source-classes"
-                [attr.title]="(shape.fillSource.classNames ?? []).join(' ')">
-                {{ (shape.fillSource.classNames ?? []).join(' ') }}
-              </span>
-            }
-            @if (shouldOfferBakeFill(shape)) {
+      @if (supportsFill(shape)) {
+        <div class="property-group">
+          <label class="property-label" for="fill-color">Fill Color</label>
+          @if (selectionCount() === 1 && shape.fillSource) {
+            <div
+              class="paint-source-row"
+              [class.class-controlled]="isClassControlled(shape.fillSource)">
+              <span class="paint-source-badge">{{ paintSourceText(shape.fillSource) }}</span>
+              @if (shape.fillSource.classNames?.length) {
+                <span
+                  class="paint-source-classes"
+                  [attr.title]="(shape.fillSource.classNames ?? []).join(' ')">
+                  {{ (shape.fillSource.classNames ?? []).join(' ') }}
+                </span>
+              }
+              @if (shouldOfferBakeFill(shape)) {
+                <button type="button" class="btn-paint-action" (click)="onBakeFillClick()">
+                  Apply to this shape
+                </button>
+              }
+            </div>
+          } @else if (selectionCount() > 1) {
+            <p class="paint-multi-hint">
+              Paint source details are hidden for multi-selection; fill edits update every selected shape.
+            </p>
+            @if (shouldOfferBakeFillOnAny()) {
               <button type="button" class="btn-paint-action" (click)="onBakeFillClick()">
-                Apply to this shape
+                Bake effective fill on all selected
               </button>
+            }
+          }
+          <div class="color-input-group">
+            @if (isGradientOrPatternFill(shape)) {
+              <div class="no-paint-value">
+                <span class="paint-ref-label">{{ paintTypeLabel(shape.fillPaintType) }} fill</span>
+              </div>
+            } @else if (allSelectedLackFill(shape)) {
+              <div class="no-paint-value">
+                <span class="no-paint-label">No fill</span>
+                <button type="button" class="btn-set-paint" (click)="onFillColorChange('#000000')">
+                  Set fill
+                </button>
+              </div>
+            } @else {
+              <app-color-picker
+                [color]="fillPickerColor(shape)"
+                [indeterminate]="fillMixed()"
+                (colorChange)="onFillColorChange($event)">
+              </app-color-picker>
             }
           </div>
-        } @else if (selectionCount() > 1) {
-          <p class="paint-multi-hint">
-            Paint source details are hidden for multi-selection; fill edits update every selected shape.
-          </p>
-          @if (shouldOfferBakeFillOnAny()) {
-            <button type="button" class="btn-paint-action" (click)="onBakeFillClick()">
-              Bake effective fill on all selected
-            </button>
-          }
-        }
-        <div class="color-input-group">
-          @if (allSelectedLackFill(shape)) {
-            <div class="no-paint-value">
-              <span class="no-paint-label">No fill</span>
-              <button type="button" class="btn-set-paint" (click)="onFillColorChange('#000000')">
-                Set fill
-              </button>
-            </div>
-          } @else {
-            <app-color-picker
-              [color]="fillPickerColor(shape)"
-              [indeterminate]="fillMixed()"
-              (colorChange)="onFillColorChange($event)">
-            </app-color-picker>
-          }
         </div>
-      </div>
+      } @else {
+        <div class="property-group">
+          <label class="property-label">Fill Color</label>
+          <div class="no-paint-value">
+            <span class="no-paint-label">Not applicable for {{ shapeTypeLabel(shape) }}</span>
+          </div>
+        </div>
+      }
 
       <div class="property-group">
         <label class="property-label" for="stroke-color">Stroke Color</label>
@@ -104,7 +117,11 @@
           }
         }
         <div class="color-input-group">
-          @if (allSelectedLackStroke(shape)) {
+          @if (isGradientOrPatternStroke(shape)) {
+            <div class="no-paint-value">
+              <span class="paint-ref-label">{{ paintTypeLabel(shape.strokePaintType) }} stroke</span>
+            </div>
+          } @else if (allSelectedLackStroke(shape)) {
             <div class="no-paint-value">
               <span class="no-paint-label">No stroke</span>
               <button type="button" class="btn-set-paint" (click)="onAddStrokeClick()">
@@ -149,6 +166,64 @@
             (change)="onStrokeWidthChange($event)">
         </div>
       </div>
+
+      @if (hasAnyStroke()) {
+        <div class="property-group">
+          <label class="property-label" for="dash-pattern">Dash Pattern</label>
+          @if (dashArraysMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <select
+            id="dash-pattern"
+            class="dash-select"
+            [class.mixed-control]="dashArraysMixed()"
+            [value]="currentDashPreset(shape)"
+            (change)="onDashPresetChange($event)">
+            @for (preset of dashPresets; track preset.value) {
+              <option [value]="preset.value">{{ preset.label }}</option>
+            }
+          </select>
+          @if (showCustomDashInput(shape)) {
+            <input
+              type="text"
+              class="dash-custom-input"
+              placeholder="e.g. 5,3,2,3"
+              [value]="shape.strokeDasharray ?? ''"
+              (change)="onCustomDashArrayChange($event)">
+          }
+        </div>
+
+        @if (shape.strokeDasharray) {
+          <div class="property-group">
+            <label class="property-label" for="dash-offset">Dash Offset</label>
+            @if (dashOffsetsMixed()) {
+              <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+            }
+            <div class="range-input-group">
+              <input
+                type="range"
+                id="dash-offset"
+                class="range-slider"
+                [class.mixed-control]="dashOffsetsMixed()"
+                min="0"
+                max="50"
+                step="0.5"
+                [value]="dashOffsetsMixed() ? 0 : (shape.strokeDashoffset ?? 0)"
+                (input)="onDashOffsetChange($event)">
+              <input
+                type="number"
+                class="range-number"
+                [class.mixed-control]="dashOffsetsMixed()"
+                min="0"
+                max="100"
+                step="0.5"
+                [value]="dashOffsetsMixed() ? '' : (shape.strokeDashoffset ?? 0)"
+                [attr.placeholder]="dashOffsetsMixed() ? '—' : ''"
+                (change)="onDashOffsetChange($event)">
+            </div>
+          </div>
+        }
+      }
 
       @if (shouldOfferSelectParentGroup(shape)) {
         <div class="paint-parent-row">
