@@ -383,6 +383,122 @@ export class UngroupCommand implements EditorCommand {
   }
 }
 
+/**
+ * Snapshot of fill-related DOM state needed to fully restore the cascade on undo.
+ */
+interface FillSnapshot {
+  fillAttr: string | null;
+  fillStyleValue: string;
+}
+
+export class BakeFillCommand implements EditorCommand {
+  readonly description = 'Bake fill to local';
+
+  private readonly before: FillSnapshot;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly shapeId: string
+  ) {
+    const svgInstance = this.svc.getSVGInstance();
+    const node = svgInstance?.findOne(`#${this.shapeId}`)?.node as SVGGraphicsElement | undefined;
+    this.before = {
+      fillAttr: node?.getAttribute('fill') ?? null,
+      fillStyleValue: node?.style?.getPropertyValue('fill')?.trim() ?? ''
+    };
+  }
+
+  execute(): void {
+    this.svc.bakeEffectiveFillToLocal(this.shapeId);
+  }
+
+  undo(): void {
+    const svgInstance = this.svc.getSVGInstance();
+    if (!svgInstance) return;
+    const shape = svgInstance.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
+    const node = shape?.node as SVGGraphicsElement | undefined;
+    if (!node) return;
+
+    if (this.before.fillAttr !== null) {
+      node.setAttribute('fill', this.before.fillAttr);
+    } else {
+      node.removeAttribute('fill');
+    }
+
+    if (this.before.fillStyleValue) {
+      node.style?.setProperty('fill', this.before.fillStyleValue);
+    } else {
+      node.style?.removeProperty('fill');
+    }
+  }
+}
+
+/**
+ * Snapshot of stroke-related DOM state needed to fully restore the cascade on undo.
+ */
+interface StrokeSnapshot {
+  strokeAttr: string | null;
+  strokeStyleValue: string;
+  strokeWidthAttr: string | null;
+  strokeWidthStyleValue: string;
+}
+
+export class BakeStrokeCommand implements EditorCommand {
+  readonly description = 'Bake stroke to local';
+
+  private readonly before: StrokeSnapshot;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly shapeId: string
+  ) {
+    const svgInstance = this.svc.getSVGInstance();
+    const node = svgInstance?.findOne(`#${this.shapeId}`)?.node as SVGGraphicsElement | undefined;
+    this.before = {
+      strokeAttr: node?.getAttribute('stroke') ?? null,
+      strokeStyleValue: node?.style?.getPropertyValue('stroke')?.trim() ?? '',
+      strokeWidthAttr: node?.getAttribute('stroke-width') ?? null,
+      strokeWidthStyleValue: node?.style?.getPropertyValue('stroke-width')?.trim() ?? ''
+    };
+  }
+
+  execute(): void {
+    this.svc.bakeEffectiveStrokeToLocal(this.shapeId);
+  }
+
+  undo(): void {
+    const svgInstance = this.svc.getSVGInstance();
+    if (!svgInstance) return;
+    const shape = svgInstance.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
+    const node = shape?.node as SVGGraphicsElement | undefined;
+    if (!node) return;
+
+    if (this.before.strokeAttr !== null) {
+      node.setAttribute('stroke', this.before.strokeAttr);
+    } else {
+      node.removeAttribute('stroke');
+    }
+
+    if (this.before.strokeStyleValue) {
+      node.style?.setProperty('stroke', this.before.strokeStyleValue);
+    } else {
+      node.style?.removeProperty('stroke');
+    }
+
+    if (this.before.strokeWidthAttr !== null) {
+      node.setAttribute('stroke-width', this.before.strokeWidthAttr);
+    } else {
+      node.removeAttribute('stroke-width');
+    }
+
+    if (this.before.strokeWidthStyleValue) {
+      node.style?.setProperty('stroke-width', this.before.strokeWidthStyleValue);
+    } else {
+      node.style?.removeProperty('stroke-width');
+    }
+  }
+}
+
 export class RemoveShapesCommand implements EditorCommand {
   readonly description = 'Remove shapes';
 

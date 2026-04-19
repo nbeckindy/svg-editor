@@ -15,7 +15,9 @@ import {
   AddStrokeCommand,
   RemoveStrokeCommand,
   SetStrokeCommand,
-  OpacityCommand
+  OpacityCommand,
+  BakeFillCommand,
+  BakeStrokeCommand
 } from '../../models/editor-commands';
 
 @Component({
@@ -202,20 +204,18 @@ export class PropertiesPanelComponent {
   }
 
   onBakeFillClick(): void {
-    for (const s of this.selectedShapesList()) {
-      if (this.shouldOfferBakeFill(s)) {
-        this.svgManipulationService.bakeEffectiveFillToLocal(s.id);
-      }
-    }
+    const commands = this.selectedShapesList()
+      .filter((s) => this.shouldOfferBakeFill(s))
+      .map((s) => new BakeFillCommand(this.svgManipulationService, s.id));
+    this.pushCommand(commands, 'Bake fill to local');
     this.syncAllSelectedFromDom();
   }
 
   onBakeStrokeClick(): void {
-    for (const s of this.selectedShapesList()) {
-      if (this.shouldOfferBakeStroke(s)) {
-        this.svgManipulationService.bakeEffectiveStrokeToLocal(s.id);
-      }
-    }
+    const commands = this.selectedShapesList()
+      .filter((s) => this.shouldOfferBakeStroke(s))
+      .map((s) => new BakeStrokeCommand(this.svgManipulationService, s.id));
+    this.pushCommand(commands, 'Bake stroke to local');
     this.syncAllSelectedFromDom();
   }
 
