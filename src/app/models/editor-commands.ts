@@ -1,5 +1,6 @@
 import { Matrix, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../services/svg-manipulation.service';
+import { ShapeSelectionService } from '../services/shape-selection.service';
 import { type ResizeCorner } from '../utils/selection-resize';
 
 export interface EditorCommand {
@@ -620,7 +621,8 @@ export class RemoveShapesCommand implements EditorCommand {
 
   constructor(
     private readonly svc: SvgManipulationService,
-    private readonly shapeIds: string[]
+    private readonly shapeIds: string[],
+    private readonly selectionSvc?: ShapeSelectionService
   ) {
     this.serializedMarkup = new Map();
     this.insertionIndices = new Map();
@@ -644,6 +646,7 @@ export class RemoveShapesCommand implements EditorCommand {
 
   execute(): void {
     this.svc.removeShapes(this.shapeIds);
+    this.selectionSvc?.clearSelection();
   }
 
   undo(): void {
@@ -671,6 +674,18 @@ export class RemoveShapesCommand implements EditorCommand {
         contentNode.insertBefore(restored, children[idx]);
       } else {
         contentNode.appendChild(restored);
+      }
+    }
+
+    if (this.selectionSvc) {
+      const restoredProps = sorted
+        .map((id) => {
+          const el = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+          return el ? this.svc.getShapeProperties(el) : null;
+        })
+        .filter((p): p is NonNullable<typeof p> => p !== null);
+      if (restoredProps.length > 0) {
+        this.selectionSvc.selectShapes(restoredProps);
       }
     }
   }

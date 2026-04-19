@@ -25,11 +25,10 @@ import {
   GroupCommand,
   UngroupCommand
 } from '../../models/editor-commands';
+import { DragGesture, ResizeGesture, RotateGesture, type GestureContext, type Rect } from './gestures';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
-/** SVG.js `.size()` must be > 0; wrapper CSS can be subpixel to match the blue overlay. */
-const GHOST_SVG_MIN_PX = 1e-6;
 
 const CONTENT_SHAPE_TAGS = new Set([
   'circle',
@@ -47,15 +46,6 @@ const CONTENT_SHAPE_TAGS = new Set([
 
 /** After loading SVG, fit the editor stage in the canvas with this much inset (margin). */
 const INITIAL_LOAD_VIEWPORT_FIT_FRACTION = 0.88;
-
-/** In-document preview clones (drag / resize / rotate); participates in SVG paint order. */
-const EDITOR_GHOST_ATTR = 'data-editor-ghost';
-
-type GhostPreviewFragment = {
-  outerGroup: SVGElement;
-  nestedSvg: Svg;
-  worldToUnion: SVGElement;
-};
 
 /** Round to nearest "nice" step (1, 2, 5 × 10^n) for readable labels. */
 function roundToNiceStep(value: number): number {
@@ -92,21 +82,19 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   overlayViewBox = '0 0 100 100';
   wrapperWidth = 0;
   wrapperHeight = 0;
-  /** Offset of zoom-wrapper (content) origin from viewport top-left; used so ruler 0,0 aligns with content 0,0. */
   rulerOriginOffsetX = 0;
   rulerOriginOffsetY = 0;
+
   get overlayWidthPx(): number {
     return this.wrapperWidth * this.canvasView.scale;
   }
   get overlayHeightPx(): number {
     return this.wrapperHeight * this.canvasView.scale;
   }
-  /** Current zoom as percentage (100% = original SVG size). */
   get zoomLevelPercent(): number {
     return Math.round(this.canvasView.scale * 100);
   }
 
-  /** Horizontal ruler ticks: position (px) and value (viewBox units). 0,0 aligns with content origin. */
   get horizontalRulerTicks(): { position: number; value: number; major: boolean }[] {
     const originX = this.rulerOriginOffsetX + this.canvasView.panX;
     return this.getRulerTicks(
@@ -119,8 +107,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     );
   }
 
-  /** Vertical ruler ticks (half as many as horizontal). */
-  /** Corner resize handles when selector is active and selection exists. */
   get showResizeHandles(): boolean {
     return (
       this.editorTool.getCurrentTool() === 'selector' &&
@@ -134,7 +120,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     );
   }
 
-  /** Offset above selection (overlay SVG units) for the rotate handle. */
   readonly rotateHandleOffset = 28;
 
   get verticalRulerTicks(): { position: number; value: number; major: boolean }[] {
@@ -173,41 +158,39 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     return out;
   }
-  /** SVG-coordinate bbox of selected shape; overlay pixel rect is derived from this so zoom updates the highlight. */
-  private lastBbox: { x: number; y: number; width: number; height: number } | null = null;
-  /** During drag, overlay rect in overlay-container pixel coords so the blue outline follows the ghost. */
-  private dragOverlayRect: { x: number; y: number; width: number; height: number } | null = null;
-  /** Cache key and result so the getter is stable across re-reads in the same CD cycle (avoids NG0100). */
+
+  // --- Gesture handlers ---
+  private readonly drag = new DragGesture();
+  private readonly resize = new ResizeGesture();
+  private readonly rotate = new RotateGesture();
+
+  // Proxy getters for template bindings and inter-gesture guards
+  get isDraggingShape(): boolean { return this.drag.isActive; }
+  get isResizingSelection(): boolean { return this.resize.isActive; }
+  get isRotatingSelection(): boolean { return this.rotate.isActive; }
+
+  // --- Shared selection/highlight state ---
+  lastBbox: { x: number; y: number; width: number; height: number } | null = null;
   private _highlightRectCache: { x: number; y: number; width: number; height: number } | null = null;
-  private _highlightRectCacheKey = '';
-  /**
-   * Axis-aligned selection frame in overlay pixel space (only right angles), matching typical design-tool UX.
-   * Prefer the tight screen-space union of selected elements’ `getBoundingClientRect()` so the box hugs
-   * **rendered** ink after rotation/transform; falls back to mapping `lastBbox` when DOM rects are unavailable.
-   */
+  _highlightRectCacheKey = '';
+
   get highlightRect(): { x: number; y: number; width: number; height: number } | null {
-    if (this.isResizingSelection && this.resizeOverlayRect) return this.resizeOverlayRect;
-    if (this.isRotatingSelection && this.rotateUnionStart && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
-      return this.svgBboxToOverlayPixels(this.rotateUnionStart);
+    if (this.isResizingSelection && this.resize.overlayRect) return this.resize.overlayRect;
+    if (this.isRotatingSelection && this.rotate.unionStart && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
+      return this.svgBboxToOverlayPixels(this.rotate.unionStart);
     }
-    if (this.isDraggingShape && this.dragOverlayRect) return this.dragOverlayRect;
+    if (this.isDraggingShape && this.drag.overlayRect) return this.drag.overlayRect;
     if (!this.lastBbox || this.wrapperWidth <= 0 || this.wrapperHeight <= 0) {
       this._highlightRectCache = null;
       this._highlightRectCacheKey = '';
       return null;
     }
-    // Include documentRevision: lastBbox alone can match after different rotations (same user-space
-    // AABB) while getBoundingClientRect changes — caching only on lastBbox would reuse stale DOM union.
-    // Include selected ids so switching selection without bbox change still invalidates.
     const idKey = this.shapeSelection.getSelectedShapes().map((s) => s.id).join(',');
     const key = `${this.lastBbox.x}-${this.lastBbox.y}-${this.lastBbox.width}-${this.lastBbox.height}-${this.wrapperWidth}-${this.wrapperHeight}-${this.canvasView.scale}-${this.canvasView.panX}-${this.canvasView.panY}-${this.svgManipulation.documentRevision()}-${idKey}`;
     if (this._highlightRectCacheKey === key) {
       return this._highlightRectCache;
     }
     this._highlightRectCacheKey = key;
-    // Prefer screen-space union → overlay pixels so the frame matches painted bounds (same as
-    // getBoundingClientRect), avoiding user-space ↔ overlay rounding drift with preserveAspectRatio
-    // none + CSS zoom on the zoom wrapper.
     const fromDom = this.selectionHighlightOverlayFromDom();
     const resolved =
       fromDom ?? this.svgBboxToOverlayPixels(this.lastBbox);
@@ -220,7 +203,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return this._highlightRectCache;
   }
 
-  /** Debug: filter DevTools console with `[selection-highlight]`. */
   private logSelectionHighlightRecompute(
     source: 'dom-union' | 'lastBbox-fallback',
     fromDom: { x: number; y: number; width: number; height: number } | null,
@@ -254,10 +236,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     });
   }
 
-  /**
-   * Union of selected shapes’ client rects relative to the highlight overlay — i.e. the smallest axis-aligned
-   * rectangle in **screen pixels** that contains the painted bounds (tight AABB of what the browser draws).
-   */
   private selectionHighlightOverlayFromDom(): { x: number; y: number; width: number; height: number } | null {
     const overlayEl = this.highlightOverlayContainer()?.nativeElement;
     const svg = this.svgManipulation.getSVGInstance();
@@ -295,10 +273,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     };
   }
 
-  /**
-   * Overlay-space rect per selected shape (for multi-select: one outline each so every item reads as selected).
-   * Empty when 0–1 shapes, while transforming, or when overlay/DOM is unavailable (falls back to union `highlightRect`).
-   */
   get multiSelectionOutlineRects(): { x: number; y: number; width: number; height: number; id: string }[] {
     if (this.isDraggingShape || this.isResizingSelection || this.isRotatingSelection) return [];
     if (this.wrapperWidth <= 0 || this.wrapperHeight <= 0) return [];
@@ -327,24 +301,34 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return out.length >= 2 ? out : [];
   }
 
-  /** SVG `transform` for the blue selection frame while rotating (union center, same angle as commit). */
   selectionRotateHighlightTransform(_hr: { x: number; y: number; width: number; height: number }): string {
-    if (!this.isRotatingSelection || !this.rotatePivotDoc) return '';
+    if (!this.isRotatingSelection || !this.rotate.pivotDoc) return '';
     const po = this.svgBboxToOverlayPixels({
-      x: this.rotatePivotDoc.x,
-      y: this.rotatePivotDoc.y,
+      x: this.rotate.pivotDoc.x,
+      y: this.rotate.pivotDoc.y,
       width: 0,
       height: 0
     });
-    return `rotate(${radiansToDegrees(this.rotateAccumulatedRad)},${po.x},${po.y})`;
+    return `rotate(${radiansToDegrees(this.rotate.accumulatedRad)},${po.x},${po.y})`;
   }
 
-  /** Set only in syncOverlayViewBox so it stays stable during CD. Document viewBox stroke drawn in overlay so it stays constant width at any zoom. */
   private _viewBoxOverlayRect: { x: number; y: number; width: number; height: number } | null = null;
   get viewBoxOverlayRect(): { x: number; y: number; width: number; height: number } | null {
     return this._viewBoxOverlayRect;
   }
-  /** Screen rect for zoom marquee overlay (position: fixed; left, top, width, height in px). */
+
+  // --- Pan state ---
+  private panStartClientX = 0;
+  private panStartClientY = 0;
+  private panStartX = 0;
+  private panStartY = 0;
+
+  // --- Zoom marquee state ---
+  isZoomMarquee = false;
+  private zoomMarqueeStart: { clientX: number; clientY: number } | null = null;
+  private zoomMarqueeEnd: { clientX: number; clientY: number } | null = null;
+  private zoomMarqueeJustEnded = false;
+
   get zoomMarqueeRect(): { left: number; top: number; width: number; height: number } | null {
     if (!this.isZoomMarquee || !this.zoomMarqueeStart || !this.zoomMarqueeEnd) return null;
     const left = Math.min(this.zoomMarqueeStart.clientX, this.zoomMarqueeEnd.clientX);
@@ -353,7 +337,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const height = Math.abs(this.zoomMarqueeEnd.clientY - this.zoomMarqueeStart.clientY);
     return { left, top, width, height };
   }
-  /** Screen rect for selection marquee (selector tool). */
+
+  // --- Selection marquee state ---
+  isSelectionMarquee = false;
+  private selectionMarqueeStart: { clientX: number; clientY: number } | null = null;
+  private selectionMarqueeEnd: { clientX: number; clientY: number } | null = null;
+  private selectionMarqueeJustEnded = false;
+
   get selectionMarqueeRect(): { left: number; top: number; width: number; height: number } | null {
     if (!this.isSelectionMarquee || !this.selectionMarqueeStart || !this.selectionMarqueeEnd) return null;
     const left = Math.min(this.selectionMarqueeStart.clientX, this.selectionMarqueeEnd.clientX);
@@ -362,71 +352,29 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const height = Math.abs(this.selectionMarqueeEnd.clientY - this.selectionMarqueeStart.clientY);
     return { left, top, width, height };
   }
-  private panStartClientX = 0;
-  private panStartClientY = 0;
-  private panStartX = 0;
-  private panStartY = 0;
 
-  /** Shape drag: when user drags the selected element(s) we hide them and show a ghost until mouseup. */
-  isDraggingShape = false;
-  /** Ids of all shapes being dragged (one or many for group drag). */
-  private dragShapeIds: string[] = [];
-  /** True after drag ends so we ignore the following click (which would target SVG root and clear selection). */
-  private dragJustEnded = false;
-  private dragStartSvg: { x: number; y: number } | null = null;
-  private dragStartBbox: { x: number; y: number; width: number; height: number } | null = null;
-  private dragSnapshot: Map<string, Matrix> = new Map();
-  private dragGhostFragments: GhostPreviewFragment[] = [];
-
-  /** Proportional resize from corner handles (ghost preview; DOM updates on mouseup). */
-  isResizingSelection = false;
-  private resizeHandle: ResizeCorner | null = null;
-  private resizeUnionStart: BBox | null = null;
-  private resizeLastUnion: BBox | null = null;
-  private resizeSnapshot: Map<string, Matrix> = new Map();
-  private resizeGhostFragments: GhostPreviewFragment[] = [];
-  /** Overlay pixels for selection outline during resize (matches ghost). */
-  private resizeOverlayRect: { x: number; y: number; width: number; height: number } | null = null;
-  /** After resize mouseup, ignore next canvas click so selection is not cleared. */
-  private resizeJustEnded = false;
-
-  /** Rotation from selection handle (ghost preview; DOM updates on mouseup). */
-  isRotatingSelection = false;
-  private rotateSnapshot: Map<string, Matrix> = new Map();
-  private rotateUnionStart: BBox | null = null;
-  private rotatePivotDoc: { x: number; y: number } | null = null;
-  private rotateAccumulatedRad = 0;
-  private rotateLastPointerSvg: { x: number; y: number } | null = null;
-  private rotateGhostFragments: GhostPreviewFragment[] = [];
-  private rotateJustEnded = false;
-
-  /** Prefixed def clones in root `<defs>` so nested ghost SVGs can reference `url(#id)` uniquely. */
-  private ghostDefPrefix: string | null = null;
-  private ghostDefElements: Element[] = [];
-
-  /** Zoom marquee: drag-to-rectangle zoom. */
-  isZoomMarquee = false;
-  private zoomMarqueeStart: { clientX: number; clientY: number } | null = null;
-  private zoomMarqueeEnd: { clientX: number; clientY: number } | null = null;
-  /** After marquee mouseup, ignore the next click so it doesn't zoom in. */
-  private zoomMarqueeJustEnded = false;
-
-  /** Which group the user has drilled into (double-click); children are individually selectable. */
   drilledIntoGroupId: string | null = null;
 
-  /** Selection marquee: drag-to-rectangle multi-select (selector tool). */
-  isSelectionMarquee = false;
-  private selectionMarqueeStart: { clientX: number; clientY: number } | null = null;
-  private selectionMarqueeEnd: { clientX: number; clientY: number } | null = null;
-  /** After selection marquee mouseup, ignore the next click so it doesn't clear selection. */
-  private selectionMarqueeJustEnded = false;
+  // --- GestureContext implementation ---
+  private get gestureCtx(): GestureContext {
+    return {
+      svgManipulation: this.svgManipulation,
+      shapeSelection: this.shapeSelection,
+      editorHistory: this.editorHistory,
+      canvasView: this.canvasView,
+      cdr: this.cdr,
+      svgContainer: this.svgContainer,
+      zoomWrapper: this.zoomWrapper,
+      highlightOverlayContainer: this.highlightOverlayContainer,
+      overlayViewBox: this.overlayViewBox,
+      clientToEditorSvgPoint: (cx: number, cy: number) => this.clientToEditorSvgPoint(cx, cy),
+      svgBboxToOverlayPixels: (bbox: Rect) => this.svgBboxToOverlayPixels(bbox),
+      invalidateHighlightCache: () => { this._highlightRectCacheKey = ''; },
+      setLastBbox: (bbox: Rect | null) => { this.lastBbox = bbox; }
+    };
+  }
 
-  /**
-   * Document keyboard shortcuts for the canvas (see `shouldIgnoreKeyboardShortcuts`):
-   * - **Ctrl/Cmd+A** (selector tool): select all shapes in paint order; clip/mask groups expanded like marquee.
-   * - **Escape**: cancel selection or zoom marquee if active; otherwise clear selection.
-   * - **Delete / Backspace** (selector tool): remove selected shapes (clip/mask groups expanded); no-op if nothing selected.
-   */
+  // --- Keyboard shortcuts ---
   onKeyDown(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
     if (this.shouldIgnoreKeyboardShortcuts(event)) return;
@@ -487,9 +435,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.shapeSelection.getSelectedShapes().length > 0
     ) {
       const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-      const cmd = new RemoveShapesCommand(this.svgManipulation, ids);
+      const cmd = new RemoveShapesCommand(this.svgManipulation, ids, this.shapeSelection);
       this.editorHistory.pushAndExecute(cmd);
-      this.shapeSelection.clearSelection();
       this.svgManipulation.clearHighlight();
       event.preventDefault();
     }
@@ -583,6 +530,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.drilledIntoGroupId = null;
   }
 
+  // --- Mouse event orchestration ---
   onDocumentMouseMove(event: MouseEvent): void {
     if (this.isSelectionMarquee) {
       this.selectionMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
@@ -594,31 +542,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.cdr.detectChanges();
       return;
     }
-    if (this.isResizingSelection && this.resizeHandle && this.resizeUnionStart && this.resizeGhostFragments.length > 0) {
-      const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
-      if (point) {
-        const unionAfter = computeProportionalResizedUnion(this.resizeUnionStart, this.resizeHandle, point);
-        this.resizeLastUnion = unionAfter;
-        this.updateResizeGhost(unionAfter);
-      }
-      this.cdr.detectChanges();
+    if (this.isResizingSelection) {
+      this.resize.move(this.gestureCtx, event.clientX, event.clientY);
       return;
     }
-    if (
-      this.isRotatingSelection &&
-      this.rotateGhostFragments.length > 0 &&
-      this.rotateUnionStart &&
-      this.rotatePivotDoc &&
-      this.rotateLastPointerSvg
-    ) {
-      const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
-      if (point) {
-        const d = rotationDeltaFromPointerMoveRad(this.rotatePivotDoc, this.rotateLastPointerSvg, point);
-        this.rotateAccumulatedRad += d;
-        this.rotateLastPointerSvg = point;
-        this.updateRotateGhost(this.rotateAccumulatedRad);
-      }
-      this.cdr.detectChanges();
+    if (this.isRotatingSelection) {
+      this.rotate.move(this.gestureCtx, event.clientX, event.clientY);
       return;
     }
     if (this.isPanning) {
@@ -626,229 +555,134 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         this.panStartX + (event.clientX - this.panStartClientX),
         this.panStartY + (event.clientY - this.panStartClientY)
       );
-    } else if (this.isDraggingShape && this.dragGhostFragments.length > 0 && this.dragStartSvg && this.dragStartBbox) {
-      const currentSvg = this.clientToEditorSvgPoint(event.clientX, event.clientY);
-      if (currentSvg) {
-        const dx = currentSvg.x - this.dragStartSvg.x;
-        const dy = currentSvg.y - this.dragStartSvg.y;
-        const currentBbox = {
-          x: this.dragStartBbox.x + dx,
-          y: this.dragStartBbox.y + dy,
-          width: this.dragStartBbox.width,
-          height: this.dragStartBbox.height
-        };
-        this.updateDragGhostAndOverlay(currentBbox);
-      }
+    } else if (this.isDraggingShape) {
+      this.drag.move(this.gestureCtx, event.clientX, event.clientY);
     }
   }
 
   onDocumentMouseUp(event: MouseEvent): void {
     if (event.button !== 0) return;
+
     if (this.isSelectionMarquee && this.selectionMarqueeStart && this.selectionMarqueeEnd) {
-      const screenW = Math.abs(this.selectionMarqueeEnd.clientX - this.selectionMarqueeStart.clientX);
-      const screenH = Math.abs(this.selectionMarqueeEnd.clientY - this.selectionMarqueeStart.clientY);
-      const isTinyDrag =
-        screenW < MARQUEE_MIN_DRAG_PX && screenH < MARQUEE_MIN_DRAG_PX;
-      if (isTinyDrag) {
-        this.selectionMarqueeJustEnded = false;
-      } else {
-        const startSvg = this.clientToEditorSvgPoint(
-          this.selectionMarqueeStart.clientX,
-          this.selectionMarqueeStart.clientY
-        );
-        const endSvg = this.clientToEditorSvgPoint(
-          this.selectionMarqueeEnd.clientX,
-          this.selectionMarqueeEnd.clientY
-        );
-        if (startSvg && endSvg) {
-          const x = Math.min(startSvg.x, endSvg.x);
-          const y = Math.min(startSvg.y, endSvg.y);
-          const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
-          const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
-          const hits = this.svgManipulation.getShapePropertiesIntersectingRect({ x, y, width: w, height: h });
-          const expanded = this.svgManipulation.expandSelectionByClipGroups(hits);
-          if (event.shiftKey) {
-            if (expanded.length > 0) {
-              this.shapeSelection.mergeShapesIntoSelection(expanded);
-            }
-          } else if (expanded.length > 0) {
-            this.shapeSelection.selectShapes(expanded);
-          } else {
-            this.shapeSelection.clearSelection();
-          }
-          this.svgManipulation.clearHighlight();
-          this.selectionMarqueeJustEnded = true;
-        } else {
-          this.selectionMarqueeJustEnded = false;
-        }
-      }
-      this.isSelectionMarquee = false;
-      this.selectionMarqueeStart = null;
-      this.selectionMarqueeEnd = null;
-      this.cdr.detectChanges();
+      this.commitSelectionMarquee(event);
       return;
     }
     if (this.isZoomMarquee && this.zoomMarqueeStart && this.zoomMarqueeEnd) {
-      const viewportEl = this.zoomWrapper()?.nativeElement?.closest('.canvas-container') as HTMLElement | undefined;
-      if (viewportEl && viewportEl.clientWidth > 0 && viewportEl.clientHeight > 0) {
-        this.wrapperWidth = viewportEl.clientWidth;
-        this.wrapperHeight = viewportEl.clientHeight;
-      }
-      const rawRect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
-      if (rawRect && this.svgContent() && this.canvasView.isInitialized()) {
-        const scale = this.canvasView.scale;
-        if (scale <= 0) {
-          this.isZoomMarquee = false;
-          this.zoomMarqueeStart = null;
-          this.zoomMarqueeEnd = null;
-          this.cdr.detectChanges();
-          return;
-        }
-        const startSvg = {
-          x: (this.zoomMarqueeStart.clientX - rawRect.left) / scale,
-          y: (this.zoomMarqueeStart.clientY - rawRect.top) / scale
-        };
-        const endSvg = {
-          x: (this.zoomMarqueeEnd.clientX - rawRect.left) / scale,
-          y: (this.zoomMarqueeEnd.clientY - rawRect.top) / scale
-        };
-        {
-          const x = Math.min(startSvg.x, endSvg.x);
-          const y = Math.min(startSvg.y, endSvg.y);
-          const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
-          const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
-          const screenW = Math.abs(this.zoomMarqueeEnd.clientX - this.zoomMarqueeStart.clientX);
-          const screenH = Math.abs(this.zoomMarqueeEnd.clientY - this.zoomMarqueeStart.clientY);
-          const isTinyDrag =
-            screenW < MARQUEE_MIN_DRAG_PX && screenH < MARQUEE_MIN_DRAG_PX;
-          if (isTinyDrag) {
-            this.zoomMarqueeJustEnded = false;
-          } else if (w > 0 && h > 0 && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
-            this.canvasView.zoomToFitRect(x, y, w, h, this.wrapperWidth, this.wrapperHeight);
-            const wrapperEl = this.zoomWrapper()?.nativeElement;
-            if (viewportEl && wrapperEl) {
-              const wrapperRect = wrapperEl.getBoundingClientRect();
-              const containerRect = viewportEl.getBoundingClientRect();
-              this.canvasView.panX += containerRect.left - wrapperRect.left;
-              this.canvasView.panY += containerRect.top - wrapperRect.top;
-            }
-            this.updateViewBoxOverlayRect();
-            this.zoomMarqueeJustEnded = true;
-          } else {
-            this.zoomMarqueeJustEnded = false;
-          }
-        }
-      } else {
-        this.zoomMarqueeJustEnded = false;
-      }
-      this.isZoomMarquee = false;
-      this.zoomMarqueeStart = null;
-      this.zoomMarqueeEnd = null;
-      this.cdr.detectChanges();
+      this.commitZoomMarquee();
       return;
     }
+
     this.isPanning = false;
-    if (this.isResizingSelection && this.resizeHandle && this.resizeUnionStart && this.resizeLastUnion) {
-      const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-      const cmd = new UnionScaleCommand(
-        this.svgManipulation, ids,
-        this.resizeUnionStart, this.resizeLastUnion,
-        this.resizeSnapshot, this.resizeHandle
-      );
-      this.editorHistory.pushAndExecute(cmd);
-      for (const id of ids) {
-        this.svgManipulation.setShapeVisibility(id, true);
-      }
-      this.removeResizeGhost();
-      this.isResizingSelection = false;
-      this.resizeHandle = null;
-      this.resizeUnionStart = null;
-      this.resizeLastUnion = null;
-      this.resizeSnapshot = new Map();
-      this.resizeOverlayRect = null;
-      const unionBbox = this.svgManipulation.getUnionBBox(ids);
-      if (unionBbox) {
-        this.lastBbox = unionBbox;
-        this._highlightRectCacheKey = '';
-      }
-      this.resizeJustEnded = true;
-      this.cdr.detectChanges();
+
+    if (this.isResizingSelection) {
+      this.resize.end(this.gestureCtx);
       return;
     }
-    if (this.isRotatingSelection && this.rotateUnionStart && this.rotatePivotDoc) {
-      const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-      const committedRotateRad = this.rotateAccumulatedRad;
-      const cmd = new UnionRotateCommand(
-        this.svgManipulation, ids,
-        this.rotatePivotDoc, radiansToDegrees(committedRotateRad),
-        this.rotateSnapshot
-      );
-      this.editorHistory.pushAndExecute(cmd);
-      for (const id of ids) {
-        this.svgManipulation.setShapeVisibility(id, true);
-      }
-      this.removeRotateGhost();
-      this.isRotatingSelection = false;
-      this.rotateUnionStart = null;
-      this.rotatePivotDoc = null;
-      this.rotateAccumulatedRad = 0;
-      this.rotateLastPointerSvg = null;
-      this.rotateSnapshot = new Map();
-      const unionBbox = this.svgManipulation.getUnionBBox(ids);
-      if (unionBbox) {
-        this.lastBbox = unionBbox;
-        this._highlightRectCacheKey = '';
-      }
-      this.rotateJustEnded = true;
-      this.cdr.detectChanges();
+    if (this.isRotatingSelection) {
+      this.rotate.end(this.gestureCtx);
       return;
     }
-    if (this.isDraggingShape && this.dragShapeIds.length > 0 && this.dragStartSvg) {
-      let dx = 0;
-      let dy = 0;
-      const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
-      if (point) {
-        dx = point.x - this.dragStartSvg.x;
-        dy = point.y - this.dragStartSvg.y;
-      }
-      const dragCmds: EditorCommand[] = this.dragShapeIds.map(
-        (id) => new TranslateCommand(this.svgManipulation, id, dx, dy, this.dragSnapshot)
-      );
-      this.editorHistory.pushAndExecute(
-        dragCmds.length === 1 ? dragCmds[0] : new CompositeCommand(dragCmds, 'Move shapes')
-      );
-      for (const shapeId of this.dragShapeIds) {
-        this.svgManipulation.setShapeVisibility(shapeId, true);
-      }
-      this.removeDragGhost();
-      this.dragOverlayRect = null;
-      this.isDraggingShape = false;
-      this.dragShapeIds = [];
-      this.dragStartSvg = null;
-      this.dragStartBbox = null;
-      this.dragSnapshot = new Map();
-      this.dragJustEnded = true;
-      const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-      const unionBbox = this.svgManipulation.getUnionBBox(selectedIds);
-      if (unionBbox) {
-        this.lastBbox = unionBbox;
-        this._highlightRectCacheKey = '';
-      }
-      this.cdr.detectChanges();
+    if (this.isDraggingShape) {
+      this.drag.end(this.gestureCtx, event.clientX, event.clientY);
     }
   }
 
-  private updateDragGhostAndOverlay(currentBbox: { x: number; y: number; width: number; height: number }): void {
-    this.dragOverlayRect = this.svgBboxToOverlayPixels(currentBbox);
-    if (this.dragGhostFragments.length === 0 || !this.dragStartBbox) return;
-    // Move the outer <g> only. Updating nested <svg> x/y/viewBox/size + inner matrix every frame
-    // can fail to apply visually with SVG.js; translate is stable and matches fixed-screen drag.
-    const dx = currentBbox.x - this.dragStartBbox.x;
-    const dy = currentBbox.y - this.dragStartBbox.y;
-    const m = new Matrix().translate(dx, dy);
-    for (const f of this.dragGhostFragments) {
-      (f.outerGroup as Svg).matrix(m);
+  private commitSelectionMarquee(event: MouseEvent): void {
+    const screenW = Math.abs(this.selectionMarqueeEnd!.clientX - this.selectionMarqueeStart!.clientX);
+    const screenH = Math.abs(this.selectionMarqueeEnd!.clientY - this.selectionMarqueeStart!.clientY);
+    const isTinyDrag = screenW < MARQUEE_MIN_DRAG_PX && screenH < MARQUEE_MIN_DRAG_PX;
+    if (isTinyDrag) {
+      this.selectionMarqueeJustEnded = false;
+    } else {
+      const startSvg = this.clientToEditorSvgPoint(
+        this.selectionMarqueeStart!.clientX,
+        this.selectionMarqueeStart!.clientY
+      );
+      const endSvg = this.clientToEditorSvgPoint(
+        this.selectionMarqueeEnd!.clientX,
+        this.selectionMarqueeEnd!.clientY
+      );
+      if (startSvg && endSvg) {
+        const x = Math.min(startSvg.x, endSvg.x);
+        const y = Math.min(startSvg.y, endSvg.y);
+        const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
+        const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
+        const hits = this.svgManipulation.getShapePropertiesIntersectingRect({ x, y, width: w, height: h });
+        const expanded = this.svgManipulation.expandSelectionByClipGroups(hits);
+        if (event.shiftKey) {
+          if (expanded.length > 0) {
+            this.shapeSelection.mergeShapesIntoSelection(expanded);
+          }
+        } else if (expanded.length > 0) {
+          this.shapeSelection.selectShapes(expanded);
+        } else {
+          this.shapeSelection.clearSelection();
+        }
+        this.svgManipulation.clearHighlight();
+        this.selectionMarqueeJustEnded = true;
+      } else {
+        this.selectionMarqueeJustEnded = false;
+      }
     }
+    this.isSelectionMarquee = false;
+    this.selectionMarqueeStart = null;
+    this.selectionMarqueeEnd = null;
+    this.cdr.detectChanges();
+  }
+
+  private commitZoomMarquee(): void {
+    const viewportEl = this.zoomWrapper()?.nativeElement?.closest('.canvas-container') as HTMLElement | undefined;
+    if (viewportEl && viewportEl.clientWidth > 0 && viewportEl.clientHeight > 0) {
+      this.wrapperWidth = viewportEl.clientWidth;
+      this.wrapperHeight = viewportEl.clientHeight;
+    }
+    const rawRect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
+    if (rawRect && this.svgContent() && this.canvasView.isInitialized()) {
+      const scale = this.canvasView.scale;
+      if (scale <= 0) {
+        this.isZoomMarquee = false;
+        this.zoomMarqueeStart = null;
+        this.zoomMarqueeEnd = null;
+        this.cdr.detectChanges();
+        return;
+      }
+      const startSvg = {
+        x: (this.zoomMarqueeStart!.clientX - rawRect.left) / scale,
+        y: (this.zoomMarqueeStart!.clientY - rawRect.top) / scale
+      };
+      const endSvg = {
+        x: (this.zoomMarqueeEnd!.clientX - rawRect.left) / scale,
+        y: (this.zoomMarqueeEnd!.clientY - rawRect.top) / scale
+      };
+      const x = Math.min(startSvg.x, endSvg.x);
+      const y = Math.min(startSvg.y, endSvg.y);
+      const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
+      const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
+      const screenW = Math.abs(this.zoomMarqueeEnd!.clientX - this.zoomMarqueeStart!.clientX);
+      const screenH = Math.abs(this.zoomMarqueeEnd!.clientY - this.zoomMarqueeStart!.clientY);
+      const isTinyDrag = screenW < MARQUEE_MIN_DRAG_PX && screenH < MARQUEE_MIN_DRAG_PX;
+      if (isTinyDrag) {
+        this.zoomMarqueeJustEnded = false;
+      } else if (w > 0 && h > 0 && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
+        this.canvasView.zoomToFitRect(x, y, w, h, this.wrapperWidth, this.wrapperHeight);
+        const wrapperEl = this.zoomWrapper()?.nativeElement;
+        if (viewportEl && wrapperEl) {
+          const wrapperRect = wrapperEl.getBoundingClientRect();
+          const containerRect = viewportEl.getBoundingClientRect();
+          this.canvasView.panX += containerRect.left - wrapperRect.left;
+          this.canvasView.panY += containerRect.top - wrapperRect.top;
+        }
+        this.updateViewBoxOverlayRect();
+        this.zoomMarqueeJustEnded = true;
+      } else {
+        this.zoomMarqueeJustEnded = false;
+      }
+    } else {
+      this.zoomMarqueeJustEnded = false;
+    }
+    this.isZoomMarquee = false;
+    this.zoomMarqueeStart = null;
+    this.zoomMarqueeEnd = null;
     this.cdr.detectChanges();
   }
 
@@ -888,7 +722,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
             this._highlightRectCacheKey = '';
           }
         }
-        // Rely on next CD run (e.g. fixture.detectChanges() in tests) so we don't trigger NG0100
         this.cdr.markForCheck();
       }, 0);
     });
@@ -909,7 +742,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
-  /** Sync overlay from the main SVG (editor stage). Its viewBox is the union of document viewBox and content; shape bboxes are in the same coordinate system. */
   private syncOverlayViewBox(): void {
     const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
     if (!mainSvg) {
@@ -969,13 +801,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this._viewBoxOverlayRect = null;
   }
 
-  /** Recompute and set _viewBoxOverlayRect. Uses the same logic as syncOverlayViewBox (document viewBox → svgBboxToOverlayPixels) so zoom and select stay in sync. */
   private updateViewBoxOverlayRect(): void {
     this.syncOverlayViewBox();
   }
 
-  /** Convert SVG viewBox bbox to overlay pixel coordinates. Uses the main SVG viewport and its position within the wrapper so alignment matches the browser. */
-  private svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
+  svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
     const parts = this.overlayViewBox.split(/\s+/);
     const vbMinX = parts.length >= 4 ? Number(parts[0]) || 0 : 0;
     const vbMinY = parts.length >= 4 ? Number(parts[1]) || 0 : 0;
@@ -1047,12 +877,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     };
   }
 
-  /**
-   * Pointer → editor SVG user space (same coordinates as shape bboxes / union). Uses the live
-   * rendered SVG rect and `overlayViewBox` — avoids double-counting pan (already in getBoundingClientRect)
-   * and matches non-uniform viewBox ↔ pixel mapping.
-   */
-  private clientToEditorSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null {
+  clientToEditorSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null {
     const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
     if (!mainSvg) return null;
     const fromCtm = screenPointToRootSvgUserPoint(mainSvg, clientX, clientY);
@@ -1064,52 +889,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return {
       x: vbMinX + ((clientX - r.left) / r.width) * vbW,
       y: vbMinY + ((clientY - r.top) / r.height) * vbH
-    };
-  }
-
-  /**
-   * Fixed-position drag/resize ghosts must use the same mapping as the painted SVG (screen px),
-   * not overlay-inner coords (which are relative to the zoom wrapper and can diverge from the
-   * highlight host when rulers/layout offset the overlay).
-   */
-  private svgDocumentBboxToFixedScreenRect(bbox: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }): { left: number; top: number; width: number; height: number } | null {
-    const vb = this.parseOverlayViewBox();
-    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
-    if (!vb || !mainSvg) return null;
-    const r = mainSvg.getBoundingClientRect();
-    if (r.width <= 0 || r.height <= 0) return null;
-    const { vbMinX, vbMinY, vbW, vbH } = vb;
-    return {
-      left: r.left + ((bbox.x - vbMinX) / vbW) * r.width,
-      top: r.top + ((bbox.y - vbMinY) / vbH) * r.height,
-      width: (bbox.width / vbW) * r.width,
-      height: (bbox.height / vbH) * r.height
-    };
-  }
-
-  /**
-   * Same pixel rect as `highlightRect` / `svgBboxToOverlayPixels` → fixed screen box. Using this
-   * for ghosts keeps them locked to the blue preview; `svgDocumentBboxToFixedScreenRect` can
-   * diverge slightly (wrapper-relative vs host offset), visible when the box is subpixel.
-   */
-  private overlayPixelsToFixedScreenRect(o: {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  }): { left: number; top: number; width: number; height: number } | null {
-    const host = this.highlightOverlayContainer()?.nativeElement?.getBoundingClientRect();
-    if (!host) return null;
-    return {
-      left: host.left + o.x,
-      top: host.top + o.y,
-      width: o.width,
-      height: o.height
     };
   }
 
@@ -1146,22 +925,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     this._highlightRectCacheKey = '';
     const content = this.svgContent();
-    // Only auto-fit when the svg came from the built-in icon palette.
-    // (File uploads should not unexpectedly change the editor viewport.)
     if (content && content.includes('svg-editor-test-icon')) {
       queueMicrotask(() => this.applyInitialFitToViewport());
     }
   }
 
-  /**
-   * Zoom/pan so the full editor SVG viewBox (stage: grey + page + content) fits in the canvas
-   * viewport with a small margin. Retries on the next frame if layout size is not ready yet.
-   */
   private applyInitialFitToViewport(attempt = 0): void {
     if (!this.svgContent() || !this.canvasView.isInitialized()) {
       return;
     }
-    // Avoid re-reading layout when the test already set wrapper dimensions.
     if (this.wrapperWidth <= 0 || this.wrapperHeight <= 0) {
       this.syncOverlayViewBox();
     }
@@ -1178,9 +950,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
-    // Fit to the actual rendered SVG element size. `initializeSVG()` sizes the editor stage using
-    // the source SVG `width/height` (which may differ from the `viewBox`), and our zoom transform
-    // operates on the SVG element itself.
     const wAttr = mainSvg.getAttribute('width');
     const hAttr = mainSvg.getAttribute('height');
     const svgWpx = wAttr && !wAttr.endsWith('%') ? Number(wAttr) : mainSvg.clientWidth || 0;
@@ -1189,10 +958,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
-    // The `.svg-canvas` container centers its inline-block children using flexbox. SVG transforms
-    // do not affect layout size, so the "layout center" depends on the *unscaled* SVG size.
-    // Our `zoomToFitRect()` computes pan as if the SVG starts at the viewport origin, so we
-    // subtract the flexbox centering offset here to keep the artwork in-bounds.
     const layoutOffsetX = (vw - svgWpx) / 2;
     const layoutOffsetY = (vh - svgHpx) / 2;
 
@@ -1210,9 +975,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.canvasView.panX -= layoutOffsetX;
     this.canvasView.panY -= layoutOffsetY;
 
-    // The viewBox border uses bounding boxes (getBoundingClientRect). Those can be computed
-    // against the old transform if we run synchronously right after updating pan/scale.
-    // Refresh on the next tick to eliminate the occasional stale border.
     this.cdr.markForCheck();
     setTimeout(() => {
       this.updateViewBoxOverlayRect();
@@ -1240,71 +1002,31 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     if (this.editorTool.getCurrentTool() !== 'selector' || !this.svgContent() || !this.canvasView.isInitialized()) return;
     const target = event.target as Element;
+
+    // Resize handle
     const resizeEl = target.closest?.('[data-resize-handle]');
     if (resizeEl) {
       const corner = resizeEl.getAttribute('data-resize-handle') as ResizeCorner | null;
       if (corner && (corner === 'nw' || corner === 'ne' || corner === 'sw' || corner === 'se')) {
-        const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-        if (selectedIds.length === 0) return;
-        const union = this.svgManipulation.getUnionBBox(selectedIds);
-        if (!union) return;
-        this.resizeUnionStart = union;
-        this.resizeHandle = corner;
-        this.resizeSnapshot = this.svgManipulation.snapshotSelectionTransforms(selectedIds);
-        for (const id of selectedIds) {
-          this.svgManipulation.setShapeVisibility(id, false);
+        if (this.resize.start(this.gestureCtx, corner, event)) {
+          event.preventDefault();
+          event.stopPropagation();
         }
-        this.resizeLastUnion = union;
-        this.resizeOverlayRect = this.svgBboxToOverlayPixels(union);
-        this.createResizeGhost(union, selectedIds);
-        this.isResizingSelection = true;
-        event.preventDefault();
-        event.stopPropagation();
         return;
       }
     }
+
+    // Rotate handle
     const rotateEl = target.closest?.('[data-rotate-handle]');
     if (rotateEl) {
-      const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-      if (selectedIds.length === 0) return;
-      const union = this.svgManipulation.getUnionBBox(selectedIds);
-      if (!union) return;
-      const unionCenterPivot = unionRotationPivot(union);
-      const geomPivot = this.svgManipulation.getSelectionRotationPivot(selectedIds);
-      const pivot = geomPivot ?? unionCenterPivot;
-      this.rotateUnionStart = union;
-      this.rotatePivotDoc = pivot;
-      this.rotateAccumulatedRad = 0;
-      this.rotateSnapshot = this.svgManipulation.snapshotSelectionTransforms(selectedIds);
-      for (const id of selectedIds) {
-        this.svgManipulation.setShapeVisibility(id, false);
+      if (this.rotate.start(this.gestureCtx, event)) {
+        event.preventDefault();
+        event.stopPropagation();
       }
-      const p0 = this.clientToEditorSvgPoint(event.clientX, event.clientY);
-      if (!p0) {
-        for (const id of selectedIds) {
-          this.svgManipulation.setShapeVisibility(id, true);
-        }
-        this.rotateUnionStart = null;
-        this.rotatePivotDoc = null;
-        this.rotateSnapshot = new Map();
-        return;
-      }
-      this.rotateLastPointerSvg = p0;
-      if (!this.createRotateGhost(union, selectedIds)) {
-        for (const id of selectedIds) {
-          this.svgManipulation.setShapeVisibility(id, true);
-        }
-        this.rotateUnionStart = null;
-        this.rotatePivotDoc = null;
-        this.rotateSnapshot = new Map();
-        this.rotateLastPointerSvg = null;
-        return;
-      }
-      this.isRotatingSelection = true;
-      event.preventDefault();
-      event.stopPropagation();
       return;
     }
+
+    // Selection marquee (click on empty space)
     if (!this.isEditorContentShapeTarget(target)) {
       this.isSelectionMarquee = true;
       this.selectionMarqueeStart = { clientX: event.clientX, clientY: event.clientY };
@@ -1312,6 +1034,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       event.preventDefault();
       return;
     }
+
+    // Shape drag
     if (target.tagName === 'svg' || !target.id) return;
     let effectiveDragId = target.id;
     if (!this.shapeSelection.isShapeSelected(target.id)) {
@@ -1326,353 +1050,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
     if (!point) return;
     const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-    for (const id of selectedIds) {
-      this.svgManipulation.setShapeVisibility(id, false);
+    if (this.drag.start(this.gestureCtx, selectedIds, effectiveDragId, point, event)) {
+      event.preventDefault();
     }
-    const svgInstance = this.svgManipulation.getSVGInstance();
-    const effectiveEl = svgInstance?.findOne(`#${effectiveDragId}`) as SVGElement | undefined;
-    const effectiveNode = effectiveEl?.node as Element | undefined;
-    if (selectedIds.length === 1) {
-      const bbox = this.svgManipulation.getShapeBBox(effectiveDragId);
-      if (!bbox) {
-        for (const id of selectedIds) this.svgManipulation.setShapeVisibility(id, true);
-        return;
-      }
-      this.dragStartBbox = bbox;
-      const shapeScreenRect =
-        effectiveNode && typeof effectiveNode.getBoundingClientRect === 'function'
-          ? effectiveNode.getBoundingClientRect()
-          : (target as Element).getBoundingClientRect();
-
-      this.createDragGhost(effectiveDragId, bbox, shapeScreenRect);
-    } else {
-      const unionBbox = this.svgManipulation.getUnionBBox(selectedIds);
-      if (!unionBbox) {
-        for (const id of selectedIds) this.svgManipulation.setShapeVisibility(id, true);
-        return;
-      }
-      this.dragStartBbox = unionBbox;
-      this.createUnionDragGhost(unionBbox, selectedIds);
-    }
-    if (this.dragGhostFragments.length === 0) {
-      for (const id of selectedIds) {
-        this.svgManipulation.setShapeVisibility(id, true);
-      }
-      return;
-    }
-    this.isDraggingShape = true;
-    this.dragShapeIds = selectedIds;
-    this.dragStartSvg = { x: point.x, y: point.y };
-    this.dragSnapshot = this.svgManipulation.snapshotSelectionTransforms(selectedIds);
-    event.preventDefault();
-  }
-
-  private createDragGhost(shapeId: string, bbox: { x: number; y: number; width: number; height: number }, shapeScreenRect: DOMRect): void {
-    const svgInstance = this.svgManipulation.getSVGInstance();
-    if (!svgInstance) return;
-    const rootSvg = svgInstance.node as SVGSVGElement;
-    const built = this.buildDragGhostShapeSubtree(shapeId, svgInstance, rootSvg);
-    if (!built) return;
-    const contentGroupEl = this.getEditorContentGroupEl(svgInstance);
-    const shapeNode = svgInstance.findOne(`#${shapeId}`)?.node as Element | undefined;
-    if (!contentGroupEl || !shapeNode) return;
-
-    this.installGhostSessionDefs(rootSvg, built.urlRefs);
-    const prefix = this.ghostDefPrefix ?? '';
-    if (built.urlRefs.size > 0) {
-      this.rewriteGhostUrlRefs(built.subtree, prefix, built.urlRefs);
-    }
-
-    const frag = this.mountGhostFragment(svgInstance, contentGroupEl, shapeNode, bbox, built.subtree);
-    this.dragGhostFragments = [frag];
-
-    const overlayContainer = this.highlightOverlayContainer()?.nativeElement;
-    this.dragOverlayRect = overlayContainer
-      ? {
-          x: shapeScreenRect.left - overlayContainer.getBoundingClientRect().left,
-          y: shapeScreenRect.top - overlayContainer.getBoundingClientRect().top,
-          width: shapeScreenRect.width,
-          height: shapeScreenRect.height
-        }
-      : this.svgBboxToOverlayPixels(bbox);
-    this.cdr.detectChanges();
-  }
-
-  /** Collect `url(#id)` targets from `clip-path` and `mask` attributes on `root` and its descendants. */
-  private collectClipAndMaskUrlRefsFromElementTree(root: Element): Set<string> {
-    const refs = new Set<string>();
-    const all = [root, ...Array.from(root.querySelectorAll('*'))];
-    all.forEach((el) => {
-      const cp = el.getAttribute('clip-path');
-      const mk = el.getAttribute('mask');
-      [cp, mk].forEach((val) => {
-        if (!val) return;
-        const m = val.match(/url\(#([^)]+)\)/i);
-        if (m?.[1]) refs.add(m[1]);
-      });
-    });
-    return refs;
-  }
-
-  /**
-   * Clone a shape plus the ancestor chain down to `[data-editor-content-group]` (same as single-shape drag ghost)
-   * so nested `transform` / `clip-path` on groups is preserved. Leaf-only clones collapse local path geometry to one origin.
-   */
-  private buildDragGhostShapeSubtree(
-    shapeId: string,
-    svgInstance: Svg,
-    rootSvg: SVGSVGElement
-  ): { subtree: Element; urlRefs: Set<string> } | null {
-    const shape = svgInstance.findOne(`#${shapeId}`) as SVGElement | undefined;
-    if (!shape?.node) return null;
-    const shapeNode = shape.node as Element;
-    const contentGroup = shapeNode.closest?.('[data-editor-content-group]');
-    if (!contentGroup) return null;
-    const chain: Element[] = [];
-    let cur: Element | null = shapeNode;
-    while (cur && cur !== rootSvg && cur !== contentGroup) {
-      chain.push(cur);
-      cur = cur.parentElement;
-    }
-    if (chain.length === 0) return null;
-    let subtree = chain[0].cloneNode(true) as Element;
-    for (let i = 1; i < chain.length; i++) {
-      const parentClone = chain[i].cloneNode(false) as Element;
-      parentClone.appendChild(subtree);
-      subtree = parentClone;
-    }
-    const urlRefs = this.collectClipAndMaskUrlRefsFromElementTree(subtree);
-    const clonedShape = subtree.matches?.(`#${shapeId}`)
-      ? subtree
-      : (subtree.querySelector?.(`#${shapeId}`) as Element | null);
-    if (clonedShape) {
-      clonedShape.setAttribute('visibility', 'visible');
-    }
-    // Ghost clones must not reuse document ids or `findOne('#id')` / translate commit target the clone.
-    this.stripIdsFromGhostSubtree(subtree);
-    return { subtree, urlRefs };
-  }
-
-  private stripIdsFromGhostSubtree(root: Element): void {
-    const walk = (el: Element) => {
-      el.removeAttribute('id');
-      el.removeAttribute('xml:id');
-      for (const c of Array.from(el.children)) walk(c);
-    };
-    walk(root);
-  }
-
-  private getEditorContentGroupEl(svgInstance: Svg): Element | null {
-    const cg = svgInstance.findOne('[data-editor-content-group]');
-    return cg?.node ? (cg.node as Element) : null;
-  }
-
-  private clearGhostSessionDefs(): void {
-    for (const el of this.ghostDefElements) {
-      el.parentNode?.removeChild(el);
-    }
-    this.ghostDefElements = [];
-    this.ghostDefPrefix = null;
-  }
-
-  private installGhostSessionDefs(rootSvg: SVGSVGElement, urlRefs: Set<string>): void {
-    if (urlRefs.size === 0) return;
-    if (!this.ghostDefPrefix) {
-      this.ghostDefPrefix = `__eg_${Math.random().toString(36).slice(2)}_`;
-    }
-    const prefix = this.ghostDefPrefix;
-    const defs = SVG(rootSvg).defs();
-    urlRefs.forEach((id) => {
-      const src = rootSvg.getElementById(id);
-      if (!src) return;
-      const clone = src.cloneNode(true) as Element;
-      clone.id = `${prefix}${id}`;
-      defs.node.appendChild(clone);
-      this.ghostDefElements.push(clone);
-    });
-  }
-
-  private rewriteGhostUrlRefs(root: Element, prefix: string, urlRefIds: Set<string>): void {
-    if (urlRefIds.size === 0) return;
-    const rewrite = (val: string): string => {
-      let out = val;
-      for (const id of urlRefIds) {
-        out = out.split(`url(#${id})`).join(`url(#${prefix}${id})`);
-      }
-      return out;
-    };
-    const walk = (el: Element) => {
-      for (const name of ['clip-path', 'mask', 'fill', 'stroke', 'filter']) {
-        const v = el.getAttribute(name);
-        if (v) el.setAttribute(name, rewrite(v));
-      }
-      const st = el.getAttribute('style');
-      if (st) el.setAttribute('style', rewrite(st));
-      for (const c of Array.from(el.children)) walk(c);
-    };
-    walk(root);
-  }
-
-  /**
-   * One nested &lt;svg&gt; per selected shape, inserted **before** that shape, so SVG paint order
-   * matches non-selected siblings between the selection.
-   */
-  private mountGhostFragment(
-    svgInstance: Svg,
-    contentGroupEl: Element,
-    insertBefore: Element,
-    unionBbox: { x: number; y: number; width: number; height: number },
-    subtree: Element
-  ): GhostPreviewFragment {
-    const outer = SVG().group();
-    outer.attr(EDITOR_GHOST_ATTR, 'true');
-    outer.attr('pointer-events', 'none');
-
-    const uw = Math.max(unionBbox.width, GHOST_SVG_MIN_PX);
-    const uh = Math.max(unionBbox.height, GHOST_SVG_MIN_PX);
-    const nested = SVG().addTo(outer) as Svg;
-    nested
-      .attr({ x: unionBbox.x, y: unionBbox.y, width: uw, height: uh, overflow: 'visible', preserveAspectRatio: 'none' })
-      .viewbox(0, 0, unionBbox.width, unionBbox.height)
-      .size(uw, uh);
-    const innerEl = nested.node as SVGSVGElement;
-    innerEl.style.display = 'block';
-    innerEl.style.verticalAlign = 'top';
-
-    const worldToUnion = nested.group();
-    worldToUnion.matrix(new Matrix().translate(-unionBbox.x, -unionBbox.y));
-    worldToUnion.node.appendChild(subtree);
-
-    contentGroupEl.insertBefore(outer.node, insertBefore);
-    return { outerGroup: outer, nestedSvg: nested, worldToUnion };
-  }
-
-  private buildGhostFragmentsForUnion(svgInstance: Svg, unionBbox: BBox, selectedIds: string[]): GhostPreviewFragment[] {
-    const rootSvg = svgInstance.node as SVGSVGElement;
-    const contentGroupEl = this.getEditorContentGroupEl(svgInstance);
-    if (!contentGroupEl) return [];
-
-    const orderedIds = this.svgManipulation.getShapeIdsInDomOrder(selectedIds);
-    const unionUrlRefs = new Set<string>();
-    const builtList: { id: string; subtree: Element; urlRefs: Set<string> }[] = [];
-
-    for (const id of orderedIds) {
-      const built = this.buildDragGhostShapeSubtree(id, svgInstance, rootSvg);
-      if (!built) continue;
-      built.urlRefs.forEach((r) => unionUrlRefs.add(r));
-      builtList.push({ id, subtree: built.subtree, urlRefs: built.urlRefs });
-    }
-
-    if (builtList.length === 0) return [];
-
-    this.installGhostSessionDefs(rootSvg, unionUrlRefs);
-    const prefix = this.ghostDefPrefix ?? '';
-
-    const frags: GhostPreviewFragment[] = [];
-    for (const { id, subtree } of builtList) {
-      if (unionUrlRefs.size > 0) {
-        this.rewriteGhostUrlRefs(subtree, prefix, unionUrlRefs);
-      }
-      const shapeNode = svgInstance.findOne(`#${id}`)?.node as Element | undefined;
-      if (!shapeNode) continue;
-      frags.push(this.mountGhostFragment(svgInstance, contentGroupEl, shapeNode, unionBbox, subtree));
-    }
-    return frags;
-  }
-
-  private createUnionDragGhost(
-    unionBbox: { x: number; y: number; width: number; height: number },
-    selectedIds: string[]
-  ): void {
-    this.dragOverlayRect = this.svgBboxToOverlayPixels(unionBbox);
-    const svgInstance = this.svgManipulation.getSVGInstance();
-    if (!svgInstance) return;
-    this.dragGhostFragments = this.buildGhostFragmentsForUnion(svgInstance, unionBbox, selectedIds);
-    this.cdr.detectChanges();
-  }
-
-  private removeDragGhost(): void {
-    for (const f of this.dragGhostFragments) {
-      f.outerGroup.remove();
-    }
-    this.dragGhostFragments = [];
-    this.clearGhostSessionDefs();
-  }
-
-  private createResizeGhost(unionBbox: BBox, selectedIds: string[]): void {
-    const svgInstance = this.svgManipulation.getSVGInstance();
-    if (!svgInstance) return;
-    this.resizeGhostFragments = this.buildGhostFragmentsForUnion(svgInstance, unionBbox, selectedIds);
-    this.cdr.detectChanges();
-  }
-
-  private updateResizeGhost(unionAfter: BBox): void {
-    this.resizeOverlayRect = this.svgBboxToOverlayPixels(unionAfter);
-    if (this.resizeGhostFragments.length === 0) return;
-    if (!this.resizeOverlayRect) return;
-    const uw = Math.max(unionAfter.width, GHOST_SVG_MIN_PX);
-    const uh = Math.max(unionAfter.height, GHOST_SVG_MIN_PX);
-    const m = new Matrix().translate(-unionAfter.x, -unionAfter.y);
-    for (const f of this.resizeGhostFragments) {
-      f.nestedSvg.attr({ x: unionAfter.x, y: unionAfter.y, width: uw, height: uh });
-      f.nestedSvg.viewbox(0, 0, unionAfter.width, unionAfter.height);
-      (f.nestedSvg as Svg).size(uw, uh);
-      f.worldToUnion.matrix(m);
-    }
-    this.cdr.detectChanges();
-  }
-
-  private removeResizeGhost(): void {
-    for (const f of this.resizeGhostFragments) {
-      f.outerGroup.remove();
-    }
-    this.resizeGhostFragments = [];
-    this.clearGhostSessionDefs();
-  }
-
-  /** @returns true if the ghost was created and appended */
-  private createRotateGhost(unionBbox: BBox, selectedIds: string[]): boolean {
-    const svgInstance = this.svgManipulation.getSVGInstance();
-    if (!svgInstance) return false;
-    this.rotateGhostFragments = this.buildGhostFragmentsForUnion(svgInstance, unionBbox, selectedIds);
-    if (this.rotateGhostFragments.length === 0) return false;
-    this.cdr.detectChanges();
-    return true;
-  }
-
-  private updateRotateGhost(accumulatedRad: number): void {
-    if (!this.rotateUnionStart || this.rotateGhostFragments.length === 0 || !this.rotatePivotDoc) {
-      return;
-    }
-    const T = rotateGhostWorldToUnionMatrix(this.rotateUnionStart, this.rotatePivotDoc, accumulatedRad);
-    for (const f of this.rotateGhostFragments) {
-      f.worldToUnion.matrix(T);
-    }
-    this.cdr.detectChanges();
-  }
-
-  private removeRotateGhost(): void {
-    for (const f of this.rotateGhostFragments) {
-      f.outerGroup.remove();
-    }
-    this.rotateGhostFragments = [];
-    this.clearGhostSessionDefs();
   }
 
   onCanvasClick(event: MouseEvent): void {
     const clickTarget = event.target as Element;
-    if (this.dragJustEnded) {
-      this.dragJustEnded = false;
-      return;
-    }
-    if (this.resizeJustEnded) {
-      this.resizeJustEnded = false;
-      return;
-    }
-    if (this.rotateJustEnded) {
-      this.rotateJustEnded = false;
-      return;
-    }
+    if (this.drag.consumeJustEnded()) return;
+    if (this.resize.consumeJustEnded()) return;
+    if (this.rotate.consumeJustEnded()) return;
     if (this.editorTool.getCurrentTool() === 'pan') {
       return;
     }
@@ -1768,7 +1155,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
-  /** True when the `<g>` element carries `clip-path` or `mask` (clip/mask group, not a user group). */
   private isGroupAClipMaskCarrier(groupId: string): boolean {
     const svg = this.svgManipulation.getSVGInstance();
     if (!svg) return false;
@@ -1777,7 +1163,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return el.hasAttribute('clip-path') || el.hasAttribute('mask');
   }
 
-  /** True when the event target is a user shape inside the editor content group (not stage chrome). */
   private isEditorContentShapeTarget(target: Element): boolean {
     const tag = target.tagName?.toLowerCase?.() ?? '';
     if (!CONTENT_SHAPE_TAGS.has(tag)) return false;

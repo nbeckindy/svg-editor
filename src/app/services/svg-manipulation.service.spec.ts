@@ -1359,6 +1359,24 @@ describe('SvgManipulationService', () => {
       expect(props.fill).toBeUndefined();
     });
 
+    it('gradient fill does not bleed into fill hex (normalizeColorForPicker guard)', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="g1">
+            <stop offset="0%" stop-color="#FF0000"/>
+            <stop offset="100%" stop-color="#0000FF"/>
+          </linearGradient>
+        </defs>
+        <rect id="r1" x="0" y="0" width="50" height="50" fill="url(#g1)"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.fill).toBeUndefined();
+      expect(props.fillPaintType).not.toBe('solid');
+    });
+
     it('getShapeProperties returns solid strokePaintType for hex stroke', () => {
       const svgContent = `<svg viewBox="0 0 100 100">
         <rect id="r1" x="0" y="0" width="50" height="50" stroke="#00FF00" stroke-width="2"/>

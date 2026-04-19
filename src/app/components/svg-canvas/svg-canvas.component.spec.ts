@@ -1371,9 +1371,12 @@ describe('SvgCanvasComponent', () => {
     fixture.detectChanges();
     const translateSpy = vi.spyOn(svgManipulationService, 'translateShape');
     const setVisibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
-    component['isDraggingShape'] = true;
-    component['dragShapeIds'] = ['shape-a', 'shape-b'];
-    component['dragStartSvg'] = { x: 0, y: 0 };
+    const dragHandler = component['drag'] as any;
+    dragHandler.isActive = true;
+    dragHandler.shapeIds = ['shape-a', 'shape-b'];
+    dragHandler.startSvg = { x: 0, y: 0 };
+    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn() } }];
+    dragHandler.ghost = { removeFragments: vi.fn(), clearDefs: vi.fn() };
     const wrapperEl = component.svgContainer()?.nativeElement;
     if (wrapperEl) {
       vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
@@ -1707,9 +1710,12 @@ describe('SvgCanvasComponent', () => {
     });
     const translateSpy = vi.spyOn(svgManipulationService, 'translateShape');
     const setVisibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
-    component['isDraggingShape'] = true;
-    component['dragShapeIds'] = ['drag-me'];
-    component['dragStartSvg'] = { x: 25, y: 40 };
+    const dragHandler = component['drag'] as any;
+    dragHandler.isActive = true;
+    dragHandler.shapeIds = ['drag-me'];
+    dragHandler.startSvg = { x: 25, y: 40 };
+    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn() } }];
+    dragHandler.ghost = { removeFragments: vi.fn(), clearDefs: vi.fn() };
     stubEditorSvgScreenMapping(component);
     component.onDocumentMouseUp({
       button: 0,

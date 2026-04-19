@@ -140,6 +140,7 @@ export class SvgManipulationService {
     if (!cssColor) return fallback;
     const t = cssColor.trim();
     if (t === 'none' || t === 'transparent') return fallback;
+    if (/^\s*url\s*\(/i.test(t)) return fallback;
     const rgb = t.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
     if (rgb) {
       const toHex = (n: number) =>
