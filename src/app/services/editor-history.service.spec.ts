@@ -1,5 +1,5 @@
-import { EditorHistoryService } from './editor-history.service';
-import { EditorCommand } from '../models/editor-commands';
+import { EditorHistoryService, COALESCE_WINDOW_MS } from './editor-history.service';
+import { EditorCommand, CoalesceableCommand } from '../models/editor-commands';
 
 function makeCommand(description = 'test'): EditorCommand & { executeCalls: number; undoCalls: number } {
   const cmd = {
@@ -8,6 +8,28 @@ function makeCommand(description = 'test'): EditorCommand & { executeCalls: numb
     undoCalls: 0,
     execute() { this.executeCalls++; },
     undo() { this.undoCalls++; }
+  };
+  return cmd;
+}
+
+function makeCoalesceableCommand(
+  key: string,
+  value: string,
+  oldValue = 'original'
+): CoalesceableCommand & { executeCalls: number; undoCalls: number; value: string; oldValue: string } {
+  const cmd = {
+    description: `set ${key} to ${value}`,
+    coalesceKey: key,
+    executeCalls: 0,
+    undoCalls: 0,
+    value,
+    oldValue,
+    execute() { this.executeCalls++; },
+    undo() { this.undoCalls++; },
+    coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+      const n = newer as typeof cmd;
+      return makeCoalesceableCommand(cmd.coalesceKey, n.value, cmd.oldValue);
+    }
   };
   return cmd;
 }
@@ -161,5 +183,153 @@ describe('EditorHistoryService', () => {
     svc.undo();
     expect(a.undoCalls).toBe(1);
     expect(svc.canUndo()).toBe(false);
+  });
+
+  describe('command coalescing', () => {
+    beforeEach(() => {
+      vi.useFakeTimers();
+    });
+
+    afterEach(() => {
+      vi.useRealTimers();
+    });
+
+    it('should coalesce rapid pushes with same coalesce key into one undo step', () => {
+      const a = makeCoalesceableCommand('fill:shape1', 'red');
+      const b = makeCoalesceableCommand('fill:shape1', 'green', 'red');
+      const c = makeCoalesceableCommand('fill:shape1', 'blue', 'green');
+
+      svc.pushAndExecute(a);
+      vi.advanceTimersByTime(100);
+      svc.pushAndExecute(b);
+      vi.advanceTimersByTime(100);
+      svc.pushAndExecute(c);
+
+      expect(a.executeCalls).toBe(1);
+      expect(b.executeCalls).toBe(1);
+      expect(c.executeCalls).toBe(1);
+
+      svc.undo();
+      expect(svc.canUndo()).toBe(false);
+    });
+
+    it('coalesced undo should restore the original (first) old value', () => {
+      let currentValue = 'original';
+      const trackingCmd = (key: string, newVal: string, oldVal: string): CoalesceableCommand => ({
+        description: `set ${newVal}`,
+        coalesceKey: key,
+        execute() { currentValue = newVal; },
+        undo() { currentValue = oldVal; },
+        coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+          const n = newer as ReturnType<typeof trackingCmd>;
+          return trackingCmd(key, (n as any)._newVal, oldVal);
+        },
+        _newVal: newVal
+      } as CoalesceableCommand & { _newVal: string });
+
+      svc.pushAndExecute(trackingCmd('opacity:s1', '0.8', 'original'));
+      expect(currentValue).toBe('0.8');
+      vi.advanceTimersByTime(100);
+
+      svc.pushAndExecute(trackingCmd('opacity:s1', '0.5', '0.8'));
+      expect(currentValue).toBe('0.5');
+
+      svc.undo();
+      expect(currentValue).toBe('original');
+    });
+
+    it('should NOT coalesce pushes beyond the time window', () => {
+      const a = makeCoalesceableCommand('fill:shape1', 'red');
+      const b = makeCoalesceableCommand('fill:shape1', 'green', 'red');
+
+      svc.pushAndExecute(a);
+      vi.advanceTimersByTime(COALESCE_WINDOW_MS + 1);
+      svc.pushAndExecute(b);
+
+      svc.undo();
+      expect(svc.canUndo()).toBe(true);
+      svc.undo();
+      expect(svc.canUndo()).toBe(false);
+    });
+
+    it('should NOT coalesce commands with different coalesce keys', () => {
+      const a = makeCoalesceableCommand('fill:shape1', 'red');
+      const b = makeCoalesceableCommand('fill:shape2', 'green');
+
+      svc.pushAndExecute(a);
+      vi.advanceTimersByTime(100);
+      svc.pushAndExecute(b);
+
+      svc.undo();
+      expect(svc.canUndo()).toBe(true);
+      svc.undo();
+      expect(svc.canUndo()).toBe(false);
+    });
+
+    it('should NOT coalesce non-coalesceable commands', () => {
+      const a = makeCommand('a');
+      const b = makeCommand('b');
+
+      svc.pushAndExecute(a);
+      vi.advanceTimersByTime(100);
+      svc.pushAndExecute(b);
+
+      svc.undo();
+      expect(svc.canUndo()).toBe(true);
+    });
+
+    it('should NOT coalesce coalesceable with non-coalesceable on stack top', () => {
+      const a = makeCoalesceableCommand('fill:shape1', 'red');
+      const b = makeCommand('move');
+      const c = makeCoalesceableCommand('fill:shape1', 'blue', 'red');
+
+      svc.pushAndExecute(a);
+      vi.advanceTimersByTime(100);
+      svc.pushAndExecute(b);
+      vi.advanceTimersByTime(100);
+      svc.pushAndExecute(c);
+
+      let undoCount = 0;
+      while (svc.canUndo()) { svc.undo(); undoCount++; }
+      expect(undoCount).toBe(3);
+    });
+
+    it('should clear redo stack when coalescing', () => {
+      const a = makeCoalesceableCommand('fill:shape1', 'red');
+      const b = makeCommand('other');
+
+      svc.pushAndExecute(a);
+      svc.pushAndExecute(b);
+      svc.undo();
+      expect(svc.canRedo()).toBe(true);
+
+      const c = makeCoalesceableCommand('fill:shape1', 'green', 'red');
+      vi.advanceTimersByTime(100);
+      svc.pushAndExecute(c);
+      expect(svc.canRedo()).toBe(false);
+    });
+
+    it('sliding window: continuous rapid events coalesce into one step', () => {
+      for (let i = 0; i < 20; i++) {
+        svc.pushAndExecute(makeCoalesceableCommand('opacity:s1', String(1 - i * 0.025)));
+        vi.advanceTimersByTime(50);
+      }
+
+      let undoCount = 0;
+      while (svc.canUndo()) { svc.undo(); undoCount++; }
+      expect(undoCount).toBe(1);
+    });
+
+    it('pause in the middle creates two undo steps', () => {
+      svc.pushAndExecute(makeCoalesceableCommand('opacity:s1', '0.9'));
+      vi.advanceTimersByTime(100);
+      svc.pushAndExecute(makeCoalesceableCommand('opacity:s1', '0.8', '0.9'));
+      vi.advanceTimersByTime(COALESCE_WINDOW_MS + 1);
+      svc.pushAndExecute(makeCoalesceableCommand('opacity:s1', '0.5', '0.8'));
+
+      let undoCount = 0;
+      while (svc.canUndo()) { svc.undo(); undoCount++; }
+      expect(undoCount).toBe(2);
+    });
   });
 });

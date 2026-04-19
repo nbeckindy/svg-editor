@@ -1,12 +1,14 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { EditorCommand } from '../models/editor-commands';
+import { EditorCommand, isCoalesceable } from '../models/editor-commands';
 
 const MAX_STACK_DEPTH = 100;
+export const COALESCE_WINDOW_MS = 500;
 
 @Injectable({ providedIn: 'root' })
 export class EditorHistoryService {
   private readonly undoStack = signal<EditorCommand[]>([]);
   private readonly redoStack = signal<EditorCommand[]>([]);
+  private lastPushTime = 0;
 
   readonly canUndo = computed(() => this.undoStack().length > 0);
   readonly canRedo = computed(() => this.redoStack().length > 0);
@@ -16,6 +18,25 @@ export class EditorHistoryService {
 
   pushAndExecute(command: EditorCommand): void {
     command.execute();
+    const now = Date.now();
+    const stack = this.undoStack();
+
+    if (stack.length > 0 && isCoalesceable(command)) {
+      const last = stack[stack.length - 1];
+      if (
+        isCoalesceable(last) &&
+        last.coalesceKey === command.coalesceKey &&
+        now - this.lastPushTime < COALESCE_WINDOW_MS
+      ) {
+        const merged = last.coalesceWith(command);
+        this.undoStack.update((s) => [...s.slice(0, -1), merged]);
+        this.lastPushTime = now;
+        this.redoStack.set([]);
+        return;
+      }
+    }
+
+    this.lastPushTime = now;
     this.undoStack.update((stack) => {
       const next = [...stack, command];
       if (next.length > MAX_STACK_DEPTH) {

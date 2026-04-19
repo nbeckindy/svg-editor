@@ -8,14 +8,31 @@ export interface EditorCommand {
   undo(): void;
 }
 
+export interface CoalesceableCommand extends EditorCommand {
+  readonly coalesceKey: string;
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand;
+}
+
+export function isCoalesceable(cmd: EditorCommand): cmd is CoalesceableCommand {
+  return (
+    typeof (cmd as Partial<CoalesceableCommand>).coalesceKey === 'string' &&
+    typeof (cmd as Partial<CoalesceableCommand>).coalesceWith === 'function'
+  );
+}
+
 export class CompositeCommand implements EditorCommand {
   readonly description: string;
+  readonly coalesceKey?: string;
 
   constructor(
     private readonly commands: EditorCommand[],
     description?: string
   ) {
     this.description = description ?? commands[0]?.description ?? 'Batch edit';
+    if (commands.length > 0 && commands.every(isCoalesceable)) {
+      const keys = (commands as CoalesceableCommand[]).map((c) => c.coalesceKey).sort();
+      this.coalesceKey = `composite:${keys.join('|')}`;
+    }
   }
 
   execute(): void {
@@ -27,10 +44,19 @@ export class CompositeCommand implements EditorCommand {
       this.commands[i].undo();
     }
   }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as CompositeCommand;
+    const merged = this.commands.map((cmd, i) =>
+      (cmd as CoalesceableCommand).coalesceWith(n.commands[i] as CoalesceableCommand)
+    );
+    return new CompositeCommand(merged, this.description) as EditorCommand & CoalesceableCommand;
+  }
 }
 
-export class FillColorCommand implements EditorCommand {
+export class FillColorCommand implements CoalesceableCommand {
   readonly description: string;
+  readonly coalesceKey: string;
 
   constructor(
     private readonly svc: SvgManipulationService,
@@ -39,6 +65,7 @@ export class FillColorCommand implements EditorCommand {
     private readonly newColor: string
   ) {
     this.description = `Change fill to ${newColor}`;
+    this.coalesceKey = `fill:${shapeId}`;
   }
 
   execute(): void {
@@ -48,10 +75,16 @@ export class FillColorCommand implements EditorCommand {
   undo(): void {
     this.svc.updateFillColor(this.shapeId, this.oldColor);
   }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as FillColorCommand;
+    return new FillColorCommand(this.svc, this.shapeId, this.oldColor, n.newColor);
+  }
 }
 
-export class StrokeColorCommand implements EditorCommand {
+export class StrokeColorCommand implements CoalesceableCommand {
   readonly description: string;
+  readonly coalesceKey: string;
 
   constructor(
     private readonly svc: SvgManipulationService,
@@ -60,6 +93,7 @@ export class StrokeColorCommand implements EditorCommand {
     private readonly newColor: string
   ) {
     this.description = `Change stroke to ${newColor}`;
+    this.coalesceKey = `stroke-color:${shapeId}`;
   }
 
   execute(): void {
@@ -68,6 +102,11 @@ export class StrokeColorCommand implements EditorCommand {
 
   undo(): void {
     this.svc.updateStrokeColor(this.shapeId, this.oldColor);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as StrokeColorCommand;
+    return new StrokeColorCommand(this.svc, this.shapeId, this.oldColor, n.newColor);
   }
 }
 
@@ -109,8 +148,9 @@ export class RemoveStrokeCommand implements EditorCommand {
   }
 }
 
-export class SetStrokeCommand implements EditorCommand {
+export class SetStrokeCommand implements CoalesceableCommand {
   readonly description: string;
+  readonly coalesceKey: string;
 
   constructor(
     private readonly svc: SvgManipulationService,
@@ -122,6 +162,7 @@ export class SetStrokeCommand implements EditorCommand {
     private readonly newWidth: number
   ) {
     this.description = `Set stroke ${newColor} width ${newWidth}`;
+    this.coalesceKey = `set-stroke:${shapeId}`;
   }
 
   execute(): void {
@@ -135,10 +176,20 @@ export class SetStrokeCommand implements EditorCommand {
       this.svc.removeStroke(this.shapeId);
     }
   }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as SetStrokeCommand;
+    return new SetStrokeCommand(
+      this.svc, this.shapeId,
+      this.hadStrokeBefore, this.oldColor, this.oldWidth,
+      n.newColor, n.newWidth
+    );
+  }
 }
 
-export class OpacityCommand implements EditorCommand {
+export class OpacityCommand implements CoalesceableCommand {
   readonly description: string;
+  readonly coalesceKey: string;
 
   constructor(
     private readonly svc: SvgManipulationService,
@@ -147,6 +198,7 @@ export class OpacityCommand implements EditorCommand {
     private readonly newOpacity: number
   ) {
     this.description = `Change opacity to ${newOpacity}`;
+    this.coalesceKey = `opacity:${shapeId}`;
   }
 
   execute(): void {
@@ -155,6 +207,11 @@ export class OpacityCommand implements EditorCommand {
 
   undo(): void {
     this.svc.updateOpacity(this.shapeId, this.oldOpacity);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as OpacityCommand;
+    return new OpacityCommand(this.svc, this.shapeId, this.oldOpacity, n.newOpacity);
   }
 }
 
