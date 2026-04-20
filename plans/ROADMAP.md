@@ -16,11 +16,16 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 
 | Order | Epic | Slug | bd status | Progress | Depends on |
 |------:|------|------|-----------|----------|------------|
-| 6 | Transform and gesture UX polish | [transform-ux-polish](./epics/transform-ux-polish.md) | `OPEN` | 0/7 (0%) | Gesture extraction (`svg-editor-60f`) |
-| 7 | Shape creation tools | [shape-creation](./epics/shape-creation.md) | `OPEN` | 0/6 (0%) | — |
-| 8 | Clipboard and duplication | [clipboard-duplication](./epics/clipboard-duplication.md) | `OPEN` | 0/5 (0%) | Shape creation helpful but not required |
-| 9 | File operations and viewport UX | [file-ops-viewport](./epics/file-ops-viewport.md) | `OPEN` | 0/5 (0%) | — |
-| 10 | Text editing | [text-editing](./epics/text-editing.md) | `OPEN` | 0/5 (0%) | Shape creation (shares tool infrastructure) |
+| 6 | Transform and gesture UX polish | [transform-ux-polish](./epics/transform-ux-polish.md) | `OPEN` | 0/12 (0%) | Gesture extraction (`svg-editor-60f`) |
+| 7 | Shape creation tools | [shape-creation](./epics/shape-creation.md) | `OPEN` | 0/8 (0%) | — |
+| 8 | Clipboard and duplication | [clipboard-duplication](./epics/clipboard-duplication.md) | `OPEN` | 0/7 (0%) | Shape creation helpful but not required |
+| 9 | File operations and viewport UX | [file-ops-viewport](./epics/file-ops-viewport.md) | `OPEN` | 0/6 (0%) | — |
+| 10 | Text editing | [text-editing](./epics/text-editing.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, SC-2a, SC-5) |
+| 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `OPEN` | 0/5 (0%) | Multi-select (done) |
+| 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `OPEN` | 0/8 (0%) | Shape creation (epic 7) helpful |
+| 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, shares tool infra) |
+| 14 | Canvas and artboard | [canvas-artboard](./epics/canvas-artboard.md) | `OPEN` | 0/7 (0%) | — |
+| 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `OPEN` | 0/4 (0%) | Pen tool (PP-2a segment model) |
 
 ## Free-standing issues
 
@@ -31,13 +36,16 @@ These beads are not part of an epic and can be tackled independently.
 | `svg-editor-60f` | Extract gesture handlers from svg-canvas | P2 | Refactoring prerequisite for epic 6 |
 | `svg-editor-ag5` | Undo delete should restore selection | P2 | Small UX fix |
 | `svg-editor-brz` | Bug: normalizeColorForPicker destroys gradient fills | P2 | Bug fix |
+| `svg-editor-e1x` | Full gradient editor UI | P3 | Depends on `svg-editor-brz` fix |
 
-## Deferred / post-MVP issues
+## Post-MVP
 
 | bd ID | Title | Priority | Notes |
 |-------|-------|----------|-------|
-| `svg-editor-w1t` | Skew transform support | P4 | Deferred from epic 3 |
-| `svg-editor-e1x` | Full gradient editor UI (phase 2) | P3 | Depends on `svg-editor-brz` fix |
+| — | Raster export (PNG/JPEG) | P4 | Export canvas as PNG with resolution/scale selector |
+| — | Preview mode (artboard clipping) | P4 | Clip/dim content outside artboard boundary |
+| — | Configurable keyboard shortcuts | P4 | User-editable shortcut bindings |
+| — | Align to artboard/canvas | P4 | Align shapes relative to document bounds (vs. selection bounds) |
 
 ## Dependency graph
 
@@ -63,9 +71,20 @@ flowchart LR
     e8[clipboard_duplication]
     e9[file_ops_viewport]
     e10[text_editing]
+    e11[align_distribute]
+    e12[snap_guides]
+    e13[pen_path_tool]
+    e14[canvas_artboard]
+    e15[path_node_editing]
+    bugfix_brz[gradient_bugfix_brz]
+    gradient_e1x[gradient_editor_e1x]
     refactor --> e6
     e7 --> e8
     e7 --> e10
+    e7 --> e12
+    e7 --> e13
+    e13 --> e15
+    bugfix_brz --> gradient_e1x
   end
 ```
 
@@ -73,10 +92,16 @@ flowchart LR
 
 1. **Now (free-standing):** `svg-editor-brz` (bug), `svg-editor-ag5` (UX fix), `svg-editor-60f` (refactoring)
 2. **Epic 9** (file ops / viewport) -- FO-1 (download button) is near-trivial and immediately useful
-3. **Epic 7** (shape creation) -- the largest gap; transforms the editor from modifier to creator
-4. **Epic 8** (clipboard) -- standard editor expectation, high value once shapes can be created
-5. **Epic 6** (transform UX polish) -- nice-to-have polish, can be interleaved
-6. **Epic 10** (text editing) -- post-MVP stretch goal
+3. **Epic 14** (canvas / artboard) -- sets up the "blank document" concept for creation
+4. **Epic 7** (shape creation) -- the largest gap; transforms the editor from modifier to creator
+5. **Epic 13** (pen / path tool) -- creation companion; enables freeform drawing
+6. **Epic 8** (clipboard / duplication) -- standard editor expectation, high value once shapes can be created
+7. **Epic 11** (align / distribute) -- high value with multi-select already in place
+8. **Epic 12** (snap / guides) -- improves creation and positioning precision
+9. **Epic 6** (transform UX polish) -- includes skew, z-order UI, modifier keys
+10. **Epic 10** (text editing) -- inline text editing and font controls
+11. **Epic 15** (path node editing) -- fine-grained path manipulation
+12. **`svg-editor-e1x`** (gradient editor) -- after `svg-editor-brz` fix lands
 
 ## Beads epic references
 
@@ -90,11 +115,16 @@ Status/progress below is current as of 2026-04-19.
 | shape-transforms | `svg-editor-2zo` | Shape transforms | `CLOSED` | 5/5 |
 | groups-layers | `svg-editor-0l4` | Groups and layer management | `CLOSED` | 5/5 |
 | advanced-styling | `svg-editor-v77` | Advanced stroke and fill | `CLOSED` | 5/5 |
-| transform-ux-polish | `svg-editor-vfr` | Transform and gesture UX polish | `OPEN` | 0/7 |
-| shape-creation | `svg-editor-og7` | Shape creation tools | `OPEN` | 0/6 |
-| clipboard-duplication | `svg-editor-d79` | Clipboard and duplication | `OPEN` | 0/5 |
-| file-ops-viewport | `svg-editor-we7` | File operations and viewport UX | `OPEN` | 0/5 |
-| text-editing | `svg-editor-nkz` | Text editing | `OPEN` | 0/5 |
+| transform-ux-polish | `svg-editor-vfr` | Transform and gesture UX polish | `OPEN` | 0/12 |
+| shape-creation | `svg-editor-og7` | Shape creation tools | `OPEN` | 0/8 |
+| clipboard-duplication | `svg-editor-d79` | Clipboard and duplication | `OPEN` | 0/7 |
+| file-ops-viewport | `svg-editor-we7` | File operations and viewport UX | `OPEN` | 0/6 |
+| text-editing | `svg-editor-nkz` | Text editing | `OPEN` | 0/7 |
+| align-distribute | TBD | Align and distribute | `OPEN` | 0/5 |
+| snap-guides | TBD | Snap and guides | `OPEN` | 0/8 |
+| pen-path-tool | TBD | Pen and path tool | `OPEN` | 0/7 |
+| canvas-artboard | TBD | Canvas and artboard | `OPEN` | 0/7 |
+| path-node-editing | TBD | Path node editing | `OPEN` | 0/4 |
 
 ## How to use this roadmap
 
