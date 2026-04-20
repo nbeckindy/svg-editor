@@ -7,6 +7,7 @@
   border: 1px solid #ddd;
   /* 25% black: area outside the document viewBox (e.g. letterbox) */
   background: #bfbfbf;
+  overscroll-behavior: none;
 }
 
 .ruler-wrapper {

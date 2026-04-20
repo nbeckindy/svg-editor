@@ -68,6 +68,18 @@ export class CanvasViewService {
   }
 
   /**
+   * Apply a continuous zoom factor centered on the given SVG-layout point.
+   * Used for wheel / pinch-to-zoom where the factor is derived from delta
+   * (e.g. `Math.pow(1.002, -deltaY)`). Clamps at {@link CANVAS_MIN_ZOOM_SCALE}.
+   */
+  zoomByAt(factor: number, svgX: number, svgY: number): void {
+    const newScale = Math.max(CANVAS_MIN_ZOOM_SCALE, this.scale * factor);
+    this.panX = this.panX + svgX * (this.scale - newScale);
+    this.panY = this.panY + svgY * (this.scale - newScale);
+    this.scale = newScale;
+  }
+
+  /**
    * Zoom out 2x centered on the given SVG point. Stops at {@link CANVAS_MIN_ZOOM_SCALE}.
    */
   zoomOutAt(svgX: number, svgY: number): void {
