@@ -429,6 +429,32 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
+    if (mod && (event.key === '+' || event.key === '=')) {
+      this.zoomInAtViewportCenter();
+      event.preventDefault();
+      return;
+    }
+
+    if (mod && event.key === '-') {
+      this.zoomOutAtViewportCenter();
+      event.preventDefault();
+      return;
+    }
+
+    if (mod && event.key === '0') {
+      this.canvasView.resetZoom();
+      this.updateViewBoxOverlayRect();
+      this.cdr.detectChanges();
+      event.preventDefault();
+      return;
+    }
+
+    if (mod && event.key === '1') {
+      this.fitDocumentToViewport();
+      event.preventDefault();
+      return;
+    }
+
     if (
       selectorActive &&
       (event.key === 'Delete' || event.key === 'Backspace') &&
@@ -452,6 +478,51 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (t.isContentEditable) return true;
     const tag = t.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  }
+
+  private zoomInAtViewportCenter(): void {
+    if (!this.canvasView.isInitialized() || this.wrapperWidth <= 0 || this.wrapperHeight <= 0) return;
+    const svgX = (this.wrapperWidth / 2 - this.canvasView.panX) / this.canvasView.scale;
+    const svgY = (this.wrapperHeight / 2 - this.canvasView.panY) / this.canvasView.scale;
+    this.canvasView.zoomInAt(svgX, svgY);
+    this.updateViewBoxOverlayRect();
+    this.cdr.detectChanges();
+  }
+
+  private zoomOutAtViewportCenter(): void {
+    if (!this.canvasView.isInitialized() || this.wrapperWidth <= 0 || this.wrapperHeight <= 0) return;
+    const svgX = (this.wrapperWidth / 2 - this.canvasView.panX) / this.canvasView.scale;
+    const svgY = (this.wrapperHeight / 2 - this.canvasView.panY) / this.canvasView.scale;
+    this.canvasView.zoomOutAt(svgX, svgY);
+    this.updateViewBoxOverlayRect();
+    this.cdr.detectChanges();
+  }
+
+  private fitDocumentToViewport(): void {
+    if (!this.canvasView.isInitialized()) return;
+    this.syncOverlayViewBox();
+    if (this.wrapperWidth <= 0 || this.wrapperHeight <= 0) return;
+
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) return;
+
+    const wAttr = mainSvg.getAttribute('width');
+    const hAttr = mainSvg.getAttribute('height');
+    const svgWpx = wAttr && !wAttr.endsWith('%') ? Number(wAttr) : mainSvg.clientWidth || 0;
+    const svgHpx = hAttr && !hAttr.endsWith('%') ? Number(hAttr) : mainSvg.clientHeight || 0;
+    if (!Number.isFinite(svgWpx) || !Number.isFinite(svgHpx) || svgWpx <= 0 || svgHpx <= 0) return;
+
+    const vw = this.wrapperWidth;
+    const vh = this.wrapperHeight;
+    const layoutOffsetX = (vw - svgWpx) / 2;
+    const layoutOffsetY = (vh - svgHpx) / 2;
+
+    this.canvasView.zoomToFitRect(0, 0, svgWpx, svgHpx, vw, vh, 64, INITIAL_LOAD_VIEWPORT_FIT_FRACTION);
+    this.canvasView.panX -= layoutOffsetX;
+    this.canvasView.panY -= layoutOffsetY;
+
+    this.updateViewBoxOverlayRect();
+    this.cdr.detectChanges();
   }
 
   private cancelActiveMarquees(): void {
@@ -732,14 +803,46 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     });
   }
 
+  private boundOnWheel = this.onWheel.bind(this);
+
   ngOnInit(): void {}
 
-  ngOnDestroy(): void {}
+  ngOnDestroy(): void {
+    const el = this.canvasViewport()?.nativeElement;
+    if (el) {
+      el.removeEventListener('wheel', this.boundOnWheel);
+    }
+  }
 
   ngAfterViewInit(): void {
+    const el = this.canvasViewport()?.nativeElement;
+    if (el) {
+      el.addEventListener('wheel', this.boundOnWheel, { passive: false });
+    }
     if (this.svgContent()) {
       this.initializeSVG();
     }
+  }
+
+  private onWheel(event: WheelEvent): void {
+    if (!this.svgContent() || !this.canvasView.isInitialized()) return;
+
+    event.preventDefault();
+
+    if (event.ctrlKey || event.metaKey) {
+      const rect = this.svgContainer()!.nativeElement.getBoundingClientRect();
+      const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
+      if (!point) return;
+      const factor = Math.pow(1.002, -event.deltaY);
+      this.canvasView.zoomByAt(factor, point.x, point.y);
+    } else if (event.shiftKey) {
+      this.canvasView.panBy(-event.deltaY, 0);
+    } else {
+      this.canvasView.panBy(-event.deltaX, -event.deltaY);
+    }
+
+    this.updateViewBoxOverlayRect();
+    this.cdr.detectChanges();
   }
 
   private syncOverlayViewBox(): void {
