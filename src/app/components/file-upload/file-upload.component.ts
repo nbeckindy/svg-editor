@@ -11,6 +11,7 @@ import { SvgService } from '../../services/svg.service';
 })
 export class FileUploadComponent {
   readonly svgLoaded = output<string>();
+  readonly fileNameLoaded = output<string>();
   
   isDragOver = false;
   errorMessage = '';
@@ -54,6 +55,7 @@ export class FileUploadComponent {
     this.svgService.loadSVG(file).subscribe({
       next: (content) => {
         this.svgLoaded.emit(content);
+        this.fileNameLoaded.emit(file.name);
       },
       error: (error) => {
         this.errorMessage = error.message || 'Failed to load SVG file';

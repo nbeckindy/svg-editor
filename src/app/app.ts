@@ -1,4 +1,4 @@
-import { Component } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FileUploadComponent } from './components/file-upload/file-upload.component';
 import { IconPaletteComponent } from './components/icon-palette/icon-palette.component';
@@ -7,6 +7,7 @@ import { SvgCanvasComponent } from './components/svg-canvas/svg-canvas.component
 import { PropertiesPanelComponent } from './components/properties-panel/properties-panel.component';
 import { SvgDebugPanelComponent } from './components/svg-debug-panel/svg-debug-panel.component';
 import { LayersPanelComponent } from './components/layers-panel/layers-panel.component';
+import { SvgManipulationService } from './services/svg-manipulation.service';
 
 @Component({
   selector: 'app-root',
@@ -29,7 +30,22 @@ import { LayersPanelComponent } from './components/layers-panel/layers-panel.com
 
       <div class="toolbar-row" data-testid="editor-toolbar">
         <app-tool-strip data-testid="editor-tool-strip"></app-tool-strip>
-        <app-file-upload data-testid="editor-file-upload" (svgLoaded)="onSVGLoaded($event)"></app-file-upload>
+        <button
+          type="button"
+          class="new-canvas-btn"
+          data-testid="new-canvas-button"
+          (click)="onNewCanvas()">
+          New
+        </button>
+        <app-file-upload data-testid="editor-file-upload" (svgLoaded)="onSVGLoaded($event)" (fileNameLoaded)="uploadedFileName = $event"></app-file-upload>
+        <button
+          type="button"
+          class="download-button"
+          data-testid="download-svg-button"
+          [disabled]="!svgContent"
+          (click)="downloadSvg()">
+          Download SVG
+        </button>
         <app-icon-palette data-testid="editor-icon-palette" (svgLoaded)="onSVGLoaded($event)"></app-icon-palette>
       </div>
 
@@ -79,6 +95,39 @@ import { LayersPanelComponent } from './components/layers-panel/layers-panel.com
     }
     .toolbar-row app-file-upload {
       flex-shrink: 0;
+    }
+    .toolbar-row .new-canvas-btn {
+      padding: 10px 20px;
+      background-color: #1976D2;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      align-self: center;
+      white-space: nowrap;
+    }
+    .toolbar-row .new-canvas-btn:hover {
+      background-color: #1565C0;
+    }
+    .toolbar-row .download-button {
+      padding: 10px 20px;
+      background-color: #4CAF50;
+      color: white;
+      border: none;
+      border-radius: 4px;
+      cursor: pointer;
+      font-size: 16px;
+      align-self: center;
+      white-space: nowrap;
+    }
+    .toolbar-row .download-button:hover:not(:disabled) {
+      background-color: #388E3C;
+    }
+    .toolbar-row .download-button:disabled {
+      background-color: #ccc;
+      color: #888;
+      cursor: not-allowed;
     }
     .toolbar-row app-icon-palette {
       flex: 1;
@@ -130,9 +179,36 @@ import { LayersPanelComponent } from './components/layers-panel/layers-panel.com
   `]
 })
 export class AppComponent {
+  private readonly svgManipulation = inject(SvgManipulationService);
+
   svgContent: string = '';
+  uploadedFileName: string = '';
+
+  private static readonly DEFAULT_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600"></svg>';
+
+  onNewCanvas(): void {
+    this.svgContent = '';
+    this.uploadedFileName = '';
+    queueMicrotask(() => {
+      this.svgContent = AppComponent.DEFAULT_SVG;
+    });
+  }
 
   onSVGLoaded(content: string): void {
     this.svgContent = content;
+  }
+
+  downloadSvg(): void {
+    const svgText = this.svgManipulation.exportSVG();
+    if (!svgText) return;
+
+    const blob = new Blob([svgText], { type: 'image/svg+xml' });
+    const url = URL.createObjectURL(blob);
+    const anchor = document.createElement('a');
+    anchor.href = url;
+    anchor.download = this.uploadedFileName || 'document.svg';
+    anchor.click();
+    URL.revokeObjectURL(url);
   }
 }
