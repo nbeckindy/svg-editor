@@ -2193,6 +2193,68 @@ describe('SvgCanvasComponent', () => {
       removeSpy.mockRestore();
     });
 
+    it('Ctrl+= zooms in at viewport center', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      component.wrapperWidth = 200;
+      component.wrapperHeight = 200;
+
+      const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: '=', ctrlKey: true, bubbles: true }));
+      expect(zoomInAtSpy).toHaveBeenCalled();
+    });
+
+    it('Ctrl+- zooms out at viewport center', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      component.wrapperWidth = 200;
+      component.wrapperHeight = 200;
+
+      const zoomOutAtSpy = vi.spyOn(canvasViewService, 'zoomOutAt');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: '-', ctrlKey: true, bubbles: true }));
+      expect(zoomOutAtSpy).toHaveBeenCalled();
+    });
+
+    it('Ctrl+0 resets zoom', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      canvasViewService.scale = 4;
+      canvasViewService.panX = 10;
+      canvasViewService.panY = 20;
+
+      const resetSpy = vi.spyOn(canvasViewService, 'resetZoom');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: '0', ctrlKey: true, bubbles: true }));
+      expect(resetSpy).toHaveBeenCalled();
+      expect(canvasViewService.scale).toBe(1);
+      expect(canvasViewService.panX).toBe(0);
+      expect(canvasViewService.panY).toBe(0);
+    });
+
+    it('Ctrl+= does nothing when no SVG content', () => {
+      fixture.componentRef.setInput('svgContent', '');
+      fixture.detectChanges();
+
+      const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: '=', ctrlKey: true, bubbles: true }));
+      expect(zoomInAtSpy).not.toHaveBeenCalled();
+    });
+
     it('Delete removes every selected shape id', async () => {
       editorToolService.setTool('selector');
       fixture.componentRef.setInput(

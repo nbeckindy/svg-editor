@@ -1,5 +1,8 @@
 import { TestBed } from '@angular/core/testing';
 import { AppComponent } from './app';
+import { SvgManipulationService } from './services/svg-manipulation.service';
+import { ShapeSelectionService } from './services/shape-selection.service';
+import { EditorHistoryService } from './services/editor-history.service';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
@@ -38,5 +41,195 @@ describe('AppComponent', () => {
     const content = '<svg><circle cx="50" cy="50" r="40"/></svg>';
     app.onSVGLoaded(content);
     expect(app.svgContent).toBe(content);
+  });
+
+  describe('downloadSvg', () => {
+    it('should call exportSVG and trigger download with correct MIME type', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const svgManipulation = TestBed.inject(SvgManipulationService);
+
+      const exportedSvg = '<svg><rect width="10" height="10"/></svg>';
+      vi.spyOn(svgManipulation, 'exportSVG').mockReturnValue(exportedSvg);
+
+      const fakeUrl = 'blob:http://localhost/fake-id';
+      const createObjectURLSpy = vi.fn().mockReturnValue(fakeUrl);
+      const revokeObjectURLSpy = vi.fn();
+      vi.stubGlobal('URL', { ...URL, createObjectURL: createObjectURLSpy, revokeObjectURL: revokeObjectURLSpy });
+
+      const clickSpy = vi.fn();
+      vi.spyOn(document, 'createElement').mockReturnValue({ set href(_: string) {}, set download(_: string) {}, click: clickSpy } as unknown as HTMLAnchorElement);
+
+      app.downloadSvg();
+
+      expect(svgManipulation.exportSVG).toHaveBeenCalled();
+      expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+      const blob: Blob = createObjectURLSpy.mock.calls[0][0];
+      expect(blob).toBeInstanceOf(Blob);
+      expect(blob.type).toBe('image/svg+xml');
+      expect(clickSpy).toHaveBeenCalled();
+      expect(revokeObjectURLSpy).toHaveBeenCalledWith(fakeUrl);
+
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    it('should use uploadedFileName when available, fallback to document.svg', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const svgManipulation = TestBed.inject(SvgManipulationService);
+
+      vi.spyOn(svgManipulation, 'exportSVG').mockReturnValue('<svg></svg>');
+      vi.stubGlobal('URL', { ...URL, createObjectURL: vi.fn().mockReturnValue('blob:fake'), revokeObjectURL: vi.fn() });
+
+      let capturedDownload = '';
+      vi.spyOn(document, 'createElement').mockReturnValue({
+        set href(_: string) {},
+        set download(val: string) { capturedDownload = val; },
+        click: vi.fn()
+      } as unknown as HTMLAnchorElement);
+
+      app.uploadedFileName = 'my-design.svg';
+      app.downloadSvg();
+      expect(capturedDownload).toBe('my-design.svg');
+
+      app.uploadedFileName = '';
+      app.downloadSvg();
+      expect(capturedDownload).toBe('document.svg');
+
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    it('should be a no-op when exportSVG returns empty', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const svgManipulation = TestBed.inject(SvgManipulationService);
+
+      vi.spyOn(svgManipulation, 'exportSVG').mockReturnValue('');
+      const createObjectURLSpy = vi.fn();
+      vi.stubGlobal('URL', { ...URL, createObjectURL: createObjectURLSpy, revokeObjectURL: vi.fn() });
+
+      app.downloadSvg();
+
+      expect(createObjectURLSpy).not.toHaveBeenCalled();
+
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    it('should render download button disabled when no SVG content', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      app.svgContent = '';
+      fixture.detectChanges();
+
+      const btn = (fixture.nativeElement as HTMLElement).querySelector('[data-testid="download-svg-button"]') as HTMLButtonElement;
+      expect(btn).toBeTruthy();
+      expect(btn.disabled).toBe(true);
+    });
+  });
+
+  describe('onNewCanvas', () => {
+    it('should set svgContent to empty then to DEFAULT_SVG via microtask', async () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+
+      app.svgContent = '<svg><circle cx="10" cy="10" r="5"/></svg>';
+      app.onNewCanvas();
+      expect(app.svgContent).toBe('');
+
+      await new Promise<void>((r) => queueMicrotask(r));
+      expect(app.svgContent).toContain('viewBox="0 0 800 600"');
+    });
+
+    it('should clear selection and highlight', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const shapeSelection = TestBed.inject(ShapeSelectionService);
+      const svgManipulation = TestBed.inject(SvgManipulationService);
+
+      const clearSelectionSpy = vi.spyOn(shapeSelection, 'clearSelection');
+      const clearHighlightSpy = vi.spyOn(svgManipulation, 'clearHighlight');
+
+      app.onNewCanvas();
+
+      expect(clearSelectionSpy).toHaveBeenCalled();
+      expect(clearHighlightSpy).toHaveBeenCalled();
+    });
+
+    it('should clear uploadedFileName', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+
+      app.uploadedFileName = 'test.svg';
+      app.onNewCanvas();
+      expect(app.uploadedFileName).toBe('');
+    });
+
+    it('should clear editor history', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const editorHistory = TestBed.inject(EditorHistoryService);
+
+      const clearSpy = vi.spyOn(editorHistory, 'clear');
+      app.onNewCanvas();
+      expect(clearSpy).toHaveBeenCalled();
+    });
+
+    it('should show confirm dialog when canUndo is true and abort if user cancels', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const editorHistory = TestBed.inject(EditorHistoryService);
+
+      const dummyCmd = { execute: vi.fn(), undo: vi.fn() };
+      editorHistory.pushAndExecute(dummyCmd);
+      expect(editorHistory.canUndo()).toBe(true);
+
+      app.svgContent = '<svg><rect/></svg>';
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+
+      app.onNewCanvas();
+
+      expect(confirmSpy).toHaveBeenCalledWith('You have unsaved changes. Create a new document?');
+      expect(app.svgContent).toBe('<svg><rect/></svg>');
+
+      confirmSpy.mockRestore();
+    });
+
+    it('should not show confirm dialog when canUndo is false', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+
+      const confirmSpy = vi.spyOn(window, 'confirm');
+
+      app.onNewCanvas();
+
+      expect(confirmSpy).not.toHaveBeenCalled();
+
+      confirmSpy.mockRestore();
+    });
+
+    it('should proceed with new canvas when user confirms', async () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const editorHistory = TestBed.inject(EditorHistoryService);
+
+      const dummyCmd = { execute: vi.fn(), undo: vi.fn() };
+      editorHistory.pushAndExecute(dummyCmd);
+
+      app.svgContent = '<svg><rect/></svg>';
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
+      app.onNewCanvas();
+
+      expect(confirmSpy).toHaveBeenCalled();
+      expect(app.svgContent).toBe('');
+
+      await new Promise<void>((r) => queueMicrotask(r));
+      expect(app.svgContent).toContain('viewBox="0 0 800 600"');
+
+      confirmSpy.mockRestore();
+    });
   });
 });

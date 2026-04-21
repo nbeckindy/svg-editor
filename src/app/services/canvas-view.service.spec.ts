@@ -188,4 +188,68 @@ describe('CanvasViewService', () => {
     service.zoomToFitRect(0, 0, 200, 200, 200, 200, 64, 0.5);
     expect(service.scale).toBe(0.5);
   });
+
+  describe('zoomByAt', () => {
+    it('should apply arbitrary factor to scale centered on a point', () => {
+      service.scale = 1;
+      service.panX = 0;
+      service.panY = 0;
+      service.zoomByAt(1.5, 10, 20);
+      expect(service.scale).toBeCloseTo(1.5);
+      expect(service.panX).toBeCloseTo(10 * (1 - 1.5));
+      expect(service.panY).toBeCloseTo(20 * (1 - 1.5));
+    });
+
+    it('should clamp at CANVAS_MIN_ZOOM_SCALE', () => {
+      service.scale = CANVAS_MIN_ZOOM_SCALE * 2;
+      service.panX = 0;
+      service.panY = 0;
+      service.zoomByAt(0.001, 50, 50);
+      expect(service.scale).toBe(CANVAS_MIN_ZOOM_SCALE);
+    });
+
+    it('should not go below CANVAS_MIN_ZOOM_SCALE even with very small factor', () => {
+      service.scale = 0.1;
+      service.panX = 0;
+      service.panY = 0;
+      service.zoomByAt(0, 0, 0);
+      expect(service.scale).toBe(CANVAS_MIN_ZOOM_SCALE);
+    });
+
+    it('with factor 2 at origin should produce same result as zoomInAt at origin', () => {
+      service.scale = 1;
+      service.panX = 0;
+      service.panY = 0;
+      service.zoomByAt(2, 8, 8);
+      const byAtScale = service.scale;
+      const byAtPanX = service.panX;
+      const byAtPanY = service.panY;
+
+      service.scale = 1;
+      service.panX = 0;
+      service.panY = 0;
+      service.zoomInAt(8, 8);
+
+      expect(byAtScale).toBeCloseTo(service.scale);
+      expect(byAtPanX).toBeCloseTo(service.panX);
+      expect(byAtPanY).toBeCloseTo(service.panY);
+    });
+
+    it('should preserve point-under-cursor invariant', () => {
+      service.scale = 2;
+      service.panX = -10;
+      service.panY = -20;
+      const svgX = 30;
+      const svgY = 40;
+      const screenXBefore = svgX * service.scale + service.panX;
+      const screenYBefore = svgY * service.scale + service.panY;
+
+      service.zoomByAt(1.5, svgX, svgY);
+
+      const screenXAfter = svgX * service.scale + service.panX;
+      const screenYAfter = svgY * service.scale + service.panY;
+      expect(screenXAfter).toBeCloseTo(screenXBefore);
+      expect(screenYAfter).toBeCloseTo(screenYBefore);
+    });
+  });
 });
