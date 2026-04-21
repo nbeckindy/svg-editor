@@ -450,7 +450,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
 
     if (mod && event.key === '1') {
-      this.fitDocumentToViewport();
+      this.fitArtboardToViewport();
+      event.preventDefault();
+      return;
+    }
+
+    if (mod && event.key === '2') {
+      this.fitContentToViewport();
       event.preventDefault();
       return;
     }
@@ -520,6 +526,63 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.canvasView.zoomToFitRect(0, 0, svgWpx, svgHpx, vw, vh, 64, INITIAL_LOAD_VIEWPORT_FIT_FRACTION);
     this.canvasView.panX -= layoutOffsetX;
     this.canvasView.panY -= layoutOffsetY;
+
+    this.updateViewBoxOverlayRect();
+    this.cdr.detectChanges();
+  }
+
+  private fitArtboardToViewport(): void {
+    if (!this.canvasView.isInitialized()) return;
+    this.syncOverlayViewBox();
+    if (this.wrapperWidth <= 0 || this.wrapperHeight <= 0) return;
+
+    const ab = this.svgManipulation.getArtboard();
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) return;
+
+    const wAttr = mainSvg.getAttribute('width');
+    const hAttr = mainSvg.getAttribute('height');
+    const svgWpx = wAttr && !wAttr.endsWith('%') ? Number(wAttr) : mainSvg.clientWidth || 0;
+    const svgHpx = hAttr && !hAttr.endsWith('%') ? Number(hAttr) : mainSvg.clientHeight || 0;
+    if (!Number.isFinite(svgWpx) || !Number.isFinite(svgHpx) || svgWpx <= 0 || svgHpx <= 0) return;
+
+    const vw = this.wrapperWidth;
+    const vh = this.wrapperHeight;
+    const layoutOffsetX = (vw - svgWpx) / 2;
+    const layoutOffsetY = (vh - svgHpx) / 2;
+
+    this.canvasView.zoomToFitRect(0, 0, svgWpx, svgHpx, vw, vh, 64, INITIAL_LOAD_VIEWPORT_FIT_FRACTION);
+    this.canvasView.panX -= layoutOffsetX;
+    this.canvasView.panY -= layoutOffsetY;
+
+    this.updateViewBoxOverlayRect();
+    this.cdr.detectChanges();
+  }
+
+  private fitContentToViewport(): void {
+    if (!this.canvasView.isInitialized()) return;
+    this.syncOverlayViewBox();
+    if (this.wrapperWidth <= 0 || this.wrapperHeight <= 0) return;
+
+    const items = this.svgManipulation.getLayerStackItems();
+    if (items.length === 0) return;
+
+    const allIds = items.map((item) => item.id);
+    const contentBbox = this.svgManipulation.getUnionBBox(allIds);
+    if (!contentBbox || contentBbox.width <= 0 || contentBbox.height <= 0) return;
+
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) return;
+
+    const overlayBbox = this.svgBboxToOverlayPixels(contentBbox);
+    const vw = this.wrapperWidth;
+    const vh = this.wrapperHeight;
+
+    this.canvasView.zoomToFitRect(
+      overlayBbox.x, overlayBbox.y,
+      overlayBbox.width, overlayBbox.height,
+      vw, vh, 64, INITIAL_LOAD_VIEWPORT_FIT_FRACTION
+    );
 
     this.updateViewBoxOverlayRect();
     this.cdr.detectChanges();

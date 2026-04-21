@@ -2,6 +2,7 @@ import { Matrix, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../services/shape-selection.service';
 import { type ResizeCorner } from '../utils/selection-resize';
+import { ArtboardModel } from './artboard.model';
 
 export interface EditorCommand {
   readonly description: string;
@@ -688,5 +689,59 @@ export class RemoveShapesCommand implements EditorCommand {
         this.selectionSvc.selectShapes(restoredProps);
       }
     }
+  }
+}
+
+export class ArtboardSizeCommand implements CoalesceableCommand {
+  readonly description: string;
+  readonly coalesceKey = 'artboard-size';
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly oldWidth: number,
+    private readonly oldHeight: number,
+    private readonly newWidth: number,
+    private readonly newHeight: number
+  ) {
+    this.description = `Resize artboard to ${newWidth}×${newHeight}`;
+  }
+
+  execute(): void {
+    this.svc.setArtboardSize(this.newWidth, this.newHeight);
+  }
+
+  undo(): void {
+    this.svc.setArtboardSize(this.oldWidth, this.oldHeight);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as ArtboardSizeCommand;
+    return new ArtboardSizeCommand(this.svc, this.oldWidth, this.oldHeight, n.newWidth, n.newHeight);
+  }
+}
+
+export class ArtboardBackgroundCommand implements CoalesceableCommand {
+  readonly description: string;
+  readonly coalesceKey = 'artboard-bg';
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly oldColor: string,
+    private readonly newColor: string
+  ) {
+    this.description = `Change background to ${newColor}`;
+  }
+
+  execute(): void {
+    this.svc.setBackgroundColor(this.newColor);
+  }
+
+  undo(): void {
+    this.svc.setBackgroundColor(this.oldColor);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as ArtboardBackgroundCommand;
+    return new ArtboardBackgroundCommand(this.svc, this.oldColor, n.newColor);
   }
 }

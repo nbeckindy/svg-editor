@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { SvgManipulationService } from './svg-manipulation.service';
+import { ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
 
 describe('SvgManipulationService', () => {
   let service: SvgManipulationService;
@@ -1410,6 +1411,141 @@ describe('SvgManipulationService', () => {
       const el = svg.findOne('#pl1') as import('@svgdotjs/svg.js').Element;
       const props = service.getShapeProperties(el);
       expect(props.type).toBe('polyline');
+    });
+  });
+
+  describe('artboard model', () => {
+    it('populates artboard from viewBox on initialization', () => {
+      const svgContent = '<svg viewBox="10 20 300 200"><rect id="r1" x="0" y="0" width="50" height="50"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const ab = service.getArtboard();
+      expect(ab.width).toBe(300);
+      expect(ab.height).toBe(200);
+      expect(ab.minX).toBe(10);
+      expect(ab.minY).toBe(20);
+    });
+
+    it('defaults artboard to width/height when no viewBox', () => {
+      const svgContent = '<svg width="400" height="300"><rect id="r1" x="0" y="0" width="50" height="50"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const ab = service.getArtboard();
+      expect(ab.width).toBe(400);
+      expect(ab.height).toBe(300);
+    });
+
+    it('artboard has white background by default', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const ab = service.getArtboard();
+      expect(ab.backgroundColor).toBe('#ffffff');
+    });
+
+    it('setArtboardSize updates artboard and documentViewBox', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setArtboardSize(500, 400);
+      const ab = service.getArtboard();
+      expect(ab.width).toBe(500);
+      expect(ab.height).toBe(400);
+      expect(service.getDocumentViewBox()).toBe('0 0 500 400');
+    });
+
+    it('setArtboardSize rejects zero dimensions', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setArtboardSize(0, 400);
+      expect(service.getArtboard().width).toBe(100);
+    });
+
+    it('setArtboardSize rejects negative dimensions', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setArtboardSize(-50, 400);
+      expect(service.getArtboard().width).toBe(100);
+    });
+
+    it('setBackgroundColor updates artboard background', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setBackgroundColor('#ff0000');
+      expect(service.getArtboard().backgroundColor).toBe('#ff0000');
+    });
+
+    it('setBackgroundColor updates the viewbox rect fill', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setBackgroundColor('#00ff00');
+      const svg = service.getSVGInstance()!;
+      const viewBoxRect = svg.findOne('[data-editor-viewbox-rect]') as import('@svgdotjs/svg.js').Element;
+      expect(viewBoxRect).toBeTruthy();
+      const fill = viewBoxRect.attr('fill');
+      expect(fill).toBe('#00ff00');
+    });
+
+    it('exportSVG includes width and height attributes', () => {
+      const svgContent = '<svg viewBox="0 0 200 150"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const exported = service.exportSVG();
+      expect(exported).toContain('width="200"');
+      expect(exported).toContain('height="150"');
+    });
+
+    it('exportSVG reflects updated artboard size', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setArtboardSize(500, 400);
+      const exported = service.exportSVG();
+      expect(exported).toContain('width="500"');
+      expect(exported).toContain('height="400"');
+      expect(exported).toContain('viewBox="0 0 500 400"');
+    });
+
+    it('artboard boundary rect has non-scaling-stroke', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const viewBoxRect = svg.findOne('[data-editor-viewbox-rect]');
+      expect(viewBoxRect).toBeTruthy();
+      const ve = viewBoxRect!.attr('vector-effect');
+      expect(ve).toBe('non-scaling-stroke');
+    });
+
+    it('artboard boundary rect has drop shadow filter', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const viewBoxRect = svg.findOne('[data-editor-viewbox-rect]');
+      expect(viewBoxRect).toBeTruthy();
+      const filter = viewBoxRect!.attr('filter');
+      expect(filter).toContain('url(#artboard-shadow)');
+    });
+  });
+
+  describe('artboard commands undo/redo', () => {
+    it('ArtboardSizeCommand undo restores original size', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+
+      const cmd = new ArtboardSizeCommand(service, 100, 100, 500, 400);
+      cmd.execute();
+      expect(service.getArtboard().width).toBe(500);
+      expect(service.getArtboard().height).toBe(400);
+
+      cmd.undo();
+      expect(service.getArtboard().width).toBe(100);
+      expect(service.getArtboard().height).toBe(100);
+    });
+
+    it('ArtboardBackgroundCommand undo restores original color', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+
+      const cmd = new ArtboardBackgroundCommand(service, '#ffffff', '#ff0000');
+      cmd.execute();
+      expect(service.getArtboard().backgroundColor).toBe('#ff0000');
+
+      cmd.undo();
+      expect(service.getArtboard().backgroundColor).toBe('#ffffff');
     });
   });
 });

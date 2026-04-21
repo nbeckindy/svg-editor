@@ -1,6 +1,7 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, signal, computed } from '@angular/core';
 import { SVG, Svg, Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../models/shape-properties.interface';
+import { ArtboardModel, DEFAULT_ARTBOARD } from '../models/artboard.model';
 import { type ResizeCorner, oppositeCornerForHandle } from '../utils/selection-resize';
 import {
   axisAlignedRectContains,
@@ -331,6 +332,10 @@ export class SvgManipulationService {
   /** Bumped when logical document content changes (for debug / reactive views); not bumped for visibility-only changes during drag. */
   readonly documentRevision = signal(0);
 
+  private readonly _artboard = signal<ArtboardModel>({ ...DEFAULT_ARTBOARD });
+  /** Reactive artboard state (width, height, origin, background color). */
+  readonly artboard = computed(() => this._artboard());
+
   private svgInstance: Svg | null = null;
   /** Stored document viewBox for export and overlay (e.g. "0 0 100 100"). */
   private documentViewBox = '0 0 100 100';
@@ -341,6 +346,67 @@ export class SvgManipulationService {
    */
   getDocumentViewBox(): string {
     return this.documentViewBox;
+  }
+
+  /**
+   * Update artboard dimensions. Syncs the editor stage DOM (viewBox rect, outside rect, root stage viewBox/size).
+   * Rejects zero/negative values.
+   */
+  setArtboardSize(width: number, height: number): void {
+    if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) return;
+    if (!this.svgInstance) return;
+
+    const prev = this._artboard();
+    const minX = prev.minX;
+    const minY = prev.minY;
+
+    this._artboard.set({ ...prev, width, height });
+    this.documentViewBox = `${minX} ${minY} ${width} ${height}`;
+
+    const outsideRect = this.svgInstance.findOne(`[${EDITOR_OUTSIDE_RECT_ATTR}]`) as SvgJsElement | null;
+    const viewBoxRect = this.svgInstance.findOne(`[${EDITOR_VIEWBOX_RECT_ATTR}]`) as SvgJsElement | null;
+
+    if (viewBoxRect) {
+      viewBoxRect.size(width, height);
+      viewBoxRect.move(minX, minY);
+    }
+
+    if (outsideRect) {
+      const margin = Math.max(width, height) * 0.5;
+      const outerW = width + margin * 2;
+      const outerH = height + margin * 2;
+      outsideRect.size(outerW, outerH);
+      outsideRect.move(minX - margin, minY - margin);
+    }
+
+    this.svgInstance.size(width, height);
+    const vb = this.svgInstance.viewbox();
+    this.svgInstance.viewbox(
+      vb.x, vb.y,
+      vb.width, vb.height
+    );
+
+    this.bumpDocumentRevision();
+  }
+
+  /**
+   * Update artboard background color. Editor-only (not exported as content).
+   */
+  setBackgroundColor(color: string): void {
+    if (!this.svgInstance) return;
+    const prev = this._artboard();
+    this._artboard.set({ ...prev, backgroundColor: color });
+
+    const viewBoxRect = this.svgInstance.findOne(`[${EDITOR_VIEWBOX_RECT_ATTR}]`) as SvgJsElement | null;
+    if (viewBoxRect) {
+      viewBoxRect.fill(color);
+    }
+    this.bumpDocumentRevision();
+  }
+
+  /** Return current artboard state (read-only snapshot). */
+  getArtboard(): ArtboardModel {
+    return this._artboard();
   }
 
   /**
@@ -374,6 +440,14 @@ export class SvgManipulationService {
     const vbMinY = parts.length >= 4 ? Number(parts[1]) || 0 : 0;
     const vbW = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
     const vbH = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
+
+    this._artboard.set({
+      width: vbW,
+      height: vbH,
+      minX: vbMinX,
+      minY: vbMinY,
+      backgroundColor: '#ffffff'
+    });
 
     const contentBbox = this.computeContentBbox(svgElement);
     let uMinX = Math.min(vbMinX, contentBbox.x);
@@ -454,10 +528,16 @@ export class SvgManipulationService {
       .fill(OUTSIDE_VIEWBOX_FILL)
       .attr(EDITOR_OUTSIDE_RECT_ATTR, 'true');
 
+    const shadowFilter = editorSvg.defs().element('filter').attr({ id: 'artboard-shadow', x: '-5%', y: '-5%', width: '110%', height: '110%' });
+    shadowFilter.element('feDropShadow').attr({ dx: '0', dy: '1', stdDeviation: '3', 'flood-color': 'rgba(0,0,0,0.2)' });
+
     editorSvg
       .rect(vbW, vbH)
       .move(vbMinX, vbMinY)
       .fill('#ffffff')
+      .stroke({ color: '#cccccc', width: 1 })
+      .attr('vector-effect', 'non-scaling-stroke')
+      .attr('filter', 'url(#artboard-shadow)')
       .attr(EDITOR_VIEWBOX_RECT_ATTR, 'true');
 
     const contentGroup = editorSvg.group().attr(EDITOR_CONTENT_GROUP_ID, 'true');
@@ -1185,7 +1265,8 @@ export class SvgManipulationService {
     if (!contentGroup?.node) return this.svgInstance.svg();
     const xmlns = this.svgInstance.node.getAttribute('xmlns') || 'http://www.w3.org/2000/svg';
     const inner = (contentGroup.node as Element).innerHTML;
-    return `<svg xmlns="${xmlns}" viewBox="${this.documentViewBox}" preserveAspectRatio="${this.documentPreserveAspectRatio}">${inner}</svg>`;
+    const ab = this._artboard();
+    return `<svg xmlns="${xmlns}" width="${ab.width}" height="${ab.height}" viewBox="${this.documentViewBox}" preserveAspectRatio="${this.documentPreserveAspectRatio}">${inner}</svg>`;
   }
 
   /**

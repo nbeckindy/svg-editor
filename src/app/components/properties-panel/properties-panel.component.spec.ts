@@ -4,6 +4,7 @@ import { PropertiesPanelComponent } from './properties-panel.component';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
+import { DEFAULT_ARTBOARD } from '../../models/artboard.model';
 import { vi } from 'vitest';
 
 describe('PropertiesPanelComponent', () => {
@@ -36,6 +37,7 @@ describe('PropertiesPanelComponent', () => {
       clearSelection: vi.fn(() => selectedShapesSignal.set([]))
     };
 
+    const artboardSig = signal({ ...DEFAULT_ARTBOARD });
     const svgManipulationServiceMock = {
       updateFillColor: vi.fn(),
       updateStrokeColor: vi.fn(),
@@ -47,7 +49,14 @@ describe('PropertiesPanelComponent', () => {
       bakeEffectiveFillToLocal: vi.fn(),
       bakeEffectiveStrokeToLocal: vi.fn(),
       getSVGInstance: vi.fn(),
-      getShapeProperties: vi.fn()
+      getShapeProperties: vi.fn(),
+      artboard: computed(() => artboardSig()),
+      getArtboard: () => artboardSig(),
+      setArtboardSize: vi.fn(),
+      setBackgroundColor: vi.fn(),
+      documentRevision: signal(0),
+      updateStrokeDasharray: vi.fn(),
+      updateStrokeDashoffset: vi.fn()
     };
 
     await TestBed.configureTestingModule({
@@ -69,12 +78,16 @@ describe('PropertiesPanelComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should display empty state when no shape is selected', () => {
+  it('should display document settings and hint when no shape is selected', () => {
     const compiled = fixture.nativeElement;
-    const emptyState = compiled.querySelector('.empty-state');
+    const docSettings = compiled.querySelector('[data-testid="document-settings-panel"]');
+    expect(docSettings).toBeTruthy();
 
-    expect(emptyState).toBeTruthy();
-    expect(emptyState.textContent).toContain('No shape selected');
+    const allEmptyStates = compiled.querySelectorAll('.empty-state');
+    const hintState = Array.from(allEmptyStates).find(
+      (el: any) => el.textContent.includes('Click on a shape')
+    );
+    expect(hintState).toBeTruthy();
   });
 
   it('should display properties when a shape is selected', () => {

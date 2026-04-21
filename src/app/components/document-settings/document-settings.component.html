@@ -1,0 +1,58 @@
+<div class="document-settings" data-testid="document-settings">
+  <div class="panel-header">
+    <h3>Document</h3>
+  </div>
+
+  @if (hasDocument()) {
+    <div class="settings-content">
+      <div class="property-group">
+        <label class="property-label">Artboard Size</label>
+        <div class="dimension-row">
+          <div class="dimension-field">
+            <label class="dimension-label" for="artboard-width">W</label>
+            <input
+              type="number"
+              id="artboard-width"
+              class="dimension-input"
+              data-testid="artboard-width"
+              [min]="MIN_DIMENSION"
+              [max]="MAX_DIMENSION"
+              step="1"
+              [value]="artboard().width"
+              (change)="onWidthChange($event)">
+            <span class="dimension-unit">px</span>
+          </div>
+          <div class="dimension-field">
+            <label class="dimension-label" for="artboard-height">H</label>
+            <input
+              type="number"
+              id="artboard-height"
+              class="dimension-input"
+              data-testid="artboard-height"
+              [min]="MIN_DIMENSION"
+              [max]="MAX_DIMENSION"
+              step="1"
+              [value]="artboard().height"
+              (change)="onHeightChange($event)">
+            <span class="dimension-unit">px</span>
+          </div>
+        </div>
+      </div>
+
+      <div class="property-group">
+        <label class="property-label">Background Color</label>
+        <div class="color-input-group">
+          <app-color-picker
+            [color]="artboard().backgroundColor"
+            (colorChange)="onBackgroundColorChange($event)">
+          </app-color-picker>
+        </div>
+      </div>
+    </div>
+  } @else {
+    <div class="empty-state">
+      <p>No document loaded</p>
+      <p class="hint">Upload or create an SVG to edit document settings</p>
+    </div>
+  }
+</div>

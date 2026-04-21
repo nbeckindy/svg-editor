@@ -11,6 +11,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 3 | Shape transforms (rotate, scale, skew) | [shape-transforms](./epics/shape-transforms.md) | `CLOSED` | 5/5 (100%) |
 | 4 | Groups and layer management | [groups-layers](./epics/groups-layers.md) | `CLOSED` | 5/5 (100%) |
 | 5 | Advanced stroke and fill | [advanced-styling](./epics/advanced-styling.md) | `CLOSED` | 5/5 (100%) |
+| 14 | Canvas and artboard | [canvas-artboard](./epics/canvas-artboard.md) | `CLOSED` | 7/7 (100%) |
 
 ## Active epics (phase 2)
 
@@ -24,7 +25,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `OPEN` | 0/5 (0%) | Multi-select (done) |
 | 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `OPEN` | 0/8 (0%) | Shape creation (epic 7) helpful |
 | 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, shares tool infra) |
-| 14 | Canvas and artboard | [canvas-artboard](./epics/canvas-artboard.md) | `OPEN` | 0/7 (0%) | — |
+| 14 | Canvas and artboard | [canvas-artboard](./epics/canvas-artboard.md) | `CLOSED` | 7/7 (100%) | — |
 | 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `OPEN` | 0/4 (0%) | Pen tool (PP-2a segment model) |
 
 ## Free-standing issues
@@ -37,6 +38,10 @@ These beads are not part of an epic and can be tackled independently.
 | `svg-editor-ag5` | Undo delete should restore selection | P2 | Small UX fix |
 | `svg-editor-brz` | Bug: normalizeColorForPicker destroys gradient fills | P2 | Bug fix |
 | `svg-editor-e1x` | Full gradient editor UI | P3 | Depends on `svg-editor-brz` fix |
+| `svg-editor-cno` | Bug: dragging Tree group hides child layer elements after drop | P2 | Drag/drop visibility bug with nested groups |
+| `svg-editor-0lx` | Investigate group/ungroup behavior with pre-existing groups | P2 | Edge-case exploration for nested group operations |
+| `svg-editor-awx` | Bug: setArtboardSize outside-rect sizing doesn't match initializeSVG logic | P3 | Artboard resize may not cover all content if shapes extend beyond viewBox |
+| `svg-editor-9xz` | Enhancement: setArtboardSize should recalculate root stage viewBox | P3 | Currently uses simpler logic than initializeSVG; acceptable for MVP |
 
 ## Post-MVP
 
@@ -106,7 +111,7 @@ flowchart LR
 ## Beads epic references
 
 Epic issues in `bd` (see `bd list -t epic` or `bd show <id>` if this table drifts).
-Status/progress below is current as of 2026-04-19.
+Status/progress below is current as of 2026-04-20.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
@@ -123,7 +128,7 @@ Status/progress below is current as of 2026-04-19.
 | align-distribute | TBD | Align and distribute | `OPEN` | 0/5 |
 | snap-guides | TBD | Snap and guides | `OPEN` | 0/8 |
 | pen-path-tool | TBD | Pen and path tool | `OPEN` | 0/7 |
-| canvas-artboard | TBD | Canvas and artboard | `OPEN` | 0/7 |
+| canvas-artboard | `svg-editor-dl9` | Canvas and artboard | `CLOSED` | 7/7 |
 | path-node-editing | TBD | Path node editing | `OPEN` | 0/4 |
 
 ## How to use this roadmap

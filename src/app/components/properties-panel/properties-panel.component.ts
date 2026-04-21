@@ -7,6 +7,7 @@ import { SvgManipulationService } from '../../services/svg-manipulation.service'
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-properties.interface';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
+import { DocumentSettingsComponent } from '../document-settings/document-settings.component';
 import {
   EditorCommand,
   CompositeCommand,
@@ -24,8 +25,7 @@ import {
 
 @Component({
   selector: 'app-properties-panel',
-  standalone: true,
-  imports: [CommonModule, FormsModule, ColorPickerComponent],
+  imports: [CommonModule, FormsModule, ColorPickerComponent, DocumentSettingsComponent],
   templateUrl: './properties-panel.component.html',
   styleUrl: './properties-panel.component.css'
 })
