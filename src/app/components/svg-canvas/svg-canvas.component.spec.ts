@@ -2255,6 +2255,58 @@ describe('SvgCanvasComponent', () => {
       expect(zoomInAtSpy).not.toHaveBeenCalled();
     });
 
+    it('NumpadAdd zooms in', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      component.wrapperWidth = 200;
+      component.wrapperHeight = 200;
+
+      const zoomInAtSpy = vi.spyOn(canvasViewService, 'zoomInAt');
+      component.onKeyDown(
+        new KeyboardEvent('keydown', { key: '+', code: 'NumpadAdd', ctrlKey: true, bubbles: true })
+      );
+      expect(zoomInAtSpy).toHaveBeenCalled();
+    });
+
+    it('NumpadSubtract zooms out', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      component.wrapperWidth = 200;
+      component.wrapperHeight = 200;
+
+      const zoomOutAtSpy = vi.spyOn(canvasViewService, 'zoomOutAt');
+      component.onKeyDown(
+        new KeyboardEvent('keydown', { key: '-', code: 'NumpadSubtract', ctrlKey: true, bubbles: true })
+      );
+      expect(zoomOutAtSpy).toHaveBeenCalled();
+    });
+
+    it('Ctrl+1 fits artboard to viewport', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      component.wrapperWidth = 400;
+      component.wrapperHeight = 300;
+
+      const zoomFitSpy = vi.spyOn(canvasViewService, 'zoomToFitRect');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: '1', ctrlKey: true, bubbles: true }));
+      expect(zoomFitSpy).toHaveBeenCalled();
+    });
+
     it('Delete removes every selected shape id', async () => {
       editorToolService.setTool('selector');
       fixture.componentRef.setInput(

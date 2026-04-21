@@ -349,7 +349,8 @@ export class SvgManipulationService {
   }
 
   /**
-   * Update artboard dimensions. Syncs the editor stage DOM (viewBox rect, outside rect, root stage viewBox/size).
+   * Update artboard dimensions. Syncs the viewBox rect, outside rect, and stage viewBox
+   * without changing the root SVG element's pixel size (that's managed by zoom/layout).
    * Rejects zero/negative values.
    */
   setArtboardSize(width: number, height: number): void {
@@ -379,14 +380,51 @@ export class SvgManipulationService {
       outsideRect.move(minX - margin, minY - margin);
     }
 
-    this.svgInstance.size(width, height);
-    const vb = this.svgInstance.viewbox();
-    this.svgInstance.viewbox(
-      vb.x, vb.y,
-      vb.width, vb.height
-    );
-
+    this.syncStageViewBox();
     this.bumpDocumentRevision();
+  }
+
+  /**
+   * Recalculate the editor stage viewBox to encompass the artboard (and outside rect)
+   * while preserving the root SVG element's pixel aspect ratio so content is not distorted
+   * under `preserveAspectRatio="none"`.
+   */
+  private syncStageViewBox(): void {
+    if (!this.svgInstance) return;
+
+    const outsideRect = this.svgInstance.findOne(`[${EDITOR_OUTSIDE_RECT_ATTR}]`) as SvgJsElement | null;
+    if (!outsideRect) return;
+
+    let uMinX = Number(outsideRect.attr('x')) || 0;
+    let uMinY = Number(outsideRect.attr('y')) || 0;
+    let uW = Number(outsideRect.attr('width')) || 100;
+    let uH = Number(outsideRect.attr('height')) || 100;
+
+    const node = this.svgInstance.node as SVGSVGElement;
+    const elW = Number(node.getAttribute('width')) || node.clientWidth || uW;
+    const elH = Number(node.getAttribute('height')) || node.clientHeight || uH;
+    const desiredRatio = elW / elH;
+    const currentRatio = uW / uH;
+
+    if (
+      Number.isFinite(desiredRatio) && Number.isFinite(currentRatio) &&
+      desiredRatio > 0 && currentRatio > 0 &&
+      Math.abs(currentRatio - desiredRatio) > 1e-6
+    ) {
+      const cx = uMinX + uW / 2;
+      const cy = uMinY + uH / 2;
+      if (currentRatio > desiredRatio) {
+        const newH = uW / desiredRatio;
+        uMinY = cy - newH / 2;
+        uH = newH;
+      } else {
+        const newW = uH * desiredRatio;
+        uMinX = cx - newW / 2;
+        uW = newW;
+      }
+    }
+
+    this.svgInstance.viewbox(uMinX, uMinY, uW, uH);
   }
 
   /**

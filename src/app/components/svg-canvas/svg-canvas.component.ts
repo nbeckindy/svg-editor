@@ -429,13 +429,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
-    if (mod && (event.key === '+' || event.key === '=')) {
+    if (mod && (event.key === '+' || event.key === '=' || event.code === 'NumpadAdd')) {
       this.zoomInAtViewportCenter();
       event.preventDefault();
       return;
     }
 
-    if (mod && event.key === '-') {
+    if (mod && (event.key === '-' || event.code === 'NumpadSubtract')) {
       this.zoomOutAtViewportCenter();
       event.preventDefault();
       return;
@@ -899,7 +899,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       const factor = Math.pow(1.002, -event.deltaY);
       this.canvasView.zoomByAt(factor, point.x, point.y);
     } else if (event.shiftKey) {
-      this.canvasView.panBy(-event.deltaY, 0);
+      const dx = event.deltaX || event.deltaY;
+      this.canvasView.panBy(-dx, 0);
     } else {
       this.canvasView.panBy(-event.deltaX, -event.deltaY);
     }
@@ -1079,6 +1080,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private initializeSVG(): void {
     this.editorHistory.clear();
+    this.isSelectionMarquee = false;
+    this.isZoomMarquee = false;
     this.svgManipulation.initializeSVG(this.svgContainer()!.nativeElement, this.svgContent());
     this.canvasView.init();
     this.syncOverlayViewBox();
