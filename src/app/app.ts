@@ -9,6 +9,7 @@ import { SvgDebugPanelComponent } from './components/svg-debug-panel/svg-debug-p
 import { LayersPanelComponent } from './components/layers-panel/layers-panel.component';
 import { SvgManipulationService } from './services/svg-manipulation.service';
 import { ShapeSelectionService } from './services/shape-selection.service';
+import { EditorHistoryService } from './services/editor-history.service';
 
 @Component({
   selector: 'app-root',
@@ -182,6 +183,7 @@ import { ShapeSelectionService } from './services/shape-selection.service';
 export class AppComponent {
   private readonly svgManipulation = inject(SvgManipulationService);
   private readonly shapeSelection = inject(ShapeSelectionService);
+  private readonly editorHistory = inject(EditorHistoryService);
 
   svgContent: string = '';
   uploadedFileName: string = '';
@@ -190,8 +192,13 @@ export class AppComponent {
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600"></svg>';
 
   onNewCanvas(): void {
+    if (this.editorHistory.canUndo() &&
+        !window.confirm('You have unsaved changes. Create a new document?')) {
+      return;
+    }
     this.shapeSelection.clearSelection();
     this.svgManipulation.clearHighlight();
+    this.editorHistory.clear();
     this.svgContent = '';
     this.uploadedFileName = '';
     queueMicrotask(() => {
