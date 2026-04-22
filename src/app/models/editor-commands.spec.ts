@@ -16,8 +16,10 @@ import {
   GroupCommand,
   UngroupCommand,
   RemoveShapesCommand,
+  AddShapeCommand,
   type EditorCommand,
 } from './editor-commands';
+import { ShapeSelectionService } from '../services/shape-selection.service';
 
 function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown>> = {}) {
   return {
@@ -614,5 +616,111 @@ describe('RemoveShapesCommand', () => {
   it('should have description "Remove shapes"', () => {
     const svc = mockSvc();
     expect(new RemoveShapesCommand(svc, ['s1']).description).toBe('Remove shapes');
+  });
+});
+
+describe('AddShapeCommand', () => {
+  function buildContentGroupForAddShape(shapeId: string) {
+    const contentGroup = document.createElement('div');
+    contentGroup.setAttribute('data-editor-content-group', '');
+    const existing = document.createElement('div');
+    existing.id = 'existing';
+    contentGroup.appendChild(existing);
+    const shapeNode = document.createElement('div');
+    shapeNode.id = shapeId;
+    shapeNode.innerHTML = 'shape-content';
+    contentGroup.appendChild(shapeNode);
+
+    return { contentGroup, shapeNode };
+  }
+
+  function buildMockSvcsForAddShape(shapeId: string) {
+    const { contentGroup, shapeNode } = buildContentGroupForAddShape(shapeId);
+
+    const mockShapeProps = { id: shapeId, type: 'rect' as const };
+
+    const findOne = vi.fn((sel: string) => {
+      if (sel === `#${shapeId}`) return { node: shapeNode };
+      if (sel === '[data-editor-content-group]') return { node: contentGroup };
+      return undefined;
+    });
+
+    const svc = {
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+      removeShape: vi.fn(),
+      insertShapeMarkup: vi.fn(),
+      getShapeProperties: vi.fn().mockReturnValue(mockShapeProps),
+    } as unknown as SvgManipulationService;
+
+    const selectionSvc = {
+      selectShapes: vi.fn(),
+      clearSelection: vi.fn(),
+    } as unknown as ShapeSelectionService;
+
+    return { svc, selectionSvc, contentGroup, shapeNode };
+  }
+
+  it('constructor captures serialized markup and insertion index', () => {
+    const { svc, selectionSvc, shapeNode } = buildMockSvcsForAddShape('shape-1');
+    const cmd = new AddShapeCommand(svc, 'shape-1', selectionSvc);
+    expect(cmd.description).toBe('Create shape');
+    expect(svc.getSVGInstance).toHaveBeenCalled();
+    expect(shapeNode.outerHTML).toBeTruthy();
+  });
+
+  it('first execute() is a no-op (shape already exists)', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddShape('shape-1');
+    const cmd = new AddShapeCommand(svc, 'shape-1', selectionSvc);
+    cmd.execute();
+    expect(svc.insertShapeMarkup).not.toHaveBeenCalled();
+  });
+
+  it('undo() removes the shape via removeShape()', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddShape('shape-1');
+    const cmd = new AddShapeCommand(svc, 'shape-1', selectionSvc);
+    cmd.undo();
+    expect(svc.removeShape).toHaveBeenCalledWith('shape-1');
+  });
+
+  it('undo() clears selection', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddShape('shape-1');
+    const cmd = new AddShapeCommand(svc, 'shape-1', selectionSvc);
+    cmd.undo();
+    expect(selectionSvc.clearSelection).toHaveBeenCalled();
+  });
+
+  it('second execute() (redo) re-inserts the shape via insertShapeMarkup()', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddShape('shape-1');
+    const cmd = new AddShapeCommand(svc, 'shape-1', selectionSvc);
+    cmd.execute(); // first call — no-op
+    cmd.execute(); // second call — redo
+    expect(svc.insertShapeMarkup).toHaveBeenCalledTimes(1);
+  });
+
+  it('redo re-selects the shape', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddShape('shape-1');
+    const cmd = new AddShapeCommand(svc, 'shape-1', selectionSvc);
+    cmd.execute(); // first — no-op
+    cmd.execute(); // redo
+    expect(selectionSvc.selectShapes).toHaveBeenCalled();
+  });
+
+  it('round-trip: create → undo → redo → shape methods called correctly', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddShape('shape-1');
+    const cmd = new AddShapeCommand(svc, 'shape-1', selectionSvc);
+
+    // first execute (no-op)
+    cmd.execute();
+    expect(svc.insertShapeMarkup).not.toHaveBeenCalled();
+
+    // undo
+    cmd.undo();
+    expect(svc.removeShape).toHaveBeenCalledWith('shape-1');
+    expect(selectionSvc.clearSelection).toHaveBeenCalled();
+
+    // redo
+    cmd.execute();
+    expect(svc.insertShapeMarkup).toHaveBeenCalledTimes(1);
+    expect(selectionSvc.selectShapes).toHaveBeenCalled();
   });
 });

@@ -121,4 +121,49 @@ describe('ToolStripComponent', () => {
     expect(panBtn?.classList.contains('active')).toBe(true);
     expect(selectorBtn?.classList.contains('active')).toBe(false);
   });
+
+  it('should set tool to rect when Rect button is clicked', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const rectBtn = compiled.querySelector('[data-testid="tool-rect"]') as HTMLElement;
+    expect(rectBtn).toBeTruthy();
+
+    rectBtn.click();
+    fixture.detectChanges();
+
+    expect(editorToolService.getCurrentTool()).toBe('rect');
+  });
+
+  it('should set tool to ellipse when Ellipse button is clicked', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const ellipseBtn = compiled.querySelector('[data-testid="tool-ellipse"]') as HTMLElement;
+    expect(ellipseBtn).toBeTruthy();
+
+    ellipseBtn.click();
+    fixture.detectChanges();
+
+    expect(editorToolService.getCurrentTool()).toBe('ellipse');
+  });
+
+  it('should set tool to line when Line button is clicked', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const lineBtn = compiled.querySelector('[data-testid="tool-line"]') as HTMLElement;
+    expect(lineBtn).toBeTruthy();
+
+    lineBtn.click();
+    fixture.detectChanges();
+
+    expect(editorToolService.getCurrentTool()).toBe('line');
+  });
+
+  it('isCreationTool() returns true for rect, ellipse, and line', () => {
+    expect(editorToolService.isCreationTool('rect')).toBe(true);
+    expect(editorToolService.isCreationTool('ellipse')).toBe(true);
+    expect(editorToolService.isCreationTool('line')).toBe(true);
+  });
+
+  it('isCreationTool() returns false for selector, zoom, and pan', () => {
+    expect(editorToolService.isCreationTool('selector')).toBe(false);
+    expect(editorToolService.isCreationTool('zoom')).toBe(false);
+    expect(editorToolService.isCreationTool('pan')).toBe(false);
+  });
 });
