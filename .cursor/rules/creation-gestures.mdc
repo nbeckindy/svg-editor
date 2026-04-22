@@ -1,0 +1,32 @@
+---
+description: Guidelines for shape creation gesture previews and per-story AC verification
+globs: src/app/components/svg-canvas/gestures/creation-gesture.ts
+alwaysApply: false
+---
+
+# Creation gesture conventions
+
+## Ghost previews go in the overlay SVG
+
+Render creation previews as SVG elements (`<rect>`, `<ellipse>`, `<line>`) inside the `highlight-overlay-container` SVG — the same container used for selection highlights and resize handles. Do **not** use HTML `<div>` elements for ghost previews; they use a different coordinate origin (`.canvas-container` vs the overlay) and cannot represent non-rectangular shapes.
+
+The overlay SVG coordinates come from `svgBboxToOverlayPixels()`. For line endpoints, convert each point individually via `svgBboxToOverlayPixels({ x, y, width: 0, height: 0 })`.
+
+## Shape-specific previews are mandatory
+
+Each creation tool must show a ghost that matches the shape being drawn:
+- **rect** tool → `<rect>` ghost
+- **ellipse** tool → `<ellipse>` ghost
+- **line** tool → `<line>` ghost
+
+## Shift constraints per shape type
+
+When Shift is held during creation drag:
+- **rect / ellipse**: constrain to square/circle — use `Math.max(abs(dx), abs(dy))` as the side length, preserving drag direction with `Math.sign`.
+- **line**: snap to nearest 45-degree increment (8-way).
+
+Shift must be read live from the `MouseEvent` on every `move()` call so the constraint is toggleable mid-drag.
+
+## Don't skip per-story AC verification when consolidating
+
+When a single class implements multiple stories (e.g. `CreationGesture` covers SC-2b, SC-3, SC-4), walk through **each story's acceptance criteria individually** before closing its bead. Consolidating code is fine; consolidating verification is not.
