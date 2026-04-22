@@ -26,6 +26,7 @@ import {
   UngroupCommand
 } from '../../models/editor-commands';
 import { DragGesture, ResizeGesture, RotateGesture, CreationGesture, type GestureContext, type Rect } from './gestures';
+import { PenSession, lastCommittedVertex, penPathOnlyMoveto } from '../../models/pen-path';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
@@ -164,6 +165,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly resize = new ResizeGesture();
   private readonly rotate = new RotateGesture();
   private readonly creation = new CreationGesture();
+  private readonly penSession = new PenSession();
+  private penPointerSvg: { x: number; y: number } | null = null;
 
   // Proxy getters for template bindings and inter-gesture guards
   get isDraggingShape(): boolean { return this.drag.isActive; }
@@ -179,6 +182,26 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!start || !end) return null;
     const p1 = this.svgBboxToOverlayPixels({ x: start.x, y: start.y, width: 0, height: 0 });
     const p2 = this.svgBboxToOverlayPixels({ x: end.x, y: end.y, width: 0, height: 0 });
+    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  }
+
+  get isPenSessionActive(): boolean {
+    return this.penSession.getSegments().length > 0;
+  }
+
+  get penRubberBandOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
+    if (!this.isPenSessionActive || !this.penPointerSvg || this.editorTool.getCurrentTool() !== 'pen') {
+      return null;
+    }
+    const anchor = lastCommittedVertex(this.penSession.getSegments());
+    if (!anchor) return null;
+    const p1 = this.svgBboxToOverlayPixels({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
+    const p2 = this.svgBboxToOverlayPixels({
+      x: this.penPointerSvg.x,
+      y: this.penPointerSvg.y,
+      width: 0,
+      height: 0
+    });
     return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
   }
 
@@ -400,6 +423,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         event.preventDefault();
         return;
       }
+      if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
+        this.clearPenDrawingState();
+        event.preventDefault();
+        return;
+      }
       if (this.shapeSelection.getSelectedShapes().length > 0) {
         this.shapeSelection.clearSelection();
         this.svgManipulation.clearHighlight();
@@ -407,6 +435,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         event.preventDefault();
       }
       return;
+    }
+
+    if (event.key === 'Enter') {
+      if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
+        this.tryFinishPenPath();
+        event.preventDefault();
+        return;
+      }
     }
 
     if (!this.svgContent()) return;
@@ -683,6 +719,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.creation.move(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
       return;
     }
+    if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
+      const pt = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+      if (pt) {
+        this.penPointerSvg = { x: pt.x, y: pt.y };
+        this.cdr.markForCheck();
+      }
+      return;
+    }
     if (this.isSelectionMarquee) {
       this.selectionMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
       this.cdr.detectChanges();
@@ -853,6 +897,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     effect(() => {
       this.svgContent();
       this.canvasView.resetZoom();
+      this.clearPenDrawingState();
+    });
+    effect(() => {
+      this.editorTool.currentTool();
+      if (this.editorTool.currentTool() !== 'pen') {
+        this.clearPenDrawingState();
+      }
     });
     effect(() => {
       this.editorHistory.revision();
@@ -1191,6 +1242,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       event.preventDefault();
       return;
     }
+    if (this.editorTool.getCurrentTool() === 'pen') {
+      if (!this.svgContent() || !this.canvasView.isInitialized()) return;
+      const pt = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+      if (!pt) return;
+      this.handlePenCanvasMouseDown(event, pt);
+      event.preventDefault();
+      return;
+    }
     if (this.editorTool.isCreationTool()) {
       if (!this.svgContent() || !this.canvasView.isInitialized()) return;
       if (this.creation.start(this.gestureCtx, this.editorTool.getCurrentTool(), event)) {
@@ -1339,6 +1398,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   onCanvasDoubleClick(event: MouseEvent): void {
+    if (this.editorTool.getCurrentTool() === 'pen') return;
     if (this.editorTool.getCurrentTool() !== 'selector') return;
     const selected = this.shapeSelection.getSelectedShapes();
     if (selected.length !== 1) return;
@@ -1358,6 +1418,55 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         this.shapeSelection.selectShapes(expanded);
       }
     }
+  }
+
+  private clearPenDrawingState(): void {
+    if (!this.isPenSessionActive && this.penPointerSvg === null) return;
+    this.penSession.reset();
+    this.penPointerSvg = null;
+    this.cdr.markForCheck();
+  }
+
+  private tryFinishPenPath(): void {
+    const d = this.penSession.finishPath();
+    if (!d) return;
+    const id = this.svgManipulation.insertPathIntoContentGroup(d);
+    if (!id) {
+      this.clearPenDrawingState();
+      return;
+    }
+    const svg = this.svgManipulation.getSVGInstance();
+    const el = svg?.findOne(`#${id}`) as SVGElement | undefined;
+    if (el) {
+      this.shapeSelection.selectShape(this.svgManipulation.getShapeProperties(el));
+    }
+    this.clearPenDrawingState();
+    this.editorTool.setTool('selector');
+    this.cdr.markForCheck();
+  }
+
+  private handlePenCanvasMouseDown(event: MouseEvent, pt: { x: number; y: number }): void {
+    if (event.detail >= 2) {
+      if (this.penSession.getSegments().length === 0) {
+        this.penSession.beginPath(pt.x, pt.y);
+        this.penPointerSvg = { x: pt.x, y: pt.y };
+        this.cdr.markForCheck();
+        return;
+      }
+      if (penPathOnlyMoveto(this.penSession.getSegments())) {
+        this.penSession.addLinePoint(pt.x, pt.y);
+      }
+      this.tryFinishPenPath();
+      return;
+    }
+    const segs = this.penSession.getSegments();
+    if (segs.length === 0) {
+      this.penSession.beginPath(pt.x, pt.y);
+    } else {
+      this.penSession.addLinePoint(pt.x, pt.y);
+    }
+    this.penPointerSvg = { x: pt.x, y: pt.y };
+    this.cdr.markForCheck();
   }
 
   private isGroupAClipMaskCarrier(groupId: string): boolean {

@@ -155,6 +155,19 @@
                 vector-effect="non-scaling-stroke"/>
             }
           }
+          @if (penRubberBandOverlay; as prb) {
+            <line
+              class="creation-ghost-shape"
+              data-testid="canvas-pen-rubber-band"
+              [attr.x1]="prb.x1"
+              [attr.y1]="prb.y1"
+              [attr.x2]="prb.x2"
+              [attr.y2]="prb.y2"
+              stroke="#2196f3"
+              stroke-width="2"
+              stroke-dasharray="6 3"
+              vector-effect="non-scaling-stroke"/>
+          }
           @if (showResizeHandles && highlightRect; as hr) {
             <circle
               class="selection-resize-handle selection-resize-nw"

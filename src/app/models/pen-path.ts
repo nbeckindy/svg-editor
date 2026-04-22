@@ -44,6 +44,22 @@ export function penPathSegmentsToD(segments: readonly PenPathSegment[]): string 
   return parts.join(' ');
 }
 
+/** Session has only an initial moveto (no line/curve segments yet). */
+export function penPathOnlyMoveto(segments: readonly PenPathSegment[]): boolean {
+  return segments.length === 1 && segments[0].type === 'M';
+}
+
+/** End vertex of the last segment (anchor for rubber-band preview). */
+export function lastCommittedVertex(
+  segments: readonly PenPathSegment[]
+): { x: number; y: number } | null {
+  if (segments.length === 0) return null;
+  const last = segments[segments.length - 1];
+  if (last.type === 'M') return { x: last.x, y: last.y };
+  if (last.type === 'L') return { x: last.x, y: last.y };
+  return { x: last.x, y: last.y };
+}
+
 /** At least one moveto and one additional drawable vertex (line or curve end). */
 export function penPathSegmentsAreValid(segments: readonly PenPathSegment[]): boolean {
   if (segments.length < 2) return false;

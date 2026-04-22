@@ -1,6 +1,8 @@
 import { describe, it, expect } from 'vitest';
 import {
   PenSession,
+  lastCommittedVertex,
+  penPathOnlyMoveto,
   penPathSegmentsAreValid,
   penPathSegmentsToD
 } from './pen-path';
@@ -45,6 +47,34 @@ describe('penPathSegmentsAreValid', () => {
         { type: 'C', x1: 0, y1: 0, x2: 1, y2: 1, x: 2, y: 2 }
       ])
     ).toBe(true);
+  });
+});
+
+describe('lastCommittedVertex', () => {
+  it('returns moveto point when only M', () => {
+    expect(lastCommittedVertex([{ type: 'M', x: 3, y: 4 }])).toEqual({ x: 3, y: 4 });
+  });
+
+  it('returns end of last L or C', () => {
+    expect(
+      lastCommittedVertex([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 1, y: 1 },
+        { type: 'L', x: 5, y: 5 }
+      ])
+    ).toEqual({ x: 5, y: 5 });
+  });
+});
+
+describe('penPathOnlyMoveto', () => {
+  it('is true only for lone M', () => {
+    expect(penPathOnlyMoveto([{ type: 'M', x: 0, y: 0 }])).toBe(true);
+    expect(
+      penPathOnlyMoveto([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 1, y: 1 }
+      ])
+    ).toBe(false);
   });
 });
 
