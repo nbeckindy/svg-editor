@@ -1,5 +1,5 @@
 import { TestBed } from '@angular/core/testing';
-import { SvgManipulationService } from './svg-manipulation.service';
+import { SvgManipulationService, CreatableShapeType } from './svg-manipulation.service';
 import { ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
 
 describe('SvgManipulationService', () => {
@@ -1546,6 +1546,244 @@ describe('SvgManipulationService', () => {
 
       cmd.undo();
       expect(service.getArtboard().backgroundColor).toBe('#ffffff');
+    });
+  });
+
+  describe('addShape', () => {
+    it('creates a rect with correct attributes', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="existing" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('rect', { x: 10, y: 20, width: 50, height: 30 });
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el).not.toBeNull();
+      expect(el?.tagName.toLowerCase()).toBe('rect');
+      expect(el?.getAttribute('width')).toBe('50');
+      expect(el?.getAttribute('height')).toBe('30');
+      expect(el?.getAttribute('x')).toBe('10');
+      expect(el?.getAttribute('y')).toBe('20');
+    });
+
+    it('creates an ellipse with correct attributes', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="existing" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('ellipse', { cx: 60, cy: 40, rx: 30, ry: 20 });
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el).not.toBeNull();
+      expect(el?.tagName.toLowerCase()).toBe('ellipse');
+      expect(el?.getAttribute('rx')).toBe('30');
+      expect(el?.getAttribute('ry')).toBe('20');
+      expect(el?.getAttribute('cx')).toBe('60');
+      expect(el?.getAttribute('cy')).toBe('40');
+    });
+
+    it('creates a line with correct attributes', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="existing" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('line', { x1: 5, y1: 10, x2: 80, y2: 90 });
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el).not.toBeNull();
+      expect(el?.tagName.toLowerCase()).toBe('line');
+      expect(el?.getAttribute('x1')).toBe('5');
+      expect(el?.getAttribute('y1')).toBe('10');
+      expect(el?.getAttribute('x2')).toBe('80');
+      expect(el?.getAttribute('y2')).toBe('90');
+    });
+
+    it('applies default paint (black fill) for rect when no overrides given', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('rect', {});
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el?.getAttribute('fill')?.toLowerCase()).toBe('#000000');
+    });
+
+    it('applies default paint (black fill) for ellipse when no overrides given', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('ellipse', {});
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el?.getAttribute('fill')?.toLowerCase()).toBe('#000000');
+    });
+
+    it('applies default paint (black stroke, fill none) for line when no overrides given', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('line', {});
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el?.getAttribute('stroke')?.toLowerCase()).toBe('#000000');
+      expect(el?.getAttribute('stroke-width')).toBe('2');
+      expect(el?.getAttribute('fill')).toBe('none');
+    });
+
+    it('applies fill override', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('rect', { fill: '#ff0000' });
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el?.getAttribute('fill')?.toLowerCase()).toBe('#ff0000');
+    });
+
+    it('applies stroke override on rect', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('rect', { stroke: '#00ff00', strokeWidth: 3 });
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el?.getAttribute('stroke')?.toLowerCase()).toBe('#00ff00');
+      expect(el?.getAttribute('stroke-width')).toBe('3');
+    });
+
+    it('applies stroke color override on line', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('line', { stroke: '#0000ff', strokeWidth: 5 });
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el?.getAttribute('stroke')?.toLowerCase()).toBe('#0000ff');
+      expect(el?.getAttribute('stroke-width')).toBe('5');
+    });
+
+    it('generates a unique ID following shape-XXXXX pattern', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('rect', {});
+      expect(id).toBeTruthy();
+      expect(id!.startsWith('shape-')).toBe(true);
+    });
+
+    it('generates unique IDs across multiple calls', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const ids = new Set<string>();
+      for (let i = 0; i < 10; i++) {
+        const id = service.addShape('rect', {});
+        expect(id).toBeTruthy();
+        expect(ids.has(id!)).toBe(false);
+        ids.add(id!);
+      }
+      expect(ids.size).toBe(10);
+    });
+
+    it('bumps documentRevision after creation', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      service.addShape('rect', {});
+      expect(service.documentRevision()).toBe(before + 1);
+    });
+
+    it('returns null when svgInstance is not initialized', () => {
+      const id = service.addShape('rect', { width: 50, height: 50 });
+      expect(id).toBeNull();
+    });
+
+    it('new shape is inside the content group', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="existing" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('rect', {});
+      expect(id).toBeTruthy();
+      const contentGroup = container.querySelector('[data-editor-content-group]');
+      expect(contentGroup?.querySelector(`#${id}`)).not.toBeNull();
+    });
+  });
+
+  describe('removeShape', () => {
+    it('removes a single shape by ID', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="20" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.removeShape('r1');
+      expect(container.querySelector('#r1')).toBeNull();
+      expect(container.querySelector('#r2')).not.toBeNull();
+    });
+
+    it('bumps documentRevision', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      service.removeShape('r1');
+      expect(service.documentRevision()).toBe(before + 1);
+    });
+
+    it('does not bump documentRevision when shape not found', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      service.removeShape('nonexistent');
+      expect(service.documentRevision()).toBe(before);
+    });
+
+    it('does nothing when not initialized', () => {
+      expect(() => service.removeShape('any-id')).not.toThrow();
+    });
+
+    it('can remove a shape created by addShape', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('ellipse', { cx: 50, cy: 50, rx: 20, ry: 20 });
+      expect(container.querySelector(`#${id}`)).not.toBeNull();
+      service.removeShape(id!);
+      expect(container.querySelector(`#${id}`)).toBeNull();
+    });
+  });
+
+  describe('insertShapeMarkup', () => {
+    it('inserts markup into content group', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.insertShapeMarkup('<circle id="inserted-circle" cx="50" cy="50" r="20" fill="#ff0000"/>');
+      const el = container.querySelector('#inserted-circle');
+      expect(el).not.toBeNull();
+      expect(el?.tagName.toLowerCase()).toBe('circle');
+    });
+
+    it('inserts at the specified DOM index', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="20" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.insertShapeMarkup('<circle id="mid" cx="5" cy="5" r="2"/>', 1);
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
+      expect(ids.indexOf('mid')).toBe(1);
+    });
+
+    it('appends when insertionIndex is omitted', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.insertShapeMarkup('<rect id="appended" x="0" y="0" width="5" height="5"/>');
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const lastChild = contentGroup.lastElementChild;
+      expect(lastChild?.id).toBe('appended');
+    });
+
+    it('bumps documentRevision', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      service.insertShapeMarkup('<rect id="new" x="0" y="0" width="5" height="5"/>');
+      expect(service.documentRevision()).toBe(before + 1);
+    });
+
+    it('does nothing when not initialized', () => {
+      expect(() => service.insertShapeMarkup('<rect id="noop" x="0" y="0" width="5" height="5"/>')).not.toThrow();
+    });
+
+    it('round-trips with removeShape (add → serialize → remove → reinsert)', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('rect', { x: 5, y: 5, width: 20, height: 20, fill: '#00ff00' });
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`)!;
+      const markup = el.outerHTML;
+      service.removeShape(id!);
+      expect(container.querySelector(`#${id}`)).toBeNull();
+      service.insertShapeMarkup(markup);
+      expect(container.querySelector(`#${id}`)).not.toBeNull();
     });
   });
 });

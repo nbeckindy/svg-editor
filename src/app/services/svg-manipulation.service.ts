@@ -1,6 +1,26 @@
 import { Injectable, signal, computed } from '@angular/core';
-import { SVG, Svg, Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
+import { SVG, Svg, Element as SvgJsElement, Matrix, G } from '@svgdotjs/svg.js';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../models/shape-properties.interface';
+
+export type CreatableShapeType = 'rect' | 'ellipse' | 'line';
+
+export interface ShapeCreationAttrs {
+  x?: number;
+  y?: number;
+  width?: number;
+  height?: number;
+  cx?: number;
+  cy?: number;
+  rx?: number;
+  ry?: number;
+  x1?: number;
+  y1?: number;
+  x2?: number;
+  y2?: number;
+  fill?: string;
+  stroke?: string;
+  strokeWidth?: number;
+}
 import { ArtboardModel, DEFAULT_ARTBOARD } from '../models/artboard.model';
 import { type ResizeCorner, oppositeCornerForHandle } from '../utils/selection-resize';
 import {
@@ -1288,6 +1308,112 @@ export class SvgManipulationService {
       if (shape) shape.remove();
     }
     if (toRemove.length > 0) this.bumpDocumentRevision();
+  }
+
+  /**
+   * Create a new SVG shape inside the content group.
+   * Returns the new element's ID, or null if not initialized.
+   */
+  addShape(type: CreatableShapeType, attrs: ShapeCreationAttrs): string | null {
+    if (!this.svgInstance) return null;
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`) as G | null;
+    if (!contentGroup) return null;
+
+    const usedIds = new Set<string>();
+    contentGroup.find('*').forEach((el: SvgJsElement) => {
+      const id = el.id();
+      if (id) usedIds.add(id);
+    });
+    let newId: string;
+    do {
+      newId = `shape-${Math.random().toString(36).substr(2, 9)}`;
+    } while (usedIds.has(newId));
+
+    let shape: SvgJsElement;
+
+    if (type === 'rect') {
+      const w = attrs.width ?? 100;
+      const h = attrs.height ?? 100;
+      const x = attrs.x ?? 0;
+      const y = attrs.y ?? 0;
+      const el = contentGroup.rect(w, h).move(x, y);
+      el.fill(attrs.fill ?? '#000000');
+      if (attrs.stroke) {
+        el.stroke({ color: attrs.stroke, width: attrs.strokeWidth ?? 1 });
+      }
+      shape = el;
+    } else if (type === 'ellipse') {
+      const rx = attrs.rx ?? 50;
+      const ry = attrs.ry ?? 50;
+      const cx = attrs.cx ?? rx;
+      const cy = attrs.cy ?? ry;
+      const el = contentGroup.ellipse(rx * 2, ry * 2).center(cx, cy);
+      el.fill(attrs.fill ?? '#000000');
+      if (attrs.stroke) {
+        el.stroke({ color: attrs.stroke, width: attrs.strokeWidth ?? 1 });
+      }
+      shape = el;
+    } else {
+      const x1 = attrs.x1 ?? 0;
+      const y1 = attrs.y1 ?? 0;
+      const x2 = attrs.x2 ?? 100;
+      const y2 = attrs.y2 ?? 100;
+      const el = contentGroup.line(x1, y1, x2, y2);
+      el.fill('none');
+      el.stroke({ color: attrs.stroke ?? '#000000', width: attrs.strokeWidth ?? 2 });
+      shape = el;
+    }
+
+    shape.id(newId);
+    try {
+      shape.css({ cursor: 'pointer' });
+    } catch {
+      // jsdom may not support style.setProperty on SVG elements
+    }
+    this.bumpDocumentRevision();
+    return newId;
+  }
+
+  /**
+   * Remove a single shape by ID (no clip-group expansion). Used by undo of AddShapeCommand.
+   */
+  removeShape(shapeId: string): void {
+    if (!this.svgInstance) return;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (shape) {
+      shape.remove();
+      this.bumpDocumentRevision();
+    }
+  }
+
+  /**
+   * Re-insert a serialized shape element (outerHTML) into the content group at the specified
+   * DOM index. Used by redo of AddShapeCommand. Sets cursor:pointer on the inserted element.
+   */
+  insertShapeMarkup(markup: string, insertionIndex?: number): void {
+    if (!this.svgInstance) return;
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    if (!contentGroup?.node) return;
+
+    const parent = contentGroup.node as Element;
+    const temp = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    temp.innerHTML = markup;
+    const newNode = temp.firstElementChild;
+    if (!newNode) return;
+
+    if (insertionIndex != null && insertionIndex < parent.children.length) {
+      parent.insertBefore(newNode, parent.children[insertionIndex]);
+    } else {
+      parent.appendChild(newNode);
+    }
+
+    try {
+      (newNode as SVGElement).style?.setProperty('cursor', 'pointer');
+    } catch {
+      // jsdom compatibility
+    }
+
+    this.bumpDocumentRevision();
   }
 
   /**
