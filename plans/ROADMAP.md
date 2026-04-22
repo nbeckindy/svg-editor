@@ -127,7 +127,7 @@ Status/progress below is current as of 2026-04-21.
 | text-editing | `svg-editor-nkz` | Text editing | `OPEN` | 0/7 |
 | align-distribute | TBD | Align and distribute | `OPEN` | 0/5 |
 | snap-guides | TBD | Snap and guides | `OPEN` | 0/8 |
-| pen-path-tool | `svg-editor-tfs` | Pen and path tool | `OPEN` | 4/7 |
+| pen-path-tool | `svg-editor-tfs` | Pen and path tool | `OPEN` | 5/7 |
 | canvas-artboard | `svg-editor-dl9` | Canvas and artboard | `CLOSED` | 7/7 |
 | path-node-editing | TBD | Path node editing | `OPEN` | 0/4 |
 

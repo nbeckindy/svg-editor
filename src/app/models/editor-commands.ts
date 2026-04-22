@@ -802,3 +802,58 @@ export class AddShapeCommand implements EditorCommand {
     this.selectionSvc?.clearSelection();
   }
 }
+
+/**
+ * Undoable path creation (pen tool). Same lifecycle as {@link AddShapeCommand}: element exists
+ * before `pushAndExecute`; first `execute()` is a no-op; redo restores markup and selection.
+ */
+export class AddPathCommand implements EditorCommand {
+  readonly description = 'Add path';
+
+  private serializedMarkup: string | null = null;
+  private insertionIndex: number | null = null;
+  private executed = false;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly shapeId: string,
+    private readonly selectionSvc?: ShapeSelectionService
+  ) {
+    this.captureState();
+    this.executed = true;
+  }
+
+  private captureState(): void {
+    const svgInstance = this.svc.getSVGInstance();
+    if (!svgInstance) return;
+    const shape = svgInstance.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
+    if (!shape?.node) return;
+    this.serializedMarkup = (shape.node as Element).outerHTML;
+    const contentGroup = svgInstance.findOne('[data-editor-content-group]');
+    if (contentGroup?.node) {
+      const children = Array.from((contentGroup.node as Element).children);
+      this.insertionIndex = children.indexOf(shape.node as Element);
+    }
+  }
+
+  execute(): void {
+    if (this.executed) {
+      this.executed = false;
+      return;
+    }
+    if (!this.serializedMarkup) return;
+    this.svc.insertShapeMarkup(this.serializedMarkup, this.insertionIndex ?? undefined);
+    if (this.selectionSvc) {
+      const svgInstance = this.svc.getSVGInstance();
+      const el = svgInstance?.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
+      if (el) {
+        this.selectionSvc.selectShapes([this.svc.getShapeProperties(el)]);
+      }
+    }
+  }
+
+  undo(): void {
+    this.svc.removeShape(this.shapeId);
+    this.selectionSvc?.clearSelection();
+  }
+}

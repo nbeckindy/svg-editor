@@ -23,7 +23,8 @@ import {
   UnionRotateCommand,
   RemoveShapesCommand,
   GroupCommand,
-  UngroupCommand
+  UngroupCommand,
+  AddPathCommand
 } from '../../models/editor-commands';
 import { DragGesture, ResizeGesture, RotateGesture, CreationGesture, type GestureContext, type Rect } from './gestures';
 import {
@@ -1561,6 +1562,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const el = svg?.findOne(`#${id}`) as SVGElement | undefined;
     if (el) {
       this.shapeSelection.selectShape(this.svgManipulation.getShapeProperties(el));
+    }
+    const cmd = new AddPathCommand(this.svgManipulation, id, this.shapeSelection);
+    this.editorHistory.pushAndExecute(cmd);
+    const shapeBbox = this.svgManipulation.getShapeBBox(id);
+    if (shapeBbox) {
+      this.lastBbox = shapeBbox;
+      this._highlightRectCacheKey = '';
     }
     this.clearPenDrawingState();
     this.editorTool.setTool('selector');

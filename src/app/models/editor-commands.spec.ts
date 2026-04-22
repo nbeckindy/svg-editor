@@ -17,6 +17,7 @@ import {
   UngroupCommand,
   RemoveShapesCommand,
   AddShapeCommand,
+  AddPathCommand,
   type EditorCommand,
 } from './editor-commands';
 import { ShapeSelectionService } from '../services/shape-selection.service';
@@ -719,6 +720,79 @@ describe('AddShapeCommand', () => {
     expect(selectionSvc.clearSelection).toHaveBeenCalled();
 
     // redo
+    cmd.execute();
+    expect(svc.insertShapeMarkup).toHaveBeenCalledTimes(1);
+    expect(selectionSvc.selectShapes).toHaveBeenCalled();
+  });
+});
+
+describe('AddPathCommand', () => {
+  function buildContentGroupForAddPath(shapeId: string) {
+    const contentGroup = document.createElement('div');
+    contentGroup.setAttribute('data-editor-content-group', '');
+    const existing = document.createElement('div');
+    existing.id = 'existing';
+    contentGroup.appendChild(existing);
+    const pathNode = document.createElement('div');
+    pathNode.id = shapeId;
+    pathNode.innerHTML = 'path-content';
+    contentGroup.appendChild(pathNode);
+
+    return { contentGroup, pathNode };
+  }
+
+  function buildMockSvcsForAddPath(shapeId: string) {
+    const { contentGroup, pathNode } = buildContentGroupForAddPath(shapeId);
+
+    const mockShapeProps = { id: shapeId, type: 'path' as const };
+
+    const findOne = vi.fn((sel: string) => {
+      if (sel === `#${shapeId}`) return { node: pathNode };
+      if (sel === '[data-editor-content-group]') return { node: contentGroup };
+      return undefined;
+    });
+
+    const svc = {
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+      removeShape: vi.fn(),
+      insertShapeMarkup: vi.fn(),
+      getShapeProperties: vi.fn().mockReturnValue(mockShapeProps),
+    } as unknown as SvgManipulationService;
+
+    const selectionSvc = {
+      selectShapes: vi.fn(),
+      clearSelection: vi.fn(),
+    } as unknown as ShapeSelectionService;
+
+    return { svc, selectionSvc, pathNode };
+  }
+
+  it('constructor captures serialized markup and insertion index', () => {
+    const { svc, selectionSvc, pathNode } = buildMockSvcsForAddPath('shape-p1');
+    const cmd = new AddPathCommand(svc, 'shape-p1', selectionSvc);
+    expect(cmd.description).toBe('Add path');
+    expect(pathNode.outerHTML).toBeTruthy();
+  });
+
+  it('first execute() is a no-op', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddPath('shape-p1');
+    const cmd = new AddPathCommand(svc, 'shape-p1', selectionSvc);
+    cmd.execute();
+    expect(svc.insertShapeMarkup).not.toHaveBeenCalled();
+  });
+
+  it('undo() removes path and clears selection', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddPath('shape-p1');
+    const cmd = new AddPathCommand(svc, 'shape-p1', selectionSvc);
+    cmd.undo();
+    expect(svc.removeShape).toHaveBeenCalledWith('shape-p1');
+    expect(selectionSvc.clearSelection).toHaveBeenCalled();
+  });
+
+  it('redo re-inserts and re-selects', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddPath('shape-p1');
+    const cmd = new AddPathCommand(svc, 'shape-p1', selectionSvc);
+    cmd.execute();
     cmd.execute();
     expect(svc.insertShapeMarkup).toHaveBeenCalledTimes(1);
     expect(selectionSvc.selectShapes).toHaveBeenCalled();

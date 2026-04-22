@@ -34,13 +34,13 @@
 - [`src/app/services/editor-tool.service.ts`](../../src/app/services/editor-tool.service.ts) — `pen` tool enum value
 - [`src/app/components/svg-canvas/svg-canvas.component.ts`](../../src/app/components/svg-canvas/svg-canvas.component.ts) — pen gesture handling, rubber-band preview
 - [`src/app/services/svg-manipulation.service.ts`](../../src/app/services/svg-manipulation.service.ts) — path insertion, `d` attribute helpers
-- [`src/app/models/editor-commands.ts`](../../src/app/models/editor-commands.ts) — `AddPathCommand` (new)
+- [`src/app/models/editor-commands.ts`](../../src/app/models/editor-commands.ts) — `AddPathCommand`
 - [`src/app/components/tool-strip/tool-strip.component.ts`](../../src/app/components/tool-strip/tool-strip.component.ts) — pen tool button
 
 ## Notes
 
 - Additional tracker issues (not in the PP-x table): `svg-editor-tfs.8` (confirm discard on tool/doc change), `svg-editor-tfs.9` (feedback when finish is invalid), `svg-editor-tfs.10` (pen hit-test / click target policy), `svg-editor-tfs.11` (optional richer cubic handle model vs chord-thirds).
-- Until **PP-4** (`AddPathCommand`), finished pen paths are inserted without history; undo will not remove them.
+- **PP-4:** finished pen paths use `AddPathCommand` (undo removes path and clears selection; redo re-inserts and re-selects).
 - Node editing of existing paths has been split into its own epic ([path-node-editing](./path-node-editing.md)).
 - The path segment model (PP-2a) is foundational — PP-3 (bezier curves) extends it with `C` segments. Choosing a structured representation up front avoids a refactor when adding curves.
 - `onCanvasMouseDown` selector-only guard must be updated (same shared blocker as shape creation SC-2b).
