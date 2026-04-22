@@ -165,6 +165,10 @@
   cursor: crosshair;
 }
 
+.canvas-container.pen-mode {
+  cursor: crosshair;
+}
+
 .zoom-marquee {
   position: fixed;
   pointer-events: none;

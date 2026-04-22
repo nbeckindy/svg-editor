@@ -1262,6 +1262,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (this.editorTool.getCurrentTool() === 'pan') {
       return;
     }
+    if (this.editorTool.getCurrentTool() === 'pen') {
+      return;
+    }
     if (this.editorTool.isCreationTool()) {
       return;
     }

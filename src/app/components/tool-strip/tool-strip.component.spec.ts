@@ -33,10 +33,10 @@ describe('ToolStripComponent', () => {
     expect(selectorBtn?.classList.contains('active')).toBe(true);
   });
 
-  it('should display Undo, Redo, Selector, Zoom, Pan, Rect, Ellipse, and Line buttons', () => {
+  it('should display Undo, Redo, Selector, Zoom, Pan, Rect, Ellipse, Line, and Pen buttons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('.tool-btn');
-    expect(buttons.length).toBe(8);
+    expect(buttons.length).toBe(9);
     expect((buttons[0] as HTMLElement).textContent?.trim()).toContain('Undo');
     expect((buttons[1] as HTMLElement).textContent?.trim()).toContain('Redo');
     expect((buttons[2] as HTMLElement).textContent?.trim()).toBe('Selector');
@@ -45,6 +45,7 @@ describe('ToolStripComponent', () => {
     expect((buttons[5] as HTMLElement).textContent?.trim()).toContain('Rect');
     expect((buttons[6] as HTMLElement).textContent?.trim()).toContain('Ellipse');
     expect((buttons[7] as HTMLElement).textContent?.trim()).toContain('Line');
+    expect((buttons[8] as HTMLElement).textContent?.trim()).toContain('Pen');
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {
@@ -161,9 +162,21 @@ describe('ToolStripComponent', () => {
     expect(editorToolService.isCreationTool('line')).toBe(true);
   });
 
-  it('isCreationTool() returns false for selector, zoom, and pan', () => {
+  it('isCreationTool() returns false for selector, zoom, pan, and pen', () => {
     expect(editorToolService.isCreationTool('selector')).toBe(false);
     expect(editorToolService.isCreationTool('zoom')).toBe(false);
     expect(editorToolService.isCreationTool('pan')).toBe(false);
+    expect(editorToolService.isCreationTool('pen')).toBe(false);
+  });
+
+  it('should set tool to pen when Pen button is clicked', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const penBtn = compiled.querySelector('[data-testid="tool-pen"]') as HTMLElement;
+    expect(penBtn).toBeTruthy();
+
+    penBtn.click();
+    fixture.detectChanges();
+
+    expect(editorToolService.getCurrentTool()).toBe('pen');
   });
 });

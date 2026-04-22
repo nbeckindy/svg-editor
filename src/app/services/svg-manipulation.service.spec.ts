@@ -1694,6 +1694,28 @@ describe('SvgManipulationService', () => {
     });
   });
 
+  describe('insertPathIntoContentGroup', () => {
+    it('creates a path with d and default stroke', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.insertPathIntoContentGroup('M 0 0 L 10 20');
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el?.tagName.toLowerCase()).toBe('path');
+      expect(el?.getAttribute('d')).toBe('M 0 0 L 10 20');
+      expect(el?.getAttribute('fill')).toBe('none');
+      expect(el?.getAttribute('stroke')?.toLowerCase()).toBe('#000000');
+    });
+
+    it('places path inside content group', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="existing" x="0" y="0" width="5" height="5"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.insertPathIntoContentGroup('M 1 1 L 2 2');
+      const contentGroup = container.querySelector('[data-editor-content-group]');
+      expect(contentGroup?.querySelector(`#${id}`)).not.toBeNull();
+    });
+  });
+
   describe('removeShape', () => {
     it('removes a single shape by ID', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="20" y="0" width="10" height="10"/></svg>';

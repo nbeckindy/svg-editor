@@ -1375,6 +1375,45 @@ export class SvgManipulationService {
   }
 
   /**
+   * Insert a `<path>` with the given `d` into the editor content group.
+   * Mirrors {@link addShape} id allocation and pointer styling.
+   */
+  insertPathIntoContentGroup(
+    d: string,
+    attrs?: { fill?: string; stroke?: string; strokeWidth?: number }
+  ): string | null {
+    if (!this.svgInstance) return null;
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`) as G | null;
+    if (!contentGroup) return null;
+
+    const usedIds = new Set<string>();
+    contentGroup.find('*').forEach((el: SvgJsElement) => {
+      const id = el.id();
+      if (id) usedIds.add(id);
+    });
+    let newId: string;
+    do {
+      newId = `shape-${Math.random().toString(36).substr(2, 9)}`;
+    } while (usedIds.has(newId));
+
+    const pathFactory = contentGroup as G & { path(pathD: string): SvgJsElement };
+    const shape = pathFactory.path(d);
+    shape.id(newId);
+    shape.fill(attrs?.fill ?? 'none');
+    shape.stroke({
+      color: attrs?.stroke ?? '#000000',
+      width: attrs?.strokeWidth ?? 2
+    });
+    try {
+      shape.css({ cursor: 'pointer' });
+    } catch {
+      /* jsdom */
+    }
+    this.bumpDocumentRevision();
+    return newId;
+  }
+
+  /**
    * Remove a single shape by ID (no clip-group expansion). Used by undo of AddShapeCommand.
    */
   removeShape(shapeId: string): void {
