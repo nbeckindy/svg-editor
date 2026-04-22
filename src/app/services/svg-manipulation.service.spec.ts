@@ -1,6 +1,7 @@
 import { TestBed } from '@angular/core/testing';
 import { SvgManipulationService, CreatableShapeType } from './svg-manipulation.service';
-import { ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
+import { AddPathCommand, ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
+import { ShapeSelectionService } from './shape-selection.service';
 
 describe('SvgManipulationService', () => {
   let service: SvgManipulationService;
@@ -1713,6 +1714,42 @@ describe('SvgManipulationService', () => {
       const id = service.insertPathIntoContentGroup('M 1 1 L 2 2');
       const contentGroup = container.querySelector('[data-editor-content-group]');
       expect(contentGroup?.querySelector(`#${id}`)).not.toBeNull();
+    });
+  });
+
+  describe('AddPathCommand (real SvgManipulationService + DOM)', () => {
+    it('undo/redo round-trip: no duplicate on first execute, DOM and selection', () => {
+      const selectionSvc = TestBed.inject(ShapeSelectionService);
+      selectionSvc.clearSelection();
+
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+
+      const pathD = 'M 0 0 L 10 10';
+      const id = service.insertPathIntoContentGroup(pathD);
+      expect(id).toBeTruthy();
+
+      const svgInstance = service.getSVGInstance()!;
+      const pathEl = svgInstance.findOne(`#${id!}`)!;
+      expect(pathEl).toBeTruthy();
+      selectionSvc.selectShape(service.getShapeProperties(pathEl));
+
+      const beforePaths = container.querySelectorAll('path');
+      expect(beforePaths.length).toBe(1);
+
+      const cmd = new AddPathCommand(service, id!, selectionSvc);
+      cmd.execute();
+      expect(container.querySelectorAll('path').length).toBe(1);
+
+      cmd.undo();
+      expect(container.querySelector(`#${id!}`)).toBeNull();
+      expect(selectionSvc.getSelectedShapes().length).toBe(0);
+
+      cmd.execute();
+      const reinserted = container.querySelector(`#${id!}`) as Element | null;
+      expect(reinserted).not.toBeNull();
+      expect(reinserted?.getAttribute('d')).toBe(pathD);
+      expect(selectionSvc.selectedShape()?.id).toBe(id!);
     });
   });
 
