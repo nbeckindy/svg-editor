@@ -1,0 +1,129 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - heading "Angular SVG Editor" [level=1] [ref=e5]
+  - generic [ref=e6]:
+    - generic [ref=e8]:
+      - button "Selector" [pressed] [ref=e9] [cursor=pointer]
+      - button "Zoom" [ref=e10] [cursor=pointer]
+      - button "Pan" [ref=e11] [cursor=pointer]:
+        - img [ref=e13]
+        - generic [ref=e18]: Pan
+    - generic "SVG file drop zone" [ref=e21]:
+      - button "Choose SVG File" [ref=e22] [cursor=pointer]
+      - paragraph [ref=e23]: or drag and drop here
+    - generic [ref=e25]:
+      - heading "Test icons" [level=3] [ref=e26]
+      - generic [ref=e27]:
+        - button "Chat left heart" [active] [ref=e28] [cursor=pointer]:
+          - img [ref=e1861]
+          - generic [ref=e33]: Chat left heart
+        - button "Clipboard2 data" [ref=e34] [cursor=pointer]:
+          - img [ref=e1864]
+          - generic [ref=e40]: Clipboard2 data
+        - button "Chat left heart fill" [ref=e41] [cursor=pointer]:
+          - img [ref=e1868]
+          - generic [ref=e45]: Chat left heart fill
+        - button "アートボード 1 Photo NG mobile" [ref=e46] [cursor=pointer]:
+          - img "アートボード 1" [ref=e1870]
+          - generic [ref=e70]: Photo NG mobile
+        - button "Broc" [ref=e71] [cursor=pointer]:
+          - img [ref=e1892]
+          - generic [ref=e858]: Broc
+        - button "Lemon squeeze" [ref=e859] [cursor=pointer]:
+          - img [ref=e2677]
+          - generic [ref=e1345]: Lemon squeeze
+        - button "SVG future" [ref=e1346] [cursor=pointer]:
+          - img [ref=e3161]
+          - generic [ref=e1828]: SVG future
+  - generic [ref=e1829]:
+    - generic [ref=e1830]:
+      - generic [ref=e1833]:
+        - generic "Zoom level": 2970%
+        - generic [ref=e1834]:
+          - img [ref=e3643]:
+            - generic: "-1"
+            - generic: "0"
+            - generic: "0"
+            - generic: "1"
+            - generic: "1"
+            - generic: "2"
+            - generic: "2"
+            - generic: "3"
+            - generic: "3"
+            - generic: "4"
+            - generic: "4"
+            - generic: "5"
+            - generic: "5"
+            - generic: "6"
+            - generic: "6"
+            - generic: "7"
+            - generic: "7"
+            - generic: "8"
+            - generic: "8"
+            - generic: "9"
+            - generic: "9"
+            - generic: "10"
+            - generic: "10"
+            - generic: "11"
+            - generic: "11"
+            - generic: "12"
+            - generic: "12"
+            - generic: "13"
+            - generic: "13"
+            - generic: "14"
+            - generic: "14"
+            - generic: "15"
+            - generic: "15"
+            - generic: "16"
+            - generic: "16"
+            - generic: "17"
+            - generic: "17"
+          - img [ref=e3645]:
+            - generic: "-1"
+            - generic: "0"
+            - generic: "1"
+            - generic: "2"
+            - generic: "3"
+            - generic: "4"
+            - generic: "5"
+            - generic: "6"
+            - generic: "7"
+            - generic: "8"
+            - generic: "9"
+            - generic: "10"
+            - generic: "11"
+            - generic: "12"
+            - generic: "13"
+            - generic: "14"
+            - generic: "15"
+            - generic: "16"
+            - generic: "17"
+          - application "SVG drawing canvas" [ref=e1835]:
+            - generic [ref=e3646]:
+              - img [ref=e3649]
+              - generic:
+                - img
+      - generic [ref=e1840]:
+        - heading "Layers" [level=3] [ref=e1842]
+        - generic [ref=e3655]:
+          - button "path preview SvgjsPath1001 path" [ref=e3656] [cursor=pointer]:
+            - img "path preview" [ref=e3657]
+            - generic [ref=e3658]:
+              - generic [ref=e3659]: SvgjsPath1001
+              - generic [ref=e3660]: path
+          - button "path preview SvgjsPath1000 path" [ref=e3661] [cursor=pointer]:
+            - img "path preview" [ref=e3662]
+            - generic [ref=e3663]:
+              - generic [ref=e3664]: SvgjsPath1000
+              - generic [ref=e3665]: path
+      - generic [ref=e1848]:
+        - heading "Properties" [level=3] [ref=e1850]
+        - generic [ref=e1851]:
+          - paragraph [ref=e1852]: No shape selected
+          - paragraph [ref=e1853]: Click on a shape in the canvas to edit its properties
+    - generic [ref=e1856]:
+      - generic [ref=e1857]:
+        - heading "SVG (debug)" [level=3] [ref=e1858]
+        - button "Collapse" [expanded] [ref=e1859] [cursor=pointer]
+      - generic "Exported SVG XML" [ref=e3667]:
+        - code [ref=e3668]: "<svg xmlns=\"http://www.w3.org/2000/svg\" viewBox=\"0 0 16 16\" preserveAspectRatio=\"xMidYMid meet\"> <path d=\"M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z\" id=\"SvgjsPath1000\" style=\"cursor: pointer;\" /> <path d=\"M8 3.993c1.664-1.711 5.825 1.283 0 5.132-5.825-3.85-1.664-6.843 0-5.132\" id=\"SvgjsPath1001\" style=\"cursor: pointer;\" /> </svg>"

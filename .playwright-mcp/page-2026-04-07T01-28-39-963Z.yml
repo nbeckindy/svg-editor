@@ -1,0 +1,57 @@
+- generic [ref=e3]:
+  - banner [ref=e4]:
+    - heading "Angular SVG Editor" [level=1] [ref=e5]
+  - generic [ref=e6]:
+    - generic [ref=e8]:
+      - button "Selector" [pressed] [ref=e9] [cursor=pointer]
+      - button "Zoom" [ref=e10] [cursor=pointer]
+      - button "Pan" [ref=e11] [cursor=pointer]:
+        - img [ref=e13]
+        - generic [ref=e18]: Pan
+    - generic "SVG file drop zone" [ref=e21]:
+      - button "Choose SVG File" [ref=e22] [cursor=pointer]
+      - paragraph [ref=e23]: or drag and drop here
+    - generic [ref=e25]:
+      - heading "Test icons" [level=3] [ref=e26]
+      - generic [ref=e27]:
+        - button "Chat left heart" [ref=e28] [cursor=pointer]:
+          - img [ref=e30]
+          - generic [ref=e33]: Chat left heart
+        - button "Clipboard2 data" [ref=e34] [cursor=pointer]:
+          - img [ref=e36]
+          - generic [ref=e40]: Clipboard2 data
+        - button "Chat left heart fill" [ref=e41] [cursor=pointer]:
+          - img [ref=e43]
+          - generic [ref=e45]: Chat left heart fill
+        - button "アートボード 1 Photo NG mobile" [ref=e46] [cursor=pointer]:
+          - img "アートボード 1" [ref=e48]
+          - generic [ref=e70]: Photo NG mobile
+        - button "Broc" [ref=e71] [cursor=pointer]:
+          - img [ref=e73]
+          - generic [ref=e858]: Broc
+        - button "Lemon squeeze" [ref=e859] [cursor=pointer]:
+          - img [ref=e861]
+          - generic [ref=e1345]: Lemon squeeze
+        - button "SVG future" [ref=e1346] [cursor=pointer]:
+          - img [ref=e1348]
+          - generic [ref=e1828]: SVG future
+  - generic [ref=e1829]:
+    - generic [ref=e1830]:
+      - generic [ref=e1833]:
+        - application "SVG drawing canvas" [ref=e1835]
+        - paragraph [ref=e1837]: Load an SVG file to begin editing
+      - generic [ref=e1840]:
+        - heading "Layers" [level=3] [ref=e1842]
+        - generic [ref=e1843]:
+          - paragraph [ref=e1844]: No layers loaded
+          - paragraph [ref=e1845]: Load an SVG to inspect stack order
+      - generic [ref=e1848]:
+        - heading "Properties" [level=3] [ref=e1850]
+        - generic [ref=e1851]:
+          - paragraph [ref=e1852]: No shape selected
+          - paragraph [ref=e1853]: Click on a shape in the canvas to edit its properties
+    - generic [ref=e1856]:
+      - generic [ref=e1857]:
+        - heading "SVG (debug)" [level=3] [ref=e1858]
+        - button "Collapse" [expanded] [ref=e1859] [cursor=pointer]
+      - generic [ref=e1860]: Load an SVG to see exported document XML.

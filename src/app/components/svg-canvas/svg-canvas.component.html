@@ -181,6 +181,16 @@
       [style.width.px]="selRect.width"
       [style.height.px]="selRect.height"></div>
   }
+  @if (creationGhostRect; as ghost) {
+    <div
+      class="creation-ghost"
+      data-testid="canvas-creation-ghost"
+      aria-hidden="true"
+      [style.left.px]="ghost.x"
+      [style.top.px]="ghost.y"
+      [style.width.px]="ghost.width"
+      [style.height.px]="ghost.height"></div>
+  }
   @if (!svgContent()) {
     <div class="placeholder" data-testid="canvas-empty-placeholder">
       <p>Load an SVG file to begin editing</p>

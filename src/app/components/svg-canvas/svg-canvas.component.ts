@@ -25,7 +25,7 @@ import {
   GroupCommand,
   UngroupCommand
 } from '../../models/editor-commands';
-import { DragGesture, ResizeGesture, RotateGesture, type GestureContext, type Rect } from './gestures';
+import { DragGesture, ResizeGesture, RotateGesture, CreationGesture, type GestureContext, type Rect } from './gestures';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
@@ -163,11 +163,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly drag = new DragGesture();
   private readonly resize = new ResizeGesture();
   private readonly rotate = new RotateGesture();
+  private readonly creation = new CreationGesture();
 
   // Proxy getters for template bindings and inter-gesture guards
   get isDraggingShape(): boolean { return this.drag.isActive; }
   get isResizingSelection(): boolean { return this.resize.isActive; }
   get isRotatingSelection(): boolean { return this.rotate.isActive; }
+  get isCreatingShape(): boolean { return this.creation.isActive; }
+  get creationGhostRect(): Rect | null { return this.creation.ghostRect; }
 
   // --- Shared selection/highlight state ---
   lastBbox: { x: number; y: number; width: number; height: number } | null = null;
@@ -666,6 +669,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // --- Mouse event orchestration ---
   onDocumentMouseMove(event: MouseEvent): void {
+    if (this.isCreatingShape) {
+      this.creation.move(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
+      return;
+    }
     if (this.isSelectionMarquee) {
       this.selectionMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
       this.cdr.detectChanges();
@@ -696,6 +703,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onDocumentMouseUp(event: MouseEvent): void {
     if (event.button !== 0) return;
+
+    if (this.isCreatingShape) {
+      this.creation.end(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
+      return;
+    }
 
     if (this.isSelectionMarquee && this.selectionMarqueeStart && this.selectionMarqueeEnd) {
       this.commitSelectionMarquee(event);
@@ -1170,7 +1182,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (this.editorTool.isCreationTool()) {
-      event.preventDefault();
+      if (!this.svgContent() || !this.canvasView.isInitialized()) return;
+      if (this.creation.start(this.gestureCtx, this.editorTool.getCurrentTool(), event)) {
+        event.preventDefault();
+      }
       return;
     }
     if (this.editorTool.getCurrentTool() !== 'selector' || !this.svgContent() || !this.canvasView.isInitialized()) return;
@@ -1233,6 +1248,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (this.drag.consumeJustEnded()) return;
     if (this.resize.consumeJustEnded()) return;
     if (this.rotate.consumeJustEnded()) return;
+    if (this.creation.consumeJustEnded()) return;
     if (this.editorTool.getCurrentTool() === 'pan') {
       return;
     }
