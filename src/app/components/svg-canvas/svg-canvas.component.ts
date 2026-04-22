@@ -171,6 +171,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   get isRotatingSelection(): boolean { return this.rotate.isActive; }
   get isCreatingShape(): boolean { return this.creation.isActive; }
   get creationGhostRect(): Rect | null { return this.creation.ghostRect; }
+  get creationShapeType(): string { return this.creation.activeShapeType; }
+
+  get creationGhostLineOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
+    const start = this.creation.ghostLineStart;
+    const end = this.creation.ghostLineEnd;
+    if (!start || !end) return null;
+    const p1 = this.svgBboxToOverlayPixels({ x: start.x, y: start.y, width: 0, height: 0 });
+    const p2 = this.svgBboxToOverlayPixels({ x: end.x, y: end.y, width: 0, height: 0 });
+    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  }
 
   // --- Shared selection/highlight state ---
   lastBbox: { x: number; y: number; width: number; height: number } | null = null;

@@ -38,6 +38,12 @@ export class CreationGesture {
   private shapeType: CreatableShapeType = 'rect';
 
   ghostRect: Rect | null = null;
+  /** Expose the current shape type for template rendering. */
+  get activeShapeType(): CreatableShapeType { return this.shapeType; }
+  /** For line ghost: start point in SVG user space. */
+  ghostLineStart: Point | null = null;
+  /** For line ghost: end point in SVG user space. */
+  ghostLineEnd: Point | null = null;
 
   start(
     ctx: GestureContext,
@@ -78,6 +84,13 @@ export class CreationGesture {
     this.currentSvg = this.applyConstraint(raw, shiftKey);
     const bbox = this.computeGhostBbox(this.startSvg, this.currentSvg);
     this.ghostRect = ctx.svgBboxToOverlayPixels(bbox);
+    if (this.shapeType === 'line') {
+      this.ghostLineStart = this.startSvg;
+      this.ghostLineEnd = this.currentSvg;
+    } else {
+      this.ghostLineStart = null;
+      this.ghostLineEnd = null;
+    }
     ctx.cdr.detectChanges();
   }
 
@@ -150,6 +163,8 @@ export class CreationGesture {
     this.startSvg = null;
     this.currentSvg = null;
     this.ghostRect = null;
+    this.ghostLineStart = null;
+    this.ghostLineEnd = null;
   }
 
   /**
@@ -162,7 +177,13 @@ export class CreationGesture {
     if (this.shapeType === 'line') {
       return snapToEightWay(this.startSvg, end);
     }
-    return end;
+    const dx = end.x - this.startSvg.x;
+    const dy = end.y - this.startSvg.y;
+    const side = Math.max(Math.abs(dx), Math.abs(dy));
+    return {
+      x: this.startSvg.x + Math.sign(dx) * side,
+      y: this.startSvg.y + Math.sign(dy) * side
+    };
   }
 
   /** Bounding box for the ghost outline (all shape types). */

@@ -111,6 +111,49 @@
                 stroke-width="2"/>
             }
           }
+          @if (creationGhostRect; as ghost) {
+            @if (creationShapeType === 'ellipse') {
+              <ellipse
+                class="creation-ghost-shape"
+                data-testid="canvas-creation-ghost"
+                [attr.cx]="ghost.x + ghost.width / 2"
+                [attr.cy]="ghost.y + ghost.height / 2"
+                [attr.rx]="ghost.width / 2"
+                [attr.ry]="ghost.height / 2"
+                fill="rgba(33, 150, 243, 0.08)"
+                stroke="#2196f3"
+                stroke-width="2"
+                stroke-dasharray="6 3"
+                vector-effect="non-scaling-stroke"/>
+            } @else if (creationShapeType === 'line') {
+              @if (creationGhostLineOverlay; as gl) {
+                <line
+                  class="creation-ghost-shape"
+                  data-testid="canvas-creation-ghost"
+                  [attr.x1]="gl.x1"
+                  [attr.y1]="gl.y1"
+                  [attr.x2]="gl.x2"
+                  [attr.y2]="gl.y2"
+                  stroke="#2196f3"
+                  stroke-width="2"
+                  stroke-dasharray="6 3"
+                  vector-effect="non-scaling-stroke"/>
+              }
+            } @else {
+              <rect
+                class="creation-ghost-shape"
+                data-testid="canvas-creation-ghost"
+                [attr.x]="ghost.x"
+                [attr.y]="ghost.y"
+                [attr.width]="ghost.width"
+                [attr.height]="ghost.height"
+                fill="rgba(33, 150, 243, 0.08)"
+                stroke="#2196f3"
+                stroke-width="2"
+                stroke-dasharray="6 3"
+                vector-effect="non-scaling-stroke"/>
+            }
+          }
           @if (showResizeHandles && highlightRect; as hr) {
             <circle
               class="selection-resize-handle selection-resize-nw"
@@ -180,16 +223,6 @@
       [style.top.px]="selRect.top"
       [style.width.px]="selRect.width"
       [style.height.px]="selRect.height"></div>
-  }
-  @if (creationGhostRect; as ghost) {
-    <div
-      class="creation-ghost"
-      data-testid="canvas-creation-ghost"
-      aria-hidden="true"
-      [style.left.px]="ghost.x"
-      [style.top.px]="ghost.y"
-      [style.width.px]="ghost.width"
-      [style.height.px]="ghost.height"></div>
   }
   @if (!svgContent()) {
     <div class="placeholder" data-testid="canvas-empty-placeholder">

@@ -181,12 +181,8 @@
   background: rgba(76, 175, 80, 0.12);
 }
 
-.creation-ghost {
-  position: absolute;
+.creation-ghost-shape {
   pointer-events: none;
-  z-index: 9997;
-  border: 2px solid #2196f3;
-  background: rgba(33, 150, 243, 0.08);
 }
 
 .zoom-level {
