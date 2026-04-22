@@ -1,7 +1,9 @@
 import { describe, it, expect } from 'vitest';
 import {
   PenSession,
+  appendCubicToD,
   appendSymmetricCubicToD,
+  dragBendCubicControlPoints,
   lastCommittedVertex,
   penPathOnlyMoveto,
   penPathSegmentsAreValid,
@@ -20,6 +22,35 @@ describe('appendSymmetricCubicToD', () => {
   it('appends C command to base d', () => {
     const d = appendSymmetricCubicToD('M 0 0', { x: 0, y: 0 }, { x: 9, y: 9 });
     expect(d).toBe('M 0 0 C 3 3 6 6 9 9');
+  });
+});
+
+describe('appendCubicToD', () => {
+  it('appends explicit cubic controls to base d', () => {
+    const d = appendCubicToD('M 0 0', { x1: 2, y1: 4, x2: 6, y2: 8 }, { x: 9, y: 9 });
+    expect(d).toBe('M 0 0 C 2 4 6 8 9 9');
+  });
+});
+
+describe('dragBendCubicControlPoints', () => {
+  it('matches symmetric controls when drag has no orthogonal component', () => {
+    const c = dragBendCubicControlPoints(
+      { x: 0, y: 0 },
+      { x: 9, y: 0 },
+      { x: 3, y: 0 },
+      { x: 6, y: 0 }
+    );
+    expect(c).toEqual({ x1: 3, y1: 0, x2: 6, y2: 0 });
+  });
+
+  it('bends controls off the chord when drag moves normal to chord', () => {
+    const c = dragBendCubicControlPoints(
+      { x: 0, y: 0 },
+      { x: 9, y: 0 },
+      { x: 3, y: 0 },
+      { x: 3, y: 2 }
+    );
+    expect(c).toEqual({ x1: 3, y1: 2, x2: 6, y2: 2 });
   });
 });
 

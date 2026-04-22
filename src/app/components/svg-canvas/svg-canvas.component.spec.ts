@@ -2056,6 +2056,192 @@ describe('SvgCanvasComponent', () => {
     });
   });
 
+  describe('pen tool', () => {
+    async function loadEmptySvgAndPenMode(): Promise<void> {
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      component.wrapperWidth = 100;
+      component.wrapperHeight = 100;
+      editorToolService.setTool('pen');
+      stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
+      fixture.detectChanges();
+    }
+
+    it('click sequence adds a path; Enter finishes and selects it', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 30,
+        clientY: 40,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 30,
+        clientY: 40
+      } as MouseEvent);
+      expect(editorToolService.getCurrentTool()).toBe('pen');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const path = fixture.nativeElement
+        .querySelector('[data-editor-content-group]')
+        ?.querySelector('path');
+      expect(path).toBeTruthy();
+      const d = path?.getAttribute('d') ?? '';
+      expect(d).toMatch(/M[\s0-9.]+/);
+      expect(d).toMatch(/L[\s0-9.]+/);
+      expect(shapeSelectionService.getSelectedShapes().length).toBe(1);
+      expect(shapeSelectionService.getSelectedShapes()[0].type).toBe('path');
+      expect(editorToolService.getCurrentTool()).toBe('selector');
+    });
+
+    it('finishes open path on double-click (mousedown detail >= 2)', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 5,
+        clientY: 5,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 25,
+        clientY: 25,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 25, clientY: 25 } as MouseEvent);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 60,
+        clientY: 10,
+        detail: 2,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      const path = fixture.nativeElement
+        .querySelector('[data-editor-content-group]')
+        ?.querySelector('path');
+      expect(path).toBeTruthy();
+      expect(editorToolService.getCurrentTool()).toBe('selector');
+    });
+
+    it('Escape clears in-progress pen session without adding a path', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+
+      const paths = fixture.nativeElement.querySelectorAll('[data-editor-content-group] path');
+      expect(paths.length).toBe(0);
+    });
+
+    it('shows rubber-band line in overlay after first point and pointer move', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 70, clientY: 60 } as MouseEvent);
+      fixture.detectChanges();
+
+      const band = fixture.nativeElement.querySelector('[data-testid="canvas-pen-rubber-band"]');
+      expect(band).toBeTruthy();
+      expect(band?.getAttribute('x1')).toBeTruthy();
+      expect(band?.getAttribute('x2')).toBeTruthy();
+    });
+
+    it('shows cubic curve preview overlay when second point is dragged past threshold', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 30, clientY: 20 } as MouseEvent);
+      fixture.detectChanges();
+
+      const preview = fixture.nativeElement.querySelector('[data-testid="canvas-pen-curve-preview"]');
+      expect(preview).toBeTruthy();
+      const d = preview?.getAttribute('d') ?? '';
+      expect(d).toContain('C');
+      // Regression for svg-editor-tfs.14: old controls sat on the chord, yielding a visually straight preview.
+      expect(d).not.toBe('M 10 10 C 16.666667 13.333333 23.333333 16.666667 30 20');
+    });
+
+    it('commits a bent cubic segment (not a straight chord cubic) after drag', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 30, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 30, clientY: 20 } as MouseEvent);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      expect(d).toContain('C');
+      expect(d).not.toContain('C 16.666667 13.333333 23.333333 16.666667 30 20');
+    });
+  });
+
   describe('keyboard shortcuts', () => {
     it('Ctrl+A selects all shapes when selector tool is active', async () => {
       editorToolService.setTool('selector');

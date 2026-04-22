@@ -24,7 +24,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 10 | Text editing | [text-editing](./epics/text-editing.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, SC-2a, SC-5) |
 | 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `OPEN` | 0/5 (0%) | Multi-select (done) |
 | 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `OPEN` | 0/8 (0%) | Shape creation (epic 7) helpful |
-| 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, shares tool infra) |
+| 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `OPEN` | 7/7 (100%) | Shape creation (SC-1, shares tool infra); optional beads tfs.8–11 open in bd |
 | 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `OPEN` | 0/4 (0%) | Pen tool (PP-2a segment model) |
 
 ## Free-standing issues
@@ -127,7 +127,7 @@ Status/progress below is current as of 2026-04-21.
 | text-editing | `svg-editor-nkz` | Text editing | `OPEN` | 0/7 |
 | align-distribute | TBD | Align and distribute | `OPEN` | 0/5 |
 | snap-guides | TBD | Snap and guides | `OPEN` | 0/8 |
-| pen-path-tool | `svg-editor-tfs` | Pen and path tool | `OPEN` | 6/7 |
+| pen-path-tool | `svg-editor-tfs` | Pen and path tool | `OPEN` | 7/7 |
 | canvas-artboard | `svg-editor-dl9` | Canvas and artboard | `CLOSED` | 7/7 |
 | path-node-editing | TBD | Path node editing | `OPEN` | 0/4 |
 

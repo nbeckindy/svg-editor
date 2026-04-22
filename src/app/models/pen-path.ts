@@ -15,6 +15,8 @@ export type PenPathSegment =
       y: number;
     };
 
+export type CubicControlPoints = { x1: number; y1: number; x2: number; y2: number };
+
 function formatCoord(n: number): string {
   if (!Number.isFinite(n)) return '0';
   const rounded = Math.round(n * 1e6) / 1e6;
@@ -53,7 +55,7 @@ export function penPathOnlyMoveto(segments: readonly PenPathSegment[]): boolean 
 export function symmetricCubicControlPoints(
   p0: { x: number; y: number },
   p3: { x: number; y: number }
-): { x1: number; y1: number; x2: number; y2: number } {
+): CubicControlPoints {
   const dx = p3.x - p0.x;
   const dy = p3.y - p0.y;
   return {
@@ -64,23 +66,63 @@ export function symmetricCubicControlPoints(
   };
 }
 
+/**
+ * Cubic controls that preserve the endpoint chord while adding bend from drag direction.
+ *
+ * `dragStart`/`dragCurrent` are in the same SVG user space as `p0`/`p3` and encode
+ * how far the pointer has moved since the pending segment began.
+ */
+export function dragBendCubicControlPoints(
+  p0: { x: number; y: number },
+  p3: { x: number; y: number },
+  dragStart: { x: number; y: number },
+  dragCurrent: { x: number; y: number }
+): CubicControlPoints {
+  const base = symmetricCubicControlPoints(p0, p3);
+  const dx = p3.x - p0.x;
+  const dy = p3.y - p0.y;
+  const chordLen = Math.hypot(dx, dy);
+  if (chordLen < 1e-9) return base;
+
+  const nx = -dy / chordLen;
+  const ny = dx / chordLen;
+  const dragDx = dragCurrent.x - dragStart.x;
+  const dragDy = dragCurrent.y - dragStart.y;
+  const bend = dragDx * nx + dragDy * ny;
+
+  return {
+    x1: base.x1 + nx * bend,
+    y1: base.y1 + ny * bend,
+    x2: base.x2 + nx * bend,
+    y2: base.y2 + ny * bend
+  };
+}
+
+/** Append a cubic `C` command to an existing `d` (no trailing space). */
+export function appendCubicToD(
+  baseD: string,
+  controls: CubicControlPoints,
+  p3: { x: number; y: number }
+): string {
+  const tail = [
+    'C',
+    formatCoord(controls.x1),
+    formatCoord(controls.y1),
+    formatCoord(controls.x2),
+    formatCoord(controls.y2),
+    formatCoord(p3.x),
+    formatCoord(p3.y)
+  ].join(' ');
+  return baseD ? `${baseD} ${tail}` : tail;
+}
+
 /** Append a symmetric cubic from last point `p0` to `p3` to an existing `d` (no trailing space). */
 export function appendSymmetricCubicToD(
   baseD: string,
   p0: { x: number; y: number },
   p3: { x: number; y: number }
 ): string {
-  const { x1, y1, x2, y2 } = symmetricCubicControlPoints(p0, p3);
-  const tail = [
-    'C',
-    formatCoord(x1),
-    formatCoord(y1),
-    formatCoord(x2),
-    formatCoord(y2),
-    formatCoord(p3.x),
-    formatCoord(p3.y)
-  ].join(' ');
-  return baseD ? `${baseD} ${tail}` : tail;
+  return appendCubicToD(baseD, symmetricCubicControlPoints(p0, p3), p3);
 }
 
 /** Append `L x y` to `d` for preview. */

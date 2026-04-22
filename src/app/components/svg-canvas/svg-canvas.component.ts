@@ -29,12 +29,12 @@ import {
 import { DragGesture, ResizeGesture, RotateGesture, CreationGesture, type GestureContext, type Rect } from './gestures';
 import {
   PenSession,
-  appendSymmetricCubicToD,
+  appendCubicToD,
+  dragBendCubicControlPoints,
   lastCommittedVertex,
   penPathOnlyMoveto,
   penPathSegmentsToD,
-  penSvgDistanceSq,
-  symmetricCubicControlPoints
+  penSvgDistanceSq
 } from '../../models/pen-path';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
@@ -180,6 +180,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private penPendingSegment: {
     anchor: { x: number; y: number };
     startClient: { x: number; y: number };
+    startSvg: { x: number; y: number };
   } | null = null;
   private penPendingLastClient: { x: number; y: number } | null = null;
 
@@ -211,7 +212,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return Math.hypot(lc.x - startClient.x, lc.y - startClient.y) >= MARQUEE_MIN_DRAG_PX;
   }
 
-  /** Live cubic preview `d` (committed segments + symmetric C to pointer). */
+  /** Live cubic preview `d` (committed segments + drag-bent C to pointer). */
   get penCurvePreviewPathD(): string | null {
     if (
       !this.penPendingSegment ||
@@ -222,14 +223,22 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return null;
     }
     const base = penPathSegmentsToD(this.penSession.getSegments());
-    return appendSymmetricCubicToD(base, this.penPendingSegment.anchor, this.penPointerSvg);
+    const controls = dragBendCubicControlPoints(
+      this.penPendingSegment.anchor,
+      this.penPointerSvg,
+      this.penPendingSegment.startSvg,
+      this.penPointerSvg
+    );
+    return appendCubicToD(base, controls, this.penPointerSvg);
   }
 
   /** Control handle centers (overlay px) while dragging a cubic preview. */
   get penCurveHandleOverlays(): { cx: number; cy: number }[] {
     if (!this.penCurvePreviewPathD || !this.penPendingSegment || !this.penPointerSvg) return [];
-    const { x1, y1, x2, y2 } = symmetricCubicControlPoints(
+    const { x1, y1, x2, y2 } = dragBendCubicControlPoints(
       this.penPendingSegment.anchor,
+      this.penPointerSvg,
+      this.penPendingSegment.startSvg,
       this.penPointerSvg
     );
     const p1 = this.svgBboxToOverlayPixels({ x: x1, y: y1, width: 0, height: 0 });
@@ -1502,7 +1511,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.cdr.markForCheck();
       return;
     }
-    const { anchor, startClient } = this.penPendingSegment;
+    const { anchor, startClient, startSvg } = this.penPendingSegment;
     if (penSvgDistanceSq(anchor, end) < 1e-12) {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
@@ -1513,7 +1522,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (screenDist < MARQUEE_MIN_DRAG_PX) {
       this.penSession.addLinePoint(end.x, end.y);
     } else {
-      const c = symmetricCubicControlPoints(anchor, end);
+      const c = dragBendCubicControlPoints(anchor, end, startSvg, end);
       this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
     }
     this.penPendingSegment = null;
@@ -1529,7 +1538,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penPendingLastClient = null;
       return;
     }
-    const { anchor, startClient } = this.penPendingSegment;
+    const { anchor, startClient, startSvg } = this.penPendingSegment;
     const end = this.penPointerSvg;
     if (penSvgDistanceSq(anchor, end) < 1e-12) {
       this.penPendingSegment = null;
@@ -1541,7 +1550,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (screenDist < MARQUEE_MIN_DRAG_PX) {
       this.penSession.addLinePoint(end.x, end.y);
     } else {
-      const c = symmetricCubicControlPoints(anchor, end);
+      const c = dragBendCubicControlPoints(anchor, end, startSvg, end);
       this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
     }
     this.penPendingSegment = null;
@@ -1602,7 +1611,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!anchor) return;
     this.penPendingSegment = {
       anchor: { x: anchor.x, y: anchor.y },
-      startClient: { x: event.clientX, y: event.clientY }
+      startClient: { x: event.clientX, y: event.clientY },
+      startSvg: { x: pt.x, y: pt.y }
     };
     this.penPendingLastClient = { x: event.clientX, y: event.clientY };
     this.penPointerSvg = { x: pt.x, y: pt.y };
