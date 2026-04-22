@@ -2103,12 +2103,13 @@ describe('SvgCanvasComponent', () => {
       const d = path?.getAttribute('d') ?? '';
       expect(d).toMatch(/M[\s0-9.]+/);
       expect(d).toMatch(/L[\s0-9.]+/);
+      expect(d.trim().endsWith('Z')).toBe(false);
       expect(shapeSelectionService.getSelectedShapes().length).toBe(1);
       expect(shapeSelectionService.getSelectedShapes()[0].type).toBe('path');
       expect(editorToolService.getCurrentTool()).toBe('selector');
     });
 
-    it('finishes open path on double-click (mousedown detail >= 2)', async () => {
+    it('double-click finishes as a closed path (joins to start via Z)', async () => {
       await loadEmptySvgAndPenMode();
 
       component.onCanvasMouseDown({
@@ -2140,6 +2141,47 @@ describe('SvgCanvasComponent', () => {
         .querySelector('[data-editor-content-group]')
         ?.querySelector('path');
       expect(path).toBeTruthy();
+      const d = path?.getAttribute('d') ?? '';
+      expect(d.trim().endsWith('Z')).toBe(true);
+      expect(editorToolService.getCurrentTool()).toBe('selector');
+    });
+
+    it('right-click finishes an open path without closing', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 25,
+        clientY: 25,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 25, clientY: 25 } as MouseEvent);
+
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 2,
+        clientX: 25,
+        clientY: 25,
+        detail: 1,
+        preventDefault
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      const path = fixture.nativeElement
+        .querySelector('[data-editor-content-group]')
+        ?.querySelector('path');
+      expect(path).toBeTruthy();
+      const d = path?.getAttribute('d') ?? '';
+      expect(d.trim().endsWith('Z')).toBe(false);
+      expect(preventDefault).toHaveBeenCalled();
       expect(editorToolService.getCurrentTool()).toBe('selector');
     });
 
@@ -2179,6 +2221,35 @@ describe('SvgCanvasComponent', () => {
       expect(band).toBeTruthy();
       expect(band?.getAttribute('x1')).toBeTruthy();
       expect(band?.getAttribute('x2')).toBeTruthy();
+    });
+
+    it('shows full in-progress path preview (committed segments + current segment)', async () => {
+      await loadEmptySvgAndPenMode();
+
+      // First point
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      // Second point commit (L)
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 20, clientY: 20 } as MouseEvent);
+      // Pointer moves toward third point (preview only)
+      component.onDocumentMouseMove({ clientX: 40, clientY: 20 } as MouseEvent);
+      fixture.detectChanges();
+
+      const fullPreview = fixture.nativeElement.querySelector('[data-testid="canvas-pen-path-preview"]');
+      expect(fullPreview).toBeTruthy();
+      expect(fullPreview?.getAttribute('d')).toBe('M 10 10 L 20 20 L 40 20');
     });
 
     it('shows cubic curve preview overlay when second point is dragged past threshold', async () => {

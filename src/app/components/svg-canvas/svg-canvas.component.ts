@@ -30,6 +30,7 @@ import { DragGesture, ResizeGesture, RotateGesture, CreationGesture, type Gestur
 import {
   PenSession,
   appendCubicToD,
+  appendLineToD,
   dragBendCubicControlPoints,
   lastCommittedVertex,
   penPathOnlyMoveto,
@@ -210,6 +211,30 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const { startClient } = this.penPendingSegment;
     const lc = this.penPendingLastClient;
     return Math.hypot(lc.x - startClient.x, lc.y - startClient.y) >= MARQUEE_MIN_DRAG_PX;
+  }
+
+  /**
+   * Full in-progress pen preview (`M/L/C...`) including committed segments plus the current
+   * pending segment to pointer. This keeps the whole path visible during authoring.
+   */
+  get penSessionPreviewPathD(): string | null {
+    if (this.editorTool.getCurrentTool() !== 'pen' || !this.isPenSessionActive) return null;
+    const base = penPathSegmentsToD(this.penSession.getSegments());
+    if (!base || !this.penPointerSvg) return base || null;
+    const segs = this.penSession.getSegments();
+    const anchor = this.penPendingSegment?.anchor ?? lastCommittedVertex(segs);
+    if (!anchor) return base;
+
+    if (this.penPendingSegment && this.penPendingShowsCurvePreview) {
+      const controls = dragBendCubicControlPoints(
+        this.penPendingSegment.anchor,
+        this.penPointerSvg,
+        this.penPendingSegment.startSvg,
+        this.penPointerSvg
+      );
+      return appendCubicToD(base, controls, this.penPointerSvg);
+    }
+    return appendLineToD(base, this.penPointerSvg.x, this.penPointerSvg.y);
   }
 
   /** Live cubic preview `d` (committed segments + drag-bent C to pointer). */
@@ -502,7 +527,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     if (event.key === 'Enter') {
       if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
-        this.tryFinishPenPath();
+        this.tryFinishPenPath(false);
         event.preventDefault();
         return;
       }
@@ -1296,6 +1321,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   onCanvasMouseDown(event: MouseEvent): void {
+    if (this.editorTool.getCurrentTool() === 'pen' && event.button === 2) {
+      if (this.isPenSessionActive) {
+        this.tryFinishPenPath(false);
+      }
+      event.preventDefault();
+      return;
+    }
     if (event.button !== 0) return;
     if (this.editorTool.getCurrentTool() === 'zoom') {
       this.isZoomMarquee = true;
@@ -1558,11 +1590,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  private tryFinishPenPath(): void {
+  private tryFinishPenPath(closePath: boolean): void {
     this.flushPenPendingAsCurrentPointer();
     const d = this.penSession.finishPath();
     if (!d) return;
-    const id = this.svgManipulation.insertPathIntoContentGroup(d);
+    const finalD = closePath ? `${d} Z` : d;
+    const id = this.svgManipulation.insertPathIntoContentGroup(finalD);
     if (!id) {
       this.clearPenDrawingState();
       return;
@@ -1597,7 +1630,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       if (penPathOnlyMoveto(this.penSession.getSegments())) {
         this.penSession.addLinePoint(pt.x, pt.y);
       }
-      this.tryFinishPenPath();
+      this.tryFinishPenPath(true);
       return;
     }
     const segs = this.penSession.getSegments();

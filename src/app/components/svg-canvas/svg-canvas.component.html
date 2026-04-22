@@ -155,6 +155,17 @@
                 vector-effect="non-scaling-stroke"/>
             }
           }
+          @if (penSessionPreviewPathD; as pfull) {
+            <path
+              class="creation-ghost-shape"
+              data-testid="canvas-pen-path-preview"
+              [attr.d]="pfull"
+              fill="none"
+              stroke="#2196f3"
+              stroke-width="2"
+              stroke-dasharray="6 3"
+              vector-effect="non-scaling-stroke"/>
+          }
           @if (penCurvePreviewPathD; as pcurve) {
             <path
               class="creation-ghost-shape"
