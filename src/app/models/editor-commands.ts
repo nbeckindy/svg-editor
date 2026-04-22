@@ -1,5 +1,5 @@
 import { Matrix, Element as SvgJsElement } from '@svgdotjs/svg.js';
-import { SvgManipulationService } from '../services/svg-manipulation.service';
+import { SvgManipulationService, type CreatableShapeType, type ShapeCreationAttrs } from '../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../services/shape-selection.service';
 import { type ResizeCorner } from '../utils/selection-resize';
 import { ArtboardModel } from './artboard.model';
@@ -743,5 +743,62 @@ export class ArtboardBackgroundCommand implements CoalesceableCommand {
   coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
     const n = newer as ArtboardBackgroundCommand;
     return new ArtboardBackgroundCommand(this.svc, this.oldColor, n.newColor);
+  }
+}
+
+/**
+ * Undoable shape creation. The shape is created before the command is pushed
+ * (during the gesture), so `execute()` is a no-op on the first call. Subsequent
+ * calls (redo) re-insert from serialized markup.
+ */
+export class AddShapeCommand implements EditorCommand {
+  readonly description: string;
+
+  private serializedMarkup: string | null = null;
+  private insertionIndex: number | null = null;
+  private executed = false;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly shapeId: string,
+    private readonly selectionSvc?: ShapeSelectionService
+  ) {
+    this.description = `Create shape`;
+    this.captureState();
+    this.executed = true;
+  }
+
+  private captureState(): void {
+    const svgInstance = this.svc.getSVGInstance();
+    if (!svgInstance) return;
+    const shape = svgInstance.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
+    if (!shape?.node) return;
+    this.serializedMarkup = (shape.node as Element).outerHTML;
+    const contentGroup = svgInstance.findOne('[data-editor-content-group]');
+    if (contentGroup?.node) {
+      const children = Array.from((contentGroup.node as Element).children);
+      this.insertionIndex = children.indexOf(shape.node as Element);
+    }
+  }
+
+  execute(): void {
+    if (this.executed) {
+      this.executed = false;
+      return;
+    }
+    if (!this.serializedMarkup) return;
+    this.svc.insertShapeMarkup(this.serializedMarkup, this.insertionIndex ?? undefined);
+    if (this.selectionSvc) {
+      const svgInstance = this.svc.getSVGInstance();
+      const el = svgInstance?.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
+      if (el) {
+        this.selectionSvc.selectShapes([this.svc.getShapeProperties(el)]);
+      }
+    }
+  }
+
+  undo(): void {
+    this.svc.removeShape(this.shapeId);
+    this.selectionSvc?.clearSelection();
   }
 }

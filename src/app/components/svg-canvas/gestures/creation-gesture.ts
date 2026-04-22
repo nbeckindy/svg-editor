@@ -2,6 +2,7 @@ import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { GestureContext, Rect, Point } from './gesture-context';
 import type { CreatableShapeType, ShapeCreationAttrs } from '../../../services/svg-manipulation.service';
 import type { EditorTool } from '../../../services/editor-tool.service';
+import { AddShapeCommand } from '../../../models/editor-commands';
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 
 const TOOL_TO_SHAPE: Partial<Record<EditorTool, CreatableShapeType>> = {
@@ -120,6 +121,10 @@ export class CreationGesture {
         const props = ctx.svgManipulation.getShapeProperties(el);
         ctx.shapeSelection.selectShapes([props]);
       }
+
+      const cmd = new AddShapeCommand(ctx.svgManipulation, newId, ctx.shapeSelection);
+      ctx.editorHistory.pushAndExecute(cmd);
+
       const shapeBbox = ctx.svgManipulation.getShapeBBox(newId);
       ctx.setLastBbox(shapeBbox);
       ctx.invalidateHighlightCache();
