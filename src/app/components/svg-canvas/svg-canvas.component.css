@@ -161,6 +161,10 @@
   cursor: grabbing;
 }
 
+.canvas-container.creation-mode {
+  cursor: crosshair;
+}
+
 .zoom-marquee {
   position: fixed;
   pointer-events: none;

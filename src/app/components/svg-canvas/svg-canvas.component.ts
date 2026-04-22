@@ -1169,6 +1169,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       event.preventDefault();
       return;
     }
+    if (this.editorTool.isCreationTool()) {
+      event.preventDefault();
+      return;
+    }
     if (this.editorTool.getCurrentTool() !== 'selector' || !this.svgContent() || !this.canvasView.isInitialized()) return;
     const target = event.target as Element;
 
@@ -1230,6 +1234,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (this.resize.consumeJustEnded()) return;
     if (this.rotate.consumeJustEnded()) return;
     if (this.editorTool.getCurrentTool() === 'pan') {
+      return;
+    }
+    if (this.editorTool.isCreationTool()) {
       return;
     }
     if (this.editorTool.getCurrentTool() === 'zoom') {

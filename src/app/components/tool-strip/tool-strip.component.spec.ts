@@ -33,15 +33,18 @@ describe('ToolStripComponent', () => {
     expect(selectorBtn?.classList.contains('active')).toBe(true);
   });
 
-  it('should display Undo, Redo, Selector, Zoom, and Pan buttons', () => {
+  it('should display Undo, Redo, Selector, Zoom, Pan, Rect, Ellipse, and Line buttons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('.tool-btn');
-    expect(buttons.length).toBe(5);
+    expect(buttons.length).toBe(8);
     expect((buttons[0] as HTMLElement).textContent?.trim()).toContain('Undo');
     expect((buttons[1] as HTMLElement).textContent?.trim()).toContain('Redo');
     expect((buttons[2] as HTMLElement).textContent?.trim()).toBe('Selector');
     expect((buttons[3] as HTMLElement).textContent?.trim()).toBe('Zoom');
     expect((buttons[4] as HTMLElement).textContent?.trim()).toContain('Pan');
+    expect((buttons[5] as HTMLElement).textContent?.trim()).toContain('Rect');
+    expect((buttons[6] as HTMLElement).textContent?.trim()).toContain('Ellipse');
+    expect((buttons[7] as HTMLElement).textContent?.trim()).toContain('Line');
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {
