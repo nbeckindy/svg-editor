@@ -2057,8 +2057,8 @@ describe('SvgCanvasComponent', () => {
   });
 
   describe('pen tool', () => {
-    async function loadEmptySvgAndPenMode(): Promise<void> {
-      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
+    async function loadSvgAndPenMode(svg: string): Promise<void> {
+      fixture.componentRef.setInput('svgContent', svg);
       fixture.detectChanges();
       await new Promise((r) => setTimeout(r, 50));
       fixture.detectChanges();
@@ -2068,6 +2068,48 @@ describe('SvgCanvasComponent', () => {
       stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
       fixture.detectChanges();
     }
+
+    async function loadEmptySvgAndPenMode(): Promise<void> {
+      await loadSvgAndPenMode('<svg viewBox="0 0 100 100"></svg>');
+    }
+
+    it('ignores pen mousedown when target is existing editor content shape', async () => {
+      await loadSvgAndPenMode('<svg viewBox="0 0 100 100"><rect id="existing-shape" x="10" y="10" width="20" height="20"/></svg>');
+      const shapeEl = fixture.nativeElement.querySelector('#existing-shape') as Element | null;
+      expect(shapeEl).toBeTruthy();
+
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 15,
+        clientY: 15,
+        detail: 1,
+        target: shapeEl,
+        preventDefault
+      } as unknown as MouseEvent);
+
+      expect(component.isPenSessionActive).toBe(false);
+      expect(preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('accepts pen mousedown on empty canvas background', async () => {
+      await loadSvgAndPenMode('<svg viewBox="0 0 100 100"><rect id="existing-shape" x="10" y="10" width="20" height="20"/></svg>');
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg') as Element | null;
+      expect(svgRoot).toBeTruthy();
+
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 80,
+        clientY: 80,
+        detail: 1,
+        target: svgRoot,
+        preventDefault
+      } as unknown as MouseEvent);
+
+      expect(component.isPenSessionActive).toBe(true);
+      expect(preventDefault).toHaveBeenCalled();
+    });
 
     it('click sequence adds a path; Enter finishes and selects it', async () => {
       await loadEmptySvgAndPenMode();
@@ -2202,6 +2244,202 @@ describe('SvgCanvasComponent', () => {
 
       const paths = fixture.nativeElement.querySelectorAll('[data-editor-content-group] path');
       expect(paths.length).toBe(0);
+    });
+
+    it('canceling tool-switch confirm preserves pen session and keeps pen active', async () => {
+      await loadEmptySvgAndPenMode();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      editorToolService.setTool('selector');
+      fixture.detectChanges();
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(component.isPenSessionActive).toBe(true);
+      expect(editorToolService.getCurrentTool()).toBe('pen');
+      confirmSpy.mockRestore();
+    });
+
+    it('accepting tool-switch confirm discards pen session and applies new tool', async () => {
+      await loadEmptySvgAndPenMode();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      editorToolService.setTool('selector');
+      fixture.detectChanges();
+
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(component.isPenSessionActive).toBe(false);
+      expect(editorToolService.getCurrentTool()).toBe('selector');
+      confirmSpy.mockRestore();
+    });
+
+    it('canceling document-replace confirm preserves pen session and current document', async () => {
+      await loadSvgAndPenMode('<svg viewBox="0 0 100 100"><rect id="doc-old" x="1" y="1" width="5" height="5"/></svg>');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="doc-new" cx="20" cy="20" r="5"/></svg>');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      const host = component.svgContainer()?.nativeElement;
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(component.isPenSessionActive).toBe(true);
+      expect(editorToolService.getCurrentTool()).toBe('pen');
+      expect(host?.querySelector('#doc-old')).toBeTruthy();
+      expect(host?.querySelector('#doc-new')).toBeFalsy();
+      confirmSpy.mockRestore();
+    });
+
+    it('accepting document-replace confirm discards pen session and loads new document', async () => {
+      await loadSvgAndPenMode('<svg viewBox="0 0 100 100"><rect id="doc-old" x="1" y="1" width="5" height="5"/></svg>');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="doc-new" cx="20" cy="20" r="5"/></svg>');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      const host = component.svgContainer()?.nativeElement;
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(component.isPenSessionActive).toBe(false);
+      expect(editorToolService.getCurrentTool()).toBe('pen');
+      expect(host?.querySelector('#doc-old')).toBeFalsy();
+      expect(host?.querySelector('#doc-new')).toBeTruthy();
+      confirmSpy.mockRestore();
+    });
+
+    it('shows finish feedback when Enter tries to finish an invalid pen path', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const feedback = fixture.nativeElement.querySelector('[data-testid="canvas-pen-finish-feedback"]');
+      expect(feedback).toBeTruthy();
+      expect(feedback?.textContent).toContain('Add at least 2 points');
+      expect(editorToolService.getCurrentTool()).toBe('pen');
+    });
+
+    it('shows finish feedback when right-click tries to finish an invalid pen path', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 2,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      const feedback = fixture.nativeElement.querySelector('[data-testid="canvas-pen-finish-feedback"]');
+      expect(feedback).toBeTruthy();
+      expect(preventDefault).toHaveBeenCalled();
+      expect(editorToolService.getCurrentTool()).toBe('pen');
+    });
+
+    it('does not show finish feedback when pen path is valid and finishes', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 30,
+        clientY: 40,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 30,
+        clientY: 40
+      } as MouseEvent);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const feedback = fixture.nativeElement.querySelector('[data-testid="canvas-pen-finish-feedback"]');
+      expect(feedback).toBeFalsy();
+    });
+
+    it('auto-clears finish feedback after a short duration', async () => {
+      await loadEmptySvgAndPenMode();
+      vi.useFakeTimers();
+      try {
+        component.onCanvasMouseDown({
+          button: 0,
+          clientX: 10,
+          clientY: 10,
+          detail: 1,
+          preventDefault: vi.fn()
+        } as unknown as MouseEvent);
+
+        component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        fixture.detectChanges();
+        expect(fixture.nativeElement.querySelector('[data-testid="canvas-pen-finish-feedback"]')).toBeTruthy();
+
+        vi.advanceTimersByTime(1200);
+        fixture.detectChanges();
+
+        expect(fixture.nativeElement.querySelector('[data-testid="canvas-pen-finish-feedback"]')).toBeFalsy();
+      } finally {
+        vi.useRealTimers();
+      }
     });
 
     it('shows rubber-band line in overlay after first point and pointer move', async () => {

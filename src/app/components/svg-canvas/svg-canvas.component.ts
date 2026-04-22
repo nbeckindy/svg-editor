@@ -1,8 +1,8 @@
-import { Component, input, viewChild, AfterViewInit, ElementRef, OnInit, OnDestroy, ChangeDetectorRef, effect } from '@angular/core';
+import { Component, input, viewChild, AfterViewInit, ElementRef, OnInit, OnDestroy, ChangeDetectorRef, effect, signal } from '@angular/core';
 import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
-import { EditorToolService } from '../../services/editor-tool.service';
+import { EditorToolService, type EditorTool } from '../../services/editor-tool.service';
 import { CanvasViewService } from '../../services/canvas-view.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { computeProportionalResizedUnion, type BBox, type ResizeCorner } from '../../utils/selection-resize';
@@ -57,6 +57,7 @@ const CONTENT_SHAPE_TAGS = new Set([
 
 /** After loading SVG, fit the editor stage in the canvas with this much inset (margin). */
 const INITIAL_LOAD_VIEWPORT_FIT_FRACTION = 0.88;
+const PEN_FINISH_FEEDBACK_DURATION_MS = 1200;
 
 /** Round to nearest "nice" step (1, 2, 5 × 10^n) for readable labels. */
 function roundToNiceStep(value: number): number {
@@ -176,6 +177,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly rotate = new RotateGesture();
   private readonly creation = new CreationGesture();
   private readonly penSession = new PenSession();
+  private readonly acceptedSvgContent = signal<string>('');
+  private lastObservedTool: EditorTool = 'selector';
+  private isRevertingToolChange = false;
+  penFinishFeedbackMessage: string | null = null;
+  private penFinishFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private penPointerSvg: { x: number; y: number } | null = null;
   /** Deferred next vertex: commit on mouseup as L (click) or C (drag past threshold). */
   private penPendingSegment: {
@@ -991,13 +997,38 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     private editorHistory: EditorHistoryService
   ) {
     effect(() => {
-      this.svgContent();
+      const incomingSvgContent = this.svgContent();
+      const acceptedSvgContent = this.acceptedSvgContent();
+      if (incomingSvgContent === acceptedSvgContent) return;
+      if (
+        this.editorTool.getCurrentTool() === 'pen' &&
+        !this.confirmDiscardPenSessionIfNeeded('document replace/load')
+      ) {
+        return;
+      }
+      this.acceptedSvgContent.set(incomingSvgContent);
       this.canvasView.resetZoom();
-      this.clearPenDrawingState();
     });
     effect(() => {
-      this.editorTool.currentTool();
-      if (this.editorTool.currentTool() !== 'pen') {
+      const currentTool = this.editorTool.currentTool();
+      if (this.isRevertingToolChange) {
+        this.lastObservedTool = currentTool;
+        return;
+      }
+      const previousTool = this.lastObservedTool;
+      this.lastObservedTool = currentTool;
+      if (
+        previousTool === 'pen' &&
+        currentTool !== 'pen' &&
+        !this.confirmDiscardPenSessionIfNeeded('tool switch')
+      ) {
+        this.isRevertingToolChange = true;
+        this.editorTool.setTool('pen');
+        this.isRevertingToolChange = false;
+        this.lastObservedTool = 'pen';
+        return;
+      }
+      if (currentTool !== 'pen') {
         this.clearPenDrawingState();
       }
     });
@@ -1029,8 +1060,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       }, 0);
     });
     effect(() => {
-      if (this.svgContent() && this.svgContainer()?.nativeElement) {
-        setTimeout(() => this.initializeSVG(), 0);
+      const acceptedSvgContent = this.acceptedSvgContent();
+      if (acceptedSvgContent && this.svgContainer()?.nativeElement) {
+        setTimeout(() => this.initializeSVG(acceptedSvgContent), 0);
       }
     });
   }
@@ -1040,6 +1072,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   ngOnInit(): void {}
 
   ngOnDestroy(): void {
+    this.clearPenFinishFeedback();
     const el = this.canvasViewport()?.nativeElement;
     if (el) {
       el.removeEventListener('wheel', this.boundOnWheel);
@@ -1051,8 +1084,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (el) {
       el.addEventListener('wheel', this.boundOnWheel, { passive: false });
     }
-    if (this.svgContent()) {
-      this.initializeSVG();
+    const acceptedSvgContent = this.acceptedSvgContent();
+    if (acceptedSvgContent) {
+      this.initializeSVG(acceptedSvgContent);
     }
   }
 
@@ -1247,11 +1281,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cdr.detectChanges();
   }
 
-  private initializeSVG(): void {
+  private initializeSVG(svgContent: string): void {
     this.editorHistory.clear();
     this.isSelectionMarquee = false;
     this.isZoomMarquee = false;
-    this.svgManipulation.initializeSVG(this.svgContainer()!.nativeElement, this.svgContent());
+    this.svgManipulation.initializeSVG(this.svgContainer()!.nativeElement, svgContent);
     this.canvasView.init();
     this.syncOverlayViewBox();
     const shapes = this.shapeSelection.getSelectedShapes();
@@ -1262,8 +1296,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.lastBbox = null;
     }
     this._highlightRectCacheKey = '';
-    const content = this.svgContent();
-    if (content && content.includes('svg-editor-test-icon')) {
+    if (svgContent.includes('svg-editor-test-icon')) {
       queueMicrotask(() => this.applyInitialFitToViewport());
     }
   }
@@ -1347,6 +1380,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     if (this.editorTool.getCurrentTool() === 'pen') {
       if (!this.svgContent() || !this.canvasView.isInitialized()) return;
+      const penTarget = event.target as Element | null;
+      if (penTarget && this.isEditorContentShapeTarget(penTarget)) {
+        return;
+      }
       const pt = this.clientToEditorSvgPoint(event.clientX, event.clientY);
       if (!pt) return;
       this.handlePenCanvasMouseDown(event, pt);
@@ -1523,14 +1560,54 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
+  private confirmDiscardPenSessionIfNeeded(reason: 'tool switch' | 'document replace/load'): boolean {
+    if (!this.isPenSessionActive) return true;
+    const shouldDiscard = window.confirm(
+      `Discard the current in-progress pen path before ${reason}?`
+    );
+    if (!shouldDiscard) return false;
+    this.clearPenDrawingState();
+    return true;
+  }
+
   private clearPenDrawingState(): void {
-    const had =
+    const hadPenState =
       this.isPenSessionActive || this.penPointerSvg !== null || this.penPendingSegment !== null;
-    if (!had) return;
-    this.penPendingSegment = null;
-    this.penPendingLastClient = null;
-    this.penSession.reset();
-    this.penPointerSvg = null;
+    const hadFeedback = this.penFinishFeedbackMessage !== null;
+    if (!hadPenState && !hadFeedback) return;
+    if (hadPenState) {
+      this.penPendingSegment = null;
+      this.penPendingLastClient = null;
+      this.penSession.reset();
+      this.penPointerSvg = null;
+    }
+    if (hadFeedback) {
+      this.clearPenFinishFeedback();
+    } else {
+      this.cdr.markForCheck();
+    }
+  }
+
+  private showPenFinishFeedback(): void {
+    this.penFinishFeedbackMessage = 'Add at least 2 points before finishing.';
+    if (this.penFinishFeedbackTimer) {
+      clearTimeout(this.penFinishFeedbackTimer);
+    }
+    this.penFinishFeedbackTimer = setTimeout(() => {
+      this.penFinishFeedbackMessage = null;
+      this.penFinishFeedbackTimer = null;
+      this.cdr.markForCheck();
+    }, PEN_FINISH_FEEDBACK_DURATION_MS);
+    this.cdr.markForCheck();
+  }
+
+  private clearPenFinishFeedback(): void {
+    if (this.penFinishFeedbackTimer) {
+      clearTimeout(this.penFinishFeedbackTimer);
+      this.penFinishFeedbackTimer = null;
+    }
+    if (this.penFinishFeedbackMessage === null) return;
+    this.penFinishFeedbackMessage = null;
     this.cdr.markForCheck();
   }
 
@@ -1593,7 +1670,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private tryFinishPenPath(closePath: boolean): void {
     this.flushPenPendingAsCurrentPointer();
     const d = this.penSession.finishPath();
-    if (!d) return;
+    if (!d) {
+      this.showPenFinishFeedback();
+      return;
+    }
+    this.clearPenFinishFeedback();
     const finalD = closePath ? `${d} Z` : d;
     const id = this.svgManipulation.insertPathIntoContentGroup(finalD);
     if (!id) {

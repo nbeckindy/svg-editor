@@ -10,6 +10,11 @@
   @if (svgContent()) {
     <div class="zoom-level" data-testid="canvas-zoom-level" aria-label="Zoom level">{{ zoomLevelPercent }}%</div>
   }
+  @if (penFinishFeedbackMessage; as message) {
+    <div class="pen-finish-feedback" data-testid="canvas-pen-finish-feedback" role="status" aria-live="polite">
+      {{ message }}
+    </div>
+  }
   <div class="ruler-wrapper" [class.with-rulers]="!!svgContent()">
     @if (svgContent()) {
       <div class="ruler-corner" aria-hidden="true"></div>
