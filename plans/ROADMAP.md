@@ -12,6 +12,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 4 | Groups and layer management | [groups-layers](./epics/groups-layers.md) | `CLOSED` | 5/5 (100%) |
 | 5 | Advanced stroke and fill | [advanced-styling](./epics/advanced-styling.md) | `CLOSED` | 5/5 (100%) |
 | 9 | File operations and viewport UX | [file-ops-viewport](./epics/file-ops-viewport.md) | `CLOSED` | 5/5 (100%) |
+| 7 | Shape creation tools | [shape-creation](./epics/shape-creation.md) | `CLOSED` | 6/6 (100%) |
 | 14 | Canvas and artboard | [canvas-artboard](./epics/canvas-artboard.md) | `CLOSED` | 7/7 (100%) |
 
 ## Active epics (phase 2)
@@ -19,7 +20,6 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | Order | Epic | Slug | bd status | Progress | Depends on |
 |------:|------|------|-----------|----------|------------|
 | 6 | Transform and gesture UX polish | [transform-ux-polish](./epics/transform-ux-polish.md) | `OPEN` | 0/12 (0%) | Gesture extraction (`svg-editor-60f`) |
-| 7 | Shape creation tools | [shape-creation](./epics/shape-creation.md) | `OPEN` | 0/8 (0%) | — |
 | 8 | Clipboard and duplication | [clipboard-duplication](./epics/clipboard-duplication.md) | `OPEN` | 0/7 (0%) | Shape creation helpful but not required |
 | 10 | Text editing | [text-editing](./epics/text-editing.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, SC-2a, SC-5) |
 | 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `OPEN` | 0/5 (0%) | Multi-select (done) |
@@ -98,7 +98,7 @@ flowchart LR
 ## Recommended execution order
 
 1. **Now (free-standing):** `svg-editor-brz` (bug), `svg-editor-ag5` (UX fix), `svg-editor-60f` (refactoring)
-2. **Epic 7** (shape creation) -- the largest gap; transforms the editor from modifier to creator
+2. ~~**Epic 7** (shape creation)~~ -- **DONE**
 3. **Epic 13** (pen / path tool) -- creation companion; enables freeform drawing
 4. **Epic 8** (clipboard / duplication) -- standard editor expectation, high value once shapes can be created
 5. **Epic 11** (align / distribute) -- high value with multi-select already in place
@@ -111,7 +111,7 @@ flowchart LR
 ## Beads epic references
 
 Epic issues in `bd` (see `bd list -t epic` or `bd show <id>` if this table drifts).
-Status/progress below is current as of 2026-04-20.
+Status/progress below is current as of 2026-04-21.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
@@ -121,7 +121,7 @@ Status/progress below is current as of 2026-04-20.
 | groups-layers | `svg-editor-0l4` | Groups and layer management | `CLOSED` | 5/5 |
 | advanced-styling | `svg-editor-v77` | Advanced stroke and fill | `CLOSED` | 5/5 |
 | transform-ux-polish | `svg-editor-vfr` | Transform and gesture UX polish | `OPEN` | 0/12 |
-| shape-creation | `svg-editor-og7` | Shape creation tools | `OPEN` | 0/8 |
+| shape-creation | `svg-editor-og7` | Shape creation tools | `CLOSED` | 6/6 |
 | clipboard-duplication | `svg-editor-d79` | Clipboard and duplication | `OPEN` | 0/7 |
 | file-ops-viewport | `svg-editor-we7` | File operations and viewport UX | `CLOSED` | 5/5 |
 | text-editing | `svg-editor-nkz` | Text editing | `OPEN` | 0/7 |
