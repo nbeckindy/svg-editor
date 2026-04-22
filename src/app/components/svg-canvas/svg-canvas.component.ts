@@ -26,7 +26,15 @@ import {
   UngroupCommand
 } from '../../models/editor-commands';
 import { DragGesture, ResizeGesture, RotateGesture, CreationGesture, type GestureContext, type Rect } from './gestures';
-import { PenSession, lastCommittedVertex, penPathOnlyMoveto } from '../../models/pen-path';
+import {
+  PenSession,
+  appendSymmetricCubicToD,
+  lastCommittedVertex,
+  penPathOnlyMoveto,
+  penPathSegmentsToD,
+  penSvgDistanceSq,
+  symmetricCubicControlPoints
+} from '../../models/pen-path';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
@@ -167,6 +175,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly creation = new CreationGesture();
   private readonly penSession = new PenSession();
   private penPointerSvg: { x: number; y: number } | null = null;
+  /** Deferred next vertex: commit on mouseup as L (click) or C (drag past threshold). */
+  private penPendingSegment: {
+    anchor: { x: number; y: number };
+    startClient: { x: number; y: number };
+  } | null = null;
+  private penPendingLastClient: { x: number; y: number } | null = null;
 
   // Proxy getters for template bindings and inter-gesture guards
   get isDraggingShape(): boolean { return this.drag.isActive; }
@@ -189,11 +203,50 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return this.penSession.getSegments().length > 0;
   }
 
+  get penPendingShowsCurvePreview(): boolean {
+    if (!this.penPendingSegment || !this.penPendingLastClient) return false;
+    const { startClient } = this.penPendingSegment;
+    const lc = this.penPendingLastClient;
+    return Math.hypot(lc.x - startClient.x, lc.y - startClient.y) >= MARQUEE_MIN_DRAG_PX;
+  }
+
+  /** Live cubic preview `d` (committed segments + symmetric C to pointer). */
+  get penCurvePreviewPathD(): string | null {
+    if (
+      !this.penPendingSegment ||
+      !this.penPointerSvg ||
+      !this.penPendingShowsCurvePreview ||
+      this.editorTool.getCurrentTool() !== 'pen'
+    ) {
+      return null;
+    }
+    const base = penPathSegmentsToD(this.penSession.getSegments());
+    return appendSymmetricCubicToD(base, this.penPendingSegment.anchor, this.penPointerSvg);
+  }
+
+  /** Control handle centers (overlay px) while dragging a cubic preview. */
+  get penCurveHandleOverlays(): { cx: number; cy: number }[] {
+    if (!this.penCurvePreviewPathD || !this.penPendingSegment || !this.penPointerSvg) return [];
+    const { x1, y1, x2, y2 } = symmetricCubicControlPoints(
+      this.penPendingSegment.anchor,
+      this.penPointerSvg
+    );
+    const p1 = this.svgBboxToOverlayPixels({ x: x1, y: y1, width: 0, height: 0 });
+    const p2 = this.svgBboxToOverlayPixels({ x: x2, y: y2, width: 0, height: 0 });
+    return [
+      { cx: p1.x, cy: p1.y },
+      { cx: p2.x, cy: p2.y }
+    ];
+  }
+
   get penRubberBandOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
     if (!this.isPenSessionActive || !this.penPointerSvg || this.editorTool.getCurrentTool() !== 'pen') {
       return null;
     }
-    const anchor = lastCommittedVertex(this.penSession.getSegments());
+    if (this.penPendingSegment && this.penPendingShowsCurvePreview) return null;
+    const anchor = this.penPendingSegment
+      ? this.penPendingSegment.anchor
+      : lastCommittedVertex(this.penSession.getSegments());
     if (!anchor) return null;
     const p1 = this.svgBboxToOverlayPixels({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
     const p2 = this.svgBboxToOverlayPixels({
@@ -720,6 +773,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
+      if (this.penPendingSegment) {
+        this.penPendingLastClient = { x: event.clientX, y: event.clientY };
+      }
       const pt = this.clientToEditorSvgPoint(event.clientX, event.clientY);
       if (pt) {
         this.penPointerSvg = { x: pt.x, y: pt.y };
@@ -757,6 +813,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onDocumentMouseUp(event: MouseEvent): void {
     if (event.button !== 0) return;
+
+    if (this.editorTool.getCurrentTool() === 'pen' && this.penPendingSegment) {
+      this.commitPenPendingSegment(event);
+      return;
+    }
 
     if (this.isCreatingShape) {
       this.creation.end(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
@@ -1421,13 +1482,74 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private clearPenDrawingState(): void {
-    if (!this.isPenSessionActive && this.penPointerSvg === null) return;
+    const had =
+      this.isPenSessionActive || this.penPointerSvg !== null || this.penPendingSegment !== null;
+    if (!had) return;
+    this.penPendingSegment = null;
+    this.penPendingLastClient = null;
     this.penSession.reset();
     this.penPointerSvg = null;
     this.cdr.markForCheck();
   }
 
+  private commitPenPendingSegment(event: MouseEvent): void {
+    if (!this.penPendingSegment) return;
+    const end = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+    if (!end) {
+      this.penPendingSegment = null;
+      this.penPendingLastClient = null;
+      this.cdr.markForCheck();
+      return;
+    }
+    const { anchor, startClient } = this.penPendingSegment;
+    if (penSvgDistanceSq(anchor, end) < 1e-12) {
+      this.penPendingSegment = null;
+      this.penPendingLastClient = null;
+      this.cdr.markForCheck();
+      return;
+    }
+    const screenDist = Math.hypot(event.clientX - startClient.x, event.clientY - startClient.y);
+    if (screenDist < MARQUEE_MIN_DRAG_PX) {
+      this.penSession.addLinePoint(end.x, end.y);
+    } else {
+      const c = symmetricCubicControlPoints(anchor, end);
+      this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
+    }
+    this.penPendingSegment = null;
+    this.penPendingLastClient = null;
+    this.penPointerSvg = { x: end.x, y: end.y };
+    this.cdr.markForCheck();
+  }
+
+  /** Commit open drag as L/C using last pointer + last client motion (Enter / finish). */
+  private flushPenPendingAsCurrentPointer(): void {
+    if (!this.penPendingSegment || !this.penPointerSvg) {
+      this.penPendingSegment = null;
+      this.penPendingLastClient = null;
+      return;
+    }
+    const { anchor, startClient } = this.penPendingSegment;
+    const end = this.penPointerSvg;
+    if (penSvgDistanceSq(anchor, end) < 1e-12) {
+      this.penPendingSegment = null;
+      this.penPendingLastClient = null;
+      return;
+    }
+    const lc = this.penPendingLastClient ?? startClient;
+    const screenDist = Math.hypot(lc.x - startClient.x, lc.y - startClient.y);
+    if (screenDist < MARQUEE_MIN_DRAG_PX) {
+      this.penSession.addLinePoint(end.x, end.y);
+    } else {
+      const c = symmetricCubicControlPoints(anchor, end);
+      this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
+    }
+    this.penPendingSegment = null;
+    this.penPendingLastClient = null;
+    this.cdr.markForCheck();
+  }
+
   private tryFinishPenPath(): void {
+    this.flushPenPendingAsCurrentPointer();
     const d = this.penSession.finishPath();
     if (!d) return;
     const id = this.svgManipulation.insertPathIntoContentGroup(d);
@@ -1447,6 +1569,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private handlePenCanvasMouseDown(event: MouseEvent, pt: { x: number; y: number }): void {
     if (event.detail >= 2) {
+      this.penPendingSegment = null;
+      this.penPendingLastClient = null;
       if (this.penSession.getSegments().length === 0) {
         this.penSession.beginPath(pt.x, pt.y);
         this.penPointerSvg = { x: pt.x, y: pt.y };
@@ -1462,9 +1586,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const segs = this.penSession.getSegments();
     if (segs.length === 0) {
       this.penSession.beginPath(pt.x, pt.y);
-    } else {
-      this.penSession.addLinePoint(pt.x, pt.y);
+      this.penPointerSvg = { x: pt.x, y: pt.y };
+      this.cdr.markForCheck();
+      return;
     }
+    const anchor = lastCommittedVertex(segs);
+    if (!anchor) return;
+    this.penPendingSegment = {
+      anchor: { x: anchor.x, y: anchor.y },
+      startClient: { x: event.clientX, y: event.clientY }
+    };
+    this.penPendingLastClient = { x: event.clientX, y: event.clientY };
     this.penPointerSvg = { x: pt.x, y: pt.y };
     this.cdr.markForCheck();
   }

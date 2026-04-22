@@ -155,6 +155,29 @@
                 vector-effect="non-scaling-stroke"/>
             }
           }
+          @if (penCurvePreviewPathD; as pcurve) {
+            <path
+              class="creation-ghost-shape"
+              data-testid="canvas-pen-curve-preview"
+              [attr.d]="pcurve"
+              fill="none"
+              stroke="#2196f3"
+              stroke-width="2"
+              stroke-dasharray="6 3"
+              vector-effect="non-scaling-stroke"/>
+            @for (h of penCurveHandleOverlays; track h.cx + ',' + h.cy) {
+              <circle
+                class="pen-curve-handle"
+                data-testid="canvas-pen-curve-handle"
+                [attr.cx]="h.cx"
+                [attr.cy]="h.cy"
+                r="4"
+                fill="#ffffff"
+                stroke="#2196f3"
+                stroke-width="1.5"
+                vector-effect="non-scaling-stroke"/>
+            }
+          }
           @if (penRubberBandOverlay; as prb) {
             <line
               class="creation-ghost-shape"

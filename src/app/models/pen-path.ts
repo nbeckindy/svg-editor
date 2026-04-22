@@ -49,6 +49,56 @@ export function penPathOnlyMoveto(segments: readonly PenPathSegment[]): boolean 
   return segments.length === 1 && segments[0].type === 'M';
 }
 
+/** Third-point cubic controls: symmetric along chord P0→P3 (tangent-continuous at ends). */
+export function symmetricCubicControlPoints(
+  p0: { x: number; y: number },
+  p3: { x: number; y: number }
+): { x1: number; y1: number; x2: number; y2: number } {
+  const dx = p3.x - p0.x;
+  const dy = p3.y - p0.y;
+  return {
+    x1: p0.x + dx / 3,
+    y1: p0.y + dy / 3,
+    x2: p3.x - dx / 3,
+    y2: p3.y - dy / 3
+  };
+}
+
+/** Append a symmetric cubic from last point `p0` to `p3` to an existing `d` (no trailing space). */
+export function appendSymmetricCubicToD(
+  baseD: string,
+  p0: { x: number; y: number },
+  p3: { x: number; y: number }
+): string {
+  const { x1, y1, x2, y2 } = symmetricCubicControlPoints(p0, p3);
+  const tail = [
+    'C',
+    formatCoord(x1),
+    formatCoord(y1),
+    formatCoord(x2),
+    formatCoord(y2),
+    formatCoord(p3.x),
+    formatCoord(p3.y)
+  ].join(' ');
+  return baseD ? `${baseD} ${tail}` : tail;
+}
+
+/** Append `L x y` to `d` for preview. */
+export function appendLineToD(baseD: string, x: number, y: number): string {
+  const tail = `L ${formatCoord(x)} ${formatCoord(y)}`;
+  return baseD ? `${baseD} ${tail}` : tail;
+}
+
+/** Squared distance in SVG user space (cheap degenerate test). */
+export function penSvgDistanceSq(
+  a: { x: number; y: number },
+  b: { x: number; y: number }
+): number {
+  const dx = b.x - a.x;
+  const dy = b.y - a.y;
+  return dx * dx + dy * dy;
+}
+
 /** End vertex of the last segment (anchor for rubber-band preview). */
 export function lastCommittedVertex(
   segments: readonly PenPathSegment[]

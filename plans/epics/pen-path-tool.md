@@ -39,7 +39,7 @@
 
 ## Notes
 
-- Additional tracker issues (not in the PP-x table): `svg-editor-tfs.8` (confirm discard on tool/doc change), `svg-editor-tfs.9` (feedback when finish is invalid), `svg-editor-tfs.10` (pen hit-test / click target policy).
+- Additional tracker issues (not in the PP-x table): `svg-editor-tfs.8` (confirm discard on tool/doc change), `svg-editor-tfs.9` (feedback when finish is invalid), `svg-editor-tfs.10` (pen hit-test / click target policy), `svg-editor-tfs.11` (optional richer cubic handle model vs chord-thirds).
 - Until **PP-4** (`AddPathCommand`), finished pen paths are inserted without history; undo will not remove them.
 - Node editing of existing paths has been split into its own epic ([path-node-editing](./path-node-editing.md)).
 - The path segment model (PP-2a) is foundational — PP-3 (bezier curves) extends it with `C` segments. Choosing a structured representation up front avoids a refactor when adding curves.

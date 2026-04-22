@@ -189,6 +189,10 @@
   pointer-events: none;
 }
 
+.pen-curve-handle {
+  pointer-events: none;
+}
+
 .zoom-level {
   position: absolute;
   top: 8px;

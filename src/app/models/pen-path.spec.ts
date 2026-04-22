@@ -1,11 +1,27 @@
 import { describe, it, expect } from 'vitest';
 import {
   PenSession,
+  appendSymmetricCubicToD,
   lastCommittedVertex,
   penPathOnlyMoveto,
   penPathSegmentsAreValid,
-  penPathSegmentsToD
+  penPathSegmentsToD,
+  symmetricCubicControlPoints
 } from './pen-path';
+
+describe('symmetricCubicControlPoints', () => {
+  it('places controls at 1/3 and 2/3 along chord', () => {
+    const c = symmetricCubicControlPoints({ x: 0, y: 0 }, { x: 9, y: 9 });
+    expect(c).toEqual({ x1: 3, y1: 3, x2: 6, y2: 6 });
+  });
+});
+
+describe('appendSymmetricCubicToD', () => {
+  it('appends C command to base d', () => {
+    const d = appendSymmetricCubicToD('M 0 0', { x: 0, y: 0 }, { x: 9, y: 9 });
+    expect(d).toBe('M 0 0 C 3 3 6 6 9 9');
+  });
+});
 
 describe('penPathSegmentsToD', () => {
   it('formats M and L segments', () => {
