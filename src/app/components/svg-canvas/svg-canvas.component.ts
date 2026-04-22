@@ -190,6 +190,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     startSvg: { x: number; y: number };
   } | null = null;
   private penPendingLastClient: { x: number; y: number } | null = null;
+  private penPendingDragSvg: { x: number; y: number } | null = null;
 
   // Proxy getters for template bindings and inter-gesture guards
   get isDraggingShape(): boolean { return this.drag.isActive; }
@@ -232,13 +233,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!anchor) return base;
 
     if (this.penPendingSegment && this.penPendingShowsCurvePreview) {
+      const fixedEnd = this.penPendingSegment.startSvg;
+      const dragCurrent = this.penPendingDragSvg ?? fixedEnd;
       const controls = dragBendCubicControlPoints(
         this.penPendingSegment.anchor,
-        this.penPointerSvg,
+        fixedEnd,
         this.penPendingSegment.startSvg,
-        this.penPointerSvg
+        dragCurrent
       );
-      return appendCubicToD(base, controls, this.penPointerSvg);
+      return appendCubicToD(base, controls, fixedEnd);
     }
     return appendLineToD(base, this.penPointerSvg.x, this.penPointerSvg.y);
   }
@@ -254,23 +257,27 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return null;
     }
     const base = penPathSegmentsToD(this.penSession.getSegments());
+    const fixedEnd = this.penPendingSegment.startSvg;
+    const dragCurrent = this.penPendingDragSvg ?? fixedEnd;
     const controls = dragBendCubicControlPoints(
       this.penPendingSegment.anchor,
-      this.penPointerSvg,
+      fixedEnd,
       this.penPendingSegment.startSvg,
-      this.penPointerSvg
+      dragCurrent
     );
-    return appendCubicToD(base, controls, this.penPointerSvg);
+    return appendCubicToD(base, controls, fixedEnd);
   }
 
   /** Control handle centers (overlay px) while dragging a cubic preview. */
   get penCurveHandleOverlays(): { cx: number; cy: number }[] {
     if (!this.penCurvePreviewPathD || !this.penPendingSegment || !this.penPointerSvg) return [];
+    const fixedEnd = this.penPendingSegment.startSvg;
+    const dragCurrent = this.penPendingDragSvg ?? fixedEnd;
     const { x1, y1, x2, y2 } = dragBendCubicControlPoints(
       this.penPendingSegment.anchor,
-      this.penPointerSvg,
+      fixedEnd,
       this.penPendingSegment.startSvg,
-      this.penPointerSvg
+      dragCurrent
     );
     const p1 = this.svgBboxToOverlayPixels({ x: x1, y: y1, width: 0, height: 0 });
     const p2 = this.svgBboxToOverlayPixels({ x: x2, y: y2, width: 0, height: 0 });
@@ -819,7 +826,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       }
       const pt = this.clientToEditorSvgPoint(event.clientX, event.clientY);
       if (pt) {
-        this.penPointerSvg = { x: pt.x, y: pt.y };
+        if (this.penPendingSegment) {
+          this.penPendingDragSvg = { x: pt.x, y: pt.y };
+          this.penPointerSvg = { x: this.penPendingSegment.startSvg.x, y: this.penPendingSegment.startSvg.y };
+        } else {
+          this.penPointerSvg = { x: pt.x, y: pt.y };
+        }
         this.cdr.markForCheck();
       }
       return;
@@ -1572,12 +1584,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private clearPenDrawingState(): void {
     const hadPenState =
-      this.isPenSessionActive || this.penPointerSvg !== null || this.penPendingSegment !== null;
+      this.isPenSessionActive ||
+      this.penPointerSvg !== null ||
+      this.penPendingSegment !== null ||
+      this.penPendingDragSvg !== null;
     const hadFeedback = this.penFinishFeedbackMessage !== null;
     if (!hadPenState && !hadFeedback) return;
     if (hadPenState) {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
+      this.penPendingDragSvg = null;
       this.penSession.reset();
       this.penPointerSvg = null;
     }
@@ -1613,29 +1629,27 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private commitPenPendingSegment(event: MouseEvent): void {
     if (!this.penPendingSegment) return;
-    const end = this.clientToEditorSvgPoint(event.clientX, event.clientY);
-    if (!end) {
-      this.penPendingSegment = null;
-      this.penPendingLastClient = null;
-      this.cdr.markForCheck();
-      return;
-    }
     const { anchor, startClient, startSvg } = this.penPendingSegment;
+    const end = startSvg;
     if (penSvgDistanceSq(anchor, end) < 1e-12) {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
+      this.penPendingDragSvg = null;
       this.cdr.markForCheck();
       return;
     }
+    const releaseSvg = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+    const dragCurrent = releaseSvg ?? this.penPendingDragSvg ?? startSvg;
     const screenDist = Math.hypot(event.clientX - startClient.x, event.clientY - startClient.y);
     if (screenDist < MARQUEE_MIN_DRAG_PX) {
       this.penSession.addLinePoint(end.x, end.y);
     } else {
-      const c = dragBendCubicControlPoints(anchor, end, startSvg, end);
+      const c = dragBendCubicControlPoints(anchor, end, startSvg, dragCurrent);
       this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
     }
     this.penPendingSegment = null;
     this.penPendingLastClient = null;
+    this.penPendingDragSvg = null;
     this.penPointerSvg = { x: end.x, y: end.y };
     this.cdr.markForCheck();
   }
@@ -1645,13 +1659,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!this.penPendingSegment || !this.penPointerSvg) {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
+      this.penPendingDragSvg = null;
       return;
     }
     const { anchor, startClient, startSvg } = this.penPendingSegment;
-    const end = this.penPointerSvg;
+    const end = startSvg;
     if (penSvgDistanceSq(anchor, end) < 1e-12) {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
+      this.penPendingDragSvg = null;
       return;
     }
     const lc = this.penPendingLastClient ?? startClient;
@@ -1659,11 +1675,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (screenDist < MARQUEE_MIN_DRAG_PX) {
       this.penSession.addLinePoint(end.x, end.y);
     } else {
-      const c = dragBendCubicControlPoints(anchor, end, startSvg, end);
+      const dragCurrent = this.penPendingDragSvg ?? startSvg;
+      const c = dragBendCubicControlPoints(anchor, end, startSvg, dragCurrent);
       this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
     }
     this.penPendingSegment = null;
     this.penPendingLastClient = null;
+    this.penPendingDragSvg = null;
+    this.penPointerSvg = { x: end.x, y: end.y };
     this.cdr.markForCheck();
   }
 
@@ -1702,6 +1721,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (event.detail >= 2) {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
+      this.penPendingDragSvg = null;
       if (this.penSession.getSegments().length === 0) {
         this.penSession.beginPath(pt.x, pt.y);
         this.penPointerSvg = { x: pt.x, y: pt.y };
@@ -1729,6 +1749,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       startSvg: { x: pt.x, y: pt.y }
     };
     this.penPendingLastClient = { x: event.clientX, y: event.clientY };
+    this.penPendingDragSvg = { x: pt.x, y: pt.y };
     this.penPointerSvg = { x: pt.x, y: pt.y };
     this.cdr.markForCheck();
   }

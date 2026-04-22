@@ -2490,7 +2490,7 @@ describe('SvgCanvasComponent', () => {
       expect(fullPreview?.getAttribute('d')).toBe('M 10 10 L 20 20 L 40 20');
     });
 
-    it('shows cubic curve preview overlay when second point is dragged past threshold', async () => {
+    it('keeps pending endpoint fixed while drag updates cubic preview handles', async () => {
       await loadEmptySvgAndPenMode();
 
       component.onCanvasMouseDown({
@@ -2512,10 +2512,21 @@ describe('SvgCanvasComponent', () => {
 
       const preview = fixture.nativeElement.querySelector('[data-testid="canvas-pen-curve-preview"]');
       expect(preview).toBeTruthy();
-      const d = preview?.getAttribute('d') ?? '';
-      expect(d).toContain('C');
-      // Regression for svg-editor-tfs.14: old controls sat on the chord, yielding a visually straight preview.
-      expect(d).not.toBe('M 10 10 C 16.666667 13.333333 23.333333 16.666667 30 20');
+      const firstDragD = preview?.getAttribute('d') ?? '';
+      expect(firstDragD).toContain('C');
+      expect(firstDragD).toContain(' 20 20');
+      // Endpoint is fixed at mouse-down, but drag should still bend controls off the straight chord.
+      expect(firstDragD).not.toBe('M 10 10 C 13.333333 13.333333 16.666667 16.666667 20 20');
+
+      component.onDocumentMouseMove({ clientX: 30, clientY: 30 } as MouseEvent);
+      fixture.detectChanges();
+      const secondDragD =
+        fixture.nativeElement
+          .querySelector('[data-testid="canvas-pen-curve-preview"]')
+          ?.getAttribute('d') ?? '';
+      expect(secondDragD).toContain('C');
+      expect(secondDragD).toContain(' 20 20');
+      expect(secondDragD).not.toBe(firstDragD);
     });
 
     it('commits a bent cubic segment (not a straight chord cubic) after drag', async () => {
@@ -2536,7 +2547,7 @@ describe('SvgCanvasComponent', () => {
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
       component.onDocumentMouseMove({ clientX: 30, clientY: 20 } as MouseEvent);
-      component.onDocumentMouseUp({ button: 0, clientX: 30, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 35, clientY: 25 } as MouseEvent);
 
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
       fixture.detectChanges();
@@ -2547,7 +2558,9 @@ describe('SvgCanvasComponent', () => {
           ?.querySelector('path')
           ?.getAttribute('d') ?? '';
       expect(d).toContain('C');
-      expect(d).not.toContain('C 16.666667 13.333333 23.333333 16.666667 30 20');
+      expect(d).toContain(' 20 20');
+      expect(d).not.toContain('C 13.333333 13.333333 16.666667 16.666667 20 20');
+      expect(d).not.toContain(' 35 25');
     });
   });
 
