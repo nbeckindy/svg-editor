@@ -2392,7 +2392,7 @@ describe('SvgCanvasComponent', () => {
       expect(fixture.nativeElement.querySelector('[data-testid="canvas-path-node-anchor"]')).toBeFalsy();
     });
 
-    it('fails gracefully when selected path data cannot be parsed', async () => {
+    it('does not enter node-edit mode when selected path data cannot be parsed', async () => {
       await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-bad" d="M 10 10 L ?" /></svg>');
       shapeSelectionService.selectShape({
         id: 'path-bad',
@@ -2404,9 +2404,34 @@ describe('SvgCanvasComponent', () => {
       });
       await activateNodeEditSelectorTool();
 
-      expect(component.isPathNodeEditModeActive).toBe(true);
+      expect(component.isPathNodeEditModeActive).toBe(false);
       const anchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
-      expect(anchors.length).toBe(1);
+      expect(anchors.length).toBe(0);
+      const feedback = fixture.nativeElement.querySelector('[data-testid="canvas-path-node-edit-feedback"]');
+      expect((feedback as HTMLElement | null)?.textContent ?? '').toContain('M/L/C/Z');
+    });
+
+    it('does not enter node-edit mode for unsupported path commands and keeps original d', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-unsupported" d="M 10 10 Q 20 20 30 10 L 40 20" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-unsupported',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const pathEl = fixture.nativeElement.querySelector('#path-unsupported') as SVGPathElement;
+      const beforeD = pathEl.getAttribute('d');
+      await activateNodeEditSelectorTool();
+
+      expect(component.isPathNodeEditModeActive).toBe(false);
+      expect(pathEl.getAttribute('d')).toBe(beforeD);
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBe(0);
+      const feedback = fixture.nativeElement.querySelector('[data-testid="canvas-path-node-edit-feedback"]');
+      expect((feedback as HTMLElement | null)?.textContent ?? '').toContain('M/L/C/Z');
     });
   });
 
