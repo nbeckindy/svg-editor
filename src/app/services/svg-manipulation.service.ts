@@ -945,6 +945,17 @@ export class SvgManipulationService {
   }
 
   /**
+   * Replace path `d` for an existing `<path>` element.
+   */
+  updatePathData(pathId: string, d: string): void {
+    if (!this.svgInstance) return;
+    const shape = this.svgInstance.findOne(`#${pathId}`) as SvgJsElement | undefined;
+    if (!shape || shape.type !== 'path') return;
+    shape.attr('d', d);
+    this.bumpDocumentRevision();
+  }
+
+  /**
    * Nearest ancestor `<g>` with an `id` between this shape and the editor content group (for
    * "select parent" when fill/stroke is inherited).
    */

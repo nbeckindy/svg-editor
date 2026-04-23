@@ -857,3 +857,34 @@ export class AddPathCommand implements EditorCommand {
     this.selectionSvc?.clearSelection();
   }
 }
+
+/**
+ * Undoable path node edit. Dragging applies `newD` before history push; first execute is a no-op.
+ */
+export class EditPathNodesCommand implements EditorCommand {
+  readonly description = 'Edit path nodes';
+
+  private appliedAlready = false;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly pathId: string,
+    private readonly oldD: string,
+    private readonly newD: string,
+    appliedAlready = false
+  ) {
+    this.appliedAlready = appliedAlready;
+  }
+
+  execute(): void {
+    if (this.appliedAlready) {
+      this.appliedAlready = false;
+      return;
+    }
+    this.svc.updatePathData(this.pathId, this.newD);
+  }
+
+  undo(): void {
+    this.svc.updatePathData(this.pathId, this.oldD);
+  }
+}

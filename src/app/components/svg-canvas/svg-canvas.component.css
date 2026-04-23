@@ -193,6 +193,16 @@
   pointer-events: none;
 }
 
+.path-node-control-line {
+  pointer-events: none;
+}
+
+.path-node-control-handle,
+.path-node-anchor {
+  pointer-events: auto;
+  cursor: move;
+}
+
 .zoom-level {
   position: absolute;
   top: 8px;

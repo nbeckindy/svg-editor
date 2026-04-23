@@ -207,6 +207,48 @@
               stroke-dasharray="6 3"
               vector-effect="non-scaling-stroke"/>
           }
+          @if (isPathNodeEditModeActive) {
+            @for (handle of pathNodeControlHandleOverlays; track $index) {
+              <line
+                class="path-node-control-line"
+                data-path-node-edit-target="true"
+                data-testid="canvas-path-node-control-line"
+                [attr.x1]="handle.x1"
+                [attr.y1]="handle.y1"
+                [attr.x2]="handle.x2"
+                [attr.y2]="handle.y2"
+                stroke="#43A047"
+                stroke-width="1.5"
+                stroke-dasharray="3 2"
+                vector-effect="non-scaling-stroke"/>
+              <circle
+                class="path-node-control-handle"
+                data-path-node-edit-target="true"
+                [attr.data-path-node-handle-index]="$index"
+                data-testid="canvas-path-node-control-handle"
+                [attr.cx]="handle.cx"
+                [attr.cy]="handle.cy"
+                r="3.5"
+                fill="#ffffff"
+                stroke="#43A047"
+                stroke-width="1.5"
+                vector-effect="non-scaling-stroke"/>
+            }
+            @for (anchor of pathNodeAnchorOverlays; track $index) {
+              <circle
+                class="path-node-anchor"
+                data-path-node-edit-target="true"
+                [attr.data-path-node-anchor-index]="$index"
+                data-testid="canvas-path-node-anchor"
+                [attr.cx]="anchor.cx"
+                [attr.cy]="anchor.cy"
+                r="4"
+                fill="#ffffff"
+                stroke="#1E88E5"
+                stroke-width="2"
+                vector-effect="non-scaling-stroke"/>
+            }
+          }
           @if (showResizeHandles && highlightRect; as hr) {
             <circle
               class="selection-resize-handle selection-resize-nw"
