@@ -43,6 +43,16 @@
   <button
     type="button"
     class="tool-btn"
+    data-testid="tool-node-edit-selector"
+    [class.active]="editorTool.currentTool() === 'node-edit-selector'"
+    (click)="setTool('node-edit-selector')"
+    title="Node Edit Selector"
+    [attr.aria-pressed]="editorTool.currentTool() === 'node-edit-selector'">
+    Node Edit
+  </button>
+  <button
+    type="button"
+    class="tool-btn"
     data-testid="tool-zoom"
     [class.active]="editorTool.currentTool() === 'zoom'"
     (click)="setTool('zoom')"

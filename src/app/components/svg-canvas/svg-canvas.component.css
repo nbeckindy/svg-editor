@@ -203,6 +203,10 @@
   cursor: move;
 }
 
+.path-node-anchor.path-node-anchor-selected {
+  fill: #1e88e5;
+}
+
 .zoom-level {
   position: absolute;
   top: 8px;
@@ -221,6 +225,20 @@
 .pen-finish-feedback {
   position: absolute;
   top: 8px;
+  left: 8px;
+  z-index: 11;
+  padding: 4px 8px;
+  font-size: 12px;
+  color: #7a3e00;
+  background: rgba(255, 235, 204, 0.95);
+  border: 1px solid #f0c27b;
+  border-radius: 4px;
+  pointer-events: none;
+}
+
+.path-node-edit-feedback {
+  position: absolute;
+  top: 40px;
   left: 8px;
   z-index: 11;
   padding: 4px 8px;

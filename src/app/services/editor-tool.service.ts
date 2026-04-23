@@ -1,6 +1,14 @@
 import { Injectable, signal } from '@angular/core';
 
-export type EditorTool = 'selector' | 'zoom' | 'pan' | 'rect' | 'ellipse' | 'line' | 'pen';
+export type EditorTool =
+  | 'selector'
+  | 'node-edit-selector'
+  | 'zoom'
+  | 'pan'
+  | 'rect'
+  | 'ellipse'
+  | 'line'
+  | 'pen';
 
 const CREATION_TOOLS: ReadonlySet<EditorTool> = new Set(['rect', 'ellipse', 'line']);
 

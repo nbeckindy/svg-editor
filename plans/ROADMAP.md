@@ -25,8 +25,8 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `OPEN` | 0/5 (0%) | Multi-select (done) |
 | 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `OPEN` | 0/8 (0%) | Shape creation (epic 7) helpful |
 | 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `OPEN` | 7/7 (100%) | Shape creation (SC-1, shares tool infra); optional beads tfs.8–11 open in bd |
-| 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `OPEN` | 4/5 (80%) | Pen tool (PP-2a segment model) |
-| 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `OPEN` | 0/5 (0%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
+| 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `CLOSED` | 5/5 (100%) | Pen tool (PP-2a segment model) |
+| 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `OPEN` | 1/6 (17%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
 
 ## Free-standing issues
 
@@ -130,8 +130,8 @@ Status/progress below is current as of 2026-04-21.
 | snap-guides | TBD | Snap and guides | `OPEN` | 0/8 |
 | pen-path-tool | `svg-editor-tfs` | Pen and path tool | `OPEN` | 7/7 |
 | canvas-artboard | `svg-editor-dl9` | Canvas and artboard | `CLOSED` | 7/7 |
-| path-node-editing | `svg-editor-cfc` | Path node editing | `OPEN` | 4/5 |
-| advanced-path-editing | `svg-editor-4nz` | Advanced path editing | `OPEN` | 0/5 |
+| path-node-editing | `svg-editor-cfc` | Path node editing | `CLOSED` | 5/5 |
+| advanced-path-editing | `svg-editor-4nz` | Advanced path editing | `OPEN` | 1/6 |
 
 ## How to use this roadmap
 

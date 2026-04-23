@@ -14,6 +14,7 @@
 
 | Local ref | Title | bd id | Type | Acceptance criteria | Depends on | Est (min) |
 |-----------|--------|-------|------|---------------------|------------|-----------|
+| APE-0 | Investigate node-edit selector anchor mismatch and path corruption on drag | `svg-editor-4nz.1` | `bug` | Reproduce sparse/incorrect node overlays on complex paths, capture before/after `d` values when drag causes shape disappearance, identify parser/overlay/root-cause, and produce concrete fix beads. | `svg-editor-cfc.5` | 120 |
 | APE-1 | Pen tool: insert node into existing path | `svg-editor-gh9` | `feature` | With pen tool active, user can click a path segment to insert a node at that location; path `d` remains valid; insertion is undoable/redoable; off-path clicks do not accidentally insert; tests cover representative segment types. | Pen/path model (`svg-editor-tfs`, `svg-editor-cfc.1`) | 180 |
 | APE-2 | Path node editing: select and delete individual node | `svg-editor-9hh` | `feature` | Node can be explicitly selected and deleted via keyboard; invalid deletions are prevented with clear feedback; undo/redo works as one history step; tests cover valid and invalid delete flows. | `svg-editor-cfc.5` | 180 |
 | APE-3 | Spike: node editing for non-path shapes via convert-to-path | `svg-editor-18f` | `task` | Document which shape types can be node-edited directly versus requiring conversion; propose convert-to-path flow preserving style/transform; identify destructive/irreversible risks; recommend MVP and follow-ups. | APE-2 (context), shape model | 120 |

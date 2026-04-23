@@ -15,6 +15,11 @@
       {{ message }}
     </div>
   }
+  @if (pathNodeEditFeedbackMessage; as message) {
+    <div class="path-node-edit-feedback" data-testid="canvas-path-node-edit-feedback" role="status" aria-live="polite">
+      {{ message }}
+    </div>
+  }
   <div class="ruler-wrapper" [class.with-rulers]="!!svgContent()">
     @if (svgContent()) {
       <div class="ruler-corner" aria-hidden="true"></div>
@@ -237,6 +242,7 @@
             @for (anchor of pathNodeAnchorOverlays; track $index) {
               <circle
                 class="path-node-anchor"
+                [class.path-node-anchor-selected]="anchor.selected"
                 data-path-node-edit-target="true"
                 [attr.data-path-node-anchor-index]="$index"
                 data-testid="canvas-path-node-anchor"

@@ -2071,7 +2071,14 @@ describe('SvgCanvasComponent', () => {
       fixture.detectChanges();
     }
 
-    it('enters node-edit mode for a selected path and renders anchors + cubic handles', async () => {
+    async function activateNodeEditSelectorTool(): Promise<void> {
+      editorToolService.setTool('node-edit-selector');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+    }
+
+    it('enters node-edit mode for a selected path when node-edit selector tool is active', async () => {
       await loadSvgForSelector(
         '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 C 20 10 30 20 40 40 L 60 50" /></svg>'
       );
@@ -2083,12 +2090,7 @@ describe('SvgCanvasComponent', () => {
         strokeWidth: 0,
         opacity: 1
       });
-      const pathEl = fixture.nativeElement.querySelector('#path-a') as Element;
-
-      component.onCanvasDoubleClick({
-        target: pathEl
-      } as unknown as MouseEvent);
-      fixture.detectChanges();
+      await activateNodeEditSelectorTool();
 
       expect(component.isPathNodeEditModeActive).toBe(true);
       const anchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
@@ -2097,6 +2099,35 @@ describe('SvgCanvasComponent', () => {
       expect(anchors.length).toBe(3);
       expect(controlLines.length).toBe(2);
       expect(controlHandles.length).toBe(2);
+    });
+
+    it('marks a clicked node as selected in node-edit mode', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-select-node" d="M 10 10 L 20 20 L 30 30" /></svg>');
+      shapeSelectionService.selectShape({
+        id: 'path-select-node',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+
+      const anchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
+      const middleAnchor = anchors[1] as Element;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        target: middleAnchor,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 20, clientY: 20 } as MouseEvent);
+      fixture.detectChanges();
+
+      const refreshedAnchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
+      expect((refreshedAnchors[1] as Element).classList.contains('path-node-anchor-selected')).toBe(true);
     });
 
     it('drags an anchor and updates path d live', async () => {
@@ -2110,8 +2141,7 @@ describe('SvgCanvasComponent', () => {
         opacity: 1
       });
       const pathEl = fixture.nativeElement.querySelector('#path-drag-anchor') as SVGPathElement;
-      component.onCanvasDoubleClick({ target: pathEl } as unknown as MouseEvent);
-      fixture.detectChanges();
+      await activateNodeEditSelectorTool();
 
       const firstAnchor = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]')[0] as Element;
       component.onCanvasMouseDown({
@@ -2131,6 +2161,77 @@ describe('SvgCanvasComponent', () => {
       expect(pathEl.getAttribute('d')).toContain('M 15 25');
     });
 
+    it('deletes selected node with Delete and supports undo/redo', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-delete-node" d="M 10 10 L 20 20 L 30 30" /></svg>');
+      shapeSelectionService.selectShape({
+        id: 'path-delete-node',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const pathEl = fixture.nativeElement.querySelector('#path-delete-node') as SVGPathElement;
+      const dBefore = pathEl.getAttribute('d') ?? '';
+      await activateNodeEditSelectorTool();
+
+      const middleAnchor = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]')[1] as Element;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        target: middleAnchor,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 20, clientY: 20 } as MouseEvent);
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+      fixture.detectChanges();
+
+      const dAfter = pathEl.getAttribute('d') ?? '';
+      expect(dAfter).not.toBe(dBefore);
+      expect(dAfter).toContain('M 10 10 L 30 30');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+      expect(pathEl.getAttribute('d')).toBe(dBefore);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Z', ctrlKey: true, shiftKey: true, bubbles: true }));
+      expect(pathEl.getAttribute('d')).toBe(dAfter);
+    });
+
+    it('prevents deleting below minimum node count and shows feedback', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-delete-guard" d="M 10 10 L 20 20" /></svg>');
+      shapeSelectionService.selectShape({
+        id: 'path-delete-guard',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const pathEl = fixture.nativeElement.querySelector('#path-delete-guard') as SVGPathElement;
+      const dBefore = pathEl.getAttribute('d') ?? '';
+      await activateNodeEditSelectorTool();
+
+      const firstAnchor = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]')[0] as Element;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        target: firstAnchor,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 10, clientY: 10 } as MouseEvent);
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+      fixture.detectChanges();
+
+      expect(pathEl.getAttribute('d')).toBe(dBefore);
+      const feedback = fixture.nativeElement.querySelector('[data-testid="canvas-path-node-edit-feedback"]');
+      expect(feedback).toBeTruthy();
+      expect((feedback as HTMLElement).textContent ?? '').toContain('at least 2 nodes');
+    });
+
     it('commits anchor drag as a single undoable node-edit command', async () => {
       await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-drag-anchor-undo" d="M 10 10 L 20 20" /></svg>');
       shapeSelectionService.selectShape({
@@ -2143,8 +2244,7 @@ describe('SvgCanvasComponent', () => {
       });
       const pathEl = fixture.nativeElement.querySelector('#path-drag-anchor-undo') as SVGPathElement;
       const dBefore = pathEl.getAttribute('d') ?? '';
-      component.onCanvasDoubleClick({ target: pathEl } as unknown as MouseEvent);
-      fixture.detectChanges();
+      await activateNodeEditSelectorTool();
 
       const firstAnchor = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]')[0] as Element;
       component.onCanvasMouseDown({
@@ -2183,8 +2283,7 @@ describe('SvgCanvasComponent', () => {
       });
       const pathEl = fixture.nativeElement.querySelector('#path-drag-handle') as SVGPathElement;
       const dBefore = pathEl.getAttribute('d') ?? '';
-      component.onCanvasDoubleClick({ target: pathEl } as unknown as MouseEvent);
-      fixture.detectChanges();
+      await activateNodeEditSelectorTool();
 
       const firstHandle = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-control-handle"]')[0] as Element;
       component.onCanvasMouseDown({
@@ -2220,9 +2319,7 @@ describe('SvgCanvasComponent', () => {
         strokeWidth: 0,
         opacity: 1
       });
-      const pathEl = fixture.nativeElement.querySelector('#path-esc') as Element;
-      component.onCanvasDoubleClick({ target: pathEl } as unknown as MouseEvent);
-      fixture.detectChanges();
+      await activateNodeEditSelectorTool();
       expect(component.isPathNodeEditModeActive).toBe(true);
 
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
@@ -2244,10 +2341,8 @@ describe('SvgCanvasComponent', () => {
         strokeWidth: 0,
         opacity: 1
       });
-      const pathEl = fixture.nativeElement.querySelector('#path-out') as Element;
       const otherEl = fixture.nativeElement.querySelector('#other') as Element;
-      component.onCanvasDoubleClick({ target: pathEl } as unknown as MouseEvent);
-      fixture.detectChanges();
+      await activateNodeEditSelectorTool();
       expect(component.isPathNodeEditModeActive).toBe(true);
 
       component.onCanvasClick({ target: otherEl } as unknown as MouseEvent);
@@ -2278,6 +2373,25 @@ describe('SvgCanvasComponent', () => {
       expect(component.isPathNodeEditModeActive).toBe(false);
     });
 
+    it('does not enter node-edit mode from double-click on path in selector mode', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-no-dbl" d="M 10 10 L 20 20" /></svg>');
+      shapeSelectionService.selectShape({
+        id: 'path-no-dbl',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const pathEl = fixture.nativeElement.querySelector('#path-no-dbl') as Element;
+
+      component.onCanvasDoubleClick({ target: pathEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      expect(component.isPathNodeEditModeActive).toBe(false);
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-path-node-anchor"]')).toBeFalsy();
+    });
+
     it('fails gracefully when selected path data cannot be parsed', async () => {
       await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-bad" d="M 10 10 L ?" /></svg>');
       shapeSelectionService.selectShape({
@@ -2288,12 +2402,7 @@ describe('SvgCanvasComponent', () => {
         strokeWidth: 0,
         opacity: 1
       });
-      const pathEl = fixture.nativeElement.querySelector('#path-bad') as Element;
-
-      expect(() => {
-        component.onCanvasDoubleClick({ target: pathEl } as unknown as MouseEvent);
-      }).not.toThrow();
-      fixture.detectChanges();
+      await activateNodeEditSelectorTool();
 
       expect(component.isPathNodeEditModeActive).toBe(true);
       const anchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
