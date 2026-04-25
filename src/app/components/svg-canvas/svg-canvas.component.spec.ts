@@ -2471,6 +2471,152 @@ describe('SvgCanvasComponent', () => {
       expect(preventDefault).not.toHaveBeenCalled();
     });
 
+    it('pen tool inserts a node on an existing path line segment', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="pen-insert-line" d="M 0 0 L 100 0" fill="none" stroke="black"/></svg>'
+      );
+      const pathEl = fixture.nativeElement.querySelector('#pen-insert-line') as SVGPathElement | null;
+      expect(pathEl).toBeTruthy();
+
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 4,
+        detail: 1,
+        target: pathEl,
+        preventDefault
+      } as unknown as MouseEvent);
+
+      expect(preventDefault).toHaveBeenCalled();
+      const d = pathEl?.getAttribute('d') ?? '';
+      const ls = (d.match(/\bL\b/g) ?? []).length;
+      expect(ls).toBeGreaterThanOrEqual(2);
+      expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toContain('pen-insert-line');
+    });
+
+    it('pen tool inserts a node on a cubic segment', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="pen-insert-cubic" d="M 0 0 C 0 50 100 50 100 0" fill="none" stroke="black"/></svg>'
+      );
+      const pathEl = fixture.nativeElement.querySelector('#pen-insert-cubic') as SVGPathElement | null;
+      expect(pathEl).toBeTruthy();
+
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 38,
+        detail: 1,
+        target: pathEl,
+        preventDefault
+      } as unknown as MouseEvent);
+
+      expect(preventDefault).toHaveBeenCalled();
+      const d = pathEl?.getAttribute('d') ?? '';
+      expect((d.match(/\bC\b/g) ?? []).length).toBe(2);
+    });
+
+    it('pen tool does not insert when click is off the stroke', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="pen-miss" d="M 0 0 L 100 0" fill="none" stroke="black"/></svg>'
+      );
+      const pathEl = fixture.nativeElement.querySelector('#pen-miss') as SVGPathElement | null;
+      expect(pathEl).toBeTruthy();
+      const before = pathEl?.getAttribute('d');
+
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 40,
+        detail: 1,
+        target: pathEl,
+        preventDefault
+      } as unknown as MouseEvent);
+
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(pathEl?.getAttribute('d')).toBe(before);
+    });
+
+    it('pen tool does not insert on paths with unsupported commands', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="pen-bad-cmd" d="M 0 0 Q 20 20 40 0 L 80 0" fill="none" stroke="black"/></svg>'
+      );
+      const pathEl = fixture.nativeElement.querySelector('#pen-bad-cmd') as SVGPathElement | null;
+      expect(pathEl).toBeTruthy();
+      const before = pathEl?.getAttribute('d');
+
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 70,
+        clientY: 2,
+        detail: 1,
+        target: pathEl,
+        preventDefault
+      } as unknown as MouseEvent);
+
+      expect(preventDefault).not.toHaveBeenCalled();
+      expect(pathEl?.getAttribute('d')).toBe(before);
+    });
+
+    it('pen path insert is a single undo step', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="pen-undo-line" d="M 0 0 L 100 0" fill="none" stroke="black"/></svg>'
+      );
+      const pathEl = fixture.nativeElement.querySelector('#pen-undo-line') as SVGPathElement | null;
+      const before = pathEl?.getAttribute('d');
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 40,
+        clientY: 3,
+        detail: 1,
+        target: pathEl,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(pathEl?.getAttribute('d')).not.toBe(before);
+      editorHistoryService.undo();
+      fixture.detectChanges();
+      expect(pathEl?.getAttribute('d')).toBe(before);
+    });
+
+    it('pen tool does not insert on path while a pen stroke is in progress', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="pen-busy" d="M 0 50 L 100 50" fill="none" stroke="black"/></svg>'
+      );
+      const pathEl = fixture.nativeElement.querySelector('#pen-busy') as SVGPathElement | null;
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg') as Element | null;
+      expect(pathEl).toBeTruthy();
+      expect(svgRoot).toBeTruthy();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 5,
+        clientY: 5,
+        detail: 1,
+        target: svgRoot,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      const before = pathEl?.getAttribute('d');
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 50,
+        detail: 1,
+        target: pathEl,
+        preventDefault
+      } as unknown as MouseEvent);
+
+      expect(pathEl?.getAttribute('d')).toBe(before);
+      expect(preventDefault).not.toHaveBeenCalled();
+    });
+
     it('accepts pen mousedown on empty canvas background', async () => {
       await loadSvgAndPenMode('<svg viewBox="0 0 100 100"><rect id="existing-shape" x="10" y="10" width="20" height="20"/></svg>');
       const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg') as Element | null;

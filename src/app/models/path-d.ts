@@ -233,3 +233,14 @@ export function pathSegmentsToD(segments: readonly PathSegment[]): string {
   }
   return parts.join(' ');
 }
+
+/**
+ * Parsed segments suitable for node editing / pen insert: no parse errors and starts with moveto.
+ */
+export function parsePathDForNodeEditing(pathData: string): PathSegment[] | null {
+  const parsed = parsePathD(pathData);
+  if (parsed.errors.length > 0) return null;
+  if (parsed.segments.length === 0) return null;
+  if (parsed.segments[0].type !== 'M') return null;
+  return parsed.segments;
+}

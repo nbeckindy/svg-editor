@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePathD, pathSegmentsToD } from './path-d';
+import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD } from './path-d';
 
 describe('parsePathD', () => {
   it('parses absolute M/L/C/Z commands', () => {
@@ -54,6 +54,21 @@ describe('parsePathD', () => {
     const result = parsePathD('M 0 0 Q 10 10 20 20 L 30 40');
     expect(result.segments).toEqual([{ type: 'M', x: 0, y: 0 }, { type: 'L', x: 30, y: 40 }]);
     expect(result.errors).toContain('Unsupported path command "Q".');
+  });
+});
+
+describe('parsePathDForNodeEditing', () => {
+  it('returns segments when path is clean M/L/C/Z', () => {
+    const s = parsePathDForNodeEditing('M 0 0 L 10 0 Z');
+    expect(s).toEqual([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 10, y: 0 },
+      { type: 'Z' }
+    ]);
+  });
+
+  it('returns null when parse errors exist', () => {
+    expect(parsePathDForNodeEditing('M 0 0 Q 1 1 2 2')).toBeNull();
   });
 });
 
