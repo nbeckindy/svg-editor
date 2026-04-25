@@ -38,7 +38,8 @@ import {
   penPathSegmentsToD,
   penSvgDistanceSq
 } from '../../models/pen-path';
-import { parsePathD, pathSegmentsToD, type PathSegment } from '../../models/path-d';
+import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
+import { insertPenNodeOnParsedPath } from '../../models/path-pen-insert';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
@@ -1538,6 +1539,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       if (!this.svgContent() || !this.canvasView.isInitialized()) return;
       const penTarget = event.target as Element | null;
       if (penTarget && this.isEditorContentShapeTarget(penTarget)) {
+        if (
+          this.penSession.getSegments().length === 0 &&
+          !this.penPendingSegment &&
+          this.tryPenInsertNodeOnPath(penTarget, event)
+        ) {
+          event.preventDefault();
+          return;
+        }
         return;
       }
       const pt = this.clientToEditorSvgPoint(event.clientX, event.clientY);
@@ -2180,20 +2189,31 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       moveSegment.x2 += dx;
       moveSegment.y2 += dy;
     }
+    if (moveSegment.type === 'Q') {
+      moveSegment.x1 += dx;
+      moveSegment.y1 += dy;
+    }
 
     for (const segment of segments) {
-      if (segment.type !== 'C') continue;
-      if (segment.x === oldX && segment.y === oldY) {
+      if (segment.type === 'C' && segment.x === oldX && segment.y === oldY) {
         segment.x2 += dx;
         segment.y2 += dy;
+      }
+      if (segment.type === 'Q' && segment.x === oldX && segment.y === oldY) {
+        segment.x1 += dx;
+        segment.y1 += dy;
       }
     }
 
     for (let i = 1; i < segments.length; i++) {
       const previous = segments[i - 1];
       const segment = segments[i];
-      if (segment.type !== 'C' || previous.type === 'Z') continue;
-      if (previous.x === oldX && previous.y === oldY) {
+      if (previous.type === 'Z') continue;
+      if (previous.x !== oldX || previous.y !== oldY) continue;
+      if (segment.type === 'C') {
+        segment.x1 += dx;
+        segment.y1 += dy;
+      } else if (segment.type === 'Q') {
         segment.x1 += dx;
         segment.y1 += dy;
       }
@@ -2204,7 +2224,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const handle = this.pathNodeEditState?.controlHandles[handleIndex];
     if (!handle) return;
     const segment = segments[handle.segmentIndex];
-    if (!segment || segment.type !== 'C') return;
+    if (!segment) return;
+    if (segment.type === 'Q') {
+      if (handle.controlPoint === 'x1y1') {
+        segment.x1 = x;
+        segment.y1 = y;
+      }
+      return;
+    }
+    if (segment.type !== 'C') return;
     if (handle.controlPoint === 'x1y1') {
       segment.x1 = x;
       segment.y1 = y;
@@ -2226,7 +2254,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!parsed) {
       return {
         state: null,
-        reason: 'Node editing supports only clean M/L/C/Z path commands.'
+        reason: 'Node editing supports only clean M/L/C/Q/T/Z path commands (smooth T is stored as Q).'
       };
     }
     return {
@@ -2240,11 +2268,75 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private parsePathDataForNodeEditing(pathData: string): PathSegment[] | null {
-    const parsed = parsePathD(pathData);
-    if (parsed.errors.length > 0) return null;
-    if (parsed.segments.length === 0) return null;
-    if (parsed.segments[0].type !== 'M') return null;
-    return parsed.segments;
+    return parsePathDForNodeEditing(pathData);
+  }
+
+  /** ~10px in root SVG user units for pen path insert hit testing. */
+  private getPenPathInsertToleranceSvg(): number {
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) return 8;
+    const vb = this.parseOverlayViewBox();
+    const r = mainSvg.getBoundingClientRect();
+    if (!vb || r.width <= 0 || r.height <= 0) return 8;
+    const svgPerPx = (vb.vbW / r.width + vb.vbH / r.height) / 2;
+    return 10 * svgPerPx;
+  }
+
+  /**
+   * Pen tool: insert an anchor on an existing path when the user clicks near a segment (gh9).
+   * @returns true when a node was inserted (caller should preventDefault).
+   */
+  private tryPenInsertNodeOnPath(pathElement: Element, event: MouseEvent): boolean {
+    if (event.detail !== 1) return false;
+    if (this.penSession.getSegments().length > 0 || this.penPendingSegment) return false;
+    if (pathElement.tagName?.toLowerCase() !== 'path' || !pathElement.id) return false;
+
+    const pt = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+    if (!pt) return false;
+
+    const pathId = pathElement.id;
+    const svg = this.svgManipulation.getSVGInstance();
+    const pathNode = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
+    if (!pathNode) return false;
+
+    const oldD = pathNode.getAttribute('d') ?? '';
+    const parsed = parsePathDForNodeEditing(oldD);
+    if (!parsed) return false;
+
+    const tol = this.getPenPathInsertToleranceSvg();
+    const maxDistSq = tol * tol;
+    const next = insertPenNodeOnParsedPath(parsed, pt.x, pt.y, maxDistSq);
+    if (!next) return false;
+
+    const newD = pathSegmentsToD(next);
+    if (newD === oldD || !this.isValidNodeEditSerializedPath(newD)) return false;
+
+    this.svgManipulation.updatePathData(pathId, newD);
+    const cmd = new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true);
+    this.editorHistory.pushAndExecute(cmd);
+
+    const el = svg?.findOne(`#${pathId}`) as SVGElement | undefined;
+    if (el) {
+      this.shapeSelection.selectShape(this.svgManipulation.getShapeProperties(el));
+    }
+    const shapeBbox = this.svgManipulation.getShapeBBox(pathId);
+    if (shapeBbox) {
+      this.lastBbox = shapeBbox;
+      this._highlightRectCacheKey = '';
+    }
+
+    if (this.pathNodeEditState?.pathId === pathId) {
+      const refreshed = this.buildPathNodeEditState(pathId);
+      if (refreshed.state) {
+        this.pathNodeEditState = refreshed.state;
+        this.selectedPathNodeMoveSegmentIndex = null;
+      } else {
+        this.exitPathNodeEditMode();
+      }
+    }
+
+    this.cdr.markForCheck();
+    return true;
   }
 
   private isValidNodeEditSerializedPath(pathData: string): boolean {
@@ -2283,6 +2375,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         continue;
       }
       if (segment.type === 'C') {
+        const point = {
+          x: segment.x,
+          y: segment.y,
+          segmentIndex,
+          moveSegmentIndex: segmentIndex
+        };
+        anchors.push(point);
+        current = point;
+        continue;
+      }
+      if (segment.type === 'Q') {
         const point = {
           x: segment.x,
           y: segment.y,
@@ -2348,6 +2451,20 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
           segmentIndex,
           controlPoint: 'x2y2'
         });
+        current = { x: segment.x, y: segment.y, segmentIndex, moveSegmentIndex: segmentIndex };
+        continue;
+      }
+      if (segment.type === 'Q') {
+        if (current) {
+          handles.push({
+            anchorX: current.x,
+            anchorY: current.y,
+            controlX: segment.x1,
+            controlY: segment.y1,
+            segmentIndex,
+            controlPoint: 'x1y1'
+          });
+        }
         current = { x: segment.x, y: segment.y, segmentIndex, moveSegmentIndex: segmentIndex };
         continue;
       }

@@ -51,9 +51,39 @@ describe('parsePathD', () => {
   });
 
   it('reports unsupported commands as errors', () => {
-    const result = parsePathD('M 0 0 Q 10 10 20 20 L 30 40');
+    const result = parsePathD('M 0 0 S 10 10 20 20 L 30 40');
     expect(result.segments).toEqual([{ type: 'M', x: 0, y: 0 }, { type: 'L', x: 30, y: 40 }]);
-    expect(result.errors).toContain('Unsupported path command "Q".');
+    expect(result.errors).toContain('Unsupported path command "S".');
+  });
+
+  it('parses absolute Q and normalizes T using reflected control', () => {
+    const result = parsePathD('M 0 0 Q 5 10 10 0 T 20 0');
+    expect(result.errors).toEqual([]);
+    expect(result.segments).toEqual([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'Q', x1: 5, y1: 10, x: 10, y: 0 },
+      { type: 'Q', x1: 15, y1: -10, x: 20, y: 0 }
+    ]);
+  });
+
+  it('parses relative q and t', () => {
+    const result = parsePathD('M 10 10 q 5 5 5 0 t 5 0');
+    expect(result.errors).toEqual([]);
+    expect(result.segments).toEqual([
+      { type: 'M', x: 10, y: 10 },
+      { type: 'Q', x1: 15, y1: 15, x: 15, y: 10 },
+      { type: 'Q', x1: 15, y1: 5, x: 20, y: 10 }
+    ]);
+  });
+
+  it('round-trips mixed M L C Q Z', () => {
+    const d = 'M 0 0 L 10 0 Q 15 10 20 0 C 25 0 30 5 30 10 Z';
+    const parsed = parsePathD(d);
+    expect(parsed.errors).toEqual([]);
+    const out = pathSegmentsToD(parsed.segments);
+    const again = parsePathD(out);
+    expect(again.errors).toEqual([]);
+    expect(again.segments).toEqual(parsed.segments);
   });
 });
 
@@ -67,8 +97,15 @@ describe('parsePathDForNodeEditing', () => {
     ]);
   });
 
+  it('returns segments when path includes Q/T', () => {
+    const s = parsePathDForNodeEditing('M 0 0 Q 5 10 10 0 T 15 0 Z');
+    expect(s?.length).toBe(4);
+    expect(s?.[1]).toEqual({ type: 'Q', x1: 5, y1: 10, x: 10, y: 0 });
+    expect(s?.[2].type).toBe('Q');
+  });
+
   it('returns null when parse errors exist', () => {
-    expect(parsePathDForNodeEditing('M 0 0 Q 1 1 2 2')).toBeNull();
+    expect(parsePathDForNodeEditing('M 0 0 A 1 1 0 0 0 5 0')).toBeNull();
   });
 });
 

@@ -2408,12 +2408,12 @@ describe('SvgCanvasComponent', () => {
       const anchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
       expect(anchors.length).toBe(0);
       const feedback = fixture.nativeElement.querySelector('[data-testid="canvas-path-node-edit-feedback"]');
-      expect((feedback as HTMLElement | null)?.textContent ?? '').toContain('M/L/C/Z');
+      expect((feedback as HTMLElement | null)?.textContent ?? '').toContain('Node editing supports');
     });
 
     it('does not enter node-edit mode for unsupported path commands and keeps original d', async () => {
       await loadSvgForSelector(
-        '<svg viewBox="0 0 100 100"><path id="path-unsupported" d="M 10 10 Q 20 20 30 10 L 40 20" /></svg>'
+        '<svg viewBox="0 0 100 100"><path id="path-unsupported" d="M 10 10 A 10 10 0 0 1 40 10" /></svg>'
       );
       shapeSelectionService.selectShape({
         id: 'path-unsupported',
@@ -2431,7 +2431,67 @@ describe('SvgCanvasComponent', () => {
       expect(pathEl.getAttribute('d')).toBe(beforeD);
       expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBe(0);
       const feedback = fixture.nativeElement.querySelector('[data-testid="canvas-path-node-edit-feedback"]');
-      expect((feedback as HTMLElement | null)?.textContent ?? '').toContain('M/L/C/Z');
+      expect((feedback as HTMLElement | null)?.textContent ?? '').toContain('Node editing supports');
+    });
+
+    it('enters node-edit mode for quadratic Q and smooth T segments', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-q" d="M 10 10 Q 20 5 30 10 T 50 10 L 60 10" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-q',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+
+      expect(component.isPathNodeEditModeActive).toBe(true);
+      const anchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
+      const handles = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-control-handle"]');
+      expect(anchors.length).toBe(4);
+      expect(handles.length).toBe(2);
+    });
+
+    it('drags a quadratic control handle with undo/redo as one drag operation', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-q-handle" d="M 10 10 Q 20 5 30 10" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-q-handle',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const pathEl = fixture.nativeElement.querySelector('#path-q-handle') as SVGPathElement;
+      const dBefore = pathEl.getAttribute('d') ?? '';
+      await activateNodeEditSelectorTool();
+
+      const firstHandle = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-control-handle"]')[0] as Element;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 5,
+        target: firstHandle,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 22, clientY: 8 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 22, clientY: 8 } as MouseEvent);
+
+      const dAfter = pathEl.getAttribute('d') ?? '';
+      expect(dAfter).not.toBe(dBefore);
+      expect(dAfter).toContain('Q 22 8');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+      expect(pathEl.getAttribute('d')).toBe(dBefore);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Z', ctrlKey: true, shiftKey: true, bubbles: true }));
+      expect(pathEl.getAttribute('d')).toBe(dAfter);
     });
   });
 
@@ -2541,7 +2601,7 @@ describe('SvgCanvasComponent', () => {
 
     it('pen tool does not insert on paths with unsupported commands', async () => {
       await loadSvgAndPenMode(
-        '<svg viewBox="0 0 100 100"><path id="pen-bad-cmd" d="M 0 0 Q 20 20 40 0 L 80 0" fill="none" stroke="black"/></svg>'
+        '<svg viewBox="0 0 100 100"><path id="pen-bad-cmd" d="M 0 0 A 10 10 0 0 1 40 0 L 80 0" fill="none" stroke="black"/></svg>'
       );
       const pathEl = fixture.nativeElement.querySelector('#pen-bad-cmd') as SVGPathElement | null;
       expect(pathEl).toBeTruthy();

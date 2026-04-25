@@ -221,6 +221,9 @@ function pointBeforeSegmentIndex(
     } else if (s.type === 'C') {
       cx = s.x;
       cy = s.y;
+    } else if (s.type === 'Q') {
+      cx = s.x;
+      cy = s.y;
     } else if (s.type === 'Z') {
       cx = subpathStart.x;
       cy = subpathStart.y;

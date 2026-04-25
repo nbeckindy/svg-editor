@@ -1,6 +1,7 @@
 import type { PenPathSegment } from './pen-path';
 
-export type PathSegment = PenPathSegment | { type: 'Z' };
+/** Parsed absolute segments for editing; `Q` stores quadratic control + end (smooth `T` is normalized to `Q`). */
+export type PathSegment = PenPathSegment | { type: 'Z' } | { type: 'Q'; x1: number; y1: number; x: number; y: number };
 
 export interface ParsePathDResult {
   segments: PathSegment[];
@@ -58,7 +59,8 @@ function isNumberToken(token: PathToken | undefined): token is { kind: 'number';
 /**
  * Parse SVG `d` path data into absolute segments.
  *
- * MVP supports M/L/C/Z (uppercase + lowercase). Unsupported commands are reported in `errors`.
+ * Supports M/L/C/Q/T/Z (uppercase + lowercase); smooth `T`/`t` is normalized to explicit `Q`.
+ * Unsupported commands are reported in `errors`.
  * Parser is tolerant by design: it never throws and returns any valid prefix it can parse.
  */
 export function parsePathD(pathData: string): ParsePathDResult {
@@ -75,6 +77,14 @@ export function parsePathD(pathData: string): ParsePathDResult {
   let subpathStartX = 0;
   let subpathStartY = 0;
   let hasMoveto = false;
+  /** Absolute quadratic control used for implicit `T` reflection (SVG: defaults to current point). */
+  let lastQuadAbsX = 0;
+  let lastQuadAbsY = 0;
+
+  const syncQuadToCurrent = (): void => {
+    lastQuadAbsX = currentX;
+    lastQuadAbsY = currentY;
+  };
 
   const readNumber = (): number | null => {
     const token = tokens[index];
@@ -108,7 +118,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
     const upper = command.toUpperCase();
     const relative = command !== upper;
 
-    if (upper !== 'M' && upper !== 'L' && upper !== 'C' && upper !== 'Z') {
+    if (upper !== 'M' && upper !== 'L' && upper !== 'C' && upper !== 'Z' && upper !== 'Q' && upper !== 'T') {
       errors.push(`Unsupported path command "${command}".`);
       activeCommand = null;
       skipNumbersUntilNextCommand();
@@ -123,6 +133,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
       segments.push({ type: 'Z' });
       currentX = subpathStartX;
       currentY = subpathStartY;
+      syncQuadToCurrent();
       continue;
     }
 
@@ -140,6 +151,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
       subpathStartY = absY;
       hasMoveto = true;
       activeCommand = relative ? 'l' : 'L';
+      syncQuadToCurrent();
 
       while (isNumberToken(tokens[index])) {
         const lineX = readNumber();
@@ -150,6 +162,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
         segments.push({ type: 'L', x: absoluteLineX, y: absoluteLineY });
         currentX = absoluteLineX;
         currentY = absoluteLineY;
+        syncQuadToCurrent();
       }
       continue;
     }
@@ -170,6 +183,51 @@ export function parsePathD(pathData: string): ParsePathDResult {
         const absX = relative ? currentX + x : x;
         const absY = relative ? currentY + y : y;
         segments.push({ type: 'L', x: absX, y: absY });
+        currentX = absX;
+        currentY = absY;
+        syncQuadToCurrent();
+      }
+      if (!consumedAny) errors.push(`Command ${command} is missing coordinate pairs.`);
+      continue;
+    }
+
+    if (upper === 'Q') {
+      let consumedAny = false;
+      while (isNumberToken(tokens[index])) {
+        consumedAny = true;
+        const x1 = readNumber();
+        const y1 = readNumber();
+        const x = readNumber();
+        const y = readNumber();
+        if (x1 === null || y1 === null || x === null || y === null) break;
+        const absX1 = relative ? currentX + x1 : x1;
+        const absY1 = relative ? currentY + y1 : y1;
+        const absX = relative ? currentX + x : x;
+        const absY = relative ? currentY + y : y;
+        segments.push({ type: 'Q', x1: absX1, y1: absY1, x: absX, y: absY });
+        lastQuadAbsX = absX1;
+        lastQuadAbsY = absY1;
+        currentX = absX;
+        currentY = absY;
+      }
+      if (!consumedAny) errors.push(`Command ${command} is missing quadratic coordinate tuples.`);
+      continue;
+    }
+
+    if (upper === 'T') {
+      let consumedAny = false;
+      while (isNumberToken(tokens[index])) {
+        consumedAny = true;
+        const x = readNumber();
+        const y = readNumber();
+        if (x === null || y === null) break;
+        const absX = relative ? currentX + x : x;
+        const absY = relative ? currentY + y : y;
+        const cx = 2 * currentX - lastQuadAbsX;
+        const cy = 2 * currentY - lastQuadAbsY;
+        segments.push({ type: 'Q', x1: cx, y1: cy, x: absX, y: absY });
+        lastQuadAbsX = cx;
+        lastQuadAbsY = cy;
         currentX = absX;
         currentY = absY;
       }
@@ -196,6 +254,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
       segments.push({ type: 'C', x1: absX1, y1: absY1, x2: absX2, y2: absY2, x: absX, y: absY });
       currentX = absX;
       currentY = absY;
+      syncQuadToCurrent();
     }
     if (!consumedAny) errors.push(`Command ${command} is missing cubic coordinate tuples.`);
   }
@@ -224,6 +283,16 @@ export function pathSegmentsToD(segments: readonly PathSegment[]): string {
         formatCoord(segment.y1),
         formatCoord(segment.x2),
         formatCoord(segment.y2),
+        formatCoord(segment.x),
+        formatCoord(segment.y)
+      );
+      continue;
+    }
+    if (segment.type === 'Q') {
+      parts.push(
+        'Q',
+        formatCoord(segment.x1),
+        formatCoord(segment.y1),
         formatCoord(segment.x),
         formatCoord(segment.y)
       );
