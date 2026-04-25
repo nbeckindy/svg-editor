@@ -2,6 +2,7 @@ import { parsePathD, pathSegmentsToD, type PathSegment } from './path-d';
 
 const DEFAULT_MIN_T = 0.02;
 const DEFAULT_MAX_T = 0.98;
+const QUADRATIC_SEARCH_STEPS = 80;
 const CUBIC_SEARCH_STEPS = 96;
 
 function distSq(ax: number, ay: number, bx: number, by: number): number {
@@ -101,8 +102,75 @@ function closestPointOnCubic(
   return { t: bestT, x: bestX, y: bestY, distSq: bestD };
 }
 
+function quadraticPoint(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  t: number
+): { x: number; y: number } {
+  const u = 1 - t;
+  return {
+    x: u * u * x0 + 2 * u * t * x1 + t * t * x2,
+    y: u * u * y0 + 2 * u * t * y1 + t * t * y2
+  };
+}
+
+function closestPointOnQuadratic(
+  x0: number,
+  y0: number,
+  x1: number,
+  y1: number,
+  x2: number,
+  y2: number,
+  px: number,
+  py: number
+): { t: number; x: number; y: number; distSq: number } {
+  let bestT = 0;
+  let bestD = Infinity;
+  let bestX = x0;
+  let bestY = y0;
+  const steps = QUADRATIC_SEARCH_STEPS;
+  for (let i = 0; i <= steps; i++) {
+    const t = i / steps;
+    const p = quadraticPoint(x0, y0, x1, y1, x2, y2, t);
+    const d = distSq(p.x, p.y, px, py);
+    if (d < bestD) {
+      bestD = d;
+      bestT = t;
+      bestX = p.x;
+      bestY = p.y;
+    }
+  }
+  const delta = 1 / (steps * 8);
+  for (let r = 0; r < 6; r++) {
+    const tL = Math.max(0, bestT - delta);
+    const tR = Math.min(1, bestT + delta);
+    const pL = quadraticPoint(x0, y0, x1, y1, x2, y2, tL);
+    const pR = quadraticPoint(x0, y0, x1, y1, x2, y2, tR);
+    const dL = distSq(pL.x, pL.y, px, py);
+    const dR = distSq(pR.x, pR.y, px, py);
+    if (dL < bestD) {
+      bestD = dL;
+      bestT = tL;
+      bestX = pL.x;
+      bestY = pL.y;
+    }
+    if (dR < bestD) {
+      bestD = dR;
+      bestT = tR;
+      bestX = pR.x;
+      bestY = pR.y;
+    }
+  }
+  return { t: bestT, x: bestX, y: bestY, distSq: bestD };
+}
+
 export type PenPathInsertHit =
   | { kind: 'L'; segmentIndex: number; x: number; y: number }
+  | { kind: 'Q'; segmentIndex: number; t: number }
   | { kind: 'C'; segmentIndex: number; t: number }
   | { kind: 'Z'; segmentIndex: number; x: number; y: number };
 
@@ -144,6 +212,11 @@ export function findPenPathInsertHit(
     if (seg.type === 'L') {
       const cp = closestPointOnSegment(cx, cy, seg.x, seg.y, px, py);
       consider({ kind: 'L', segmentIndex: i, x: cp.x, y: cp.y }, cp.distSq, cp.t);
+      cx = seg.x;
+      cy = seg.y;
+    } else if (seg.type === 'Q') {
+      const cp = closestPointOnQuadratic(cx, cy, seg.x1, seg.y1, seg.x, seg.y, px, py);
+      consider({ kind: 'Q', segmentIndex: i, t: cp.t }, cp.distSq, cp.t);
       cx = seg.x;
       cy = seg.y;
     } else if (seg.type === 'C') {
@@ -199,6 +272,35 @@ function splitCubicAtT(
   return [first, second];
 }
 
+function splitQuadraticAtT(
+  sx: number,
+  sy: number,
+  seg: Extract<PathSegment, { type: 'Q' }>,
+  t: number
+): [PathSegment, PathSegment] {
+  const p0 = { x: sx, y: sy };
+  const p1 = { x: seg.x1, y: seg.y1 };
+  const p2 = { x: seg.x, y: seg.y };
+  const l01 = { x: p0.x + t * (p1.x - p0.x), y: p0.y + t * (p1.y - p0.y) };
+  const l12 = { x: p1.x + t * (p2.x - p1.x), y: p1.y + t * (p2.y - p1.y) };
+  const l012 = { x: l01.x + t * (l12.x - l01.x), y: l01.y + t * (l12.y - l01.y) };
+  const first: PathSegment = {
+    type: 'Q',
+    x1: l01.x,
+    y1: l01.y,
+    x: l012.x,
+    y: l012.y
+  };
+  const second: PathSegment = {
+    type: 'Q',
+    x1: l12.x,
+    y1: l12.y,
+    x: p2.x,
+    y: p2.y
+  };
+  return [first, second];
+}
+
 function pointBeforeSegmentIndex(
   segments: readonly PathSegment[],
   index: number
@@ -248,6 +350,16 @@ export function applyPenPathInsert(segments: readonly PathSegment[], hit: PenPat
     const i = hit.segmentIndex;
     if (!next[i] || next[i].type !== 'Z') return null;
     next.splice(i, 0, { type: 'L', x: hit.x, y: hit.y });
+    return next;
+  }
+  if (hit.kind === 'Q') {
+    const i = hit.segmentIndex;
+    const seg = next[i];
+    if (!seg || seg.type !== 'Q') return null;
+    const start = pointBeforeSegmentIndex(segments, i);
+    if (!start) return null;
+    const [q1, q2] = splitQuadraticAtT(start.x, start.y, seg, hit.t);
+    next.splice(i, 1, q1, q2);
     return next;
   }
   if (hit.kind === 'C') {

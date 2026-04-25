@@ -31,6 +31,13 @@ describe('path-pen-insert', () => {
     expect(next!.filter((s) => s.type === 'C').length).toBe(2);
   });
 
+  it('insertPenNodeOnParsedPath subdivides a quadratic', () => {
+    const segments = parsePathD('M 0 0 Q 50 80 100 0').segments;
+    const next = insertPenNodeOnParsedPath(segments, 50, 40, 900);
+    expect(next).not.toBeNull();
+    expect(next!.filter((s) => s.type === 'Q').length).toBe(2);
+  });
+
   it('returns null when click is too far from path', () => {
     const segments = parsePathD('M 0 0 L 100 0').segments;
     expect(insertPenNodeOnParsedPath(segments, 50, 50, 4)).toBeNull();

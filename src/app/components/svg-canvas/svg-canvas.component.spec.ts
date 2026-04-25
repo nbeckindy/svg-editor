@@ -2577,6 +2577,28 @@ describe('SvgCanvasComponent', () => {
       expect((d.match(/\bC\b/g) ?? []).length).toBe(2);
     });
 
+    it('pen tool inserts a node on a quadratic segment', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="pen-insert-quad" d="M 0 0 Q 50 80 100 0" fill="none" stroke="black"/></svg>'
+      );
+      const pathEl = fixture.nativeElement.querySelector('#pen-insert-quad') as SVGPathElement | null;
+      expect(pathEl).toBeTruthy();
+
+      const preventDefault = vi.fn();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 38,
+        detail: 1,
+        target: pathEl,
+        preventDefault
+      } as unknown as MouseEvent);
+
+      expect(preventDefault).toHaveBeenCalled();
+      const d = pathEl?.getAttribute('d') ?? '';
+      expect((d.match(/\bQ\b/g) ?? []).length).toBe(2);
+    });
+
     it('pen tool does not insert when click is off the stroke', async () => {
       await loadSvgAndPenMode(
         '<svg viewBox="0 0 100 100"><path id="pen-miss" d="M 0 0 L 100 0" fill="none" stroke="black"/></svg>'
