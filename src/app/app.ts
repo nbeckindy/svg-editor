@@ -1,6 +1,5 @@
 import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { FileUploadComponent } from './components/file-upload/file-upload.component';
 import { IconPaletteComponent } from './components/icon-palette/icon-palette.component';
 import { ToolStripComponent } from './components/tool-strip/tool-strip.component';
 import { SvgCanvasComponent } from './components/svg-canvas/svg-canvas.component';
@@ -17,7 +16,6 @@ import { EditorHistoryService } from './services/editor-history.service';
   imports: [
     CommonModule,
     ToolStripComponent,
-    FileUploadComponent,
     IconPaletteComponent,
     SvgCanvasComponent,
     LayersPanelComponent,
@@ -39,7 +37,7 @@ import { EditorHistoryService } from './services/editor-history.service';
           (click)="onNewCanvas()">
           New
         </button>
-        <app-file-upload data-testid="editor-file-upload" (svgLoaded)="onSVGLoaded($event)" (fileNameLoaded)="uploadedFileName = $event"></app-file-upload>
+        <!-- <app-file-upload data-testid="editor-file-upload" (svgLoaded)="onSVGLoaded($event)" (fileNameLoaded)="uploadedFileName = $event"></app-file-upload> -->
         <button
           type="button"
           class="download-button"
@@ -94,9 +92,6 @@ import { EditorHistoryService } from './services/editor-history.service';
     .toolbar-row app-tool-strip {
       flex-shrink: 0;
       align-self: center;
-    }
-    .toolbar-row app-file-upload {
-      flex-shrink: 0;
     }
     .toolbar-row .new-canvas-btn {
       padding: 10px 20px;
