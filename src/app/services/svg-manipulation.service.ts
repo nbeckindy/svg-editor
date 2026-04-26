@@ -22,6 +22,10 @@ export interface ShapeCreationAttrs {
   strokeWidth?: number;
 }
 import { ArtboardModel, DEFAULT_ARTBOARD } from '../models/artboard.model';
+import {
+  type ClipboardPayload,
+  type ClipboardShapeSnapshot
+} from './clipboard.service';
 import { type ResizeCorner, oppositeCornerForHandle } from '../utils/selection-resize';
 import {
   axisAlignedRectContains,
@@ -41,6 +45,8 @@ const EDITOR_VIEWBOX_RECT_ATTR = 'data-editor-viewbox-rect';
 const EDITOR_OUTSIDE_RECT_ATTR = 'data-editor-outside-rect';
 /** 25% black fill for area outside document viewBox. */
 const OUTSIDE_VIEWBOX_FILL = '#bfbfbf';
+const SVG_NS = 'http://www.w3.org/2000/svg';
+const URL_REF_RE = /url\(\s*(['"]?)#([^)'"\\s]+)\1\s*\)/g;
 
 export interface LayerStackItem {
   id: string;
@@ -1472,6 +1478,145 @@ export class SvgManipulationService {
     }
 
     this.bumpDocumentRevision();
+  }
+
+  createClipboardPayload(shapeIds: string[]): ClipboardPayload {
+    if (!this.svgInstance || shapeIds.length === 0) return { shapes: [] };
+    const orderedIds = this.getShapeIdsInDomOrder(shapeIds);
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    const contentNode = contentGroup?.node as Element | undefined;
+    const children = contentNode ? Array.from(contentNode.children) : [];
+
+    const shapes: ClipboardShapeSnapshot[] = [];
+    for (const id of orderedIds) {
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      const node = shape?.node as Element | undefined;
+      if (!node) continue;
+      const insertionIndex = children.indexOf(node);
+      shapes.push({
+        id,
+        markup: node.outerHTML,
+        insertionIndex: insertionIndex >= 0 ? insertionIndex : undefined
+      });
+    }
+    return { shapes };
+  }
+
+  pasteClipboardPayload(
+    payload: ClipboardPayload,
+    offset: { dx: number; dy: number }
+  ): { insertedIds: string[]; insertedMarkup: string[] } {
+    if (!this.svgInstance || payload.shapes.length === 0) {
+      return { insertedIds: [], insertedMarkup: [] };
+    }
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    const contentNode = contentGroup?.node as Element | undefined;
+    if (!contentNode) return { insertedIds: [], insertedMarkup: [] };
+
+    const usedIds = new Set<string>();
+    contentNode.querySelectorAll('[id]').forEach((el: Element) => {
+      const id = el.id;
+      if (id) usedIds.add(id);
+    });
+
+    const insertedIds: string[] = [];
+    const insertedMarkup: string[] = [];
+
+    for (const shape of payload.shapes) {
+      const wrapper = document.createElementNS(SVG_NS, 'g');
+      wrapper.innerHTML = shape.markup;
+      const root = wrapper.firstElementChild;
+      if (!root) continue;
+
+      const idMap = new Map<string, string>();
+      root.querySelectorAll('[id]').forEach((el) => {
+        const oldId = (el as Element).id;
+        if (!oldId) return;
+        const newId = this.generateUniqueShapeId(usedIds, oldId);
+        idMap.set(oldId, newId);
+      });
+      if (root.id) {
+        const newRootId = this.generateUniqueShapeId(usedIds, root.id);
+        idMap.set(root.id, newRootId);
+      }
+
+      root.querySelectorAll('[id]').forEach((el) => {
+        const mapped = idMap.get((el as Element).id);
+        if (mapped) (el as Element).id = mapped;
+      });
+      if (root.id) {
+        const mapped = idMap.get(root.id);
+        if (mapped) root.id = mapped;
+      }
+
+      this.remapInternalReferences(root, idMap);
+
+      const inserted = root.cloneNode(true) as SVGGraphicsElement;
+      if (offset.dx !== 0 || offset.dy !== 0) {
+        const existing = inserted.getAttribute('transform');
+        const translate = `translate(${offset.dx} ${offset.dy})`;
+        inserted.setAttribute('transform', existing ? `${translate} ${existing}` : translate);
+      }
+
+      contentNode.appendChild(inserted);
+      const insertedId = inserted.id;
+      if (insertedId) insertedIds.push(insertedId);
+
+      try {
+        (inserted as SVGElement).style?.setProperty('cursor', 'pointer');
+      } catch {
+        // jsdom compatibility
+      }
+
+      insertedMarkup.push(inserted.outerHTML);
+    }
+
+    if (insertedIds.length > 0) {
+      this.bumpDocumentRevision();
+    }
+    return { insertedIds, insertedMarkup };
+  }
+
+  private generateUniqueShapeId(usedIds: Set<string>, baseId?: string): string {
+    let newId = '';
+    const normalizedBase = baseId && baseId.trim() ? baseId.trim() : 'shape';
+    do {
+      newId = `${normalizedBase}-copy-${Math.random().toString(36).slice(2, 8)}`;
+    } while (usedIds.has(newId));
+    usedIds.add(newId);
+    return newId;
+  }
+
+  private remapInternalReferences(root: Element, idMap: Map<string, string>): void {
+    const remapValue = (raw: string): string => {
+      let next = raw;
+      next = next.replace(URL_REF_RE, (_match, quote: string, refId: string) => {
+        const mapped = idMap.get(refId);
+        return mapped ? `url(${quote}#${mapped}${quote})` : _match;
+      });
+      if (next.startsWith('#')) {
+        const refId = next.slice(1);
+        const mapped = idMap.get(refId);
+        if (mapped) return `#${mapped}`;
+      }
+      return next;
+    };
+
+    const remapNode = (node: Element): void => {
+      for (const name of node.getAttributeNames()) {
+        const value = node.getAttribute(name);
+        if (!value) continue;
+        const remapped = remapValue(value);
+        if (remapped !== value) {
+          node.setAttribute(name, remapped);
+        }
+      }
+      for (const child of Array.from(node.children)) {
+        remapNode(child);
+      }
+    };
+
+    remapNode(root);
   }
 
   /**

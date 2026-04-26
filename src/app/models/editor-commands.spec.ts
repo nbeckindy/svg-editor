@@ -19,6 +19,8 @@ import {
   AddShapeCommand,
   AddPathCommand,
   EditPathNodesCommand,
+  PasteCommand,
+  DuplicateCommand,
   type EditorCommand,
 } from './editor-commands';
 import { ShapeSelectionService } from '../services/shape-selection.service';
@@ -41,6 +43,8 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     groupSelectedElements: vi.fn(),
     ungroupElement: vi.fn(),
     removeShapes: vi.fn(),
+    createClipboardPayload: vi.fn().mockReturnValue({ shapes: [] }),
+    pasteClipboardPayload: vi.fn().mockReturnValue({ insertedIds: [], insertedMarkup: [] }),
     updatePathData: vi.fn(),
     getSVGInstance: vi.fn().mockReturnValue(null),
     ...overrides,
@@ -833,5 +837,81 @@ describe('EditPathNodesCommand', () => {
 
     expect(svc.updatePathData).toHaveBeenNthCalledWith(1, 'p1', 'M 0 0 L 10 10');
     expect(svc.updatePathData).toHaveBeenNthCalledWith(2, 'p1', 'M 0 0 L 20 20');
+  });
+});
+
+describe('PasteCommand', () => {
+  it('executes paste payload, selects inserted shapes, and supports undo/redo', () => {
+    const shapeNode = document.createElement('rect');
+    shapeNode.id = 'shape-copy';
+    const svc = mockSvc({
+      pasteClipboardPayload: vi.fn().mockReturnValue({
+        insertedIds: ['shape-copy'],
+        insertedMarkup: ['<rect id="shape-copy" />']
+      }),
+      insertShapeMarkup: vi.fn(),
+      getSVGInstance: vi.fn().mockReturnValue({
+        findOne: vi.fn().mockReturnValue({ node: shapeNode })
+      }),
+      getShapeProperties: vi.fn().mockReturnValue({ id: 'shape-copy', type: 'rect' })
+    });
+    const selectionSvc = {
+      selectShapes: vi.fn(),
+      clearSelection: vi.fn()
+    } as unknown as ShapeSelectionService;
+
+    const cmd = new PasteCommand(
+      svc,
+      { shapes: [{ id: 'shape-a', markup: '<rect id="shape-a" />' }] },
+      { dx: 10, dy: 10 },
+      selectionSvc
+    );
+    cmd.execute();
+    expect(svc.pasteClipboardPayload).toHaveBeenCalledTimes(1);
+    expect(selectionSvc.selectShapes).toHaveBeenCalled();
+
+    cmd.undo();
+    expect(svc.removeShapes).toHaveBeenCalledWith(['shape-copy']);
+    expect(selectionSvc.clearSelection).toHaveBeenCalled();
+
+    cmd.execute();
+    expect(svc.insertShapeMarkup).toHaveBeenCalledWith('<rect id="shape-copy" />');
+  });
+});
+
+describe('DuplicateCommand', () => {
+  it('duplicates from live snapshot and supports undo/redo', () => {
+    const shapeNode = document.createElement('rect');
+    shapeNode.id = 'shape-dup';
+    const svc = mockSvc({
+      createClipboardPayload: vi.fn().mockReturnValue({
+        shapes: [{ id: 'shape-1', markup: '<rect id="shape-1" />' }]
+      }),
+      pasteClipboardPayload: vi.fn().mockReturnValue({
+        insertedIds: ['shape-dup'],
+        insertedMarkup: ['<rect id="shape-dup" />']
+      }),
+      insertShapeMarkup: vi.fn(),
+      getSVGInstance: vi.fn().mockReturnValue({
+        findOne: vi.fn().mockReturnValue({ node: shapeNode })
+      }),
+      getShapeProperties: vi.fn().mockReturnValue({ id: 'shape-dup', type: 'rect' })
+    });
+    const selectionSvc = {
+      selectShapes: vi.fn(),
+      clearSelection: vi.fn()
+    } as unknown as ShapeSelectionService;
+
+    const cmd = new DuplicateCommand(svc, ['shape-1'], { dx: 10, dy: 10 }, selectionSvc);
+    cmd.execute();
+    expect(svc.createClipboardPayload).toHaveBeenCalledWith(['shape-1']);
+    expect(svc.pasteClipboardPayload).toHaveBeenCalledTimes(1);
+    expect(selectionSvc.selectShapes).toHaveBeenCalled();
+
+    cmd.undo();
+    expect(svc.removeShapes).toHaveBeenCalledWith(['shape-dup']);
+
+    cmd.execute();
+    expect(svc.insertShapeMarkup).toHaveBeenCalledWith('<rect id="shape-dup" />');
   });
 });

@@ -5,6 +5,7 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { CanvasViewService } from '../../services/canvas-view.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
+import { ClipboardService } from '../../services/clipboard.service';
 
 /** Mock SVG.js shape with clone() for drag-ghost tests. clone() returns a real DOM node so SVG.js add() can adopt it. */
 function mockSvgJsShape(
@@ -42,6 +43,7 @@ describe('SvgCanvasComponent', () => {
   let editorToolService: EditorToolService;
   let canvasViewService: CanvasViewService;
   let editorHistoryService: EditorHistoryService;
+  let clipboardService: ClipboardService;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
@@ -61,6 +63,7 @@ describe('SvgCanvasComponent', () => {
     editorToolService = TestBed.inject(EditorToolService);
     canvasViewService = TestBed.inject(CanvasViewService);
     editorHistoryService = TestBed.inject(EditorHistoryService);
+    clipboardService = TestBed.inject(ClipboardService);
   });
 
   it('should create', () => {
@@ -3488,6 +3491,161 @@ describe('SvgCanvasComponent', () => {
       expect(removeSpy).toHaveBeenCalledWith(['r1', 'r2']);
       expect(shapeSelectionService.getSelectedShapes().length).toBe(0);
       removeSpy.mockRestore();
+    });
+
+    it('Ctrl/Cmd+C stores selection in internal clipboard without mutating document', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const removeSpy = vi.spyOn(svgManipulationService, 'removeShapes');
+      const before = fixture.nativeElement.querySelectorAll('#r1').length;
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'c', metaKey: true, bubbles: true }));
+
+      expect(clipboardService.hasContent()).toBe(true);
+      expect(removeSpy).not.toHaveBeenCalled();
+      expect(fixture.nativeElement.querySelectorAll('#r1').length).toBe(before);
+      removeSpy.mockRestore();
+    });
+
+    it('Ctrl+X cuts as one undoable step', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'x', ctrlKey: true, bubbles: true }));
+      expect(fixture.nativeElement.querySelector('#r1')).toBeNull();
+      expect(clipboardService.hasContent()).toBe(true);
+
+      editorHistoryService.undo();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('#r1')).not.toBeNull();
+    });
+
+    it('Ctrl+V pastes with incremental offset and selects pasted shape', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
+      fixture.detectChanges();
+
+      const rects = Array.from(
+        fixture.nativeElement.querySelector('[data-editor-content-group]').querySelectorAll('rect')
+      );
+      expect(rects.length).toBe(3);
+      const transforms = rects.map((node: Element) => node.getAttribute('transform') ?? '');
+      expect(transforms.some((value) => value.includes('translate(10 10)'))).toBe(true);
+      expect(transforms.some((value) => value.includes('translate(20 20)'))).toBe(true);
+      expect(shapeSelectionService.getSelectedShapes().length).toBe(1);
+    });
+
+    it('Ctrl+D duplicates without changing clipboard contents', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+      const beforeClipboard = clipboardService.get();
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'd', ctrlKey: true, bubbles: true }));
+      fixture.detectChanges();
+
+      const rects = fixture.nativeElement
+        .querySelector('[data-editor-content-group]')
+        .querySelectorAll('rect');
+      expect(rects.length).toBe(2);
+      expect(clipboardService.get()).toEqual(beforeClipboard);
+    });
+
+    it('clipboard shortcuts are ignored in non-selector tool and input fields', async () => {
+      editorToolService.setTool('zoom');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'c', ctrlKey: true, bubbles: true }));
+      expect(clipboardService.hasContent()).toBe(false);
+
+      editorToolService.setTool('selector');
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      try {
+        const ev = new KeyboardEvent('keydown', { key: 'x', ctrlKey: true, bubbles: true });
+        Object.defineProperty(ev, 'target', { value: input, enumerable: true });
+        component.onKeyDown(ev);
+        expect(fixture.nativeElement.querySelector('#r1')).not.toBeNull();
+      } finally {
+        input.remove();
+      }
     });
   });
 });

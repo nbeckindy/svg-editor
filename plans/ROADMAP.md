@@ -20,7 +20,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | Order | Epic | Slug | bd status | Progress | Depends on |
 |------:|------|------|-----------|----------|------------|
 | 6 | Transform and gesture UX polish | [transform-ux-polish](./epics/transform-ux-polish.md) | `OPEN` | 0/12 (0%) | Gesture extraction (`svg-editor-60f`) |
-| 8 | Clipboard and duplication | [clipboard-duplication](./epics/clipboard-duplication.md) | `OPEN` | 0/7 (0%) | Shape creation helpful but not required |
+| 8 | Clipboard and duplication | [clipboard-duplication](./epics/clipboard-duplication.md) | `CLOSED` | 5/5 (100%) | Shape creation helpful but not required |
 | 10 | Text editing | [text-editing](./epics/text-editing.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, SC-2a, SC-5) |
 | 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `OPEN` | 0/5 (0%) | Multi-select (done) |
 | 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `OPEN` | 0/8 (0%) | Shape creation (epic 7) helpful |
@@ -101,7 +101,7 @@ flowchart LR
 1. ~~**Now (free-standing):** `svg-editor-brz` (bug), `svg-editor-ag5` (UX fix), `svg-editor-60f` (refactoring)~~ -- **DONE**
 2. ~~**Epic 7** (shape creation)~~ -- **DONE**
 3. ~~**Epic 13** (pen / path tool)~~ -- **DONE**
-4. **Epic 8** (clipboard / duplication) -- standard editor expectation, high value once shapes can be created
+4. ~~**Epic 8** (clipboard / duplication)~~ -- **DONE**
 5. **Epic 11** (align / distribute) -- high value with multi-select already in place
 6. **Epic 12** (snap / guides) -- improves creation and positioning precision
 7. **Epic 6** (transform UX polish) -- includes skew, z-order UI, modifier keys
@@ -123,7 +123,7 @@ Status/progress below is current as of 2026-04-21.
 | advanced-styling | `svg-editor-v77` | Advanced stroke and fill | `CLOSED` | 5/5 |
 | transform-ux-polish | `svg-editor-vfr` | Transform and gesture UX polish | `OPEN` | 0/12 |
 | shape-creation | `svg-editor-og7` | Shape creation tools | `CLOSED` | 6/6 |
-| clipboard-duplication | `svg-editor-d79` | Clipboard and duplication | `OPEN` | 0/7 |
+| clipboard-duplication | `svg-editor-d79` | Clipboard and duplication | `CLOSED` | 5/5 |
 | file-ops-viewport | `svg-editor-we7` | File operations and viewport UX | `CLOSED` | 5/5 |
 | text-editing | `svg-editor-nkz` | Text editing | `OPEN` | 0/7 |
 | align-distribute | TBD | Align and distribute | `OPEN` | 0/5 |

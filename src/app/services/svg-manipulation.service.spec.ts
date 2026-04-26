@@ -1864,4 +1864,41 @@ describe('SvgManipulationService', () => {
       expect(container.querySelector(`#${id}`)).not.toBeNull();
     });
   });
+
+  describe('clipboard payload + paste', () => {
+    it('createClipboardPayload serializes selected shape markup in dom order', () => {
+      const svgContent =
+        '<svg viewBox="0 0 200 200"><rect id="a" x="0" y="0" width="10" height="10"/><rect id="b" x="20" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const payload = service.createClipboardPayload(['b', 'a']);
+      expect(payload.shapes.map((shape) => shape.id)).toEqual(['a', 'b']);
+      expect(payload.shapes[0].markup).toContain('id="a"');
+      expect(payload.shapes[1].markup).toContain('id="b"');
+    });
+
+    it('pasteClipboardPayload remaps ids and internal url references', () => {
+      const svgContent =
+        '<svg viewBox="0 0 200 200"><rect id="existing" x="0" y="0" width="10" height="10"/><defs><linearGradient id="gradA"><stop offset="0%" stop-color="#f00"/></linearGradient></defs></svg>';
+      service.initializeSVG(container, svgContent);
+      const payload = {
+        shapes: [
+          {
+            id: 'shape-1',
+            markup:
+              '<g id="shape-1"><defs><linearGradient id="gradA"><stop offset="100%" stop-color="#00f"/></linearGradient></defs><rect id="shape-child" x="5" y="5" width="10" height="10" fill="url(#gradA)"/></g>'
+          }
+        ]
+      };
+
+      const pasted = service.pasteClipboardPayload(payload, { dx: 10, dy: 10 });
+      expect(pasted.insertedIds.length).toBe(1);
+      const root = container.querySelector(`#${pasted.insertedIds[0]}`) as Element | null;
+      expect(root).not.toBeNull();
+      const child = root?.querySelector('rect');
+      expect(child?.id).not.toBe('shape-child');
+      expect(child?.getAttribute('fill')).toMatch(/^url\(#.+\)$/);
+      expect(child?.getAttribute('transform')).toBeNull();
+      expect(root?.getAttribute('transform')).toContain('translate(10 10)');
+    });
+  });
 });

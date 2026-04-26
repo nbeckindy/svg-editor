@@ -3,6 +3,7 @@ import { SvgManipulationService, type CreatableShapeType, type ShapeCreationAttr
 import { ShapeSelectionService } from '../services/shape-selection.service';
 import { type ResizeCorner } from '../utils/selection-resize';
 import { ArtboardModel } from './artboard.model';
+import { type ClipboardPayload } from '../services/clipboard.service';
 
 export interface EditorCommand {
   readonly description: string;
@@ -689,6 +690,94 @@ export class RemoveShapesCommand implements EditorCommand {
         this.selectionSvc.selectShapes(restoredProps);
       }
     }
+  }
+}
+
+export class PasteCommand implements EditorCommand {
+  readonly description = 'Paste shapes';
+  private insertedIds: string[] = [];
+  private insertedMarkup: string[] = [];
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly payload: ClipboardPayload,
+    private readonly offset: { dx: number; dy: number },
+    private readonly selectionSvc?: ShapeSelectionService
+  ) {}
+
+  execute(): void {
+    if (this.insertedMarkup.length > 0) {
+      for (const markup of this.insertedMarkup) {
+        this.svc.insertShapeMarkup(markup);
+      }
+    } else {
+      const inserted = this.svc.pasteClipboardPayload(this.payload, this.offset);
+      this.insertedIds = inserted.insertedIds;
+      this.insertedMarkup = inserted.insertedMarkup;
+    }
+
+    if (!this.selectionSvc || this.insertedIds.length === 0) return;
+    const svg = this.svc.getSVGInstance();
+    if (!svg) return;
+    const selected = this.insertedIds
+      .map((id) => {
+        const el = svg.findOne(`#${id}`) as SvgJsElement | undefined;
+        return el ? this.svc.getShapeProperties(el) : null;
+      })
+      .filter((shape): shape is NonNullable<typeof shape> => shape !== null);
+    if (selected.length > 0) this.selectionSvc.selectShapes(selected);
+  }
+
+  undo(): void {
+    if (this.insertedIds.length === 0) return;
+    this.svc.removeShapes(this.insertedIds);
+    this.selectionSvc?.clearSelection();
+  }
+}
+
+export class DuplicateCommand implements EditorCommand {
+  readonly description = 'Duplicate shapes';
+  private readonly payload: ClipboardPayload;
+  private insertedIds: string[] = [];
+  private insertedMarkup: string[] = [];
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    sourceShapeIds: string[],
+    private readonly offset: { dx: number; dy: number },
+    private readonly selectionSvc?: ShapeSelectionService
+  ) {
+    this.payload = this.svc.createClipboardPayload(sourceShapeIds);
+  }
+
+  execute(): void {
+    if (this.payload.shapes.length === 0) return;
+    if (this.insertedMarkup.length > 0) {
+      for (const markup of this.insertedMarkup) {
+        this.svc.insertShapeMarkup(markup);
+      }
+    } else {
+      const inserted = this.svc.pasteClipboardPayload(this.payload, this.offset);
+      this.insertedIds = inserted.insertedIds;
+      this.insertedMarkup = inserted.insertedMarkup;
+    }
+
+    if (!this.selectionSvc || this.insertedIds.length === 0) return;
+    const svg = this.svc.getSVGInstance();
+    if (!svg) return;
+    const selected = this.insertedIds
+      .map((id) => {
+        const el = svg.findOne(`#${id}`) as SvgJsElement | undefined;
+        return el ? this.svc.getShapeProperties(el) : null;
+      })
+      .filter((shape): shape is NonNullable<typeof shape> => shape !== null);
+    if (selected.length > 0) this.selectionSvc.selectShapes(selected);
+  }
+
+  undo(): void {
+    if (this.insertedIds.length === 0) return;
+    this.svc.removeShapes(this.insertedIds);
+    this.selectionSvc?.clearSelection();
   }
 }
 
