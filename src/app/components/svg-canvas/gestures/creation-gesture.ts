@@ -3,6 +3,7 @@ import type { GestureContext, Rect, Point } from './gesture-context';
 import type { CreatableShapeType, ShapeCreationAttrs } from '../../../services/svg-manipulation.service';
 import type { EditorTool } from '../../../services/editor-tool.service';
 import { AddShapeCommand } from '../../../models/editor-commands';
+import type { SmartGuideResult } from '../../../services/snap.service';
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 
 const TOOL_TO_SHAPE: Partial<Record<EditorTool, CreatableShapeType>> = {
@@ -81,7 +82,8 @@ export class CreationGesture {
       return;
     }
 
-    this.currentSvg = this.applyConstraint(raw, shiftKey);
+    const constrained = this.applyConstraint(raw, shiftKey);
+    this.currentSvg = this.applySnap(ctx, this.startSvg, constrained, shiftKey);
     const bbox = this.computeGhostBbox(this.startSvg, this.currentSvg);
     this.ghostRect = ctx.svgBboxToOverlayPixels(bbox);
     if (this.shapeType === 'line') {
@@ -122,7 +124,8 @@ export class CreationGesture {
       return null;
     }
 
-    const endPt = this.applyConstraint(raw, shiftKey);
+    const constrained = this.applyConstraint(raw, shiftKey);
+    const endPt = this.applySnap(ctx, this.startSvg, constrained, shiftKey);
     const attrs = this.computeAttrs(this.startSvg, endPt);
 
     const newId = ctx.svgManipulation.addShape(this.shapeType, attrs);
@@ -183,6 +186,25 @@ export class CreationGesture {
     return {
       x: this.startSvg.x + Math.sign(dx) * side,
       y: this.startSvg.y + Math.sign(dy) * side
+    };
+  }
+
+  private applySnap(ctx: GestureContext, start: Point, end: Point, shiftKey: boolean): Point {
+    // Shift constraints intentionally win over snapping.
+    if (shiftKey || ctx.isSnapTemporarilyDisabled()) return end;
+
+    const gridSnapped = ctx.snap.snapToGrid(end);
+    if (!ctx.snap.shapeEnabled()) return gridSnapped;
+
+    const startBBox = this.computeGhostBbox(start, gridSnapped);
+    const guideResult: SmartGuideResult = ctx.snap.snapDeltaToSmartGuides(
+      startBBox,
+      { x: 0, y: 0 },
+      ctx.getSmartGuideCandidates()
+    );
+    return {
+      x: gridSnapped.x + guideResult.delta.x,
+      y: gridSnapped.y + guideResult.delta.y
     };
   }
 

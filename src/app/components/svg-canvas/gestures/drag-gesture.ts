@@ -220,7 +220,7 @@ export class DragGesture {
     const gridSnappedDelta = this.snapAnchor
       ? ctx.snap.snapDelta(this.startSvg, rawDelta, { anchor: this.snapAnchor })
       : rawDelta;
-    if (!ctx.snap.enabled()) {
+    if (!ctx.snap.shapeEnabled()) {
       this.smartGuides = { vertical: [], horizontal: [] };
       return { dx: gridSnappedDelta.x, dy: gridSnappedDelta.y };
     }

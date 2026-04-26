@@ -131,7 +131,7 @@ export class ResizeGesture {
       return { x: 0, y: 0, width: 0, height: 0 };
     }
     const resizedUnion = computeProportionalResizedUnion(this.unionStart, this.handle, { x: svgX, y: svgY });
-    if (ctx.isSnapTemporarilyDisabled() || !ctx.snap.enabled()) {
+    if (ctx.isSnapTemporarilyDisabled() || !ctx.snap.shapeEnabled()) {
       this.smartGuides = { vertical: [], horizontal: [] };
       return resizedUnion;
     }

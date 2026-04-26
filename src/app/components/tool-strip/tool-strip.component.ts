@@ -19,8 +19,12 @@ export class ToolStripComponent {
     this.editorTool.setTool(tool);
   }
 
-  toggleSnap(): void {
-    this.editorTool.toggleSnap();
+  toggleGridSnap(): void {
+    this.editorTool.toggleGridSnap();
+  }
+
+  toggleShapeSnap(): void {
+    this.editorTool.toggleShapeSnap();
   }
 
   onUndo(): void {

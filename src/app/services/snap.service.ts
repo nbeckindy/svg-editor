@@ -51,12 +51,17 @@ export interface SmartGuideResult {
   providedIn: 'root'
 })
 export class SnapService {
-  readonly enabled = signal<boolean>(true);
+  readonly gridEnabled = signal<boolean>(true);
+  readonly shapeEnabled = signal<boolean>(true);
   readonly gridSize = signal<number>(10);
   readonly snapTolerance = signal<number>(5);
 
-  setEnabled(enabled: boolean): void {
-    this.enabled.set(enabled);
+  setGridEnabled(enabled: boolean): void {
+    this.gridEnabled.set(enabled);
+  }
+
+  setShapeEnabled(enabled: boolean): void {
+    this.shapeEnabled.set(enabled);
   }
 
   setGridSize(size: number): void {
@@ -70,11 +75,11 @@ export class SnapService {
   }
 
   snapToGrid(point: SnapPoint): SnapPoint {
-    return snapPointToGrid(point, this.gridSize(), this.enabled());
+    return snapPointToGrid(point, this.gridSize(), this.gridEnabled());
   }
 
   snapDelta(startPoint: SnapPoint, rawDelta: SnapPoint, options?: SnapDeltaOptions): SnapPoint {
-    return computeSnappedDelta(startPoint, rawDelta, this.gridSize(), this.enabled(), options);
+    return computeSnappedDelta(startPoint, rawDelta, this.gridSize(), this.gridEnabled(), options);
   }
 
   snapDeltaToSmartGuides(
@@ -87,7 +92,7 @@ export class SnapService {
       startBBox,
       rawDelta,
       candidateShapes,
-      this.enabled(),
+      this.shapeEnabled(),
       {
         tolerance: options?.tolerance ?? this.snapTolerance(),
         selectedShapeIds: options?.selectedShapeIds

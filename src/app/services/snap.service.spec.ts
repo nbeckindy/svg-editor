@@ -1,20 +1,30 @@
-import { TestBed } from '@angular/core/testing';
 import { SnapService, computeSmartGuideSnap, computeSnappedDelta, snapPointToGrid } from './snap.service';
+
+const bbox = (x: number, y: number, width: number, height: number) => ({ x, y, width, height });
+const shape = (id: string, x: number, y: number, width: number, height: number) => ({
+  id,
+  bbox: bbox(x, y, width, height)
+});
+const noGuideResult = (x: number, y: number) => ({
+  delta: { x, y },
+  guides: { vertical: [], horizontal: [] },
+  matches: []
+});
 
 describe('SnapService', () => {
   let service: SnapService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
-    service = TestBed.inject(SnapService);
+    service = new SnapService();
   });
 
   it('should be created', () => {
     expect(service).toBeTruthy();
   });
 
-  it('should default to enabled with grid size 10', () => {
-    expect(service.enabled()).toBe(true);
+  it('should default both grid and shape snapping to enabled with grid size 10', () => {
+    expect(service.gridEnabled()).toBe(true);
+    expect(service.shapeEnabled()).toBe(true);
     expect(service.gridSize()).toBe(10);
     expect(service.snapTolerance()).toBe(5);
   });
@@ -24,8 +34,20 @@ describe('SnapService', () => {
     expect(service.snapToGrid({ x: -14, y: -25 })).toEqual({ x: -10, y: -20 });
   });
 
+  it('snapToGrid should support different configured grid sizes', () => {
+    service.setGridSize(4);
+    expect(service.snapToGrid({ x: 5.9, y: -5.9 })).toEqual({ x: 4, y: -4 });
+
+    service.setGridSize(25);
+    expect(service.snapToGrid({ x: 62.4, y: 37.6 })).toEqual({ x: 50, y: 50 });
+
+    service.setGridSize(2.5);
+    expect(service.snapToGrid({ x: 6.3, y: -1.2 }).x).toBe(7.5);
+    expect(Object.is(service.snapToGrid({ x: 6.3, y: -1.2 }).y, -0)).toBe(true);
+  });
+
   it('snapToGrid should return original point when disabled', () => {
-    service.setEnabled(false);
+    service.setGridEnabled(false);
     expect(service.snapToGrid({ x: 14, y: 25 })).toEqual({ x: 14, y: 25 });
   });
 
@@ -51,15 +73,25 @@ describe('SnapService', () => {
   });
 
   it('snapDelta should return raw delta when snapping disabled', () => {
-    service.setEnabled(false);
+    service.setGridEnabled(false);
     expect(service.snapDelta({ x: 0, y: 0 }, { x: 3.5, y: -2.25 })).toEqual({ x: 3.5, y: -2.25 });
   });
 
   it('snapDeltaToSmartGuides should return no-op result on empty document', () => {
     const result = service.snapDeltaToSmartGuides(
-      { x: 10, y: 20, width: 40, height: 30 },
+      bbox(10, 20, 40, 30),
       { x: 2, y: 3 },
       []
+    );
+    expect(result).toEqual(noGuideResult(2, 3));
+  });
+
+  it('snapDeltaToSmartGuides should return raw delta and no guides when shape snapping is disabled', () => {
+    service.setShapeEnabled(false);
+    const result = service.snapDeltaToSmartGuides(
+      { x: 10, y: 20, width: 40, height: 30 },
+      { x: 2, y: 3 },
+      [{ id: 'candidate', bbox: { x: 13, y: 23, width: 20, height: 20 } }]
     );
     expect(result).toEqual({
       delta: { x: 2, y: 3 },
@@ -88,11 +120,11 @@ describe('snap math helpers', () => {
 
   it('computeSmartGuideSnap should detect edge and center alignments on both axes', () => {
     const result = computeSmartGuideSnap(
-      { x: 10, y: 20, width: 40, height: 20 },
+      bbox(10, 20, 40, 20),
       { x: 7, y: 8 },
       [
-        { id: 'edge-shape', bbox: { x: 30, y: 70, width: 30, height: 10 } },
-        { id: 'center-shape', bbox: { x: 35, y: 35, width: 10, height: 6 } }
+        shape('edge-shape', 30, 70, 30, 10),
+        shape('center-shape', 35, 35, 10, 6)
       ],
       true,
       { tolerance: 5 }
@@ -133,11 +165,11 @@ describe('snap math helpers', () => {
 
   it('computeSmartGuideSnap should honor selection exclusion', () => {
     const result = computeSmartGuideSnap(
-      { x: 0, y: 0, width: 10, height: 10 },
+      bbox(0, 0, 10, 10),
       { x: 12, y: 0 },
       [
-        { id: 'selected-shape', bbox: { x: 17, y: 0, width: 10, height: 10 } },
-        { id: 'other-shape', bbox: { x: 28, y: 0, width: 10, height: 10 } }
+        shape('selected-shape', 17, 0, 10, 10),
+        shape('other-shape', 28, 0, 10, 10)
       ],
       true,
       { tolerance: 5, selectedShapeIds: ['selected-shape'] }
@@ -152,9 +184,9 @@ describe('snap math helpers', () => {
 
   it('computeSmartGuideSnap should include exact tolerance boundary matches', () => {
     const result = computeSmartGuideSnap(
-      { x: 0, y: 0, width: 10, height: 10 },
+      bbox(0, 0, 10, 10),
       { x: 12, y: 0 },
-      [{ id: 'shape', bbox: { x: 17, y: 0, width: 10, height: 10 } }],
+      [shape('shape', 17, 0, 10, 10)],
       true,
       { tolerance: 5 }
     );
@@ -165,38 +197,65 @@ describe('snap math helpers', () => {
     expect(xMatches.every((match) => Math.abs(match.offset - 5) < 1e-9)).toBe(true);
   });
 
+  it('computeSmartGuideSnap should not match when distance is just outside tolerance', () => {
+    const result = computeSmartGuideSnap(
+      bbox(0, 0, 10, 10),
+      { x: 12, y: 0 },
+      [shape('shape', 17.01, 0, 10, 10)],
+      true,
+      { tolerance: 5 }
+    );
+    expect(result.delta.x).toBe(12);
+    expect(result.guides.vertical).toEqual([]);
+    expect(result.matches.filter((match) => match.axis === 'x')).toEqual([]);
+  });
+
+  it('computeSmartGuideSnap should detect guides from known bboxes on both axes', () => {
+    const result = computeSmartGuideSnap(
+      bbox(100, 100, 40, 30),
+      { x: 4, y: 7 },
+      [
+        shape('x-match', 105, 40, 20, 20),
+        shape('y-match', 30, 105, 20, 30)
+      ],
+      true,
+      { tolerance: 2 }
+    );
+    expect(result.delta).toEqual({ x: 5, y: 5 });
+    expect(result.guides.vertical).toEqual([105]);
+    expect(result.guides.horizontal).toEqual([105, 120, 135]);
+    expect(result.matches).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({ axis: 'x', candidateId: 'x-match', guidePosition: 105, offset: 1 }),
+        expect.objectContaining({ axis: 'y', candidateId: 'y-match', guidePosition: 135, offset: -2 })
+      ])
+    );
+  });
+
   it('computeSmartGuideSnap should no-op when disabled or candidates filtered out', () => {
     const baseArgs = [
-      { x: 5, y: 5, width: 10, height: 10 },
+      bbox(5, 5, 10, 10),
       { x: 1, y: 2 },
-      [{ id: 'shape', bbox: { x: 10, y: 10, width: 20, height: 20 } }]
+      [shape('shape', 10, 10, 20, 20)]
     ] as const;
 
-    expect(computeSmartGuideSnap(...baseArgs, false)).toEqual({
-      delta: { x: 1, y: 2 },
-      guides: { vertical: [], horizontal: [] },
-      matches: []
-    });
+    expect(computeSmartGuideSnap(...baseArgs, false)).toEqual(noGuideResult(1, 2));
 
     expect(
       computeSmartGuideSnap(...baseArgs, true, {
         selectedShapeIds: ['shape']
       })
-    ).toEqual({
-      delta: { x: 1, y: 2 },
-      guides: { vertical: [], horizontal: [] },
-      matches: []
-    });
+    ).toEqual(noGuideResult(1, 2));
   });
 
   it('computeSmartGuideSnap should include overlapping guide positions with shared snap offset', () => {
     const result = computeSmartGuideSnap(
-      { x: 0, y: 0, width: 20, height: 20 },
+      bbox(0, 0, 20, 20),
       { x: 9, y: 0 },
       [
-        { id: 'a', bbox: { x: 10, y: 30, width: 20, height: 20 } },
-        { id: 'b', bbox: { x: 10, y: 60, width: 20, height: 20 } },
-        { id: 'c', bbox: { x: 11, y: 90, width: 20, height: 20 } }
+        shape('a', 10, 30, 20, 20),
+        shape('b', 10, 60, 20, 20),
+        shape('c', 11, 90, 20, 20)
       ],
       true,
       { tolerance: 2 }
@@ -209,12 +268,17 @@ describe('snap math helpers', () => {
 
   it('computeSmartGuideSnap should handle invalid tolerance by using default', () => {
     const result = computeSmartGuideSnap(
-      { x: 0, y: 0, width: 10, height: 10 },
+      bbox(0, 0, 10, 10),
       { x: 0, y: 0 },
-      [{ id: 'shape', bbox: { x: 4, y: 0, width: 10, height: 10 } }],
+      [shape('shape', 4, 0, 10, 10)],
       true,
       { tolerance: Number.NaN }
     );
     expect(result.delta.x).toBe(4);
+  });
+
+  it('computeSmartGuideSnap should no-op for empty candidate lists', () => {
+    const result = computeSmartGuideSnap(bbox(20, 30, 10, 10), { x: 3, y: -4 }, [], true, { tolerance: 1 });
+    expect(result).toEqual(noGuideResult(3, -4));
   });
 });

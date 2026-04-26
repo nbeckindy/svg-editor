@@ -81,8 +81,8 @@ describe('SvgCanvasComponent', () => {
     expect(placeholder.textContent).toContain('Load an SVG file to begin editing');
   });
 
-  it('should hide grid overlay when snap is disabled', () => {
-    editorToolService.setSnapEnabled(false);
+  it('should hide grid overlay when grid snap is disabled', () => {
+    editorToolService.setGridSnapEnabled(false);
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
     fixture.detectChanges();
 
@@ -90,8 +90,8 @@ describe('SvgCanvasComponent', () => {
     expect(grid).toBeFalsy();
   });
 
-  it('should show grid overlay when snap is enabled and SVG is loaded', () => {
-    editorToolService.setSnapEnabled(true);
+  it('should show grid overlay when grid snap is enabled and SVG is loaded', () => {
+    editorToolService.setGridSnapEnabled(true);
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
     component.wrapperWidth = 100;
     component.wrapperHeight = 100;
@@ -105,7 +105,7 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should align grid origin with SVG user-space origin and coarsen spacing when zoomed out', () => {
-    editorToolService.setSnapEnabled(true);
+    editorToolService.setGridSnapEnabled(true);
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
     component.wrapperWidth = 100;
     component.wrapperHeight = 100;
@@ -125,6 +125,82 @@ describe('SvgCanvasComponent', () => {
     canvasViewService.scale = 0.5;
     const stepAtScale05 = component.gridStepSvgUnits;
     expect(stepAtScale05).toBeGreaterThan(stepAtScale2);
+  });
+
+  it('should show and hide grid overlay as grid snap is toggled', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    editorToolService.setGridSnapEnabled(false);
+    fixture.detectChanges();
+
+    expect(component.showGridOverlay).toBe(false);
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-grid-overlay"]')).toBeFalsy();
+
+    editorToolService.setGridSnapEnabled(true);
+    fixture.detectChanges();
+
+    expect(component.showGridOverlay).toBe(true);
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-grid-overlay"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-grid-line"]').length).toBeGreaterThan(0);
+
+    editorToolService.setGridSnapEnabled(false);
+    fixture.detectChanges();
+
+    expect(component.showGridOverlay).toBe(false);
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-grid-overlay"]')).toBeFalsy();
+  });
+
+  it('should handle mixed snap toggle states (grid-only and shape-only) during drag', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="drag-me" x="10" y="20" width="30" height="40"/></svg>');
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'drag-me',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    const dragHandler = component['drag'] as any;
+    dragHandler.isActive = true;
+    dragHandler.shapeIds = ['drag-me'];
+    dragHandler.startSvg = { x: 10, y: 10 };
+    dragHandler.startBbox = { x: 10, y: 20, width: 30, height: 40 };
+    dragHandler.snapAnchor = { x: 10, y: 20 };
+    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn(), matrix: vi.fn() } }];
+    stubEditorSvgScreenMapping(component);
+
+    const smartGuideSpy = vi.spyOn(snapService, 'snapDeltaToSmartGuides');
+    smartGuideSpy.mockClear();
+    editorToolService.setGridSnapEnabled(true);
+    editorToolService.setShapeSnapEnabled(false);
+    fixture.detectChanges();
+
+    expect(component.showGridOverlay).toBe(true);
+    component.onDocumentMouseMove({
+      clientX: 20,
+      clientY: 20,
+      altKey: false
+    } as MouseEvent);
+    expect(smartGuideSpy).not.toHaveBeenCalled();
+
+    smartGuideSpy.mockClear();
+    editorToolService.setGridSnapEnabled(false);
+    editorToolService.setShapeSnapEnabled(true);
+    fixture.detectChanges();
+
+    expect(component.showGridOverlay).toBe(false);
+    component.onDocumentMouseMove({
+      clientX: 25,
+      clientY: 25,
+      altKey: false
+    } as MouseEvent);
+    expect(smartGuideSpy).toHaveBeenCalledTimes(1);
   });
 
   it('should initialize SVG when content is provided', () => {
@@ -1432,7 +1508,7 @@ describe('SvgCanvasComponent', () => {
     dragHandler.startSvg = { x: 0, y: 0 };
     dragHandler.startBbox = { x: 0, y: 0, width: 30, height: 30 };
     dragHandler.snapAnchor = { x: 0, y: 0 };
-    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn() } }];
+    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn(), matrix: vi.fn() } }];
     dragHandler.ghost = { removeFragments: vi.fn(), clearDefs: vi.fn() };
     vi.spyOn(svgManipulationService, 'getLayerStackItems').mockReturnValue([
       { id: 'shape-a', name: 'Shape A', type: 'rect' },
@@ -1762,11 +1838,67 @@ describe('SvgCanvasComponent', () => {
     expect((pos & Node.DOCUMENT_POSITION_FOLLOWING) !== 0).toBe(true);
   });
 
-  it('should on mouseup after drag commit snapped delta and show shape again', () => {
+  it('should apply snapped drag preview position when shape snapping is enabled', () => {
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="drag-me" x="10" y="20" width="30" height="40"/></svg>');
     fixture.detectChanges();
-    editorToolService.setSnapEnabled(true);
-    snapService.setEnabled(true);
+    editorToolService.setGridSnapEnabled(false);
+    editorToolService.setShapeSnapEnabled(true);
+    snapService.setGridEnabled(false);
+    snapService.setShapeEnabled(true);
+    editorToolService.setTool('selector');
+    shapeSelectionService.selectShape({
+      id: 'drag-me',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    const dragHandler = component['drag'] as any;
+    dragHandler.isActive = true;
+    dragHandler.shapeIds = ['drag-me'];
+    dragHandler.startSvg = { x: 25, y: 40 };
+    dragHandler.startBbox = { x: 10, y: 20, width: 30, height: 40 };
+    dragHandler.snapAnchor = { x: 10, y: 20 };
+    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn(), matrix: vi.fn() } }];
+    vi.spyOn(svgManipulationService, 'getLayerStackItems').mockReturnValue([
+      { id: 'drag-me', name: 'Drag Me', type: 'rect' },
+      { id: 'guide-target', name: 'Guide Target', type: 'rect' }
+    ]);
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockImplementation((id: string) => {
+      if (id === 'drag-me') return { x: 10, y: 20, width: 30, height: 40 };
+      if (id === 'guide-target') return { x: 30, y: 40, width: 30, height: 40 };
+      return null;
+    });
+    const smartGuideSpy = vi.spyOn(snapService, 'snapDeltaToSmartGuides').mockReturnValue({
+      delta: { x: 12, y: 14 },
+      guides: { vertical: [40], horizontal: [50] },
+      matches: []
+    });
+    stubEditorSvgScreenMapping(component);
+
+    component.onDocumentMouseMove({
+      clientX: 45,
+      clientY: 60,
+      altKey: false
+    } as MouseEvent);
+
+    expect(smartGuideSpy).toHaveBeenCalledTimes(1);
+    expect(dragHandler.overlayRect).toEqual({
+      x: 22,
+      y: 34,
+      width: 30,
+      height: 40
+    });
+  });
+
+  it('should keep drag commit parity with preview when mouseup cannot map pointer', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="drag-me" x="10" y="20" width="30" height="40"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setGridSnapEnabled(true);
+    editorToolService.setShapeSnapEnabled(true);
+    snapService.setGridEnabled(true);
+    snapService.setShapeEnabled(true);
     editorToolService.setTool('selector');
     shapeSelectionService.selectShape({
       id: 'drag-me',
@@ -1784,7 +1916,7 @@ describe('SvgCanvasComponent', () => {
     dragHandler.startSvg = { x: 25, y: 40 };
     dragHandler.startBbox = { x: 10, y: 20, width: 30, height: 40 };
     dragHandler.snapAnchor = { x: 10, y: 20 };
-    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn() } }];
+    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn(), matrix: vi.fn() } }];
     dragHandler.ghost = { removeFragments: vi.fn(), clearDefs: vi.fn() };
     vi.spyOn(svgManipulationService, 'getLayerStackItems').mockReturnValue([
       { id: 'drag-me', name: 'Drag Me', type: 'rect' },
@@ -1795,19 +1927,28 @@ describe('SvgCanvasComponent', () => {
       if (id === 'guide-target') return { x: 30, y: 40, width: 30, height: 40 };
       return null;
     });
-    vi.spyOn(snapService, 'snapDeltaToSmartGuides').mockReturnValue({
+    const smartGuideSpy = vi.spyOn(snapService, 'snapDeltaToSmartGuides').mockReturnValue({
       delta: { x: 12, y: 14 },
       guides: { vertical: [40], horizontal: [50] },
       matches: []
     });
-    stubEditorSvgScreenMapping(component);
+    const clientToPointSpy = vi.spyOn(component as any, 'clientToEditorSvgPoint');
+    clientToPointSpy.mockReturnValueOnce({ x: 45, y: 60 });
+    clientToPointSpy.mockReturnValueOnce(null);
+
+    component.onDocumentMouseMove({
+      clientX: 45,
+      clientY: 60,
+      altKey: false
+    } as MouseEvent);
+
     component.onDocumentMouseUp({
       button: 0,
       clientX: 45,
       clientY: 60
     } as MouseEvent);
     expect(component.isDraggingShape).toBe(false);
-    expect(snapService.snapDeltaToSmartGuides).toHaveBeenCalled();
+    expect(smartGuideSpy).toHaveBeenCalledTimes(1);
     expect(translateSpy).toHaveBeenCalledWith('drag-me', 12, 14);
     expect(setVisibilitySpy).toHaveBeenCalledWith('drag-me', true);
   });

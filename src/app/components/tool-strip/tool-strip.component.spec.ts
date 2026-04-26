@@ -33,21 +33,22 @@ describe('ToolStripComponent', () => {
     expect(selectorBtn?.classList.contains('active')).toBe(true);
   });
 
-  it('should display Undo, Redo, Selector, Node Edit, Zoom, Pan, Snap, Rect, Ellipse, Line, and Pen buttons', () => {
+  it('should display Undo, Redo, Selector, Node Edit, Zoom, Pan, Grid snap, Shape snap, Rect, Ellipse, Line, and Pen buttons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('.tool-btn');
-    expect(buttons.length).toBe(11);
+    expect(buttons.length).toBe(12);
     expect((buttons[0] as HTMLElement).textContent?.trim()).toContain('Undo');
     expect((buttons[1] as HTMLElement).textContent?.trim()).toContain('Redo');
     expect((buttons[2] as HTMLElement).textContent?.trim()).toBe('Selector');
     expect((buttons[3] as HTMLElement).textContent?.trim()).toBe('Node Edit');
     expect((buttons[4] as HTMLElement).textContent?.trim()).toBe('Zoom');
     expect((buttons[5] as HTMLElement).textContent?.trim()).toContain('Pan');
-    expect((buttons[6] as HTMLElement).textContent?.trim()).toBe('Snap');
-    expect((buttons[7] as HTMLElement).textContent?.trim()).toContain('Rect');
-    expect((buttons[8] as HTMLElement).textContent?.trim()).toContain('Ellipse');
-    expect((buttons[9] as HTMLElement).textContent?.trim()).toContain('Line');
-    expect((buttons[10] as HTMLElement).textContent?.trim()).toContain('Pen');
+    expect((buttons[6] as HTMLElement).textContent?.trim()).toBe('Grid snap');
+    expect((buttons[7] as HTMLElement).textContent?.trim()).toBe('Shape snap');
+    expect((buttons[8] as HTMLElement).textContent?.trim()).toContain('Rect');
+    expect((buttons[9] as HTMLElement).textContent?.trim()).toContain('Ellipse');
+    expect((buttons[10] as HTMLElement).textContent?.trim()).toContain('Line');
+    expect((buttons[11] as HTMLElement).textContent?.trim()).toContain('Pen');
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {
@@ -136,34 +137,68 @@ describe('ToolStripComponent', () => {
     expect(selectorBtn?.classList.contains('active')).toBe(false);
   });
 
-  it('should toggle snap state from Snap button without changing active tool', () => {
+  it('should toggle grid snap from Grid snap button without changing active tool', () => {
     editorToolService.setTool('zoom');
     fixture.detectChanges();
 
-    const toggleSpy = vi.spyOn(editorToolService, 'toggleSnap');
+    const toggleSpy = vi.spyOn(editorToolService, 'toggleGridSnap');
     const compiled = fixture.nativeElement as HTMLElement;
-    const snapBtn = compiled.querySelector('[data-testid="tool-snap-toggle"]') as HTMLElement;
+    const snapBtn = compiled.querySelector('[data-testid="tool-grid-snap-toggle"]') as HTMLElement;
     expect(snapBtn).toBeTruthy();
-    expect(editorToolService.isSnapEnabled()).toBe(false);
+    expect(editorToolService.isGridSnapEnabled()).toBe(false);
 
     snapBtn.click();
     fixture.detectChanges();
 
     expect(toggleSpy).toHaveBeenCalledTimes(1);
-    expect(editorToolService.isSnapEnabled()).toBe(true);
+    expect(editorToolService.isGridSnapEnabled()).toBe(true);
     expect(editorToolService.getCurrentTool()).toBe('zoom');
   });
 
-  it('should show Snap button active state from snap signal', () => {
-    editorToolService.setSnapEnabled(true);
+  it('should toggle shape snap from Shape snap button without changing active tool', () => {
+    editorToolService.setTool('pan');
+    fixture.detectChanges();
+
+    const toggleSpy = vi.spyOn(editorToolService, 'toggleShapeSnap');
+    const compiled = fixture.nativeElement as HTMLElement;
+    const snapBtn = compiled.querySelector('[data-testid="tool-shape-snap-toggle"]') as HTMLElement;
+    expect(snapBtn).toBeTruthy();
+    expect(editorToolService.isShapeSnapEnabled()).toBe(false);
+
+    snapBtn.click();
+    fixture.detectChanges();
+
+    expect(toggleSpy).toHaveBeenCalledTimes(1);
+    expect(editorToolService.isShapeSnapEnabled()).toBe(true);
+    expect(editorToolService.getCurrentTool()).toBe('pan');
+  });
+
+  it('should show Grid snap button active state from grid snap signal', () => {
+    editorToolService.setGridSnapEnabled(true);
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const snapBtn = compiled.querySelector('[data-testid="tool-snap-toggle"]') as HTMLElement;
+    const snapBtn = compiled.querySelector('[data-testid="tool-grid-snap-toggle"]') as HTMLElement;
     expect(snapBtn.classList.contains('active')).toBe(true);
     expect(snapBtn.getAttribute('aria-pressed')).toBe('true');
 
-    editorToolService.setSnapEnabled(false);
+    editorToolService.setGridSnapEnabled(false);
+    fixture.detectChanges();
+
+    expect(snapBtn.classList.contains('active')).toBe(false);
+    expect(snapBtn.getAttribute('aria-pressed')).toBe('false');
+  });
+
+  it('should show Shape snap button active state from shape snap signal', () => {
+    editorToolService.setShapeSnapEnabled(true);
+    fixture.detectChanges();
+
+    const compiled = fixture.nativeElement as HTMLElement;
+    const snapBtn = compiled.querySelector('[data-testid="tool-shape-snap-toggle"]') as HTMLElement;
+    expect(snapBtn.classList.contains('active')).toBe(true);
+    expect(snapBtn.getAttribute('aria-pressed')).toBe('true');
+
+    editorToolService.setShapeSnapEnabled(false);
     fixture.detectChanges();
 
     expect(snapBtn.classList.contains('active')).toBe(false);

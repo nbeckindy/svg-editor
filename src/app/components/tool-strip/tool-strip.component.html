@@ -81,12 +81,22 @@
   <button
     type="button"
     class="tool-btn"
-    data-testid="tool-snap-toggle"
-    [class.active]="editorTool.isSnapEnabled()"
-    (click)="toggleSnap()"
-    title="Toggle snap"
-    [attr.aria-pressed]="editorTool.isSnapEnabled()">
-    Snap
+    data-testid="tool-grid-snap-toggle"
+    [class.active]="editorTool.isGridSnapEnabled()"
+    (click)="toggleGridSnap()"
+    title="Toggle grid snap"
+    [attr.aria-pressed]="editorTool.isGridSnapEnabled()">
+    Grid snap
+  </button>
+  <button
+    type="button"
+    class="tool-btn"
+    data-testid="tool-shape-snap-toggle"
+    [class.active]="editorTool.isShapeSnapEnabled()"
+    (click)="toggleShapeSnap()"
+    title="Toggle shape snap"
+    [attr.aria-pressed]="editorTool.isShapeSnapEnabled()">
+    Shape snap
   </button>
   <span class="tool-separator" aria-hidden="true"></span>
   <button

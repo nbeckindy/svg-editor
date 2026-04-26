@@ -23,10 +23,10 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 8 | Clipboard and duplication | [clipboard-duplication](./epics/clipboard-duplication.md) | `CLOSED` | 5/5 (100%) | Shape creation helpful but not required |
 | 10 | Text editing | [text-editing](./epics/text-editing.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, SC-2a, SC-5) |
 | 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `CLOSED` | 5/5 (100%) | Multi-select (done) |
-| 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `OPEN` | 5/8 (62%) | Shape creation (epic 7) helpful |
+| 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `CLOSED` | 9/9 (100%) | Shape creation (epic 7) helpful |
 | 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `CLOSED` | 7/7 (100%) | Shape creation (SC-1, shares tool infra); optional beads tfs.8–11 open in bd |
 | 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `CLOSED` | 5/5 (100%) | Pen tool (PP-2a segment model) |
-| 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `OPEN` | 1/7 (14%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
+| 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `OPEN` | 5/10 (50%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
 
 ## Free-standing issues
 
@@ -127,11 +127,11 @@ Status/progress below is current as of 2026-04-21.
 | file-ops-viewport | `svg-editor-we7` | File operations and viewport UX | `CLOSED` | 5/5 |
 | text-editing | `svg-editor-nkz` | Text editing | `OPEN` | 0/7 |
 | align-distribute | `svg-editor-lzc` | Align and distribute | `CLOSED` | 5/5 |
-| snap-guides | `svg-editor-l6c` | Snap and guides | `OPEN` | 5/8 |
+| snap-guides | `svg-editor-l6c` | Snap and guides | `CLOSED` | 9/9 |
 | pen-path-tool | `svg-editor-tfs` | Pen and path tool | `CLOSED` | 7/7 |
 | canvas-artboard | `svg-editor-dl9` | Canvas and artboard | `CLOSED` | 7/7 |
 | path-node-editing | `svg-editor-cfc` | Path node editing | `CLOSED` | 5/5 |
-| advanced-path-editing | `svg-editor-4nz` | Advanced path editing | `OPEN` | 1/7 |
+| advanced-path-editing | `svg-editor-4nz` | Advanced path editing | `OPEN` | 5/10 |
 
 ## How to use this roadmap
 
