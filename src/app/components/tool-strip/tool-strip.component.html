@@ -78,6 +78,16 @@
     </span>
     <span class="tool-label">Pan</span>
   </button>
+  <button
+    type="button"
+    class="tool-btn"
+    data-testid="tool-snap-toggle"
+    [class.active]="editorTool.isSnapEnabled()"
+    (click)="toggleSnap()"
+    title="Toggle snap"
+    [attr.aria-pressed]="editorTool.isSnapEnabled()">
+    Snap
+  </button>
   <span class="tool-separator" aria-hidden="true"></span>
   <button
     type="button"

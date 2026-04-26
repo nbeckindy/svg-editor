@@ -4,12 +4,14 @@ import { SvgManipulationService } from '../../../services/svg-manipulation.servi
 import { ShapeSelectionService } from '../../../services/shape-selection.service';
 import { EditorHistoryService } from '../../../services/editor-history.service';
 import { CanvasViewService } from '../../../services/canvas-view.service';
+import { SnapCandidateShape, SnapService } from '../../../services/snap.service';
 
 export interface GestureContext {
   svgManipulation: SvgManipulationService;
   shapeSelection: ShapeSelectionService;
   editorHistory: EditorHistoryService;
   canvasView: CanvasViewService;
+  snap: SnapService;
   cdr: ChangeDetectorRef;
   svgContainer: Signal<ElementRef<HTMLElement> | undefined>;
   zoomWrapper: Signal<ElementRef<HTMLElement> | undefined>;
@@ -18,6 +20,8 @@ export interface GestureContext {
 
   clientToEditorSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null;
   svgBboxToOverlayPixels(bbox: Rect): Rect;
+  getSmartGuideCandidates(): SnapCandidateShape[];
+  isSnapTemporarilyDisabled(): boolean;
   invalidateHighlightCache(): void;
   setLastBbox(bbox: Rect | null): void;
 }

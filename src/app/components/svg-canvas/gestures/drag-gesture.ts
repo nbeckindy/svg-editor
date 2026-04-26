@@ -4,6 +4,7 @@ import {
   CompositeCommand,
   TranslateCommand
 } from '../../../models/editor-commands';
+import { SmartGuideResult } from '../../../services/snap.service';
 import type { GestureContext, GhostPreviewFragment, Rect, Point } from './gesture-context';
 import { GhostSession } from './ghost-session';
 
@@ -14,9 +15,12 @@ export class DragGesture {
   private shapeIds: string[] = [];
   private startSvg: Point | null = null;
   private startBbox: Rect | null = null;
+  private snapAnchor: Point | null = null;
   private snapshot: Map<string, Matrix> = new Map();
   private ghostFragments: GhostPreviewFragment[] = [];
   private ghost = new GhostSession();
+  private lastSnappedDelta: Point = { x: 0, y: 0 };
+  private smartGuides: SmartGuideResult['guides'] = { vertical: [], horizontal: [] };
 
   overlayRect: Rect | null = null;
 
@@ -70,6 +74,9 @@ export class DragGesture {
     this.shapeIds = selectedIds;
     this.startSvg = { x: point.x, y: point.y };
     this.snapshot = ctx.svgManipulation.snapshotSelectionTransforms(selectedIds);
+    this.snapAnchor = this.startBbox
+      ? { x: this.startBbox.x, y: this.startBbox.y }
+      : this.startSvg;
     return true;
   }
 
@@ -77,11 +84,15 @@ export class DragGesture {
     if (!this.isActive || this.ghostFragments.length === 0 || !this.startSvg || !this.startBbox) return;
     const currentSvg = ctx.clientToEditorSvgPoint(clientX, clientY);
     if (!currentSvg) return;
-    const dx = currentSvg.x - this.startSvg.x;
-    const dy = currentSvg.y - this.startSvg.y;
+    const { dx, dy } = this.resolveSnappedDelta(ctx, currentSvg.x, currentSvg.y);
+    this.lastSnappedDelta = { x: dx, y: dy };
+    const rawDelta = {
+      x: dx,
+      y: dy
+    };
     const currentBbox: Rect = {
-      x: this.startBbox.x + dx,
-      y: this.startBbox.y + dy,
+      x: this.startBbox.x + rawDelta.x,
+      y: this.startBbox.y + rawDelta.y,
       width: this.startBbox.width,
       height: this.startBbox.height
     };
@@ -100,8 +111,12 @@ export class DragGesture {
     let dy = 0;
     const point = ctx.clientToEditorSvgPoint(clientX, clientY);
     if (point) {
-      dx = point.x - this.startSvg.x;
-      dy = point.y - this.startSvg.y;
+      const delta = this.resolveSnappedDelta(ctx, point.x, point.y);
+      dx = delta.dx;
+      dy = delta.dy;
+    } else {
+      dx = this.lastSnappedDelta.x;
+      dy = this.lastSnappedDelta.y;
     }
     const dragCmds: EditorCommand[] = this.shapeIds.map(
       (id) => new TranslateCommand(ctx.svgManipulation, id, dx, dy, this.snapshot)
@@ -130,8 +145,11 @@ export class DragGesture {
     this.shapeIds = [];
     this.startSvg = null;
     this.startBbox = null;
+    this.snapAnchor = null;
     this.snapshot = new Map();
     this.ghostFragments = [];
+    this.lastSnappedDelta = { x: 0, y: 0 };
+    this.smartGuides = { vertical: [], horizontal: [] };
   }
 
   consumeJustEnded(): boolean {
@@ -175,5 +193,44 @@ export class DragGesture {
         }
       : ctx.svgBboxToOverlayPixels(bbox);
     ctx.cdr.detectChanges();
+  }
+
+  get activeGuides(): SmartGuideResult['guides'] {
+    return this.smartGuides;
+  }
+
+  private resolveSnappedDelta(
+    ctx: GestureContext,
+    svgX: number,
+    svgY: number
+  ): { dx: number; dy: number } {
+    if (!this.startSvg || !this.startBbox) {
+      this.smartGuides = { vertical: [], horizontal: [] };
+      return { dx: 0, dy: 0 };
+    }
+    const rawDelta = {
+      x: svgX - this.startSvg.x,
+      y: svgY - this.startSvg.y
+    };
+    const snappingDisabled = ctx.isSnapTemporarilyDisabled();
+    if (snappingDisabled) {
+      this.smartGuides = { vertical: [], horizontal: [] };
+      return { dx: rawDelta.x, dy: rawDelta.y };
+    }
+    const gridSnappedDelta = this.snapAnchor
+      ? ctx.snap.snapDelta(this.startSvg, rawDelta, { anchor: this.snapAnchor })
+      : rawDelta;
+    if (!ctx.snap.enabled()) {
+      this.smartGuides = { vertical: [], horizontal: [] };
+      return { dx: gridSnappedDelta.x, dy: gridSnappedDelta.y };
+    }
+    const guideResult = ctx.snap.snapDeltaToSmartGuides(
+      this.startBbox,
+      gridSnappedDelta,
+      ctx.getSmartGuideCandidates(),
+      { selectedShapeIds: this.shapeIds }
+    );
+    this.smartGuides = guideResult.guides;
+    return { dx: guideResult.delta.x, dy: guideResult.delta.y };
   }
 }

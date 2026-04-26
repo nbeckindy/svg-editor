@@ -19,6 +19,10 @@ export class ToolStripComponent {
     this.editorTool.setTool(tool);
   }
 
+  toggleSnap(): void {
+    this.editorTool.toggleSnap();
+  }
+
   onUndo(): void {
     this.editorHistory.undo();
   }
