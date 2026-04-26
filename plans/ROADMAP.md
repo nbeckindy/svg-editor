@@ -24,9 +24,9 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 10 | Text editing | [text-editing](./epics/text-editing.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, SC-2a, SC-5) |
 | 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `OPEN` | 0/5 (0%) | Multi-select (done) |
 | 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `OPEN` | 0/8 (0%) | Shape creation (epic 7) helpful |
-| 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `OPEN` | 7/7 (100%) | Shape creation (SC-1, shares tool infra); optional beads tfs.8–11 open in bd |
+| 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `CLOSED` | 7/7 (100%) | Shape creation (SC-1, shares tool infra); optional beads tfs.8–11 open in bd |
 | 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `CLOSED` | 5/5 (100%) | Pen tool (PP-2a segment model) |
-| 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `OPEN` | 1/6 (17%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
+| 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `OPEN` | 1/7 (14%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
 
 ## Free-standing issues
 
@@ -34,9 +34,9 @@ These beads are not part of an epic and can be tackled independently.
 
 | bd ID | Title | Priority | Notes |
 |-------|-------|----------|-------|
-| `svg-editor-60f` | Extract gesture handlers from svg-canvas | P2 | Refactoring prerequisite for epic 6 |
-| `svg-editor-ag5` | Undo delete should restore selection | P2 | Small UX fix |
-| `svg-editor-brz` | Bug: normalizeColorForPicker destroys gradient fills | P2 | Bug fix |
+| `svg-editor-60f` | Extract gesture handlers from svg-canvas | P2 | DONE (refactoring prerequisite for epic 6) |
+| `svg-editor-ag5` | Undo delete should restore selection | P2 | DONE (small UX fix) |
+| `svg-editor-brz` | Bug: normalizeColorForPicker destroys gradient fills | P2 | DONE (bug fix) |
 | `svg-editor-e1x` | Full gradient editor UI | P3 | Depends on `svg-editor-brz` fix |
 | `svg-editor-cno` | Bug: dragging Tree group hides child layer elements after drop | P2 | Drag/drop visibility bug with nested groups |
 | `svg-editor-0lx` | Investigate group/ungroup behavior with pre-existing groups | P2 | Edge-case exploration for nested group operations |
@@ -98,9 +98,9 @@ flowchart LR
 
 ## Recommended execution order
 
-1. **Now (free-standing):** `svg-editor-brz` (bug), `svg-editor-ag5` (UX fix), `svg-editor-60f` (refactoring)
+1. ~~**Now (free-standing):** `svg-editor-brz` (bug), `svg-editor-ag5` (UX fix), `svg-editor-60f` (refactoring)~~ -- **DONE**
 2. ~~**Epic 7** (shape creation)~~ -- **DONE**
-3. **Epic 13** (pen / path tool) -- creation companion; enables freeform drawing
+3. ~~**Epic 13** (pen / path tool)~~ -- **DONE**
 4. **Epic 8** (clipboard / duplication) -- standard editor expectation, high value once shapes can be created
 5. **Epic 11** (align / distribute) -- high value with multi-select already in place
 6. **Epic 12** (snap / guides) -- improves creation and positioning precision
@@ -128,10 +128,10 @@ Status/progress below is current as of 2026-04-21.
 | text-editing | `svg-editor-nkz` | Text editing | `OPEN` | 0/7 |
 | align-distribute | TBD | Align and distribute | `OPEN` | 0/5 |
 | snap-guides | TBD | Snap and guides | `OPEN` | 0/8 |
-| pen-path-tool | `svg-editor-tfs` | Pen and path tool | `OPEN` | 7/7 |
+| pen-path-tool | `svg-editor-tfs` | Pen and path tool | `CLOSED` | 7/7 |
 | canvas-artboard | `svg-editor-dl9` | Canvas and artboard | `CLOSED` | 7/7 |
 | path-node-editing | `svg-editor-cfc` | Path node editing | `CLOSED` | 5/5 |
-| advanced-path-editing | `svg-editor-4nz` | Advanced path editing | `OPEN` | 1/6 |
+| advanced-path-editing | `svg-editor-4nz` | Advanced path editing | `OPEN` | 1/7 |
 
 ## How to use this roadmap
 

@@ -1379,6 +1379,25 @@ describe('SvgManipulationService', () => {
       expect(props.fillPaintType).not.toBe('solid');
     });
 
+    it('preserves gradient classification when rendered fill is rgb but raw fill is url(#...)', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="g1">
+            <stop offset="0%" stop-color="#FF0000"/>
+            <stop offset="100%" stop-color="#0000FF"/>
+          </linearGradient>
+        </defs>
+        <rect id="r1" x="0" y="0" width="50" height="50" fill="url(#g1)" style="fill: rgb(255, 0, 0)"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const el = svg.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.fillPaintType).toBe('gradient');
+      expect(props.fillUrl).toContain('url(#g1)');
+      expect(props.fill).toBeUndefined();
+    });
+
     it('getShapeProperties returns solid strokePaintType for hex stroke', () => {
       const svgContent = `<svg viewBox="0 0 100 100">
         <rect id="r1" x="0" y="0" width="50" height="50" stroke="#00FF00" stroke-width="2"/>
@@ -1730,7 +1749,7 @@ describe('SvgManipulationService', () => {
       expect(id).toBeTruthy();
 
       const svgInstance = service.getSVGInstance()!;
-      const pathEl = svgInstance.findOne(`#${id!}`)!;
+      const pathEl = svgInstance.findOne(`#${id!}`)! as import('@svgdotjs/svg.js').Element;
       expect(pathEl).toBeTruthy();
       selectionSvc.selectShape(service.getShapeProperties(pathEl));
 

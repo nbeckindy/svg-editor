@@ -20,10 +20,12 @@
 | APE-3 | Spike: node editing for non-path shapes via convert-to-path | `svg-editor-18f` | `task` | Document which shape types can be node-edited directly versus requiring conversion; propose convert-to-path flow preserving style/transform; identify destructive/irreversible risks; recommend MVP and follow-ups. | APE-2 (context), shape model | 120 |
 | APE-4 | UX brainstorm: bezier anchor and handle interactions | `svg-editor-f31` | `task` | Compare interactions from common vector editors and propose anchor/handle states, modifier keys, and smooth/corner semantics suitable for this app; output implementable interaction spec and phased follow-up beads. | APE-2 | 120 |
 | APE-5 | Gap analysis: missing pen tool capabilities | `svg-editor-f5z` | `task` | Produce prioritized backlog of missing pen capabilities, split MVP-critical vs post-MVP, and capture dependencies/risks with recommended implementation bead list. | `svg-editor-tfs`, APE-4 | 90 |
+| APE-6 | Multi-selection node editing with all-node visibility | `svg-editor-4nz.3` | `feature` | In node edit mode, users can edit path nodes even when multiple shapes are selected; node affordances are rendered for all eligible selected shapes (not only one); edits apply to the intended target shape without dropping the multi-selection context; undo/redo restores both geometry and selection state; tests cover mixed multi-selection (editable and non-editable shapes). | `svg-editor-cfc.5`, APE-2 | 210 |
 
 ## Exit criteria
 
 - Existing paths support structural refinement (insert/delete nodes) with undo/redo safety.
+- Node editing remains usable in multi-selection workflows, with nodes visible for all eligible selected shapes.
 - Team has a concrete strategy for non-path object node editing (including convert-to-path implications).
 - Bezier editing interactions have a documented UX baseline aligned with mainstream vector editors.
 - Missing pen features are prioritized and translated into actionable follow-up work.

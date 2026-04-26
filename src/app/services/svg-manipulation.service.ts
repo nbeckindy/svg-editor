@@ -725,7 +725,11 @@ export class SvgManipulationService {
           ? rawFill
           : '';
 
-    const fillClassification = this.classifyPaint(fillCss || rawFill);
+    const rawFillClassification = this.classifyPaint(rawFill);
+    const fillClassification =
+      rawFillClassification.type === 'gradient' || rawFillClassification.type === 'pattern'
+        ? rawFillClassification
+        : this.classifyPaint(fillCss || rawFill);
     let fillForPicker: string | undefined;
     let fillPaintType: PaintType = fillClassification.type;
     let fillUrl: string | undefined;
@@ -760,7 +764,11 @@ export class SvgManipulationService {
     const strokeWidth = strokePainted && Number.isFinite(sw) ? sw : 0;
     const strokeIsNone = !strokePainted || !strokeCss || strokeCss === 'none' || strokeWidth === 0;
 
-    const strokeClassification = this.classifyPaint(strokeCss || rawStroke);
+    const rawStrokeClassification = this.classifyPaint(rawStroke);
+    const strokeClassification =
+      rawStrokeClassification.type === 'gradient' || rawStrokeClassification.type === 'pattern'
+        ? rawStrokeClassification
+        : this.classifyPaint(strokeCss || rawStroke);
     let strokeForPicker: string | undefined;
     let strokePaintType: PaintType = strokeIsNone ? 'none' : strokeClassification.type;
     let strokeUrl: string | undefined;

@@ -4,3 +4,5 @@ export { DragGesture } from './drag-gesture';
 export { ResizeGesture } from './resize-gesture';
 export { RotateGesture } from './rotate-gesture';
 export { CreationGesture } from './creation-gesture';
+export { SelectionMarqueeGesture } from './selection-marquee-gesture';
+export { ZoomMarqueeGesture } from './zoom-marquee-gesture';

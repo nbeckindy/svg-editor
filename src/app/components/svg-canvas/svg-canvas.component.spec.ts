@@ -3234,6 +3234,38 @@ describe('SvgCanvasComponent', () => {
       removeSpy.mockRestore();
     });
 
+    it('undo after Delete restores deleted shape selection', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Delete', bubbles: true }));
+      expect(shapeSelectionService.getSelectedShapes().length).toBe(0);
+      expect(fixture.nativeElement.querySelector('#r1')).toBeNull();
+
+      editorHistoryService.undo();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+
+      const selected = shapeSelectionService.getSelectedShapes();
+      expect(selected.map((shape) => shape.id)).toEqual(['r1']);
+      expect(fixture.nativeElement.querySelector('#r1')).not.toBeNull();
+    });
+
     it('Escape clears selection', async () => {
       editorToolService.setTool('selector');
       fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
