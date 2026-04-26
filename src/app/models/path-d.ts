@@ -12,6 +12,117 @@ type PathToken = { kind: 'command'; value: string } | { kind: 'number'; value: n
 
 const COMMAND_RE = /^[a-zA-Z]$/;
 const NUMBER_RE = /^[+-]?(?:\d+\.?\d*|\.\d+)(?:[eE][+-]?\d+)?/;
+const TAU = Math.PI * 2;
+
+function vectorAngle(ux: number, uy: number, vx: number, vy: number): number {
+  return Math.atan2(ux * vy - uy * vx, ux * vx + uy * vy);
+}
+
+function arcToCubicSegments(
+  startX: number,
+  startY: number,
+  rxIn: number,
+  ryIn: number,
+  axisRotationDeg: number,
+  largeArc: boolean,
+  sweep: boolean,
+  endX: number,
+  endY: number
+): Array<Extract<PathSegment, { type: 'C' }>> {
+  if ((Math.abs(startX - endX) < 1e-12 && Math.abs(startY - endY) < 1e-12) || rxIn === 0 || ryIn === 0) {
+    return [];
+  }
+
+  let rx = Math.abs(rxIn);
+  let ry = Math.abs(ryIn);
+  if (rx < 1e-12 || ry < 1e-12) return [];
+
+  const phi = (axisRotationDeg % 360) * (Math.PI / 180);
+  const cosPhi = Math.cos(phi);
+  const sinPhi = Math.sin(phi);
+
+  const dx2 = (startX - endX) / 2;
+  const dy2 = (startY - endY) / 2;
+  const x1p = cosPhi * dx2 + sinPhi * dy2;
+  const y1p = -sinPhi * dx2 + cosPhi * dy2;
+
+  const x1pSq = x1p * x1p;
+  const y1pSq = y1p * y1p;
+  let rxSq = rx * rx;
+  let rySq = ry * ry;
+
+  const lambda = x1pSq / rxSq + y1pSq / rySq;
+  if (lambda > 1) {
+    const scale = Math.sqrt(lambda);
+    rx *= scale;
+    ry *= scale;
+    rxSq = rx * rx;
+    rySq = ry * ry;
+  }
+
+  const sign = largeArc === sweep ? -1 : 1;
+  const numerator = rxSq * rySq - rxSq * y1pSq - rySq * x1pSq;
+  const denominator = rxSq * y1pSq + rySq * x1pSq;
+  const root = denominator <= 0 ? 0 : Math.sqrt(Math.max(0, numerator / denominator));
+  const coef = sign * root;
+  const cxp = coef * ((rx * y1p) / ry);
+  const cyp = coef * (-(ry * x1p) / rx);
+
+  const centerX = cosPhi * cxp - sinPhi * cyp + (startX + endX) / 2;
+  const centerY = sinPhi * cxp + cosPhi * cyp + (startY + endY) / 2;
+
+  const ux = (x1p - cxp) / rx;
+  const uy = (y1p - cyp) / ry;
+  const vx = (-x1p - cxp) / rx;
+  const vy = (-y1p - cyp) / ry;
+
+  const theta1 = vectorAngle(1, 0, ux, uy);
+  let deltaTheta = vectorAngle(ux, uy, vx, vy);
+  if (!sweep && deltaTheta > 0) {
+    deltaTheta -= TAU;
+  } else if (sweep && deltaTheta < 0) {
+    deltaTheta += TAU;
+  }
+
+  const segmentCount = Math.max(1, Math.ceil(Math.abs(deltaTheta) / (Math.PI / 2)));
+  const step = deltaTheta / segmentCount;
+  const segments: Array<Extract<PathSegment, { type: 'C' }>> = [];
+
+  const mapPoint = (u: number, v: number): { x: number; y: number } => ({
+    x: centerX + cosPhi * rx * u - sinPhi * ry * v,
+    y: centerY + sinPhi * rx * u + cosPhi * ry * v
+  });
+
+  for (let i = 0; i < segmentCount; i++) {
+    const t1 = theta1 + i * step;
+    const t2 = t1 + step;
+    const cosT1 = Math.cos(t1);
+    const sinT1 = Math.sin(t1);
+    const cosT2 = Math.cos(t2);
+    const sinT2 = Math.sin(t2);
+
+    const alpha = (4 / 3) * Math.tan((t2 - t1) / 4);
+    const c1Unit = { x: cosT1 - alpha * sinT1, y: sinT1 + alpha * cosT1 };
+    const c2Unit = { x: cosT2 + alpha * sinT2, y: sinT2 - alpha * cosT2 };
+    const endUnit = { x: cosT2, y: sinT2 };
+
+    const c1 = mapPoint(c1Unit.x, c1Unit.y);
+    const c2 = mapPoint(c2Unit.x, c2Unit.y);
+    const p = mapPoint(endUnit.x, endUnit.y);
+
+    segments.push({
+      type: 'C',
+      x1: c1.x,
+      y1: c1.y,
+      x2: c2.x,
+      y2: c2.y,
+      x: i === segmentCount - 1 ? endX : p.x,
+      y: i === segmentCount - 1 ? endY : p.y
+    });
+  }
+
+  return segments;
+}
 
 function formatCoord(n: number): string {
   if (!Number.isFinite(n)) return '0';
@@ -59,7 +170,7 @@ function isNumberToken(token: PathToken | undefined): token is { kind: 'number';
 /**
  * Parse SVG `d` path data into absolute segments.
  *
- * Supports M/L/C/Q/T/Z (uppercase + lowercase); smooth `T`/`t` is normalized to explicit `Q`.
+ * Supports M/L/H/V/C/Q/T/A/Z (uppercase + lowercase); smooth `T`/`t` is normalized to explicit `Q`.
  * Unsupported commands are reported in `errors`.
  * Parser is tolerant by design: it never throws and returns any valid prefix it can parse.
  */
@@ -118,7 +229,17 @@ export function parsePathD(pathData: string): ParsePathDResult {
     const upper = command.toUpperCase();
     const relative = command !== upper;
 
-    if (upper !== 'M' && upper !== 'L' && upper !== 'C' && upper !== 'Z' && upper !== 'Q' && upper !== 'T') {
+    if (
+      upper !== 'M' &&
+      upper !== 'L' &&
+      upper !== 'H' &&
+      upper !== 'V' &&
+      upper !== 'C' &&
+      upper !== 'Z' &&
+      upper !== 'Q' &&
+      upper !== 'T' &&
+      upper !== 'A'
+    ) {
       errors.push(`Unsupported path command "${command}".`);
       activeCommand = null;
       skipNumbersUntilNextCommand();
@@ -191,6 +312,36 @@ export function parsePathD(pathData: string): ParsePathDResult {
       continue;
     }
 
+    if (upper === 'H') {
+      let consumedAny = false;
+      while (isNumberToken(tokens[index])) {
+        consumedAny = true;
+        const x = readNumber();
+        if (x === null) break;
+        const absX = relative ? currentX + x : x;
+        segments.push({ type: 'L', x: absX, y: currentY });
+        currentX = absX;
+        syncQuadToCurrent();
+      }
+      if (!consumedAny) errors.push(`Command ${command} is missing horizontal coordinates.`);
+      continue;
+    }
+
+    if (upper === 'V') {
+      let consumedAny = false;
+      while (isNumberToken(tokens[index])) {
+        consumedAny = true;
+        const y = readNumber();
+        if (y === null) break;
+        const absY = relative ? currentY + y : y;
+        segments.push({ type: 'L', x: currentX, y: absY });
+        currentY = absY;
+        syncQuadToCurrent();
+      }
+      if (!consumedAny) errors.push(`Command ${command} is missing vertical coordinates.`);
+      continue;
+    }
+
     if (upper === 'Q') {
       let consumedAny = false;
       while (isNumberToken(tokens[index])) {
@@ -232,6 +383,56 @@ export function parsePathD(pathData: string): ParsePathDResult {
         currentY = absY;
       }
       if (!consumedAny) errors.push(`Command ${command} is missing coordinate pairs.`);
+      continue;
+    }
+
+    if (upper === 'A') {
+      let consumedAny = false;
+      while (isNumberToken(tokens[index])) {
+        consumedAny = true;
+        const rx = readNumber();
+        const ry = readNumber();
+        const axisRotation = readNumber();
+        const largeArcFlag = readNumber();
+        const sweepFlag = readNumber();
+        const x = readNumber();
+        const y = readNumber();
+        if (
+          rx === null ||
+          ry === null ||
+          axisRotation === null ||
+          largeArcFlag === null ||
+          sweepFlag === null ||
+          x === null ||
+          y === null
+        ) {
+          break;
+        }
+        const absX = relative ? currentX + x : x;
+        const absY = relative ? currentY + y : y;
+        const cubics = arcToCubicSegments(
+          currentX,
+          currentY,
+          rx,
+          ry,
+          axisRotation,
+          largeArcFlag !== 0,
+          sweepFlag !== 0,
+          absX,
+          absY
+        );
+        if (cubics.length === 0) {
+          if (Math.abs(absX - currentX) > 1e-12 || Math.abs(absY - currentY) > 1e-12) {
+            segments.push({ type: 'L', x: absX, y: absY });
+          }
+        } else {
+          segments.push(...cubics);
+        }
+        currentX = absX;
+        currentY = absY;
+        syncQuadToCurrent();
+      }
+      if (!consumedAny) errors.push(`Command ${command} is missing arc tuples.`);
       continue;
     }
 

@@ -56,6 +56,51 @@ describe('parsePathD', () => {
     expect(result.errors).toContain('Unsupported path command "S".');
   });
 
+  it('parses arc commands by normalizing to cubic segments', () => {
+    const result = parsePathD('M 10 10 A 10 10 0 0 1 30 10');
+    expect(result.errors).toEqual([]);
+    expect(result.segments[0]).toEqual({ type: 'M', x: 10, y: 10 });
+    expect(result.segments[1]?.type).toBe('C');
+    const last = result.segments[result.segments.length - 1];
+    expect(last).toMatchObject({ type: 'C', x: 30, y: 10 });
+  });
+
+  it('parses relative arcs into absolute cubic segments', () => {
+    const result = parsePathD('M 5 5 a 15 10 30 0 1 20 10');
+    expect(result.errors).toEqual([]);
+    expect(result.segments[0]).toEqual({ type: 'M', x: 5, y: 5 });
+    const last = result.segments[result.segments.length - 1];
+    expect(last).toMatchObject({ type: 'C', x: 25, y: 15 });
+  });
+
+  it('splits large arcs into multiple cubic segments', () => {
+    const result = parsePathD('M 0 0 A 40 40 0 1 1 0 80');
+    expect(result.errors).toEqual([]);
+    const cubicCount = result.segments.filter((segment) => segment.type === 'C').length;
+    expect(cubicCount).toBeGreaterThan(1);
+  });
+
+  it('falls back to line for zero-radius arc', () => {
+    const result = parsePathD('M 0 0 A 0 10 0 0 1 20 30');
+    expect(result.errors).toEqual([]);
+    expect(result.segments).toEqual([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 20, y: 30 }
+    ]);
+  });
+
+  it('normalizes H/V commands into L segments', () => {
+    const result = parsePathD('M 1 2 H 5 v 3 h -2 V 0');
+    expect(result.errors).toEqual([]);
+    expect(result.segments).toEqual([
+      { type: 'M', x: 1, y: 2 },
+      { type: 'L', x: 5, y: 2 },
+      { type: 'L', x: 5, y: 5 },
+      { type: 'L', x: 3, y: 5 },
+      { type: 'L', x: 3, y: 0 }
+    ]);
+  });
+
   it('parses absolute Q and normalizes T using reflected control', () => {
     const result = parsePathD('M 0 0 Q 5 10 10 0 T 20 0');
     expect(result.errors).toEqual([]);
@@ -104,8 +149,25 @@ describe('parsePathDForNodeEditing', () => {
     expect(s?.[2].type).toBe('Q');
   });
 
+  it('returns cubic-normalized segments for arc paths', () => {
+    const s = parsePathDForNodeEditing('M 0 0 A 10 5 0 0 1 20 0');
+    expect(s).not.toBeNull();
+    expect(s?.[0]).toEqual({ type: 'M', x: 0, y: 0 });
+    expect(s?.some((segment) => segment.type === 'C')).toBe(true);
+  });
+
+  it('returns segments for mixed arc + H/V icon-style path data', () => {
+    const pathData =
+      'M14 1a1 1 0 0 1 1 1v8a1 1 0 0 1-1 1H4.414A2 2 0 0 0 3 11.586l-2 2V2a1 1 0 0 1 1-1zM2 0a2 2 0 0 0-2 2v12.793a.5.5 0 0 0 .854.353l2.853-2.853A1 1 0 0 1 4.414 12H14a2 2 0 0 0 2-2V2a2 2 0 0 0-2-2z';
+    const s = parsePathDForNodeEditing(pathData);
+    expect(s).not.toBeNull();
+    expect(s?.[0]?.type).toBe('M');
+    expect(s?.some((segment) => segment.type === 'C')).toBe(true);
+    expect(s?.some((segment) => segment.type === 'L')).toBe(true);
+  });
+
   it('returns null when parse errors exist', () => {
-    expect(parsePathDForNodeEditing('M 0 0 A 1 1 0 0 0 5 0')).toBeNull();
+    expect(parsePathDForNodeEditing('M 0 0 A 1 1 0 0')).toBeNull();
   });
 });
 

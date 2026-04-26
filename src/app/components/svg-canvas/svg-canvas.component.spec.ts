@@ -2411,27 +2411,26 @@ describe('SvgCanvasComponent', () => {
       expect((feedback as HTMLElement | null)?.textContent ?? '').toContain('Node editing supports');
     });
 
-    it('does not enter node-edit mode for unsupported path commands and keeps original d', async () => {
+    it('enters node-edit mode for arc paths by normalizing arcs to cubic segments', async () => {
       await loadSvgForSelector(
-        '<svg viewBox="0 0 100 100"><path id="path-unsupported" d="M 10 10 A 10 10 0 0 1 40 10" /></svg>'
+        '<svg viewBox="0 0 100 100"><path id="path-arc" d="M 10 10 A 10 10 0 0 1 40 10" /></svg>'
       );
       shapeSelectionService.selectShape({
-        id: 'path-unsupported',
+        id: 'path-arc',
         type: 'path',
         fill: '#000',
         stroke: undefined,
         strokeWidth: 0,
         opacity: 1
       });
-      const pathEl = fixture.nativeElement.querySelector('#path-unsupported') as SVGPathElement;
+      const pathEl = fixture.nativeElement.querySelector('#path-arc') as SVGPathElement;
       const beforeD = pathEl.getAttribute('d');
       await activateNodeEditSelectorTool();
 
-      expect(component.isPathNodeEditModeActive).toBe(false);
+      expect(component.isPathNodeEditModeActive).toBe(true);
       expect(pathEl.getAttribute('d')).toBe(beforeD);
-      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBe(0);
-      const feedback = fixture.nativeElement.querySelector('[data-testid="canvas-path-node-edit-feedback"]');
-      expect((feedback as HTMLElement | null)?.textContent ?? '').toContain('Node editing supports');
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBeGreaterThan(1);
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-control-handle"]').length).toBeGreaterThan(1);
     });
 
     it('enters node-edit mode for quadratic Q and smooth T segments', async () => {
@@ -2623,7 +2622,7 @@ describe('SvgCanvasComponent', () => {
 
     it('pen tool does not insert on paths with unsupported commands', async () => {
       await loadSvgAndPenMode(
-        '<svg viewBox="0 0 100 100"><path id="pen-bad-cmd" d="M 0 0 A 10 10 0 0 1 40 0 L 80 0" fill="none" stroke="black"/></svg>'
+        '<svg viewBox="0 0 100 100"><path id="pen-bad-cmd" d="M 0 0 S 20 20 40 0 L 80 0" fill="none" stroke="black"/></svg>'
       );
       const pathEl = fixture.nativeElement.querySelector('#pen-bad-cmd') as SVGPathElement | null;
       expect(pathEl).toBeTruthy();
