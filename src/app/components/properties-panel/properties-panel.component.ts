@@ -1,10 +1,11 @@
-import { Component, inject } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
+import { EditorToolService } from '../../services/editor-tool.service';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-properties.interface';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
 import { DocumentSettingsComponent } from '../document-settings/document-settings.component';
@@ -20,7 +21,9 @@ import {
   BakeFillCommand,
   BakeStrokeCommand,
   StrokeDashArrayCommand,
-  StrokeDashOffsetCommand
+  StrokeDashOffsetCommand,
+  AlignCommand,
+  DistributeCommand
 } from '../../models/editor-commands';
 
 @Component({
@@ -35,6 +38,18 @@ export class PropertiesPanelComponent {
   readonly selectionCount = this.shapeSelectionService.selectionCount;
   private svgManipulationService = inject(SvgManipulationService);
   private editorHistory = inject(EditorHistoryService);
+  private editorTool = inject(EditorToolService);
+  readonly isSelectorMode = computed(() => this.editorTool.currentTool() === 'selector');
+  readonly alignShortcutLabels = {
+    left: 'Ctrl/Cmd+Shift+Left',
+    center: 'Ctrl/Cmd+Shift+Down',
+    right: 'Ctrl/Cmd+Shift+Right',
+    top: 'Ctrl/Cmd+Shift+Up',
+    middle: 'Ctrl/Cmd+Shift+M',
+    bottom: 'Ctrl/Cmd+Shift+B',
+    distributeHorizontal: 'Ctrl/Cmd+Shift+H',
+    distributeVertical: 'Ctrl/Cmd+Shift+V'
+  } as const;
 
   private pushCommand(commands: EditorCommand[], fallbackDescription?: string): void {
     if (commands.length === 0) return;
@@ -460,5 +475,27 @@ export class PropertiesPanelComponent {
   onClearSelection(): void {
     this.shapeSelectionService.clearSelection();
     this.svgManipulationService.clearHighlight();
+  }
+
+  canAlignSelection(): boolean {
+    return this.selectionCount() >= 2;
+  }
+
+  canDistributeSelection(): boolean {
+    return this.selectionCount() >= 3;
+  }
+
+  onAlign(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'): void {
+    const ids = this.selectedShapesList().map((shape) => shape.id);
+    if (ids.length < 2) return;
+    this.pushCommand([new AlignCommand(this.svgManipulationService, ids, direction)]);
+    this.syncAllSelectedFromDom();
+  }
+
+  onDistribute(direction: 'horizontal' | 'vertical'): void {
+    const ids = this.selectedShapesList().map((shape) => shape.id);
+    if (ids.length < 3) return;
+    this.pushCommand([new DistributeCommand(this.svgManipulationService, ids, direction)]);
+    this.syncAllSelectedFromDom();
   }
 }

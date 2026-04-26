@@ -3,6 +3,7 @@ import { computed, signal, WritableSignal } from '@angular/core';
 import { PropertiesPanelComponent } from './properties-panel.component';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { EditorToolService } from '../../services/editor-tool.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import { DEFAULT_ARTBOARD } from '../../models/artboard.model';
 import { vi } from 'vitest';
@@ -12,6 +13,7 @@ describe('PropertiesPanelComponent', () => {
   let fixture: ComponentFixture<PropertiesPanelComponent>;
   let shapeSelectionService: ShapeSelectionService;
   let svgManipulationService: SvgManipulationService;
+  let editorToolService: EditorToolService;
   let selectedShapesSignal: WritableSignal<ShapeProperties[]>;
 
   beforeEach(async () => {
@@ -38,6 +40,7 @@ describe('PropertiesPanelComponent', () => {
     };
 
     const artboardSig = signal({ ...DEFAULT_ARTBOARD });
+    const editorToolSignal = signal<'selector' | 'zoom'>('selector');
     const svgManipulationServiceMock = {
       updateFillColor: vi.fn(),
       updateStrokeColor: vi.fn(),
@@ -58,17 +61,22 @@ describe('PropertiesPanelComponent', () => {
       updateStrokeDasharray: vi.fn(),
       updateStrokeDashoffset: vi.fn()
     };
+    const editorToolServiceMock = {
+      currentTool: editorToolSignal
+    };
 
     await TestBed.configureTestingModule({
       imports: [PropertiesPanelComponent],
       providers: [
         { provide: ShapeSelectionService, useValue: shapeSelectionServiceMock },
-        { provide: SvgManipulationService, useValue: svgManipulationServiceMock }
+        { provide: SvgManipulationService, useValue: svgManipulationServiceMock },
+        { provide: EditorToolService, useValue: editorToolServiceMock }
       ]
     }).compileComponents();
 
     shapeSelectionService = TestBed.inject(ShapeSelectionService);
     svgManipulationService = TestBed.inject(SvgManipulationService);
+    editorToolService = TestBed.inject(EditorToolService);
     fixture = TestBed.createComponent(PropertiesPanelComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
@@ -408,5 +416,41 @@ describe('PropertiesPanelComponent', () => {
     ]);
     fixture.detectChanges();
     expect(component.fillMixed()).toBe(true);
+  });
+
+  it('shows align/distribute controls only in selector mode', () => {
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect' }]);
+    fixture.detectChanges();
+    let el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Align');
+    expect(el.textContent).toContain('Distribute');
+
+    editorToolService.currentTool.set('zoom');
+    fixture.detectChanges();
+    el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).not.toContain('Distribute');
+  });
+
+  it('disables align buttons for fewer than 2 selected shapes', () => {
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect' }]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const leftBtn = el.querySelector('button[title*="Align left"]') as HTMLButtonElement | null;
+    expect(leftBtn).toBeTruthy();
+    expect(leftBtn?.disabled).toBe(true);
+  });
+
+  it('enables align and distribute based on selection count thresholds', () => {
+    selectedShapesSignal.set([
+      { id: 'shape-1', type: 'rect' },
+      { id: 'shape-2', type: 'rect' },
+      { id: 'shape-3', type: 'rect' }
+    ]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const leftBtn = el.querySelector('button[title*="Align left"]') as HTMLButtonElement | null;
+    const distHBtn = el.querySelector('button[title*="Distribute horizontally"]') as HTMLButtonElement | null;
+    expect(leftBtn?.disabled).toBe(false);
+    expect(distHBtn?.disabled).toBe(false);
   });
 });

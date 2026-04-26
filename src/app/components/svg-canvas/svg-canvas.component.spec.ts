@@ -3573,7 +3573,7 @@ describe('SvgCanvasComponent', () => {
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'v', ctrlKey: true, bubbles: true }));
       fixture.detectChanges();
 
-      const rects = Array.from(
+      const rects = Array.from<Element>(
         fixture.nativeElement.querySelector('[data-editor-content-group]').querySelectorAll('rect')
       );
       expect(rects.length).toBe(3);
@@ -3646,6 +3646,73 @@ describe('SvgCanvasComponent', () => {
       } finally {
         input.remove();
       }
+    });
+
+    it('Ctrl/Cmd+Shift+ArrowLeft aligns selection left in selector mode', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="20" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      shapeSelectionService.selectShapes([
+        { id: 'r1', type: 'rect', fill: '#000', strokeWidth: 0, opacity: 1 },
+        { id: 'r2', type: 'rect', fill: '#000', strokeWidth: 0, opacity: 1 }
+      ]);
+      const pushSpy = vi.spyOn(editorHistoryService, 'pushAndExecute');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'ArrowLeft', ctrlKey: true, shiftKey: true, bubbles: true }));
+
+      expect(pushSpy).toHaveBeenCalledTimes(1);
+    });
+
+    it('alignment/distribution shortcuts are ignored when not in selector tool', async () => {
+      editorToolService.setTool('zoom');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="20" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      shapeSelectionService.selectShapes([
+        { id: 'r1', type: 'rect', fill: '#000', strokeWidth: 0, opacity: 1 },
+        { id: 'r2', type: 'rect', fill: '#000', strokeWidth: 0, opacity: 1 }
+      ]);
+      const translateSpy = vi.spyOn(svgManipulationService, 'translateShape');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'ArrowLeft', ctrlKey: true, shiftKey: true, bubbles: true }));
+
+      expect(translateSpy).not.toHaveBeenCalled();
+    });
+
+    it('alignment/distribution shortcuts are ignored in text input contexts', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="20" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      shapeSelectionService.selectShapes([
+        { id: 'r1', type: 'rect', fill: '#000', strokeWidth: 0, opacity: 1 },
+        { id: 'r2', type: 'rect', fill: '#000', strokeWidth: 0, opacity: 1 }
+      ]);
+      const translateSpy = vi.spyOn(svgManipulationService, 'translateShape');
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      try {
+        const ev = new KeyboardEvent('keydown', { key: 'ArrowLeft', ctrlKey: true, shiftKey: true, bubbles: true });
+        Object.defineProperty(ev, 'target', { value: input, enumerable: true });
+        component.onKeyDown(ev);
+      } finally {
+        input.remove();
+      }
+
+      expect(translateSpy).not.toHaveBeenCalled();
     });
   });
 });

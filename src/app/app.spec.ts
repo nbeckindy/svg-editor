@@ -182,7 +182,7 @@ describe('AppComponent', () => {
       const app = fixture.componentInstance;
       const editorHistory = TestBed.inject(EditorHistoryService);
 
-      const dummyCmd = { execute: vi.fn(), undo: vi.fn() };
+      const dummyCmd = { description: 'Dummy command', execute: vi.fn(), undo: vi.fn() };
       editorHistory.pushAndExecute(dummyCmd);
       expect(editorHistory.canUndo()).toBe(true);
 
@@ -215,7 +215,7 @@ describe('AppComponent', () => {
       const app = fixture.componentInstance;
       const editorHistory = TestBed.inject(EditorHistoryService);
 
-      const dummyCmd = { execute: vi.fn(), undo: vi.fn() };
+      const dummyCmd = { description: 'Dummy command', execute: vi.fn(), undo: vi.fn() };
       editorHistory.pushAndExecute(dummyCmd);
 
       app.svgContent = '<svg><rect/></svg>';

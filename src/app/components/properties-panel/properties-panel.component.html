@@ -25,6 +25,82 @@
         <div class="property-value readonly">{{ idLabel(shape) }}</div>
       </div>
 
+      @if (isSelectorMode()) {
+        <div class="property-group align-distribute-group">
+          <label class="property-label">Align</label>
+          <div class="align-toolbar">
+            <button
+              type="button"
+              class="align-btn"
+              [disabled]="!canAlignSelection()"
+              [attr.title]="'Align left (' + alignShortcutLabels.left + ')'"
+              (click)="onAlign('left')">
+              Left
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [disabled]="!canAlignSelection()"
+              [attr.title]="'Align center (' + alignShortcutLabels.center + ')'"
+              (click)="onAlign('center')">
+              Center
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [disabled]="!canAlignSelection()"
+              [attr.title]="'Align right (' + alignShortcutLabels.right + ')'"
+              (click)="onAlign('right')">
+              Right
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [disabled]="!canAlignSelection()"
+              [attr.title]="'Align top (' + alignShortcutLabels.top + ')'"
+              (click)="onAlign('top')">
+              Top
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [disabled]="!canAlignSelection()"
+              [attr.title]="'Align middle (' + alignShortcutLabels.middle + ')'"
+              (click)="onAlign('middle')">
+              Middle
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [disabled]="!canAlignSelection()"
+              [attr.title]="'Align bottom (' + alignShortcutLabels.bottom + ')'"
+              (click)="onAlign('bottom')">
+              Bottom
+            </button>
+          </div>
+
+          <label class="property-label distribute-label">Distribute</label>
+          <div class="align-toolbar distribute-toolbar">
+            <button
+              type="button"
+              class="align-btn"
+              [disabled]="!canDistributeSelection()"
+              [attr.title]="'Distribute horizontally (' + alignShortcutLabels.distributeHorizontal + ')'"
+              (click)="onDistribute('horizontal')">
+              Horizontal
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [disabled]="!canDistributeSelection()"
+              [attr.title]="'Distribute vertically (' + alignShortcutLabels.distributeVertical + ')'"
+              (click)="onDistribute('vertical')">
+              Vertical
+            </button>
+          </div>
+        </div>
+      }
+
       @if (supportsFill(shape)) {
         <div class="property-group">
           <label class="property-label" for="fill-color">Fill Color</label>

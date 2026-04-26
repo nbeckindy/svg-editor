@@ -8,6 +8,8 @@ import {
   RemoveStrokeCommand,
   SetStrokeCommand,
   OpacityCommand,
+  AlignCommand,
+  DistributeCommand,
   TranslateCommand,
   UnionScaleCommand,
   UnionRotateCommand,
@@ -46,6 +48,9 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     createClipboardPayload: vi.fn().mockReturnValue({ shapes: [] }),
     pasteClipboardPayload: vi.fn().mockReturnValue({ insertedIds: [], insertedMarkup: [] }),
     updatePathData: vi.fn(),
+    getShapeBBox: vi.fn(),
+    getUnionBBox: vi.fn(),
+    snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
     getSVGInstance: vi.fn().mockReturnValue(null),
     ...overrides,
   } as unknown as SvgManipulationService;
@@ -269,6 +274,226 @@ describe('TranslateCommand', () => {
 
   it('should have a non-empty description', () => {
     expect(new TranslateCommand(mockSvc(), 's1', 10, 20, new Map()).description).toBeTruthy();
+  });
+});
+
+describe('AlignCommand', () => {
+  it('no-ops when fewer than 2 shapes are selected', () => {
+    const svc = mockSvc();
+    const cmd = new AlignCommand(svc, ['s1'], 'left');
+    cmd.execute();
+    expect(svc.translateShape).not.toHaveBeenCalled();
+    expect(svc.getShapeBBox).not.toHaveBeenCalled();
+  });
+
+  it('aligns left using union bounds and snapshots for undo', () => {
+    const svc = mockSvc({
+      getShapeBBox: vi.fn((id: string) => {
+        if (id === 'a') return { x: 10, y: 10, width: 20, height: 20 };
+        if (id === 'b') return { x: 40, y: 10, width: 20, height: 20 };
+        return null;
+      }),
+      getUnionBBox: vi.fn().mockReturnValue({ x: 10, y: 10, width: 50, height: 20 }),
+      snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map([['a', new Matrix()], ['b', new Matrix()]]))
+    });
+    const cmd = new AlignCommand(svc, ['a', 'b'], 'left');
+    cmd.execute();
+    expect(svc.getShapeBBox).toHaveBeenNthCalledWith(1, 'a', { preferScreenBounds: true });
+    expect(svc.getShapeBBox).toHaveBeenNthCalledWith(2, 'b', { preferScreenBounds: true });
+    expect(svc.getUnionBBox).toHaveBeenCalledWith(['a', 'b'], { preferScreenBounds: true });
+    expect(svc.snapshotSelectionTransforms).toHaveBeenCalledWith(['a', 'b']);
+    expect(svc.translateShape).toHaveBeenCalledTimes(1);
+    expect(svc.translateShape).toHaveBeenCalledWith('b', -30, 0);
+  });
+
+  it('aligns center with same bbox mode when preferScreenBounds is false', () => {
+    const svc = mockSvc({
+      getShapeBBox: vi.fn((id: string) => {
+        if (id === 'a') return { x: 0, y: 0, width: 10, height: 10 };
+        if (id === 'b') return { x: 20, y: 0, width: 10, height: 10 };
+        return null;
+      }),
+      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 30, height: 10 })
+    });
+    const cmd = new AlignCommand(svc, ['a', 'b'], 'center', false);
+    cmd.execute();
+    expect(svc.getShapeBBox).toHaveBeenNthCalledWith(1, 'a', { preferScreenBounds: false });
+    expect(svc.getShapeBBox).toHaveBeenNthCalledWith(2, 'b', { preferScreenBounds: false });
+    expect(svc.getUnionBBox).toHaveBeenCalledWith(['a', 'b'], { preferScreenBounds: false });
+    expect(svc.translateShape).toHaveBeenCalledWith('a', 10, 0);
+    expect(svc.translateShape).toHaveBeenCalledWith('b', -10, 0);
+  });
+
+  it('no-ops on degenerate union bounds', () => {
+    const svc = mockSvc({
+      getShapeBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 10, height: 10 }),
+      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 0, height: 10 })
+    });
+    const cmd = new AlignCommand(svc, ['a', 'b'], 'top');
+    cmd.execute();
+    expect(svc.translateShape).not.toHaveBeenCalled();
+    expect(svc.snapshotSelectionTransforms).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    ['right', { x: 40, y: 10, width: 20, height: 20 }, { x: 10, y: 10, width: 20, height: 20 }, ['b', 30, 0]],
+    ['top', { x: 10, y: 40, width: 20, height: 20 }, { x: 10, y: 10, width: 20, height: 20 }, ['a', 0, -30]],
+    ['middle', { x: 10, y: 40, width: 20, height: 20 }, { x: 10, y: 10, width: 20, height: 20 }, ['a', 0, -15]],
+    ['bottom', { x: 10, y: 40, width: 20, height: 20 }, { x: 10, y: 10, width: 20, height: 20 }, ['b', 0, 30]]
+  ] as const)(
+    'aligns %s with expected translation',
+    (direction, aBounds, bBounds, expectedCall) => {
+      const svc = mockSvc({
+        getShapeBBox: vi.fn((id: string) => {
+          if (id === 'a') return aBounds;
+          if (id === 'b') return bBounds;
+          return null;
+        }),
+        getUnionBBox: vi.fn().mockReturnValue({ x: 10, y: 10, width: 50, height: 50 }),
+        snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map([['a', new Matrix()], ['b', new Matrix()]]))
+      });
+
+      const cmd = new AlignCommand(svc, ['a', 'b'], direction);
+      cmd.execute();
+      expect(svc.translateShape).toHaveBeenCalledWith(expectedCall[0], expectedCall[1], expectedCall[2]);
+    }
+  );
+
+  it('undo restores original transforms after alignment', () => {
+    const matrixA = new Matrix();
+    const matrixB = new Matrix();
+    const elA = makeMockSvgElement('a', matrixA);
+    const elB = makeMockSvgElement('b', matrixB);
+    const findOne = vi.fn((sel: string) => {
+      if (sel === '#a') return elA;
+      if (sel === '#b') return elB;
+      return undefined;
+    });
+    const svc = mockSvc({
+      getShapeBBox: vi.fn((id: string) => id === 'a'
+        ? { x: 0, y: 0, width: 10, height: 10 }
+        : { x: 20, y: 0, width: 10, height: 10 }),
+      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 30, height: 10 }),
+      snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map([['a', matrixA], ['b', matrixB]])),
+      getSVGInstance: vi.fn().mockReturnValue({ findOne })
+    });
+
+    const cmd = new AlignCommand(svc, ['a', 'b'], 'center');
+    cmd.execute();
+    cmd.undo();
+    expect(elA.matrix).toHaveBeenCalledWith(matrixA);
+    expect(elB.matrix).toHaveBeenCalledWith(matrixB);
+  });
+
+  it('no-ops when any bbox has zero area', () => {
+    const svc = mockSvc({
+      getShapeBBox: vi.fn((id: string) => id === 'a'
+        ? { x: 0, y: 0, width: 0, height: 10 }
+        : { x: 20, y: 0, width: 10, height: 10 }),
+      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 30, height: 10 })
+    });
+    const cmd = new AlignCommand(svc, ['a', 'b'], 'left');
+    cmd.execute();
+    expect(svc.translateShape).not.toHaveBeenCalled();
+  });
+});
+
+describe('DistributeCommand', () => {
+  it('no-ops when fewer than 3 shapes are selected', () => {
+    const svc = mockSvc();
+    const cmd = new DistributeCommand(svc, ['a', 'b'], 'horizontal');
+    cmd.execute();
+    expect(svc.translateShape).not.toHaveBeenCalled();
+    expect(svc.getShapeBBox).not.toHaveBeenCalled();
+  });
+
+  it('distributes horizontally by center with stable tie-breaker', () => {
+    const svc = mockSvc({
+      getShapeBBox: vi.fn((id: string) => {
+        if (id === 'a') return { x: 0, y: 0, width: 10, height: 10 };   // center 5
+        if (id === 'b') return { x: 0, y: 20, width: 10, height: 10 };  // center 5
+        if (id === 'c') return { x: 30, y: 0, width: 10, height: 10 };  // center 35
+        return null;
+      }),
+      snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map([['a', new Matrix()], ['b', new Matrix()], ['c', new Matrix()]]))
+    });
+    const cmd = new DistributeCommand(svc, ['a', 'b', 'c'], 'horizontal');
+    cmd.execute();
+    expect(svc.getShapeBBox).toHaveBeenNthCalledWith(1, 'a', { preferScreenBounds: true });
+    expect(svc.getShapeBBox).toHaveBeenNthCalledWith(2, 'b', { preferScreenBounds: true });
+    expect(svc.getShapeBBox).toHaveBeenNthCalledWith(3, 'c', { preferScreenBounds: true });
+    expect(svc.snapshotSelectionTransforms).toHaveBeenCalledWith(['a', 'b', 'c']);
+    expect(svc.translateShape).toHaveBeenCalledWith('b', 15, 0);
+    expect(svc.translateShape).not.toHaveBeenCalledWith('a', expect.any(Number), expect.any(Number));
+    expect(svc.translateShape).not.toHaveBeenCalledWith('c', expect.any(Number), expect.any(Number));
+  });
+
+  it('distributes vertically with expected center spacing', () => {
+    const svc = mockSvc({
+      getShapeBBox: vi.fn((id: string) => {
+        if (id === 'a') return { x: 0, y: 0, width: 10, height: 10 };   // center y 5
+        if (id === 'b') return { x: 0, y: 10, width: 10, height: 10 };  // center y 15
+        if (id === 'c') return { x: 0, y: 40, width: 10, height: 10 };  // center y 45
+        return null;
+      })
+    });
+    const cmd = new DistributeCommand(svc, ['a', 'b', 'c'], 'vertical');
+    cmd.execute();
+    expect(svc.translateShape).toHaveBeenCalledWith('b', 0, 10);
+  });
+
+  it('no-ops when span is degenerate', () => {
+    const svc = mockSvc({
+      getShapeBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 10, height: 10 })
+    });
+    const cmd = new DistributeCommand(svc, ['a', 'b', 'c'], 'horizontal');
+    cmd.execute();
+    expect(svc.translateShape).not.toHaveBeenCalled();
+    expect(svc.snapshotSelectionTransforms).not.toHaveBeenCalled();
+  });
+
+  it('undo restores original transforms after distribution', () => {
+    const matrixA = new Matrix();
+    const matrixB = new Matrix();
+    const matrixC = new Matrix();
+    const elA = makeMockSvgElement('a', matrixA);
+    const elB = makeMockSvgElement('b', matrixB);
+    const elC = makeMockSvgElement('c', matrixC);
+    const findOne = vi.fn((sel: string) => {
+      if (sel === '#a') return elA;
+      if (sel === '#b') return elB;
+      if (sel === '#c') return elC;
+      return undefined;
+    });
+    const svc = mockSvc({
+      getShapeBBox: vi.fn((id: string) => {
+        if (id === 'a') return { x: 0, y: 0, width: 10, height: 10 };
+        if (id === 'b') return { x: 10, y: 0, width: 10, height: 10 };
+        return { x: 40, y: 0, width: 10, height: 10 };
+      }),
+      snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map([['a', matrixA], ['b', matrixB], ['c', matrixC]])),
+      getSVGInstance: vi.fn().mockReturnValue({ findOne })
+    });
+
+    const cmd = new DistributeCommand(svc, ['a', 'b', 'c'], 'horizontal');
+    cmd.execute();
+    cmd.undo();
+    expect(elB.matrix).toHaveBeenCalledWith(matrixB);
+    expect(elA.matrix).not.toHaveBeenCalled();
+    expect(elC.matrix).not.toHaveBeenCalled();
+  });
+
+  it('no-ops when any bbox has zero area', () => {
+    const svc = mockSvc({
+      getShapeBBox: vi.fn((id: string) => {
+        if (id === 'a') return { x: 0, y: 0, width: 10, height: 10 };
+        if (id === 'b') return { x: 10, y: 0, width: 0, height: 10 };
+        return { x: 40, y: 0, width: 10, height: 10 };
+      })
+    });
+    const cmd = new DistributeCommand(svc, ['a', 'b', 'c'], 'horizontal');
+    cmd.execute();
+    expect(svc.translateShape).not.toHaveBeenCalled();
   });
 });
 

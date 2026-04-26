@@ -22,7 +22,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 6 | Transform and gesture UX polish | [transform-ux-polish](./epics/transform-ux-polish.md) | `OPEN` | 0/12 (0%) | Gesture extraction (`svg-editor-60f`) |
 | 8 | Clipboard and duplication | [clipboard-duplication](./epics/clipboard-duplication.md) | `CLOSED` | 5/5 (100%) | Shape creation helpful but not required |
 | 10 | Text editing | [text-editing](./epics/text-editing.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, SC-2a, SC-5) |
-| 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `OPEN` | 0/5 (0%) | Multi-select (done) |
+| 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `CLOSED` | 5/5 (100%) | Multi-select (done) |
 | 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `OPEN` | 0/8 (0%) | Shape creation (epic 7) helpful |
 | 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `CLOSED` | 7/7 (100%) | Shape creation (SC-1, shares tool infra); optional beads tfs.8–11 open in bd |
 | 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `CLOSED` | 5/5 (100%) | Pen tool (PP-2a segment model) |
@@ -102,7 +102,7 @@ flowchart LR
 2. ~~**Epic 7** (shape creation)~~ -- **DONE**
 3. ~~**Epic 13** (pen / path tool)~~ -- **DONE**
 4. ~~**Epic 8** (clipboard / duplication)~~ -- **DONE**
-5. **Epic 11** (align / distribute) -- high value with multi-select already in place
+5. ~~**Epic 11** (align / distribute)~~ -- **DONE**
 6. **Epic 12** (snap / guides) -- improves creation and positioning precision
 7. **Epic 6** (transform UX polish) -- includes skew, z-order UI, modifier keys
 8. **Epic 10** (text editing) -- inline text editing and font controls
@@ -126,7 +126,7 @@ Status/progress below is current as of 2026-04-21.
 | clipboard-duplication | `svg-editor-d79` | Clipboard and duplication | `CLOSED` | 5/5 |
 | file-ops-viewport | `svg-editor-we7` | File operations and viewport UX | `CLOSED` | 5/5 |
 | text-editing | `svg-editor-nkz` | Text editing | `OPEN` | 0/7 |
-| align-distribute | TBD | Align and distribute | `OPEN` | 0/5 |
+| align-distribute | `svg-editor-lzc` | Align and distribute | `CLOSED` | 5/5 |
 | snap-guides | TBD | Snap and guides | `OPEN` | 0/8 |
 | pen-path-tool | `svg-editor-tfs` | Pen and path tool | `CLOSED` | 7/7 |
 | canvas-artboard | `svg-editor-dl9` | Canvas and artboard | `CLOSED` | 7/7 |
