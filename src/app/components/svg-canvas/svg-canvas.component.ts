@@ -4,6 +4,7 @@ import { SvgManipulationService } from '../../services/svg-manipulation.service'
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService, type EditorTool } from '../../services/editor-tool.service';
 import { CanvasViewService } from '../../services/canvas-view.service';
+import { SnapService } from '../../services/snap.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { computeProportionalResizedUnion, type BBox, type ResizeCorner } from '../../utils/selection-resize';
 import {
@@ -19,15 +20,28 @@ import {
   EditorCommand,
   CompositeCommand,
   TranslateCommand,
+  AlignCommand,
+  DistributeCommand,
   UnionScaleCommand,
   UnionRotateCommand,
   RemoveShapesCommand,
   GroupCommand,
   UngroupCommand,
   AddPathCommand,
-  EditPathNodesCommand
+  EditPathNodesCommand,
+  PasteCommand,
+  DuplicateCommand
 } from '../../models/editor-commands';
-import { DragGesture, ResizeGesture, RotateGesture, CreationGesture, type GestureContext, type Rect } from './gestures';
+import {
+  DragGesture,
+  ResizeGesture,
+  RotateGesture,
+  CreationGesture,
+  SelectionMarqueeGesture,
+  ZoomMarqueeGesture,
+  type GestureContext,
+  type Rect
+} from './gestures';
 import {
   PenSession,
   appendCubicToD,
@@ -40,6 +54,8 @@ import {
 } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
 import { insertPenNodeOnParsedPath } from '../../models/path-pen-insert';
+import { ClipboardService } from '../../services/clipboard.service';
+import { SnapCandidateShape } from '../../services/snap.service';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
@@ -62,6 +78,14 @@ const CONTENT_SHAPE_TAGS = new Set([
 const INITIAL_LOAD_VIEWPORT_FIT_FRACTION = 0.88;
 const PEN_FINISH_FEEDBACK_DURATION_MS = 1200;
 const PATH_NODE_EDIT_FEEDBACK_DURATION_MS = 1400;
+const ALIGN_LEFT_SHORTCUT = 'ArrowLeft';
+const ALIGN_RIGHT_SHORTCUT = 'ArrowRight';
+const ALIGN_TOP_SHORTCUT = 'ArrowUp';
+const ALIGN_CENTER_SHORTCUT = 'ArrowDown';
+const ALIGN_MIDDLE_SHORTCUT = 'm';
+const ALIGN_BOTTOM_SHORTCUT = 'b';
+const DISTRIBUTE_HORIZONTAL_SHORTCUT = 'h';
+const DISTRIBUTE_VERTICAL_SHORTCUT = 'v';
 
 interface PathNodePoint {
   x: number;
@@ -97,6 +121,23 @@ interface PathNodeDragSession {
   target:
     | { kind: 'anchor'; index: number }
     | { kind: 'control'; index: number };
+}
+
+interface GridLineOverlay {
+  key: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  major: boolean;
+}
+
+interface SmartGuideLineOverlay {
+  key: string;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
 }
 
 /** Round to nearest "nice" step (1, 2, 5 × 10^n) for readable labels. */
@@ -186,6 +227,139 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     );
   }
 
+  get showGridOverlay(): boolean {
+    return (
+      this.editorTool.isGridSnapEnabled() &&
+      !!this.svgContent() &&
+      this.wrapperWidth > 0 &&
+      this.wrapperHeight > 0 &&
+      this.canvasView.scale > 0
+    );
+  }
+
+  get gridStepSvgUnits(): number {
+    const baseStep = 10;
+    const minScreenSpacingPx = 16;
+    const maxScreenSpacingPx = 48;
+    const scale = this.canvasView.scale;
+    if (scale <= 0 || !Number.isFinite(scale)) return baseStep;
+
+    let step = baseStep;
+    let screenSpacing = step * scale;
+    if (screenSpacing < minScreenSpacingPx) {
+      while (screenSpacing < minScreenSpacingPx) {
+        step *= 2;
+        screenSpacing *= 2;
+      }
+      return step;
+    }
+    while (screenSpacing > maxScreenSpacingPx && step > baseStep / 64) {
+      step /= 2;
+      screenSpacing /= 2;
+    }
+    return step;
+  }
+
+  get verticalGridLines(): GridLineOverlay[] {
+    if (!this.showGridOverlay) return [];
+    const { minSvgX, maxSvgX, minSvgY, maxSvgY } = this.getVisibleSvgBoundsFromRulerFrame();
+    const step = this.gridStepSvgUnits;
+    const majorStep = step * 5;
+    const first = Math.floor(minSvgX / step) * step;
+    const out: GridLineOverlay[] = [];
+    for (let x = first; x <= maxSvgX + step * 0.5; x += step) {
+      const xOverlay = this.svgBboxToOverlayPixels({ x, y: minSvgY, width: 0, height: 0 }).x;
+      const top = this.svgBboxToOverlayPixels({ x, y: minSvgY, width: 0, height: 0 }).y;
+      const bottom = this.svgBboxToOverlayPixels({ x, y: maxSvgY, width: 0, height: 0 }).y;
+      const major = Math.abs((x / majorStep) - Math.round(x / majorStep)) < 1e-6;
+      out.push({
+        key: `vx-${x.toFixed(4)}`,
+        x1: xOverlay,
+        y1: Math.min(top, bottom),
+        x2: xOverlay,
+        y2: Math.max(top, bottom),
+        major
+      });
+    }
+    return out;
+  }
+
+  get horizontalGridLines(): GridLineOverlay[] {
+    if (!this.showGridOverlay) return [];
+    const { minSvgX, maxSvgX, minSvgY, maxSvgY } = this.getVisibleSvgBoundsFromRulerFrame();
+    const step = this.gridStepSvgUnits;
+    const majorStep = step * 5;
+    const first = Math.floor(minSvgY / step) * step;
+    const out: GridLineOverlay[] = [];
+    for (let y = first; y <= maxSvgY + step * 0.5; y += step) {
+      const yOverlay = this.svgBboxToOverlayPixels({ x: minSvgX, y, width: 0, height: 0 }).y;
+      const left = this.svgBboxToOverlayPixels({ x: minSvgX, y, width: 0, height: 0 }).x;
+      const right = this.svgBboxToOverlayPixels({ x: maxSvgX, y, width: 0, height: 0 }).x;
+      const major = Math.abs((y / majorStep) - Math.round(y / majorStep)) < 1e-6;
+      out.push({
+        key: `hy-${y.toFixed(4)}`,
+        x1: Math.min(left, right),
+        y1: yOverlay,
+        x2: Math.max(left, right),
+        y2: yOverlay,
+        major
+      });
+    }
+    return out;
+  }
+
+  get verticalSmartGuideLines(): SmartGuideLineOverlay[] {
+    if (this.altKeyPressed) return [];
+    const guides = this.isDraggingShape
+      ? this.drag.activeGuides.vertical
+      : this.isResizingSelection
+        ? this.resize.activeGuides.vertical
+        : [];
+    if (guides.length === 0 || this.overlayHeightPx <= 0) return [];
+    return guides.map((x) => {
+      const mapped = this.svgBboxToOverlayPixels({ x, y: 0, width: 0, height: 0 });
+      return {
+        key: `smart-v-${x.toFixed(4)}`,
+        x1: mapped.x,
+        y1: 0,
+        x2: mapped.x,
+        y2: this.overlayHeightPx
+      };
+    });
+  }
+
+  get horizontalSmartGuideLines(): SmartGuideLineOverlay[] {
+    if (this.altKeyPressed) return [];
+    const guides = this.isDraggingShape
+      ? this.drag.activeGuides.horizontal
+      : this.isResizingSelection
+        ? this.resize.activeGuides.horizontal
+        : [];
+    if (guides.length === 0 || this.overlayWidthPx <= 0) return [];
+    return guides.map((y) => {
+      const mapped = this.svgBboxToOverlayPixels({ x: 0, y, width: 0, height: 0 });
+      return {
+        key: `smart-h-${y.toFixed(4)}`,
+        x1: 0,
+        y1: mapped.y,
+        x2: this.overlayWidthPx,
+        y2: mapped.y
+      };
+    });
+  }
+
+  private getVisibleSvgBoundsFromRulerFrame(): { minSvgX: number; maxSvgX: number; minSvgY: number; maxSvgY: number } {
+    const originX = this.rulerOriginOffsetX + this.canvasView.panX;
+    const originY = this.rulerOriginOffsetY + this.canvasView.panY;
+    const scale = this.canvasView.scale || 1;
+    return {
+      minSvgX: (0 - originX) / scale,
+      maxSvgX: (this.wrapperWidth - originX) / scale,
+      minSvgY: (0 - originY) / scale,
+      maxSvgY: (this.wrapperHeight - originY) / scale
+    };
+  }
+
   private getRulerTicks(
     minSvg: number,
     maxSvg: number,
@@ -216,6 +390,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly resize = new ResizeGesture();
   private readonly rotate = new RotateGesture();
   private readonly creation = new CreationGesture();
+  private readonly selectionMarquee = new SelectionMarqueeGesture();
+  private readonly zoomMarquee = new ZoomMarqueeGesture();
   private readonly penSession = new PenSession();
   private readonly acceptedSvgContent = signal<string>('');
   private lastObservedTool: EditorTool = 'selector';
@@ -239,6 +415,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   get isResizingSelection(): boolean { return this.resize.isActive; }
   get isRotatingSelection(): boolean { return this.rotate.isActive; }
   get isCreatingShape(): boolean { return this.creation.isActive; }
+  get isSelectionMarquee(): boolean { return this.selectionMarquee.isActive; }
+  get isZoomMarquee(): boolean { return this.zoomMarquee.isActive; }
   get creationGhostRect(): Rect | null { return this.creation.ghostRect; }
   get creationShapeType(): string { return this.creation.activeShapeType; }
 
@@ -544,34 +722,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private panStartX = 0;
   private panStartY = 0;
 
-  // --- Zoom marquee state ---
-  isZoomMarquee = false;
-  private zoomMarqueeStart: { clientX: number; clientY: number } | null = null;
-  private zoomMarqueeEnd: { clientX: number; clientY: number } | null = null;
-  private zoomMarqueeJustEnded = false;
-
   get zoomMarqueeRect(): { left: number; top: number; width: number; height: number } | null {
-    if (!this.isZoomMarquee || !this.zoomMarqueeStart || !this.zoomMarqueeEnd) return null;
-    const left = Math.min(this.zoomMarqueeStart.clientX, this.zoomMarqueeEnd.clientX);
-    const top = Math.min(this.zoomMarqueeStart.clientY, this.zoomMarqueeEnd.clientY);
-    const width = Math.abs(this.zoomMarqueeEnd.clientX - this.zoomMarqueeStart.clientX);
-    const height = Math.abs(this.zoomMarqueeEnd.clientY - this.zoomMarqueeStart.clientY);
-    return { left, top, width, height };
+    const r = this.zoomMarquee.rect;
+    if (!r) return null;
+    return { left: r.x, top: r.y, width: r.width, height: r.height };
   }
 
-  // --- Selection marquee state ---
-  isSelectionMarquee = false;
-  private selectionMarqueeStart: { clientX: number; clientY: number } | null = null;
-  private selectionMarqueeEnd: { clientX: number; clientY: number } | null = null;
-  private selectionMarqueeJustEnded = false;
-
   get selectionMarqueeRect(): { left: number; top: number; width: number; height: number } | null {
-    if (!this.isSelectionMarquee || !this.selectionMarqueeStart || !this.selectionMarqueeEnd) return null;
-    const left = Math.min(this.selectionMarqueeStart.clientX, this.selectionMarqueeEnd.clientX);
-    const top = Math.min(this.selectionMarqueeStart.clientY, this.selectionMarqueeEnd.clientY);
-    const width = Math.abs(this.selectionMarqueeEnd.clientX - this.selectionMarqueeStart.clientX);
-    const height = Math.abs(this.selectionMarqueeEnd.clientY - this.selectionMarqueeStart.clientY);
-    return { left, top, width, height };
+    const r = this.selectionMarquee.rect;
+    if (!r) return null;
+    return { left: r.x, top: r.y, width: r.width, height: r.height };
   }
 
   drilledIntoGroupId: string | null = null;
@@ -579,6 +739,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private selectedPathNodeMoveSegmentIndex: number | null = null;
   private pathNodeDragSession: PathNodeDragSession | null = null;
   private pathNodeDragJustEnded = false;
+  private duplicateInvocationCount = 0;
+  private duplicateSelectionKey = '';
 
   // --- GestureContext implementation ---
   private get gestureCtx(): GestureContext {
@@ -587,6 +749,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       shapeSelection: this.shapeSelection,
       editorHistory: this.editorHistory,
       canvasView: this.canvasView,
+      snap: this.snap,
       cdr: this.cdr,
       svgContainer: this.svgContainer,
       zoomWrapper: this.zoomWrapper,
@@ -594,6 +757,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       overlayViewBox: this.overlayViewBox,
       clientToEditorSvgPoint: (cx: number, cy: number) => this.clientToEditorSvgPoint(cx, cy),
       svgBboxToOverlayPixels: (bbox: Rect) => this.svgBboxToOverlayPixels(bbox),
+      getSmartGuideCandidates: () => this.getSmartGuideCandidates(),
+      isSnapTemporarilyDisabled: () => this.altKeyPressed,
       invalidateHighlightCache: () => { this._highlightRectCacheKey = ''; },
       setLastBbox: (bbox: Rect | null) => { this.lastBbox = bbox; }
     };
@@ -607,6 +772,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const selectorActive = this.editorTool.getCurrentTool() === 'selector';
 
     if (event.key === 'Escape') {
+      if (this.isDraggingShape) {
+        this.drag.cancel(this.gestureCtx);
+        event.preventDefault();
+        return;
+      }
+      if (this.isResizingSelection) {
+        this.resize.cancel(this.gestureCtx);
+        event.preventDefault();
+        return;
+      }
+      if (this.isRotatingSelection) {
+        this.rotate.cancel(this.gestureCtx);
+        event.preventDefault();
+        return;
+      }
       if (this.isSelectionMarquee || this.isZoomMarquee) {
         this.cancelActiveMarquees();
         event.preventDefault();
@@ -655,6 +835,38 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     if (selectorActive && mod && (event.key === 'a' || event.key === 'A')) {
       this.selectAllShapesFromDocument();
+      event.preventDefault();
+      return;
+    }
+
+    if (selectorActive && mod && (event.key === 'c' || event.key === 'C')) {
+      this.copySelectionToClipboard();
+      event.preventDefault();
+      return;
+    }
+
+    if (selectorActive && mod && (event.key === 'x' || event.key === 'X')) {
+      if (this.cutSelectionToClipboard()) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    if (selectorActive && mod && (event.key === 'v' || event.key === 'V')) {
+      if (this.pasteFromClipboard()) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    if (selectorActive && mod && (event.key === 'd' || event.key === 'D')) {
+      if (this.duplicateSelection()) {
+        event.preventDefault();
+      }
+      return;
+    }
+
+    if (selectorActive && mod && event.shiftKey && this.handleAlignmentShortcut(event.key)) {
       event.preventDefault();
       return;
     }
@@ -728,6 +940,25 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onKeyUp(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
+  }
+
+  private getSmartGuideCandidates(): SnapCandidateShape[] {
+    const items = this.svgManipulation.getLayerStackItems();
+    const out: SnapCandidateShape[] = [];
+    for (const item of items) {
+      const bbox = this.svgManipulation.getShapeBBox(item.id);
+      if (!bbox) continue;
+      out.push({
+        id: item.id,
+        bbox: {
+          x: bbox.x,
+          y: bbox.y,
+          width: bbox.width,
+          height: bbox.height
+        }
+      });
+    }
+    return out;
   }
 
   private shouldIgnoreKeyboardShortcuts(event: KeyboardEvent): boolean {
@@ -843,15 +1074,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private cancelActiveMarquees(): void {
     let changed = false;
     if (this.isSelectionMarquee) {
-      this.isSelectionMarquee = false;
-      this.selectionMarqueeStart = null;
-      this.selectionMarqueeEnd = null;
+      this.selectionMarquee.cancel();
       changed = true;
     }
     if (this.isZoomMarquee) {
-      this.isZoomMarquee = false;
-      this.zoomMarqueeStart = null;
-      this.zoomMarqueeEnd = null;
+      this.zoomMarquee.cancel();
       changed = true;
     }
     if (changed) this.cdr.detectChanges();
@@ -871,6 +1098,105 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const expanded = this.svgManipulation.expandSelectionByClipGroups(shapes);
     this.shapeSelection.selectShapes(expanded);
     this.svgManipulation.clearHighlight();
+  }
+
+  private getExpandedSelectedShapeIds(): string[] {
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length === 0) return [];
+    const expanded = this.svgManipulation.expandSelectionByClipGroups(selected);
+    const ids = expanded.map((shape) => shape.id);
+    return this.svgManipulation.getShapeIdsInDomOrder(ids);
+  }
+
+  private copySelectionToClipboard(): boolean {
+    const ids = this.getExpandedSelectedShapeIds();
+    if (ids.length === 0) return false;
+    const payload = this.svgManipulation.createClipboardPayload(ids);
+    if (payload.shapes.length === 0) return false;
+    this.clipboard.set(payload);
+    return true;
+  }
+
+  private cutSelectionToClipboard(): boolean {
+    const ids = this.getExpandedSelectedShapeIds();
+    if (ids.length === 0) return false;
+    const payload = this.svgManipulation.createClipboardPayload(ids);
+    if (payload.shapes.length === 0) return false;
+    this.clipboard.set(payload);
+    const cmd = new RemoveShapesCommand(this.svgManipulation, ids, this.shapeSelection);
+    this.editorHistory.pushAndExecute(cmd);
+    this.svgManipulation.clearHighlight();
+    return true;
+  }
+
+  private pasteFromClipboard(): boolean {
+    const payload = this.clipboard.get();
+    if (!payload || payload.shapes.length === 0) return false;
+    const cmd = new PasteCommand(
+      this.svgManipulation,
+      payload,
+      this.clipboard.nextPasteOffset(),
+      this.shapeSelection
+    );
+    this.editorHistory.pushAndExecute(cmd);
+    this.svgManipulation.clearHighlight();
+    return true;
+  }
+
+  private duplicateSelection(): boolean {
+    const ids = this.getExpandedSelectedShapeIds();
+    if (ids.length === 0) return false;
+    this.duplicateInvocationCount += 1;
+    const delta = this.duplicateInvocationCount * 10;
+    const cmd = new DuplicateCommand(
+      this.svgManipulation,
+      ids,
+      { dx: delta, dy: delta },
+      this.shapeSelection
+    );
+    this.editorHistory.pushAndExecute(cmd);
+    this.svgManipulation.clearHighlight();
+    return true;
+  }
+
+  private handleAlignmentShortcut(key: string): boolean {
+    const normalized = key.length === 1 ? key.toLowerCase() : key;
+    switch (normalized) {
+      case ALIGN_LEFT_SHORTCUT:
+        return this.alignSelection('left');
+      case ALIGN_RIGHT_SHORTCUT:
+        return this.alignSelection('right');
+      case ALIGN_TOP_SHORTCUT:
+        return this.alignSelection('top');
+      case ALIGN_CENTER_SHORTCUT:
+        return this.alignSelection('center');
+      case ALIGN_MIDDLE_SHORTCUT:
+        return this.alignSelection('middle');
+      case ALIGN_BOTTOM_SHORTCUT:
+        return this.alignSelection('bottom');
+      case DISTRIBUTE_HORIZONTAL_SHORTCUT:
+        return this.distributeSelection('horizontal');
+      case DISTRIBUTE_VERTICAL_SHORTCUT:
+        return this.distributeSelection('vertical');
+      default:
+        return false;
+    }
+  }
+
+  private alignSelection(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'): boolean {
+    const ids = this.getExpandedSelectedShapeIds();
+    if (ids.length < 2) return false;
+    this.editorHistory.pushAndExecute(new AlignCommand(this.svgManipulation, ids, direction));
+    this.svgManipulation.clearHighlight();
+    return true;
+  }
+
+  private distributeSelection(direction: 'horizontal' | 'vertical'): boolean {
+    const ids = this.getExpandedSelectedShapeIds();
+    if (ids.length < 3) return false;
+    this.editorHistory.pushAndExecute(new DistributeCommand(this.svgManipulation, ids, direction));
+    this.svgManipulation.clearHighlight();
+    return true;
   }
 
   private groupSelectedShapes(): void {
@@ -943,21 +1269,20 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (this.isSelectionMarquee) {
-      this.selectionMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
-      this.cdr.detectChanges();
+      this.selectionMarquee.move(event.clientX, event.clientY, this.gestureCtx);
       return;
     }
     if (this.isZoomMarquee) {
-      this.zoomMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
+      this.zoomMarquee.move(event.clientX, event.clientY);
       this.cdr.detectChanges();
       return;
     }
     if (this.isResizingSelection) {
-      this.resize.move(this.gestureCtx, event.clientX, event.clientY);
+      this.resize.move(this.gestureCtx, event.clientX, event.clientY, event.altKey);
       return;
     }
     if (this.isRotatingSelection) {
-      this.rotate.move(this.gestureCtx, event.clientX, event.clientY);
+      this.rotate.move(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
       return;
     }
     if (this.isPanning) {
@@ -966,7 +1291,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         this.panStartY + (event.clientY - this.panStartClientY)
       );
     } else if (this.isDraggingShape) {
-      this.drag.move(this.gestureCtx, event.clientX, event.clientY);
+      this.drag.move(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
     }
   }
 
@@ -987,11 +1312,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
-    if (this.isSelectionMarquee && this.selectionMarqueeStart && this.selectionMarqueeEnd) {
-      this.commitSelectionMarquee(event);
+    if (this.isSelectionMarquee) {
+      this.selectionMarquee.endAt(event.clientX, event.clientY, event.shiftKey, this.gestureCtx);
       return;
     }
-    if (this.isZoomMarquee && this.zoomMarqueeStart && this.zoomMarqueeEnd) {
+    if (this.isZoomMarquee) {
       this.commitZoomMarquee();
       return;
     }
@@ -999,7 +1324,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.isPanning = false;
 
     if (this.isResizingSelection) {
-      this.resize.end(this.gestureCtx);
+      this.resize.end(this.gestureCtx, event.altKey);
       return;
     }
     if (this.isRotatingSelection) {
@@ -1007,51 +1332,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (this.isDraggingShape) {
-      this.drag.end(this.gestureCtx, event.clientX, event.clientY);
+      this.drag.end(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
     }
-  }
-
-  private commitSelectionMarquee(event: MouseEvent): void {
-    const screenW = Math.abs(this.selectionMarqueeEnd!.clientX - this.selectionMarqueeStart!.clientX);
-    const screenH = Math.abs(this.selectionMarqueeEnd!.clientY - this.selectionMarqueeStart!.clientY);
-    const isTinyDrag = screenW < MARQUEE_MIN_DRAG_PX && screenH < MARQUEE_MIN_DRAG_PX;
-    if (isTinyDrag) {
-      this.selectionMarqueeJustEnded = false;
-    } else {
-      const startSvg = this.clientToEditorSvgPoint(
-        this.selectionMarqueeStart!.clientX,
-        this.selectionMarqueeStart!.clientY
-      );
-      const endSvg = this.clientToEditorSvgPoint(
-        this.selectionMarqueeEnd!.clientX,
-        this.selectionMarqueeEnd!.clientY
-      );
-      if (startSvg && endSvg) {
-        const x = Math.min(startSvg.x, endSvg.x);
-        const y = Math.min(startSvg.y, endSvg.y);
-        const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
-        const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
-        const hits = this.svgManipulation.getShapePropertiesIntersectingRect({ x, y, width: w, height: h });
-        const expanded = this.svgManipulation.expandSelectionByClipGroups(hits);
-        if (event.shiftKey) {
-          if (expanded.length > 0) {
-            this.shapeSelection.mergeShapesIntoSelection(expanded);
-          }
-        } else if (expanded.length > 0) {
-          this.shapeSelection.selectShapes(expanded);
-        } else {
-          this.shapeSelection.clearSelection();
-        }
-        this.svgManipulation.clearHighlight();
-        this.selectionMarqueeJustEnded = true;
-      } else {
-        this.selectionMarqueeJustEnded = false;
-      }
-    }
-    this.isSelectionMarquee = false;
-    this.selectionMarqueeStart = null;
-    this.selectionMarqueeEnd = null;
-    this.cdr.detectChanges();
   }
 
   private commitZoomMarquee(): void {
@@ -1063,32 +1345,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const rawRect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
     if (rawRect && this.svgContent() && this.canvasView.isInitialized()) {
       const scale = this.canvasView.scale;
-      if (scale <= 0) {
-        this.isZoomMarquee = false;
-        this.zoomMarqueeStart = null;
-        this.zoomMarqueeEnd = null;
-        this.cdr.detectChanges();
-        return;
-      }
-      const startSvg = {
-        x: (this.zoomMarqueeStart!.clientX - rawRect.left) / scale,
-        y: (this.zoomMarqueeStart!.clientY - rawRect.top) / scale
-      };
-      const endSvg = {
-        x: (this.zoomMarqueeEnd!.clientX - rawRect.left) / scale,
-        y: (this.zoomMarqueeEnd!.clientY - rawRect.top) / scale
-      };
-      const x = Math.min(startSvg.x, endSvg.x);
-      const y = Math.min(startSvg.y, endSvg.y);
-      const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
-      const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
-      const screenW = Math.abs(this.zoomMarqueeEnd!.clientX - this.zoomMarqueeStart!.clientX);
-      const screenH = Math.abs(this.zoomMarqueeEnd!.clientY - this.zoomMarqueeStart!.clientY);
-      const isTinyDrag = screenW < MARQUEE_MIN_DRAG_PX && screenH < MARQUEE_MIN_DRAG_PX;
-      if (isTinyDrag) {
-        this.zoomMarqueeJustEnded = false;
-      } else if (w > 0 && h > 0 && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
-        this.canvasView.zoomToFitRect(x, y, w, h, this.wrapperWidth, this.wrapperHeight);
+      const marqueeRect = this.zoomMarquee.toSvgRect(rawRect, scale);
+      if (marqueeRect && !this.zoomMarquee.isTinyDrag() && marqueeRect.width > 0 && marqueeRect.height > 0 && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
+        const { x, y, width, height } = marqueeRect;
+        this.canvasView.zoomToFitRect(x, y, width, height, this.wrapperWidth, this.wrapperHeight);
         const wrapperEl = this.zoomWrapper()?.nativeElement;
         if (viewportEl && wrapperEl) {
           const wrapperRect = wrapperEl.getBoundingClientRect();
@@ -1097,16 +1357,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
           this.canvasView.panY += containerRect.top - wrapperRect.top;
         }
         this.updateViewBoxOverlayRect();
-        this.zoomMarqueeJustEnded = true;
+        this.zoomMarquee.finish(true);
       } else {
-        this.zoomMarqueeJustEnded = false;
+        this.zoomMarquee.finish(false);
       }
     } else {
-      this.zoomMarqueeJustEnded = false;
+      this.zoomMarquee.finish(false);
     }
-    this.isZoomMarquee = false;
-    this.zoomMarqueeStart = null;
-    this.zoomMarqueeEnd = null;
     this.cdr.detectChanges();
   }
 
@@ -1115,8 +1372,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     private shapeSelection: ShapeSelectionService,
     public editorTool: EditorToolService,
     public canvasView: CanvasViewService,
+    private snap: SnapService,
     private cdr: ChangeDetectorRef,
-    private editorHistory: EditorHistoryService
+    private editorHistory: EditorHistoryService,
+    private clipboard: ClipboardService
   ) {
     effect(() => {
       const incomingSvgContent = this.svgContent();
@@ -1171,7 +1430,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       setTimeout(() => this.syncSelectionFromDom(), 0);
     });
     effect(() => {
+      this.snap.setGridEnabled(this.editorTool.isGridSnapEnabled());
+      this.snap.setShapeEnabled(this.editorTool.isShapeSnapEnabled());
+    });
+    effect(() => {
       const shapes = this.shapeSelection.selectedShapes();
+      const duplicateKey = shapes.map((shape) => shape.id).sort().join('|');
+      if (duplicateKey !== this.duplicateSelectionKey) {
+        this.duplicateSelectionKey = duplicateKey;
+        this.duplicateInvocationCount = 0;
+      }
       if (
         this.pathNodeEditState &&
         (shapes.length !== 1 || shapes[0].id !== this.pathNodeEditState.pathId)
@@ -1439,8 +1707,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private initializeSVG(svgContent: string): void {
     this.editorHistory.clear();
-    this.isSelectionMarquee = false;
-    this.isZoomMarquee = false;
+    this.selectionMarquee.cancel();
+    this.zoomMarquee.cancel();
     this.exitPathNodeEditMode();
     this.svgManipulation.initializeSVG(this.svgContainer()!.nativeElement, svgContent);
     this.canvasView.init();
@@ -1520,9 +1788,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     if (event.button !== 0) return;
     if (this.editorTool.getCurrentTool() === 'zoom') {
-      this.isZoomMarquee = true;
-      this.zoomMarqueeStart = { clientX: event.clientX, clientY: event.clientY };
-      this.zoomMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
+      this.zoomMarquee.startAt(event.clientX, event.clientY);
       event.preventDefault();
       return;
     }
@@ -1596,9 +1862,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     // Selection marquee (click on empty space)
     if (!this.isEditorContentShapeTarget(target)) {
-      this.isSelectionMarquee = true;
-      this.selectionMarqueeStart = { clientX: event.clientX, clientY: event.clientY };
-      this.selectionMarqueeEnd = { clientX: event.clientX, clientY: event.clientY };
+      this.selectionMarquee.startAt(event.clientX, event.clientY);
       event.preventDefault();
       return;
     }
@@ -1646,8 +1910,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (this.editorTool.getCurrentTool() === 'zoom') {
-      if (this.zoomMarqueeJustEnded) {
-        this.zoomMarqueeJustEnded = false;
+      if (this.zoomMarquee.consumeJustEnded()) {
         return;
       }
       if (!this.svgContent() || !this.canvasView.isInitialized()) return;
@@ -1667,8 +1930,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
-    if (this.selectionMarqueeJustEnded) {
-      this.selectionMarqueeJustEnded = false;
+    if (this.selectionMarquee.consumeJustEnded()) {
       return;
     }
 
