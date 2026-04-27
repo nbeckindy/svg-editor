@@ -20,6 +20,7 @@ export class DragGesture {
   private ghostFragments: GhostPreviewFragment[] = [];
   private ghost = new GhostSession();
   private lastSnappedDelta: Point = { x: 0, y: 0 };
+  private hasPreviewDelta = false;
   private smartGuides: SmartGuideResult['guides'] = { vertical: [], horizontal: [] };
 
   overlayRect: Rect | null = null;
@@ -80,12 +81,13 @@ export class DragGesture {
     return true;
   }
 
-  move(ctx: GestureContext, clientX: number, clientY: number): void {
+  move(ctx: GestureContext, clientX: number, clientY: number, constrainAxis = false): void {
     if (!this.isActive || this.ghostFragments.length === 0 || !this.startSvg || !this.startBbox) return;
     const currentSvg = ctx.clientToEditorSvgPoint(clientX, clientY);
     if (!currentSvg) return;
-    const { dx, dy } = this.resolveSnappedDelta(ctx, currentSvg.x, currentSvg.y);
+    const { dx, dy } = this.resolveSnappedDelta(ctx, currentSvg.x, currentSvg.y, constrainAxis);
     this.lastSnappedDelta = { x: dx, y: dy };
+    this.hasPreviewDelta = true;
     const rawDelta = {
       x: dx,
       y: dy
@@ -105,18 +107,20 @@ export class DragGesture {
     }
   }
 
-  end(ctx: GestureContext, clientX: number, clientY: number): void {
+  end(ctx: GestureContext, clientX: number, clientY: number, constrainAxis = false): void {
     if (!this.isActive || this.shapeIds.length === 0 || !this.startSvg) return;
     let dx = 0;
     let dy = 0;
-    const point = ctx.clientToEditorSvgPoint(clientX, clientY);
-    if (point) {
-      const delta = this.resolveSnappedDelta(ctx, point.x, point.y);
-      dx = delta.dx;
-      dy = delta.dy;
-    } else {
+    if (this.hasPreviewDelta) {
       dx = this.lastSnappedDelta.x;
       dy = this.lastSnappedDelta.y;
+    } else {
+      const point = ctx.clientToEditorSvgPoint(clientX, clientY);
+      if (point) {
+        const delta = this.resolveSnappedDelta(ctx, point.x, point.y, constrainAxis);
+        dx = delta.dx;
+        dy = delta.dy;
+      }
     }
     const dragCmds: EditorCommand[] = this.shapeIds.map(
       (id) => new TranslateCommand(ctx.svgManipulation, id, dx, dy, this.snapshot)
@@ -139,6 +143,17 @@ export class DragGesture {
     ctx.cdr.detectChanges();
   }
 
+  cancel(ctx: GestureContext): void {
+    if (!this.isActive) return;
+    for (const shapeId of this.shapeIds) {
+      ctx.svgManipulation.setShapeVisibility(shapeId, true);
+    }
+    this.ghost.removeFragments(this.ghostFragments);
+    ctx.invalidateHighlightCache();
+    this.reset();
+    ctx.cdr.detectChanges();
+  }
+
   private reset(): void {
     this.overlayRect = null;
     this.isActive = false;
@@ -149,6 +164,7 @@ export class DragGesture {
     this.snapshot = new Map();
     this.ghostFragments = [];
     this.lastSnappedDelta = { x: 0, y: 0 };
+    this.hasPreviewDelta = false;
     this.smartGuides = { vertical: [], horizontal: [] };
   }
 
@@ -202,7 +218,8 @@ export class DragGesture {
   private resolveSnappedDelta(
     ctx: GestureContext,
     svgX: number,
-    svgY: number
+    svgY: number,
+    constrainAxis: boolean
   ): { dx: number; dy: number } {
     if (!this.startSvg || !this.startBbox) {
       this.smartGuides = { vertical: [], horizontal: [] };
@@ -212,14 +229,15 @@ export class DragGesture {
       x: svgX - this.startSvg.x,
       y: svgY - this.startSvg.y
     };
+    const axisConstrained = this.applyAxisConstraint(rawDelta, constrainAxis);
     const snappingDisabled = ctx.isSnapTemporarilyDisabled();
     if (snappingDisabled) {
       this.smartGuides = { vertical: [], horizontal: [] };
-      return { dx: rawDelta.x, dy: rawDelta.y };
+      return { dx: axisConstrained.x, dy: axisConstrained.y };
     }
     const gridSnappedDelta = this.snapAnchor
-      ? ctx.snap.snapDelta(this.startSvg, rawDelta, { anchor: this.snapAnchor })
-      : rawDelta;
+      ? ctx.snap.snapDelta(this.startSvg, axisConstrained, { anchor: this.snapAnchor })
+      : axisConstrained;
     if (!ctx.snap.shapeEnabled()) {
       this.smartGuides = { vertical: [], horizontal: [] };
       return { dx: gridSnappedDelta.x, dy: gridSnappedDelta.y };
@@ -232,5 +250,11 @@ export class DragGesture {
     );
     this.smartGuides = guideResult.guides;
     return { dx: guideResult.delta.x, dy: guideResult.delta.y };
+  }
+
+  private applyAxisConstraint(rawDelta: Point, constrainAxis: boolean): Point {
+    if (!constrainAxis) return rawDelta;
+    if (Math.abs(rawDelta.x) >= Math.abs(rawDelta.y)) return { x: rawDelta.x, y: 0 };
+    return { x: 0, y: rawDelta.y };
   }
 }

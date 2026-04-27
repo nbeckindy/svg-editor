@@ -64,6 +64,27 @@ export function computeProportionalResizedUnion(
   return rectFromScale(union, handle, s);
 }
 
+export function computeCenterAnchoredResize(
+  union: BBox,
+  pointer: Point,
+  minSize = MIN_UNION_SIZE
+): BBox {
+  const w0 = union.width;
+  const h0 = union.height;
+  if (w0 <= 0 || h0 <= 0) return { ...union };
+  const cx = union.x + w0 / 2;
+  const cy = union.y + h0 / 2;
+  const startHalfDiagonal = Math.hypot(w0 / 2, h0 / 2);
+  if (startHalfDiagonal <= 0) return { ...union };
+  const pointerDistance = Math.hypot(pointer.x - cx, pointer.y - cy);
+  let s = pointerDistance / startHalfDiagonal;
+  const minS = minSize / Math.min(w0, h0);
+  if (s < minS) s = minS;
+  const w1 = w0 * s;
+  const h1 = h0 * s;
+  return { x: cx - w1 / 2, y: cy - h1 / 2, width: w1, height: h1 };
+}
+
 function rectFromScale(union: BBox, handle: ResizeCorner, s: number): BBox {
   const w0 = union.width;
   const h0 = union.height;

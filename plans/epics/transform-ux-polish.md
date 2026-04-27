@@ -56,3 +56,105 @@
 
 - Skew APIs do **not** exist in the codebase; TUX-8a–8c are greenfield work.
 - Z-order API (`moveElementToFront`/`moveElementToBack`, `ReorderCommand` with `'front'`/`'back'`) already exists; TUX-9 is pure UI wiring.
+
+## TUX-8a design spike: skew transform UX
+
+Scope: define skew interaction behavior that fits the existing selection box, gesture model, and matrix-based command stack.
+
+### 1) Handle positions for skew interactions
+
+- Use the 4 **middle-edge handles** of the current selection box for skew only:
+  - Top-center and bottom-center handles -> **Skew X** interaction.
+  - Left-center and right-center handles -> **Skew Y** interaction.
+- Keep the 4 corner handles for resize and the rotate handle unchanged.
+- Cursor intent:
+  - Top/bottom middle handles use a horizontal-shear cursor (fallback: `ew-resize`).
+  - Left/right middle handles use a vertical-shear cursor (fallback: `ns-resize`).
+- Hit targets should follow the same zoom-adaptive sizing rules as existing handles (TUX-5), so skew remains usable at extreme zoom levels.
+
+### 2) Skew axes/units and pointer-to-skew mapping
+
+- Unit is **degrees** for UX and optional properties display; matrix ops use radians internally only at math boundaries.
+- Axis definitions:
+  - **Skew X**: `x' = x + tan(ax) * y`, where `ax` is skewX angle in degrees.
+  - **Skew Y**: `y' = y + tan(ay) * x`, where `ay` is skewY angle in degrees.
+- Gesture mapping is computed in root SVG user space from gesture start snapshot:
+  - For Skew X (top/bottom handles): map horizontal pointer delta (`dx`) against selection height `H`.
+    - `ax = atan(dx / max(H, epsilon)) * 180 / PI`
+  - For Skew Y (left/right handles): map vertical pointer delta (`dy`) against selection width `W`.
+    - `ay = atan(dy / max(W, epsilon)) * 180 / PI`
+- This `atan` mapping gives a smooth, bounded interaction and avoids runaway values from linear `tan` near singularities.
+- Sign convention should feel directional with handle side:
+  - Dragging right on top handle produces positive skewX.
+  - Dragging down on right handle produces positive skewY.
+  - Opposite sides may invert sign if needed so screen-direction behavior stays intuitive.
+
+### 3) Multi-select / union behavior
+
+- Multi-select skew uses the **union selection bbox** as the interaction frame (same model as rotate/resize union behavior).
+- The gesture computes one skew angle from pointer movement relative to union dimensions, then applies that same angle to each selected element.
+- Elements keep their relative offsets in the group frame; effect is a rigid "shear the whole selection" feel (not per-element local-handle skewing).
+- For command history, emit a single skew command for the selection (with per-element matrix snapshots for undo/redo parity with existing transform commands).
+
+### 4) Singularity / degenerate safeguards
+
+- Clamp user-facing skew angles to a safe range, e.g. `[-80deg, +80deg]` (well away from `+-90deg` tan singularity).
+- Treat tiny union dimensions as degenerate:
+  - `epsilon = 1e-6` in math helpers.
+  - If `W < minSize` for skewY or `H < minSize` for skewX (e.g. `minSize = 0.5` user units), freeze preview at previous valid angle or no-op.
+- Reject non-finite matrix results (`NaN`/`Infinity`) before applying preview or commit.
+- Commit guard: if final effective angle is near zero (`abs(angle) < 0.01deg`), skip command creation to avoid no-op history entries.
+
+### 5) Integration with rotate/resize gestures and command architecture
+
+- Gesture ownership:
+  - `ResizeGesture` keeps corner handles.
+  - New `SkewGesture` owns middle-edge handles.
+  - `RotateGesture` remains rotate-handle-only.
+- `svg-canvas.component` handle dispatch should route by handle type (`corner`, `edge-middle`, `rotate`) so gesture activation is explicit and conflict-free.
+- New command architecture additions:
+  - `SkewCommand` in `editor-commands` with matrix snapshot undo/redo (same style as rotate/resize commands).
+  - `SvgManipulationService.applySkew(selection, axis, angleDeg, frame)` where `frame` is the union bbox snapshot captured at gesture start.
+- Preview flow mirrors existing transform gestures:
+  - On `start`: capture original matrices and union frame.
+  - On `move`: apply transient skew preview from start snapshot (no cumulative drift).
+  - On `end`: commit `SkewCommand` with before/after matrices.
+  - On `cancel` (TUX-1 dependency): restore original matrices and clear ghost preview.
+
+## TUX-8b implementation checklist (commands + service API)
+
+- Add `SkewAxis = 'x' | 'y'` model/type in transform command/service contracts.
+- Implement `SkewCommand` with:
+  - constructor inputs: selected element ids, axis, angleDeg, beforeMatrices, afterMatrices
+  - `execute()` applying after-matrices
+  - `undo()` restoring before-matrices
+  - serialization shape consistent with existing command stack patterns.
+- Add `applySkew(...)` to `SvgManipulationService`:
+  - accepts selection, axis, angle degrees, and union frame snapshot
+  - computes per-element skew transform relative to union frame
+  - returns/records before+after matrices for command creation.
+- Add service unit tests:
+  - skewX and skewY single-element cases
+  - multi-select union-frame consistency
+  - clamp + degenerate guards
+  - no-op near-zero angle behavior.
+- Add command round-trip tests:
+  - execute -> undo -> redo returns exact prior/final matrices.
+
+## TUX-8c implementation checklist (gesture + properties UI)
+
+- Add skew handle semantics to selection overlay model (`edge-middle` typed handles).
+- Implement `SkewGesture` class with `start/move/end/cancel`, following Drag/Resize/Rotate lifecycle.
+- Wire pointer dispatch in `svg-canvas.component`:
+  - middle-edge handle starts `SkewGesture`
+  - preserve current resize/rotate behavior for other handles.
+- Add skew ghost preview behavior aligned with existing transform previews.
+- Add keyboard modifier support decisions (if none, explicitly no-op and document).
+- Properties panel integration:
+  - show read-only `SkewX` / `SkewY` fields for current selection (or "Mixed" for differing values)
+  - if editable mode is chosen later, reuse `applySkew` + `SkewCommand` path rather than direct DOM mutation.
+- Add tests:
+  - gesture mapping from pointer movement to angle
+  - multi-select skew preview + commit
+  - cancel restores original matrices with no history entry
+  - properties panel skew display updates on selection/transform changes.

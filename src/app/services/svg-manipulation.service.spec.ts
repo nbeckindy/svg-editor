@@ -578,6 +578,26 @@ describe('SvgManipulationService', () => {
       expect(after!.width).toBeCloseTo(200, 0);
       expect(after!.height).toBeCloseTo(100, 0);
     });
+
+    it('applyUnionScaleFromCenter scales while preserving union center', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const unionBefore = { x: 10, y: 20, width: 100, height: 50 };
+      const unionAfter = { x: -40, y: -5, width: 200, height: 100 };
+      const snap = service.snapshotSelectionTransforms(['r1']);
+      service.applyUnionScaleFromCenter(['r1'], unionBefore, unionAfter, snap);
+      const rectEl = container.querySelector('#r1');
+      if (rectEl && typeof (rectEl as SVGGraphicsElement).getBBox !== 'function') {
+        (rectEl as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+          ({ x: 10, y: 20, width: 100, height: 50 } as DOMRect);
+      }
+      const after = service.getShapeBBox('r1');
+      expect(after).toBeTruthy();
+      expect(after!.width).toBeCloseTo(200, 0);
+      expect(after!.height).toBeCloseTo(100, 0);
+      expect(after!.x + after!.width / 2).toBeCloseTo(unionBefore.x + unionBefore.width / 2, 5);
+      expect(after!.y + after!.height / 2).toBeCloseTo(unionBefore.y + unionBefore.height / 2, 5);
+    });
   });
 
   describe('selection rotate', () => {

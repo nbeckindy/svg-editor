@@ -1987,6 +1987,37 @@ describe('SvgCanvasComponent', () => {
     expect(component.horizontalSmartGuideLines.length).toBe(0);
   });
 
+  it('should constrain drag to dominant axis while Shift is held', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="drag-me" x="10" y="20" width="30" height="40"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    editorToolService.setGridSnapEnabled(false);
+    snapService.setGridEnabled(false);
+    shapeSelectionService.selectShape({
+      id: 'drag-me',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    const translateSpy = vi.spyOn(svgManipulationService, 'translateShape');
+    const dragHandler = component['drag'] as any;
+    dragHandler.isActive = true;
+    dragHandler.shapeIds = ['drag-me'];
+    dragHandler.startSvg = { x: 10, y: 10 };
+    dragHandler.startBbox = { x: 10, y: 20, width: 30, height: 40 };
+    dragHandler.snapAnchor = { x: 10, y: 20 };
+    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn(), matrix: vi.fn() } }];
+    dragHandler.ghost = { removeFragments: vi.fn(), clearDefs: vi.fn() };
+    stubEditorSvgScreenMapping(component);
+
+    component.onDocumentMouseMove({ clientX: 30, clientY: 60, shiftKey: true } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0, clientX: 30, clientY: 60, shiftKey: true } as MouseEvent);
+
+    expect(translateSpy).toHaveBeenCalledWith('drag-me', 0, 50);
+  });
+
   it('should clear overlay when selection is cleared', async () => {
     vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
       x: 0,
@@ -2203,6 +2234,30 @@ describe('SvgCanvasComponent', () => {
       expect(component.verticalSmartGuideLines.length).toBe(0);
       expect(component.horizontalSmartGuideLines.length).toBe(0);
     });
+
+    it('commits center-anchored resize when Alt is held on mouseup', () => {
+      const resizeHandler = component['resize'] as any;
+      const centerScaleSpy = vi.spyOn(svgManipulationService, 'applyUnionScaleFromCenter');
+      resizeHandler.isActive = true;
+      resizeHandler.handle = 'se';
+      resizeHandler.unionStart = { x: 10, y: 20, width: 30, height: 40 };
+      resizeHandler.lastUnion = { x: 5, y: 15, width: 40, height: 50 };
+      resizeHandler.snapshot = new Map([['r1', { clone: () => ({}) }]]);
+      resizeHandler.ghostFragments = [];
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+
+      component.onDocumentMouseUp({ button: 0, altKey: true } as MouseEvent);
+
+      expect(centerScaleSpy).toHaveBeenCalledTimes(1);
+      expect(component.isResizingSelection).toBe(false);
+    });
   });
 
   describe('selection rotate (handle)', () => {
@@ -2290,6 +2345,33 @@ describe('SvgCanvasComponent', () => {
       } as MouseEvent);
       expect(applySpy).toHaveBeenCalledTimes(1);
       expect(component.isRotatingSelection).toBe(false);
+    });
+
+    it('snaps rotation to 15-degree increments while Shift is held', () => {
+      const rotateHandler = component['rotate'] as any;
+      const applySpy = vi.spyOn(svgManipulationService, 'applyUnionRotationFromSnapshot');
+      rotateHandler.isActive = true;
+      rotateHandler.unionStart = { x: 0, y: 0, width: 100, height: 100 };
+      rotateHandler.pivotDoc = { x: 50, y: 50 };
+      rotateHandler.snapshot = new Map([['r1', { clone: () => ({}) }]]);
+      rotateHandler.ghostFragments = [{ outerGroup: { remove: vi.fn() }, worldToUnion: { matrix: vi.fn() } }];
+      rotateHandler.lastPointerSvg = { x: 90, y: 50 };
+      rotateHandler.startPointerRad = 0;
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      vi.spyOn(component as any, 'clientToEditorSvgPoint').mockReturnValue({ x: 70, y: 70 });
+
+      component.onDocumentMouseMove({ clientX: 70, clientY: 70, shiftKey: true } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, shiftKey: true } as MouseEvent);
+
+      const angleDeg = applySpy.mock.calls[0]?.[2] ?? 0;
+      expect(angleDeg % 15).toBeCloseTo(0, 6);
     });
   });
 
@@ -3556,6 +3638,32 @@ describe('SvgCanvasComponent', () => {
       });
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       expect(shapeSelectionService.getSelectedShapes().length).toBe(0);
+    });
+
+    it('Escape cancels active drag without clearing selection', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const dragHandler = component['drag'] as any;
+      dragHandler.isActive = true;
+      dragHandler.shapeIds = ['r1'];
+      dragHandler.ghostFragments = [];
+      const clearSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+      expect(component.isDraggingShape).toBe(false);
+      expect(clearSpy).not.toHaveBeenCalled();
+      expect(shapeSelectionService.getSelectedShapes().map((shape) => shape.id)).toEqual(['r1']);
     });
 
     it('Cmd/Meta+A selects all shapes when selector tool is active', async () => {

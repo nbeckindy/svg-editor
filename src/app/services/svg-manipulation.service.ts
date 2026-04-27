@@ -1811,6 +1811,27 @@ export class SvgManipulationService {
     this.bumpDocumentRevision();
   }
 
+  applyUnionScaleFromCenter(
+    shapeIds: string[],
+    unionBefore: { x: number; y: number; width: number; height: number },
+    unionAfter: { x: number; y: number; width: number; height: number },
+    snapshot: Map<string, Matrix>
+  ): void {
+    if (!this.svgInstance) return;
+    const s = unionAfter.width / unionBefore.width;
+    if (!Number.isFinite(s) || s <= 0) return;
+    const cx = unionBefore.x + unionBefore.width / 2;
+    const cy = unionBefore.y + unionBefore.height / 2;
+    const T = new Matrix().scale(s, s, cx, cy);
+    for (const id of shapeIds) {
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      const prev = snapshot.get(id);
+      if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
+      shape.matrix(T.multiply(prev));
+    }
+    this.bumpDocumentRevision();
+  }
+
   /**
    * Apply rotation about a pivot in root SVG user space (same as union bbox / pointer mapping).
    * Composes: newMatrix = rotate(deg,cx,cy) * snapshotMatrix (`angleDeg` in degrees, SVG.js convention).

@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import type { BBox } from './selection-resize';
 import {
+  computeCenterAnchoredResize,
   computeProportionalResizedUnion,
   oppositeCornerForHandle,
   MIN_UNION_SIZE
@@ -143,5 +144,23 @@ describe('edge cases: very small union near MIN_UNION_SIZE', () => {
   it('MIN_UNION_SIZE is a positive constant', () => {
     expect(MIN_UNION_SIZE).toBeGreaterThan(0);
     expect(MIN_UNION_SIZE).toBeLessThan(1);
+  });
+});
+
+describe('computeCenterAnchoredResize', () => {
+  const u: BBox = { x: 10, y: 20, width: 100, height: 50 };
+
+  it('keeps center fixed while scaling outward', () => {
+    const out = computeCenterAnchoredResize(u, { x: 160, y: 95 });
+    expect(out.x + out.width / 2).toBeCloseTo(u.x + u.width / 2);
+    expect(out.y + out.height / 2).toBeCloseTo(u.y + u.height / 2);
+    expect(out.width).toBeGreaterThan(u.width);
+    expect(out.height).toBeGreaterThan(u.height);
+  });
+
+  it('clamps near center to minimum size', () => {
+    const center = { x: u.x + u.width / 2, y: u.y + u.height / 2 };
+    const out = computeCenterAnchoredResize(u, center, 4);
+    expect(Math.min(out.width, out.height)).toBeGreaterThanOrEqual(4 - 1e-6);
   });
 });

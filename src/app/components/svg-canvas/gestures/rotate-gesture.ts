@@ -18,6 +18,7 @@ export class RotateGesture {
   private ghostFragments: GhostPreviewFragment[] = [];
   private ghost = new GhostSession();
   private lastPointerSvg: Point | null = null;
+  private startPointerRad: number | null = null;
 
   unionStart: BBox | null = null;
   pivotDoc: Point | null = null;
@@ -49,6 +50,7 @@ export class RotateGesture {
       return false;
     }
     this.lastPointerSvg = p0;
+    this.startPointerRad = this.pointerAngleRad(p0);
 
     const svgInstance = ctx.svgManipulation.getSVGInstance();
     if (!svgInstance) {
@@ -69,7 +71,7 @@ export class RotateGesture {
     return true;
   }
 
-  move(ctx: GestureContext, clientX: number, clientY: number): void {
+  move(ctx: GestureContext, clientX: number, clientY: number, snapToStep = false): void {
     if (
       !this.isActive ||
       this.ghostFragments.length === 0 ||
@@ -80,10 +82,28 @@ export class RotateGesture {
 
     const point = ctx.clientToEditorSvgPoint(clientX, clientY);
     if (!point) return;
-    const d = rotationDeltaFromPointerMoveRad(this.pivotDoc, this.lastPointerSvg, point);
-    this.accumulatedRad += d;
+    let nextAccumulated = this.accumulatedRad + rotationDeltaFromPointerMoveRad(this.pivotDoc, this.lastPointerSvg, point);
+    if (snapToStep && this.startPointerRad !== null) {
+      const absolute = this.startPointerRad + nextAccumulated;
+      const step = (15 * Math.PI) / 180;
+      const snappedAbsolute = Math.round(absolute / step) * step;
+      nextAccumulated = snappedAbsolute - this.startPointerRad;
+    }
+    this.accumulatedRad = nextAccumulated;
     this.lastPointerSvg = point;
     this.updateGhost();
+    ctx.cdr.detectChanges();
+  }
+
+  cancel(ctx: GestureContext): void {
+    if (!this.isActive) return;
+    const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
+    for (const id of ids) {
+      ctx.svgManipulation.setShapeVisibility(id, true);
+    }
+    this.ghost.removeFragments(this.ghostFragments);
+    ctx.invalidateHighlightCache();
+    this.reset();
     ctx.cdr.detectChanges();
   }
 
@@ -134,7 +154,16 @@ export class RotateGesture {
     this.pivotDoc = null;
     this.accumulatedRad = 0;
     this.lastPointerSvg = null;
+    this.startPointerRad = null;
     this.snapshot = new Map();
     this.ghostFragments = [];
+  }
+
+  private pointerAngleRad(pointer: Point): number | null {
+    if (!this.pivotDoc) return null;
+    const dx = pointer.x - this.pivotDoc.x;
+    const dy = pointer.y - this.pivotDoc.y;
+    if (Math.hypot(dx, dy) <= 1e-6) return null;
+    return Math.atan2(dy, dx);
   }
 }

@@ -1,7 +1,12 @@
 import { Matrix, Svg } from '@svgdotjs/svg.js';
 import { UnionScaleCommand } from '../../../models/editor-commands';
 import { SmartGuideResult } from '../../../services/snap.service';
-import { computeProportionalResizedUnion, type BBox, type ResizeCorner } from '../../../utils/selection-resize';
+import {
+  computeCenterAnchoredResize,
+  computeProportionalResizedUnion,
+  type BBox,
+  type ResizeCorner
+} from '../../../utils/selection-resize';
 import type { GestureContext, GhostPreviewFragment, Rect } from './gesture-context';
 import { GhostSession } from './ghost-session';
 
@@ -52,26 +57,30 @@ export class ResizeGesture {
     return true;
   }
 
-  move(ctx: GestureContext, clientX: number, clientY: number): void {
+  move(ctx: GestureContext, clientX: number, clientY: number, centerAnchored = false): void {
     if (!this.isActive || !this.handle || !this.unionStart || this.ghostFragments.length === 0) return;
     const point = ctx.clientToEditorSvgPoint(clientX, clientY);
     if (!point) return;
-    const resolved = this.resolveResizedUnion(ctx, point.x, point.y);
+    const resolved = this.resolveResizedUnion(ctx, point.x, point.y, centerAnchored);
     this.lastUnion = resolved;
     this.overlayRect = ctx.svgBboxToOverlayPixels(resolved);
     this.updateGhost(resolved);
     ctx.cdr.detectChanges();
   }
 
-  end(ctx: GestureContext): void {
+  end(ctx: GestureContext, centerAnchored = false): void {
     if (!this.isActive || !this.handle || !this.unionStart || !this.lastUnion) return;
     const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
-    const cmd = new UnionScaleCommand(
-      ctx.svgManipulation, ids,
-      this.unionStart, this.lastUnion,
-      this.snapshot, this.handle
-    );
-    ctx.editorHistory.pushAndExecute(cmd);
+    if (centerAnchored) {
+      ctx.svgManipulation.applyUnionScaleFromCenter(ids, this.unionStart, this.lastUnion, this.snapshot);
+    } else {
+      const cmd = new UnionScaleCommand(
+        ctx.svgManipulation, ids,
+        this.unionStart, this.lastUnion,
+        this.snapshot, this.handle
+      );
+      ctx.editorHistory.pushAndExecute(cmd);
+    }
 
     for (const id of ids) {
       ctx.svgManipulation.setShapeVisibility(id, true);
@@ -84,6 +93,18 @@ export class ResizeGesture {
     ctx.setLastBbox(unionBbox);
     ctx.invalidateHighlightCache();
 
+    this.reset();
+    ctx.cdr.detectChanges();
+  }
+
+  cancel(ctx: GestureContext): void {
+    if (!this.isActive) return;
+    const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
+    for (const id of ids) {
+      ctx.svgManipulation.setShapeVisibility(id, true);
+    }
+    this.ghost.removeFragments(this.ghostFragments);
+    ctx.invalidateHighlightCache();
     this.reset();
     ctx.cdr.detectChanges();
   }
@@ -125,12 +146,19 @@ export class ResizeGesture {
     return this.smartGuides;
   }
 
-  private resolveResizedUnion(ctx: GestureContext, svgX: number, svgY: number): BBox {
+  private resolveResizedUnion(
+    ctx: GestureContext,
+    svgX: number,
+    svgY: number,
+    centerAnchored: boolean
+  ): BBox {
     if (!this.unionStart || !this.handle) {
       this.smartGuides = { vertical: [], horizontal: [] };
       return { x: 0, y: 0, width: 0, height: 0 };
     }
-    const resizedUnion = computeProportionalResizedUnion(this.unionStart, this.handle, { x: svgX, y: svgY });
+    const resizedUnion = centerAnchored
+      ? computeCenterAnchoredResize(this.unionStart, { x: svgX, y: svgY })
+      : computeProportionalResizedUnion(this.unionStart, this.handle, { x: svgX, y: svgY });
     if (ctx.isSnapTemporarilyDisabled() || !ctx.snap.shapeEnabled()) {
       this.smartGuides = { vertical: [], horizontal: [] };
       return resizedUnion;
