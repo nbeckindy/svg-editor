@@ -896,6 +896,49 @@ describe('SvgCanvasComponent', () => {
     expect(selectShapesSpy).not.toHaveBeenCalled();
   });
 
+  it('creates a text element at click coordinates and switches back to selector', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('text');
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue(null);
+    const addShapeSpy = vi.spyOn(svgManipulationService, 'addShape');
+    const pushSpy = vi.spyOn(editorHistoryService, 'pushAndExecute');
+
+    component.onCanvasClick({
+      target: { tagName: 'svg' },
+      clientX: 30,
+      clientY: 40
+    } as unknown as MouseEvent);
+
+    expect(addShapeSpy).toHaveBeenCalledWith(
+      'text',
+      expect.objectContaining({ x: 30, y: 40, textContent: 'Text' })
+    );
+    expect(pushSpy).toHaveBeenCalledTimes(1);
+    expect(editorToolService.getCurrentTool()).toBe('selector');
+    promptSpy.mockRestore();
+  });
+
+  it('uses prompt input to update just-created text content', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('text');
+    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('Hello');
+    const updateSpy = vi.spyOn(svgManipulationService, 'updateTextContent');
+
+    component.onCanvasClick({
+      target: { tagName: 'svg' },
+      clientX: 20,
+      clientY: 25
+    } as unknown as MouseEvent);
+
+    expect(updateSpy).toHaveBeenCalledTimes(1);
+    const [shapeId, textValue] = updateSpy.mock.calls[0];
+    expect(shapeId).toContain('shape-');
+    expect(textValue).toBe('Hello');
+    promptSpy.mockRestore();
+  });
+
   it('should start pan on mousedown when pan tool is active and left button', () => {
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();

@@ -1680,6 +1680,19 @@ describe('SvgManipulationService', () => {
       expect(el?.getAttribute('y2')).toBe('90');
     });
 
+    it('creates text with default content at the given position', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('text', { x: 24, y: 36, textContent: 'Text' });
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el).not.toBeNull();
+      expect(el?.tagName.toLowerCase()).toBe('text');
+      expect(el?.getAttribute('x')).toBe('24');
+      expect(el?.getAttribute('y')).toBe('36');
+      expect(el?.textContent).toBe('Text');
+    });
+
     it('applies default paint (black fill) for rect when no overrides given', () => {
       const svgContent = '<svg viewBox="0 0 200 200"></svg>';
       service.initializeSVG(container, svgContent);
@@ -1707,6 +1720,17 @@ describe('SvgManipulationService', () => {
       expect(el?.getAttribute('stroke')?.toLowerCase()).toBe('#000000');
       expect(el?.getAttribute('stroke-width')).toBe('2');
       expect(el?.getAttribute('fill')).toBe('none');
+    });
+
+    it('applies default paint and typography for text when no overrides given', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('text', {});
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`);
+      expect(el?.getAttribute('fill')?.toLowerCase()).toBe('#000000');
+      expect(el?.getAttribute('font-size')).toBe('16');
+      expect(el?.textContent).toBe('Text');
     });
 
     it('applies fill override', () => {

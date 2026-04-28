@@ -33,10 +33,10 @@ describe('ToolStripComponent', () => {
     expect(selectorBtn?.classList.contains('active')).toBe(true);
   });
 
-  it('should display Undo, Redo, Selector, Node Edit, Zoom, Pan, Grid snap, Shape snap, Rect, Ellipse, Line, and Pen buttons', () => {
+  it('should display Undo, Redo, Selector, Node Edit, Zoom, Pan, Grid snap, Shape snap, Rect, Ellipse, Line, Text, and Pen buttons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     const buttons = compiled.querySelectorAll('.tool-btn');
-    expect(buttons.length).toBe(12);
+    expect(buttons.length).toBe(13);
     expect((buttons[0] as HTMLElement).textContent?.trim()).toContain('Undo');
     expect((buttons[1] as HTMLElement).textContent?.trim()).toContain('Redo');
     expect((buttons[2] as HTMLElement).textContent?.trim()).toBe('Selector');
@@ -48,7 +48,8 @@ describe('ToolStripComponent', () => {
     expect((buttons[8] as HTMLElement).textContent?.trim()).toContain('Rect');
     expect((buttons[9] as HTMLElement).textContent?.trim()).toContain('Ellipse');
     expect((buttons[10] as HTMLElement).textContent?.trim()).toContain('Line');
-    expect((buttons[11] as HTMLElement).textContent?.trim()).toContain('Pen');
+    expect((buttons[11] as HTMLElement).textContent?.trim()).toContain('Text');
+    expect((buttons[12] as HTMLElement).textContent?.trim()).toContain('Pen');
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {
@@ -244,12 +245,24 @@ describe('ToolStripComponent', () => {
     expect(editorToolService.isCreationTool('line')).toBe(true);
   });
 
-  it('isCreationTool() returns false for selector, node-edit-selector, zoom, pan, and pen', () => {
+  it('isCreationTool() returns false for selector, node-edit-selector, zoom, pan, text, and pen', () => {
     expect(editorToolService.isCreationTool('selector')).toBe(false);
     expect(editorToolService.isCreationTool('node-edit-selector')).toBe(false);
     expect(editorToolService.isCreationTool('zoom')).toBe(false);
     expect(editorToolService.isCreationTool('pan')).toBe(false);
+    expect(editorToolService.isCreationTool('text')).toBe(false);
     expect(editorToolService.isCreationTool('pen')).toBe(false);
+  });
+
+  it('should set tool to text when Text button is clicked', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    const textBtn = compiled.querySelector('[data-testid="tool-text"]') as HTMLElement;
+    expect(textBtn).toBeTruthy();
+
+    textBtn.click();
+    fixture.detectChanges();
+
+    expect(editorToolService.getCurrentTool()).toBe('text');
   });
 
   it('should set tool to pen when Pen button is clicked', () => {

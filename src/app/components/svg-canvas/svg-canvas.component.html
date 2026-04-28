@@ -6,6 +6,7 @@
   [class.pan-mode]="editorTool.currentTool() === 'pan'"
   [class.pan-dragging]="isPanning"
   [class.creation-mode]="editorTool.isCreationTool()"
+  [class.text-mode]="editorTool.currentTool() === 'text'"
   [class.pen-mode]="editorTool.currentTool() === 'pen'">
   @if (svgContent()) {
     <div class="zoom-level" data-testid="canvas-zoom-level" aria-label="Zoom level">{{ zoomLevelPercent }}%</div>

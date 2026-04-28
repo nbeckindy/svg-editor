@@ -28,6 +28,7 @@ import {
   RemoveShapesCommand,
   GroupCommand,
   UngroupCommand,
+  AddShapeCommand,
   AddPathCommand,
   EditPathNodesCommand,
   PasteCommand,
@@ -2035,6 +2036,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (this.editorTool.getCurrentTool() === 'pen') {
       return;
     }
+    if (this.editorTool.getCurrentTool() === 'text') {
+      this.createTextAtPoint(event.clientX, event.clientY);
+      return;
+    }
     if (this.editorTool.isCreationTool()) {
       return;
     }
@@ -2104,6 +2109,49 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.svgManipulation.clearHighlight();
       this.drilledIntoGroupId = null;
     }
+  }
+
+  private createTextAtPoint(clientX: number, clientY: number): void {
+    if (!this.svgContent() || !this.canvasView.isInitialized()) return;
+    const point = this.clientToEditorSvgPoint(clientX, clientY);
+    if (!point) return;
+    const newId = this.svgManipulation.addShape('text', {
+      x: point.x,
+      y: point.y,
+      textContent: 'Text'
+    });
+    if (!newId) return;
+
+    const svgInstance = this.svgManipulation.getSVGInstance();
+    const el = svgInstance?.findOne(`#${newId}`) as SVGElement | undefined;
+    if (el) {
+      this.shapeSelection.selectShape(this.svgManipulation.getShapeProperties(el));
+    }
+    const cmd = new AddShapeCommand(this.svgManipulation, newId, this.shapeSelection);
+    this.editorHistory.pushAndExecute(cmd);
+    const shapeBbox = this.svgManipulation.getShapeBBox(newId);
+    if (shapeBbox) {
+      this.lastBbox = shapeBbox;
+      this._highlightRectCacheKey = '';
+    }
+    this.editorTool.setTool('selector');
+    this.openTextEditPrompt(newId);
+    this.cdr.markForCheck();
+  }
+
+  /**
+   * Minimal edit path for newly created text until a dedicated inline editor lands.
+   */
+  private openTextEditPrompt(shapeId: string): void {
+    if (typeof window === 'undefined' || typeof window.prompt !== 'function') return;
+    const svgInstance = this.svgManipulation.getSVGInstance();
+    const shape = svgInstance?.findOne(`#${shapeId}`) as SVGElement | undefined;
+    const node = shape?.node as SVGTextElement | undefined;
+    if (!node || node.tagName.toLowerCase() !== 'text') return;
+    const currentText = node.textContent ?? 'Text';
+    const nextText = window.prompt('Edit text', currentText);
+    if (nextText === null || nextText === currentText) return;
+    this.svgManipulation.updateTextContent(shapeId, nextText);
   }
 
   onCanvasDoubleClick(event: MouseEvent): void {

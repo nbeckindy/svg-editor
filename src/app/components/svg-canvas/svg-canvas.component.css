@@ -183,6 +183,10 @@
   cursor: crosshair;
 }
 
+.canvas-container.text-mode {
+  cursor: text;
+}
+
 .canvas-container.pen-mode {
   cursor: crosshair;
 }

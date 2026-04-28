@@ -2,7 +2,7 @@ import { Injectable, signal, computed } from '@angular/core';
 import { SVG, Svg, Element as SvgJsElement, Matrix, G } from '@svgdotjs/svg.js';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../models/shape-properties.interface';
 
-export type CreatableShapeType = 'rect' | 'ellipse' | 'line';
+export type CreatableShapeType = 'rect' | 'ellipse' | 'line' | 'text';
 
 export interface ShapeCreationAttrs {
   x?: number;
@@ -17,6 +17,9 @@ export interface ShapeCreationAttrs {
   y1?: number;
   x2?: number;
   y2?: number;
+  textContent?: string;
+  fontSize?: number;
+  fontFamily?: string;
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
@@ -1410,7 +1413,7 @@ export class SvgManipulationService {
         el.stroke({ color: attrs.stroke, width: attrs.strokeWidth ?? 1 });
       }
       shape = el;
-    } else {
+    } else if (type === 'line') {
       const x1 = attrs.x1 ?? 0;
       const y1 = attrs.y1 ?? 0;
       const x2 = attrs.x2 ?? 100;
@@ -1418,6 +1421,19 @@ export class SvgManipulationService {
       const el = contentGroup.line(x1, y1, x2, y2);
       el.fill('none');
       el.stroke({ color: attrs.stroke ?? '#000000', width: attrs.strokeWidth ?? 2 });
+      shape = el;
+    } else {
+      const x = attrs.x ?? 0;
+      const y = attrs.y ?? 0;
+      const textContent = attrs.textContent ?? 'Text';
+      const el = contentGroup.text(textContent);
+      el.attr({
+        x,
+        y,
+        fill: attrs.fill ?? '#000000',
+        'font-size': attrs.fontSize ?? 16,
+        'font-family': attrs.fontFamily ?? 'Arial, sans-serif'
+      });
       shape = el;
     }
 
@@ -1480,6 +1496,17 @@ export class SvgManipulationService {
       shape.remove();
       this.bumpDocumentRevision();
     }
+  }
+
+  /**
+   * Update `<text>` content for a text element.
+   */
+  updateTextContent(shapeId: string, textContent: string): void {
+    if (!this.svgInstance) return;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!shape || shape.type !== 'text') return;
+    shape.node.textContent = textContent;
+    this.bumpDocumentRevision();
   }
 
   /**

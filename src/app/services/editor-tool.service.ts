@@ -8,6 +8,7 @@ export type EditorTool =
   | 'rect'
   | 'ellipse'
   | 'line'
+  | 'text'
   | 'pen';
 
 const CREATION_TOOLS: ReadonlySet<EditorTool> = new Set(['rect', 'ellipse', 'line']);
