@@ -31,7 +31,8 @@ import {
   AddPathCommand,
   EditPathNodesCommand,
   PasteCommand,
-  DuplicateCommand
+  DuplicateCommand,
+  buildReorderToExtremeCommand
 } from '../../models/editor-commands';
 import {
   DragGesture,
@@ -152,6 +153,38 @@ function roundToNiceStep(value: number): number {
   return mag * nice;
 }
 
+/** 10%–1000% zoom band for TUX-5 inverse-scale formulas; avoids div-by-zero and runaway values. */
+const SELECTION_CHROME_ZOOM_CLAMP_MIN = 0.1;
+const SELECTION_CHROME_ZOOM_CLAMP_MAX = 10;
+
+const HANDLE_RADIUS_REF_SCREEN_PX = 6;
+const HANDLE_RADIUS_MIN_SCREEN_PX = 4;
+const HANDLE_RADIUS_MAX_SCREEN_PX = 8;
+
+const ROTATE_HANDLE_OFFSET_REF_SCREEN_PX = 28;
+const ROTATE_HANDLE_OFFSET_MIN_SCREEN_PX = 20;
+const ROTATE_HANDLE_OFFSET_MAX_SCREEN_PX = 40;
+
+/** Exported for unit tests (TUX-5). */
+export function clampCanvasScaleForSelectionChrome(scale: number): number {
+  const s = Number.isFinite(scale) && scale > 0 ? scale : 1;
+  return Math.min(SELECTION_CHROME_ZOOM_CLAMP_MAX, Math.max(SELECTION_CHROME_ZOOM_CLAMP_MIN, s));
+}
+
+/** Overlay SVG `r` in px (overlay viewBox matches screen px of the scaled stage). */
+export function selectionHandleRadiusOverlayPx(scale: number): number {
+  const s = clampCanvasScaleForSelectionChrome(scale);
+  const raw = HANDLE_RADIUS_REF_SCREEN_PX / s;
+  return Math.min(HANDLE_RADIUS_MAX_SCREEN_PX, Math.max(HANDLE_RADIUS_MIN_SCREEN_PX, raw));
+}
+
+/** Distance from selection top edge to rotate handle center, in overlay px. */
+export function rotateHandleOffsetOverlayPx(scale: number): number {
+  const s = clampCanvasScaleForSelectionChrome(scale);
+  const raw = ROTATE_HANDLE_OFFSET_REF_SCREEN_PX / s;
+  return Math.min(ROTATE_HANDLE_OFFSET_MAX_SCREEN_PX, Math.max(ROTATE_HANDLE_OFFSET_MIN_SCREEN_PX, raw));
+}
+
 @Component({
   selector: 'app-svg-canvas',
   standalone: true,
@@ -216,7 +249,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     );
   }
 
-  readonly rotateHandleOffset = 28;
+  /** Resize/skew/rotate handle circle radius in overlay px (inverse zoom, clamped 4–8 screen px). */
+  get selectionHandleRadiusOverlay(): number {
+    return selectionHandleRadiusOverlayPx(this.canvasView.scale);
+  }
+
+  /** Rotate stem length and handle offset from selection top (inverse zoom, clamped 20–40 screen px). */
+  get rotateHandleOffset(): number {
+    return rotateHandleOffsetOverlayPx(this.canvasView.scale);
+  }
 
   get verticalRulerTicks(): { position: number; value: number; major: boolean }[] {
     const originY = this.rulerOriginOffsetY + this.canvasView.panY;
@@ -891,6 +932,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (selectorActive && mod && (event.key === 'g' || event.key === 'G') && event.shiftKey) {
       this.ungroupSelectedShape();
       event.preventDefault();
+      return;
+    }
+
+    // Z-order: `]` bring to front, `[` send to back (selector only, plain keys — no Cmd/Ctrl so we
+    // do not clash with Ctrl/Cmd+Shift+Arrow alignment shortcuts). Cmd/Ctrl+Shift+Up/Down would be
+    // an alternative; brackets match common design-tool muscle memory. Multi-select order is
+    // handled in `buildReorderToExtremeCommand`.
+    if (selectorActive && !mod && (event.key === ']' || event.key === '[')) {
+      const direction = event.key === ']' ? 'front' : 'back';
+      const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
+      const cmd = buildReorderToExtremeCommand(this.svgManipulation, ids, direction);
+      if (cmd) {
+        this.editorHistory.pushAndExecute(cmd);
+        event.preventDefault();
+      }
       return;
     }
 

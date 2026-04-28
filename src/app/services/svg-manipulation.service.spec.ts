@@ -598,6 +598,41 @@ describe('SvgManipulationService', () => {
       expect(after!.x + after!.width / 2).toBeCloseTo(unionBefore.x + unionBefore.width / 2, 5);
       expect(after!.y + after!.height / 2).toBeCloseTo(unionBefore.y + unionBefore.height / 2, 5);
     });
+
+    it('applyUnionScaleFromCenter scales multi-shape selection while preserving union center', () => {
+      const svgContent = `<svg viewBox="0 0 300 200">
+        <rect id="r1" x="10" y="20" width="40" height="20"/>
+        <rect id="r2" x="80" y="50" width="60" height="30"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const ids = ['r1', 'r2'];
+      const r1El = container.querySelector('#r1');
+      const r2El = container.querySelector('#r2');
+      (r1El as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 10, y: 20, width: 40, height: 20 } as DOMRect);
+      (r2El as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 80, y: 50, width: 60, height: 30 } as DOMRect);
+      const unionBefore = service.getUnionBBox(ids);
+      expect(unionBefore).toBeTruthy();
+      const centerBefore = {
+        x: unionBefore!.x + unionBefore!.width / 2,
+        y: unionBefore!.y + unionBefore!.height / 2
+      };
+      const unionAfter = {
+        x: unionBefore!.x - unionBefore!.width / 2,
+        y: unionBefore!.y - unionBefore!.height / 2,
+        width: unionBefore!.width * 2,
+        height: unionBefore!.height * 2
+      };
+      const snap = service.snapshotSelectionTransforms(ids);
+      service.applyUnionScaleFromCenter(ids, unionBefore!, unionAfter, snap);
+      const after = service.getUnionBBox(ids);
+      expect(after).toBeTruthy();
+      expect(after!.width).toBeCloseTo(unionBefore!.width * 2, 5);
+      expect(after!.height).toBeCloseTo(unionBefore!.height * 2, 5);
+      expect(after!.x + after!.width / 2).toBeCloseTo(centerBefore.x, 5);
+      expect(after!.y + after!.height / 2).toBeCloseTo(centerBefore.y, 5);
+    });
   });
 
   describe('selection rotate', () => {

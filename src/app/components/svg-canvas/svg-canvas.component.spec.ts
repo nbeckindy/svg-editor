@@ -2053,6 +2053,37 @@ describe('SvgCanvasComponent', () => {
     expect(translateSpy).toHaveBeenCalledWith('drag-me', 0, 50);
   });
 
+  it('should defer Shift axis lock until drag movement exceeds threshold', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="drag-me" x="10" y="20" width="30" height="40"/></svg>');
+    fixture.detectChanges();
+    editorToolService.setTool('selector');
+    editorToolService.setGridSnapEnabled(false);
+    snapService.setGridEnabled(false);
+    shapeSelectionService.selectShape({
+      id: 'drag-me',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    const translateSpy = vi.spyOn(svgManipulationService, 'translateShape');
+    const dragHandler = component['drag'] as any;
+    dragHandler.isActive = true;
+    dragHandler.shapeIds = ['drag-me'];
+    dragHandler.startSvg = { x: 10, y: 10 };
+    dragHandler.startBbox = { x: 10, y: 20, width: 30, height: 40 };
+    dragHandler.snapAnchor = { x: 10, y: 20 };
+    dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn(), matrix: vi.fn() } }];
+    dragHandler.ghost = { removeFragments: vi.fn(), clearDefs: vi.fn() };
+    stubEditorSvgScreenMapping(component);
+
+    component.onDocumentMouseMove({ clientX: 13, clientY: 12, shiftKey: true } as MouseEvent);
+    component.onDocumentMouseUp({ button: 0, clientX: 13, clientY: 12, shiftKey: true } as MouseEvent);
+
+    expect(translateSpy).toHaveBeenCalledWith('drag-me', 3, 2);
+  });
+
   it('should clear overlay when selection is cleared', async () => {
     vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
       x: 0,
@@ -3798,6 +3829,58 @@ describe('SvgCanvasComponent', () => {
 
       expect(component.isDraggingShape).toBe(false);
       expect(clearSpy).not.toHaveBeenCalled();
+      expect(shapeSelectionService.getSelectedShapes().map((shape) => shape.id)).toEqual(['r1']);
+    });
+
+    it('Escape cancels active resize without clearing selection', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const resizeHandler = component['resize'] as any;
+      resizeHandler.isActive = true;
+      const clearSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+      const visibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+      expect(component.isResizingSelection).toBe(false);
+      expect(clearSpy).not.toHaveBeenCalled();
+      expect(visibilitySpy).toHaveBeenCalledWith('r1', true);
+      expect(shapeSelectionService.getSelectedShapes().map((shape) => shape.id)).toEqual(['r1']);
+    });
+
+    it('Escape cancels active rotate without clearing selection', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const rotateHandler = component['rotate'] as any;
+      rotateHandler.isActive = true;
+      const clearSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+      const visibilitySpy = vi.spyOn(svgManipulationService, 'setShapeVisibility');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+
+      expect(component.isRotatingSelection).toBe(false);
+      expect(clearSpy).not.toHaveBeenCalled();
+      expect(visibilitySpy).toHaveBeenCalledWith('r1', true);
       expect(shapeSelectionService.getSelectedShapes().map((shape) => shape.id)).toEqual(['r1']);
     });
 

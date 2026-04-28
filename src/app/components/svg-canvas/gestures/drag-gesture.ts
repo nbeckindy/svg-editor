@@ -9,6 +9,8 @@ import type { GestureContext, GhostPreviewFragment, Rect, Point } from './gestur
 import { GhostSession } from './ghost-session';
 
 export class DragGesture {
+  private static readonly AXIS_CONSTRAINT_THRESHOLD = 4;
+
   isActive = false;
   justEnded = false;
 
@@ -254,6 +256,8 @@ export class DragGesture {
 
   private applyAxisConstraint(rawDelta: Point, constrainAxis: boolean): Point {
     if (!constrainAxis) return rawDelta;
+    const dominantDelta = Math.max(Math.abs(rawDelta.x), Math.abs(rawDelta.y));
+    if (dominantDelta < DragGesture.AXIS_CONSTRAINT_THRESHOLD) return rawDelta;
     if (Math.abs(rawDelta.x) >= Math.abs(rawDelta.y)) return { x: rawDelta.x, y: 0 };
     return { x: 0, y: rawDelta.y };
   }
