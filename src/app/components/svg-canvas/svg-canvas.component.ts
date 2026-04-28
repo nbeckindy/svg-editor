@@ -2112,9 +2112,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private createTextAtPoint(clientX: number, clientY: number): void {
-    if (!this.svgContent() || !this.canvasView.isInitialized()) return;
-    const point = this.clientToEditorSvgPoint(clientX, clientY);
-    if (!point) return;
+    if (!this.svgContent()) return;
+    const point = this.clientToEditorSvgPoint(clientX, clientY) ?? { x: clientX, y: clientY };
     const newId = this.svgManipulation.addShape('text', {
       x: point.x,
       y: point.y,
