@@ -19,7 +19,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 
 | Order | Epic | Slug | bd status | Progress | Depends on |
 |------:|------|------|-----------|----------|------------|
-| 6 | Transform and gesture UX polish | [transform-ux-polish](./epics/transform-ux-polish.md) | `OPEN` | 0/12 (0%) | Gesture extraction (`svg-editor-60f`) |
+| 6 | Transform and gesture UX polish | [transform-ux-polish](./epics/transform-ux-polish.md) | `OPEN` | 8/12 (~67%) | Gesture extraction (`svg-editor-60f`) done; skew stack (`svg-editor-w1t`) closed — remaining ~TUX-5, TUX-6, TUX-7, TUX-9 |
 | 8 | Clipboard and duplication | [clipboard-duplication](./epics/clipboard-duplication.md) | `CLOSED` | 5/5 (100%) | Shape creation helpful but not required |
 | 10 | Text editing | [text-editing](./epics/text-editing.md) | `OPEN` | 0/7 (0%) | Shape creation (SC-1, SC-2a, SC-5) |
 | 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `CLOSED` | 5/5 (100%) | Multi-select (done) |
@@ -103,8 +103,8 @@ flowchart LR
 3. ~~**Epic 13** (pen / path tool)~~ -- **DONE**
 4. ~~**Epic 8** (clipboard / duplication)~~ -- **DONE**
 5. ~~**Epic 11** (align / distribute)~~ -- **DONE**
-6. **Epic 12** (snap / guides) -- improves creation and positioning precision
-7. **Epic 6** (transform UX polish) -- includes skew, z-order UI, modifier keys
+6. ~~**Epic 12** (snap / guides)~~ -- **DONE**
+7. **Epic 6** (transform UX polish) -- modifier keys, escape cancel, skew (done); still: zoom-adaptive handles (TUX-5), read-only transform fields (TUX-6), rotate cursor (TUX-7), z-order front/back UI + shortcuts (TUX-9)
 8. **Epic 10** (text editing) -- inline text editing and font controls
 9. **Epic 15** (path node editing) -- fine-grained path manipulation
 10. **`svg-editor-e1x`** (gradient editor) -- after `svg-editor-brz` fix lands
@@ -112,7 +112,7 @@ flowchart LR
 ## Beads epic references
 
 Epic issues in `bd` (see `bd list -t epic` or `bd show <id>` if this table drifts).
-Status/progress below is current as of 2026-04-21.
+Status/progress below is current as of 2026-04-27.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
@@ -121,7 +121,7 @@ Status/progress below is current as of 2026-04-21.
 | shape-transforms | `svg-editor-2zo` | Shape transforms | `CLOSED` | 5/5 |
 | groups-layers | `svg-editor-0l4` | Groups and layer management | `CLOSED` | 5/5 |
 | advanced-styling | `svg-editor-v77` | Advanced stroke and fill | `CLOSED` | 5/5 |
-| transform-ux-polish | `svg-editor-vfr` | Transform and gesture UX polish | `OPEN` | 0/12 |
+| transform-ux-polish | `svg-editor-vfr` | Transform and gesture UX polish | `OPEN` | 8/12 |
 | shape-creation | `svg-editor-og7` | Shape creation tools | `CLOSED` | 6/6 |
 | clipboard-duplication | `svg-editor-d79` | Clipboard and duplication | `CLOSED` | 5/5 |
 | file-ops-viewport | `svg-editor-we7` | File operations and viewport UX | `CLOSED` | 5/5 |
