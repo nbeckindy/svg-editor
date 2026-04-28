@@ -385,6 +385,18 @@
           }
         </svg>
       </div>
+      @if (isInlineTextEditModeActive && inlineTextEditOverlayRect; as textRect) {
+        <textarea
+          #inlineTextEditor
+          class="inline-text-editor"
+          data-testid="canvas-inline-text-editor"
+          [value]="inlineTextEditValue"
+          [style.left.px]="canvasView.panX + textRect.x"
+          [style.top.px]="canvasView.panY + textRect.y"
+          [style.width.px]="inlineTextEditWidthPx(textRect)"
+          [style.height.px]="inlineTextEditHeightPx(textRect)"
+          (input)="onInlineTextEditInput($event)"></textarea>
+      }
     </div>
   </div>
   </div>

@@ -23,6 +23,7 @@ import {
   AddShapeCommand,
   AddPathCommand,
   EditPathNodesCommand,
+  TextContentCommand,
   PasteCommand,
   DuplicateCommand,
   type EditorCommand,
@@ -51,6 +52,7 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     createClipboardPayload: vi.fn().mockReturnValue({ shapes: [] }),
     pasteClipboardPayload: vi.fn().mockReturnValue({ insertedIds: [], insertedMarkup: [] }),
     updatePathData: vi.fn(),
+    updateTextContent: vi.fn(),
     getShapeBBox: vi.fn(),
     getUnionBBox: vi.fn(),
     snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
@@ -1243,5 +1245,16 @@ describe('DuplicateCommand', () => {
 
     cmd.execute();
     expect(svc.insertShapeMarkup).toHaveBeenCalledWith('<rect id="shape-dup" />');
+  });
+});
+
+describe('TextContentCommand', () => {
+  it('applies new text on execute and restores old text on undo', () => {
+    const svc = mockSvc();
+    const cmd = new TextContentCommand(svc, 'text-a', 'before', 'after');
+    cmd.execute();
+    expect(svc.updateTextContent).toHaveBeenCalledWith('text-a', 'after');
+    cmd.undo();
+    expect(svc.updateTextContent).toHaveBeenCalledWith('text-a', 'before');
   });
 });

@@ -970,6 +970,38 @@ export class SvgManipulationService {
   }
 
   /**
+   * Return editable text for a `<text>` (or its child `<tspan>`), preserving simple inline text for MVP.
+   */
+  getTextContent(textId: string): string | null {
+    if (!this.svgInstance) return null;
+    const shape = this.svgInstance.findOne(`#${textId}`) as SvgJsElement | undefined;
+    const node = shape?.node as Element | null;
+    if (!node) return null;
+    if (node.tagName.toLowerCase() === 'text') return node.textContent ?? '';
+    if (node.tagName.toLowerCase() === 'tspan') {
+      const parentText = node.closest('text');
+      return parentText?.textContent ?? null;
+    }
+    return null;
+  }
+
+  /**
+   * Replace text content for a `<text>` node. `<tspan>` ids are resolved to their parent `<text>`.
+   */
+  updateTextContent(textId: string, text: string): void {
+    if (!this.svgInstance) return;
+    const shape = this.svgInstance.findOne(`#${textId}`) as SvgJsElement | undefined;
+    const startNode = shape?.node as Element | null;
+    if (!startNode) return;
+    const textNode = startNode.tagName.toLowerCase() === 'text'
+      ? startNode
+      : startNode.closest('text');
+    if (!textNode || textNode.tagName.toLowerCase() !== 'text') return;
+    textNode.textContent = text;
+    this.bumpDocumentRevision();
+  }
+
+  /**
    * Nearest ancestor `<g>` with an `id` between this shape and the editor content group (for
    * "select parent" when fill/stroke is inherited).
    */

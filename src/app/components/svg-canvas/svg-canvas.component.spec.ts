@@ -2795,6 +2795,123 @@ describe('SvgCanvasComponent', () => {
       expect(component.isPathNodeEditModeActive).toBe(false);
     });
 
+    it('enters inline text-edit mode from selected text on double-click', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><text id="text-a" x="10" y="20">Hello</text></svg>');
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 30, height: 12 });
+      shapeSelectionService.selectShape({
+        id: 'text-a',
+        type: 'text',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const textEl = fixture.nativeElement.querySelector('#text-a') as Element;
+
+      component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      const editor = fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]') as HTMLTextAreaElement;
+      expect(editor).toBeTruthy();
+      expect(editor.value).toBe('Hello');
+      expect(component.drilledIntoGroupId).toBeNull();
+    });
+
+    it('commits inline text edit on Escape and supports undo/redo', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><text id="text-esc" x="10" y="20">Hello</text></svg>');
+      shapeSelectionService.selectShape({
+        id: 'text-esc',
+        type: 'text',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const textEl = fixture.nativeElement.querySelector('#text-esc') as SVGTextElement;
+
+      component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+      component.onInlineTextEditInput({ target: { value: 'Edited' } } as unknown as Event);
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]')).toBeFalsy();
+      expect(textEl.textContent).toBe('Edited');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+      expect(textEl.textContent).toBe('Hello');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Z', ctrlKey: true, shiftKey: true, bubbles: true }));
+      expect(textEl.textContent).toBe('Edited');
+    });
+
+    it('commits inline text edit on outside click', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><text id="text-click" x="10" y="20">Hello</text><rect id="other" x="30" y="30" width="10" height="10" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'text-click',
+        type: 'text',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const textEl = fixture.nativeElement.querySelector('#text-click') as SVGTextElement;
+      const otherEl = fixture.nativeElement.querySelector('#other') as Element;
+
+      component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+      component.onInlineTextEditInput({ target: { value: 'Outside' } } as unknown as Event);
+      component.onCanvasClick({ target: otherEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]')).toBeFalsy();
+      expect(textEl.textContent).toBe('Outside');
+    });
+
+    it('treats selected text with tspan children as parent text for inline edit', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><text id="text-tspan" x="10" y="20"><tspan id="span-a">Line</tspan></text></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'text-tspan',
+        type: 'text',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const tspanEl = fixture.nativeElement.querySelector('#span-a') as Element;
+
+      component.onCanvasDoubleClick({ target: tspanEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+      component.onInlineTextEditInput({ target: { value: 'Merged' } } as unknown as Event);
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+
+      const textEl = fixture.nativeElement.querySelector('#text-tspan') as SVGTextElement;
+      expect(textEl.textContent).toBe('Merged');
+    });
+
+    it('does not enter inline text-edit mode for multi-select', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><text id="text-multi" x="10" y="20">Hello</text><rect id="rect-multi" x="30" y="30" width="10" height="10" /></svg>'
+      );
+      const svg = svgManipulationService.getSVGInstance()!;
+      const textShape = svg.findOne('#text-multi')!;
+      const rectShape = svg.findOne('#rect-multi')!;
+      shapeSelectionService.selectShapes([
+        svgManipulationService.getShapeProperties(textShape),
+        svgManipulationService.getShapeProperties(rectShape)
+      ]);
+      const textEl = fixture.nativeElement.querySelector('#text-multi') as Element;
+
+      component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]')).toBeFalsy();
+    });
+
     it('does not enter node-edit mode from double-click on path in selector mode', async () => {
       await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-no-dbl" d="M 10 10 L 20 20" /></svg>');
       shapeSelectionService.selectShape({

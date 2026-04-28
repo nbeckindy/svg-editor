@@ -1229,3 +1229,22 @@ export class EditPathNodesCommand implements EditorCommand {
     this.svc.updatePathData(this.pathId, this.oldD);
   }
 }
+
+export class TextContentCommand implements EditorCommand {
+  readonly description = 'Edit text content';
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly textId: string,
+    private readonly oldText: string,
+    private readonly newText: string
+  ) {}
+
+  execute(): void {
+    this.svc.updateTextContent(this.textId, this.newText);
+  }
+
+  undo(): void {
+    this.svc.updateTextContent(this.textId, this.oldText);
+  }
+}

@@ -32,6 +32,7 @@ import {
   EditPathNodesCommand,
   PasteCommand,
   DuplicateCommand,
+  TextContentCommand,
   buildReorderToExtremeCommand
 } from '../../models/editor-commands';
 import {
@@ -126,6 +127,11 @@ interface PathNodeDragSession {
     | { kind: 'control'; index: number };
 }
 
+interface InlineTextEditState {
+  textId: string;
+  originalText: string;
+}
+
 interface GridLineOverlay {
   key: string;
   x1: number;
@@ -205,6 +211,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   readonly zoomWrapper = viewChild<ElementRef<HTMLElement>>('zoomWrapper');
   readonly highlightOverlayContainer = viewChild<ElementRef<HTMLElement>>('highlightOverlayContainer');
   readonly canvasViewport = viewChild<ElementRef<HTMLElement>>('canvasViewport');
+  readonly inlineTextEditor = viewChild<ElementRef<HTMLTextAreaElement>>('inlineTextEditor');
   altKeyPressed = false;
   isPanning = false;
   overlayViewBox = '0 0 100 100';
@@ -221,6 +228,31 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
   get zoomLevelPercent(): number {
     return Math.round(this.canvasView.scale * 100);
+  }
+
+  get isInlineTextEditModeActive(): boolean {
+    return this.inlineTextEditState !== null;
+  }
+
+  get inlineTextEditValue(): string {
+    return this.inlineTextEditDraft;
+  }
+
+  get inlineTextEditOverlayRect(): { x: number; y: number; width: number; height: number } | null {
+    if (!this.inlineTextEditState) return null;
+    const bbox =
+      this.svgManipulation.getShapeBBox(this.inlineTextEditState.textId) ??
+      this.svgManipulation.getShapeBBox(this.inlineTextEditState.textId, { preferScreenBounds: false });
+    if (!bbox) return null;
+    return this.svgBboxToOverlayPixels(bbox);
+  }
+
+  inlineTextEditWidthPx(rect: { width: number }): number {
+    return Math.max(24, rect.width);
+  }
+
+  inlineTextEditHeightPx(rect: { height: number }): number {
+    return Math.max(18, rect.height);
   }
 
   get horizontalRulerTicks(): { position: number; value: number; major: boolean }[] {
@@ -783,6 +815,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   drilledIntoGroupId: string | null = null;
   private pathNodeEditState: PathNodeEditState | null = null;
+  private inlineTextEditState: InlineTextEditState | null = null;
+  private inlineTextEditDraft = '';
   private selectedPathNodeMoveSegmentIndex: number | null = null;
   private pathNodeDragSession: PathNodeDragSession | null = null;
   private pathNodeDragJustEnded = false;
@@ -814,6 +848,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   // --- Keyboard shortcuts ---
   onKeyDown(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
+    if (event.key === 'Escape' && this.commitInlineTextEditIfActive()) {
+      event.preventDefault();
+      return;
+    }
     if (this.shouldIgnoreKeyboardShortcuts(event)) return;
 
     const selectorActive = this.editorTool.getCurrentTool() === 'selector';
@@ -1976,6 +2014,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   onCanvasClick(event: MouseEvent): void {
     const clickTarget = event.target as Element;
+    if (this.inlineTextEditState && !this.isInlineTextEditTarget(clickTarget)) {
+      this.commitInlineTextEditIfActive();
+    }
     if (this.pathNodeDragJustEnded) {
       this.pathNodeDragJustEnded = false;
       return;
@@ -2077,6 +2118,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!selectedEl) return;
 
     const selectedTag = selectedEl.tagName?.toLowerCase();
+    if (selectedTag === 'text' || selectedTag === 'tspan') {
+      const resolvedTextId =
+        selectedTag === 'text'
+          ? selectedId
+          : (selectedEl.closest('text') as Element | null)?.id ?? null;
+      if (!resolvedTextId) return;
+      this.enterInlineTextEditMode(resolvedTextId);
+      return;
+    }
     if (selectedTag !== 'g') return;
 
     this.drilledIntoGroupId = selectedId;
@@ -2089,6 +2139,50 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         this.shapeSelection.selectShapes(expanded);
       }
     }
+  }
+
+  onInlineTextEditInput(event: Event): void {
+    const target = event.target as HTMLTextAreaElement | null;
+    this.inlineTextEditDraft = target?.value ?? '';
+  }
+
+  private enterInlineTextEditMode(textId: string): void {
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length !== 1) return;
+    const text = this.svgManipulation.getTextContent(textId);
+    if (text === null) return;
+    this.inlineTextEditState = {
+      textId,
+      originalText: text
+    };
+    this.inlineTextEditDraft = text;
+    this.cdr.markForCheck();
+    setTimeout(() => {
+      const input = this.inlineTextEditor()?.nativeElement;
+      if (!input) return;
+      input.focus();
+      input.select();
+    }, 0);
+  }
+
+  private commitInlineTextEditIfActive(): boolean {
+    if (!this.inlineTextEditState) return false;
+    const { textId, originalText } = this.inlineTextEditState;
+    const nextText = this.inlineTextEditDraft;
+    if (nextText !== originalText) {
+      const cmd = new TextContentCommand(this.svgManipulation, textId, originalText, nextText);
+      this.editorHistory.pushAndExecute(cmd);
+    }
+    this.inlineTextEditState = null;
+    this.inlineTextEditDraft = '';
+    this.cdr.markForCheck();
+    return true;
+  }
+
+  private isInlineTextEditTarget(target: Element | null): boolean {
+    if (!target) return false;
+    const editor = this.inlineTextEditor()?.nativeElement;
+    return !!editor && (target === editor || editor.contains(target));
   }
 
   private confirmDiscardPenSessionIfNeeded(reason: 'tool switch' | 'document replace/load'): boolean {
