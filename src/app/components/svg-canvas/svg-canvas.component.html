@@ -136,7 +136,8 @@
               [attr.height]="viewBoxOverlayRect.height"
               fill="none"
               stroke="#000000"
-              stroke-width="1"/>
+              stroke-width="1"
+              vector-effect="non-scaling-stroke"/>
           }
           @if (highlightRect; as hr) {
             @if (isRotatingSelection) {
@@ -148,7 +149,8 @@
                   [attr.height]="hr.height"
                   fill="none"
                   stroke="#2196F3"
-                  stroke-width="2"/>
+                  stroke-width="2"
+                  vector-effect="non-scaling-stroke"/>
               </g>
             } @else if (multiSelectionOutlineRects.length >= 2) {
               @for (r of multiSelectionOutlineRects; track r.id) {
@@ -171,7 +173,8 @@
                 [attr.height]="hr.height"
                 fill="none"
                 stroke="#2196F3"
-                stroke-width="2"/>
+                stroke-width="2"
+                vector-effect="non-scaling-stroke"/>
             }
           }
           @if (creationGhostRect; as ghost) {
@@ -310,56 +313,56 @@
           @if (showResizeHandles && highlightRect; as hr) {
             <circle
               class="selection-resize-handle selection-resize-nw"
-              r="5"
+              [attr.r]="selectionHandleRadiusOverlay"
               data-resize-handle="nw"
               data-testid="canvas-handle-resize-nw"
               [attr.cx]="hr.x"
               [attr.cy]="hr.y"/>
             <circle
               class="selection-resize-handle selection-resize-ne"
-              r="5"
+              [attr.r]="selectionHandleRadiusOverlay"
               data-resize-handle="ne"
               data-testid="canvas-handle-resize-ne"
               [attr.cx]="hr.x + hr.width"
               [attr.cy]="hr.y"/>
             <circle
               class="selection-resize-handle selection-resize-sw"
-              r="5"
+              [attr.r]="selectionHandleRadiusOverlay"
               data-resize-handle="sw"
               data-testid="canvas-handle-resize-sw"
               [attr.cx]="hr.x"
               [attr.cy]="hr.y + hr.height"/>
             <circle
               class="selection-resize-handle selection-resize-se"
-              r="5"
+              [attr.r]="selectionHandleRadiusOverlay"
               data-resize-handle="se"
               data-testid="canvas-handle-resize-se"
               [attr.cx]="hr.x + hr.width"
               [attr.cy]="hr.y + hr.height"/>
             <circle
               class="selection-skew-handle selection-skew-n"
-              r="5"
+              [attr.r]="selectionHandleRadiusOverlay"
               data-skew-handle="n"
               data-testid="canvas-handle-skew-n"
               [attr.cx]="hr.x + hr.width / 2"
               [attr.cy]="hr.y"/>
             <circle
               class="selection-skew-handle selection-skew-s"
-              r="5"
+              [attr.r]="selectionHandleRadiusOverlay"
               data-skew-handle="s"
               data-testid="canvas-handle-skew-s"
               [attr.cx]="hr.x + hr.width / 2"
               [attr.cy]="hr.y + hr.height"/>
             <circle
               class="selection-skew-handle selection-skew-w"
-              r="5"
+              [attr.r]="selectionHandleRadiusOverlay"
               data-skew-handle="w"
               data-testid="canvas-handle-skew-w"
               [attr.cx]="hr.x"
               [attr.cy]="hr.y + hr.height / 2"/>
             <circle
               class="selection-skew-handle selection-skew-e"
-              r="5"
+              [attr.r]="selectionHandleRadiusOverlay"
               data-skew-handle="e"
               data-testid="canvas-handle-skew-e"
               [attr.cx]="hr.x + hr.width"
@@ -374,7 +377,7 @@
               pointer-events="none"/>
             <circle
               class="selection-rotate-handle"
-              r="5"
+              [attr.r]="selectionHandleRadiusOverlay"
               data-rotate-handle=""
               data-testid="canvas-handle-rotate"
               [attr.cx]="hr.x + hr.width / 2"

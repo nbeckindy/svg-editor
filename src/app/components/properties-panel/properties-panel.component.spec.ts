@@ -61,7 +61,8 @@ describe('PropertiesPanelComponent', () => {
       setBackgroundColor: vi.fn(),
       documentRevision: signal(0),
       updateStrokeDasharray: vi.fn(),
-      updateStrokeDashoffset: vi.fn()
+      updateStrokeDashoffset: vi.fn(),
+      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 50 })
     };
     const editorToolServiceMock = {
       currentTool: editorToolSignal
@@ -144,6 +145,7 @@ describe('PropertiesPanelComponent', () => {
       opacity: 1
     };
     const m = new Matrix().skewX(12, 40, 25);
+    vi.mocked(svgManipulationService.getUnionBBox).mockReturnValue({ x: 5, y: 10, width: 80, height: 40 });
     vi.mocked(svgManipulationService.getSVGInstance).mockReturnValue({
       findOne: vi.fn((sel: string) => {
         if (sel === '#rect-1') {
@@ -160,6 +162,109 @@ describe('PropertiesPanelComponent', () => {
     const elY = fixture.nativeElement.querySelector('[data-testid="properties-skew-y"]');
     expect(elX?.textContent?.trim()).toContain('12');
     expect(elY?.textContent?.trim()).toMatch(/0\.0/);
+    expect(svgManipulationService.getUnionBBox).toHaveBeenCalledWith(['rect-1']);
+  });
+
+  it('should show X/Y/W/H from getUnionBBox and R from matrix atan2 decomposition', () => {
+    const mockShape: ShapeProperties = {
+      id: 'rect-1',
+      type: 'rect',
+      fill: '#000000',
+      stroke: 'none',
+      strokeWidth: 0,
+      opacity: 1
+    };
+    const m = new Matrix().rotate(30, 0, 0);
+    vi.mocked(svgManipulationService.getUnionBBox).mockReturnValue({ x: 1.25, y: 2.5, width: 10, height: 20 });
+    vi.mocked(svgManipulationService.getSVGInstance).mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '#rect-1') {
+          return { matrix: () => m.clone() };
+        }
+        return null;
+      })
+    } as any);
+
+    selectedShapesSignal.set([mockShape]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')?.textContent?.trim()).toBe(
+      '1.3'
+    );
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-y"]')?.textContent?.trim()).toBe(
+      '2.5'
+    );
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-w"]')?.textContent?.trim()).toBe(
+      '10.0'
+    );
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-h"]')?.textContent?.trim()).toBe(
+      '20.0'
+    );
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-r"]')?.textContent?.trim()).toBe(
+      '30.0°'
+    );
+    expect(svgManipulationService.getUnionBBox).toHaveBeenCalledWith(['rect-1']);
+  });
+
+  it('should show Mixed for R when multi-select rotations differ', () => {
+    vi.mocked(svgManipulationService.getUnionBBox).mockReturnValue({ x: 0, y: 0, width: 50, height: 50 });
+    vi.mocked(svgManipulationService.getSVGInstance).mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '#a') {
+          return { matrix: () => new Matrix().rotate(0, 0, 0) };
+        }
+        if (sel === '#b') {
+          return { matrix: () => new Matrix().rotate(45, 0, 0) };
+        }
+        return null;
+      })
+    } as any);
+
+    selectedShapesSignal.set([
+      { id: 'a', type: 'rect', fill: '#000' },
+      { id: 'b', type: 'rect', fill: '#000' }
+    ]);
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-r"]')?.textContent?.trim()).toBe(
+      'Mixed'
+    );
+    expect(svgManipulationService.getUnionBBox).toHaveBeenCalledWith(['a', 'b']);
+  });
+
+  it('should refresh transform readout when documentRevision bumps', () => {
+    const mockShape: ShapeProperties = {
+      id: 'rect-1',
+      type: 'rect',
+      fill: '#000000',
+      stroke: 'none',
+      strokeWidth: 0,
+      opacity: 1
+    };
+    vi.mocked(svgManipulationService.getUnionBBox)
+      .mockReturnValueOnce({ x: 0, y: 0, width: 10, height: 10 })
+      .mockReturnValue({ x: 100, y: 0, width: 10, height: 10 });
+    vi.mocked(svgManipulationService.getSVGInstance).mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '#rect-1') {
+          return { matrix: () => new Matrix() };
+        }
+        return null;
+      })
+    } as any);
+
+    selectedShapesSignal.set([mockShape]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')?.textContent?.trim()).toBe(
+      '0.0'
+    );
+
+    const docRev = svgManipulationService.documentRevision as WritableSignal<number>;
+    docRev.set(1);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')?.textContent?.trim()).toBe(
+      '100.0'
+    );
   });
 
   it('should show fill and stroke paint source badges when metadata is set', () => {
@@ -469,11 +574,13 @@ describe('PropertiesPanelComponent', () => {
     let el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).toContain('Align');
     expect(el.textContent).toContain('Distribute');
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')).toBeTruthy();
 
     editorToolService.currentTool.set('zoom');
     fixture.detectChanges();
     el = fixture.nativeElement as HTMLElement;
     expect(el.textContent).not.toContain('Distribute');
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')).toBeNull();
   });
 
   it('disables align buttons for fewer than 2 selected shapes', () => {

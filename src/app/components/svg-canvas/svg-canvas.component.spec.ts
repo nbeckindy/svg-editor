@@ -1,5 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { SvgCanvasComponent } from './svg-canvas.component';
+import {
+  SvgCanvasComponent,
+  clampCanvasScaleForSelectionChrome,
+  rotateHandleOffsetOverlayPx,
+  selectionHandleRadiusOverlayPx
+} from './svg-canvas.component';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
@@ -7,6 +12,7 @@ import { CanvasViewService } from '../../services/canvas-view.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { ClipboardService } from '../../services/clipboard.service';
 import { SnapService } from '../../services/snap.service';
+import { CompositeCommand } from '../../models/editor-commands';
 
 /** Mock SVG.js shape with clone() for drag-ghost tests. clone() returns a real DOM node so SVG.js add() can adopt it. */
 function mockSvgJsShape(
@@ -35,6 +41,35 @@ function stubEditorSvgScreenMapping(
     (mainSvg as SVGSVGElement & { getScreenCTM: () => null }).getScreenCTM = () => null;
   }
 }
+
+describe('selection chrome zoom (TUX-5)', () => {
+  it('clampCanvasScaleForSelectionChrome pins scale to 10%–1000% band', () => {
+    expect(clampCanvasScaleForSelectionChrome(0.01)).toBe(0.1);
+    expect(clampCanvasScaleForSelectionChrome(0.1)).toBe(0.1);
+    expect(clampCanvasScaleForSelectionChrome(1)).toBe(1);
+    expect(clampCanvasScaleForSelectionChrome(10)).toBe(10);
+    expect(clampCanvasScaleForSelectionChrome(64)).toBe(10);
+  });
+
+  it('selectionHandleRadiusOverlayPx is inverse in zoom band and clamped 4–8 px', () => {
+    expect(selectionHandleRadiusOverlayPx(0.1)).toBe(8);
+    expect(selectionHandleRadiusOverlayPx(1)).toBe(6);
+    expect(selectionHandleRadiusOverlayPx(2)).toBe(4);
+    expect(selectionHandleRadiusOverlayPx(10)).toBe(4);
+  });
+
+  it('rotateHandleOffsetOverlayPx is inverse in zoom band and clamped 20–40 px', () => {
+    expect(rotateHandleOffsetOverlayPx(0.1)).toBe(40);
+    expect(rotateHandleOffsetOverlayPx(1)).toBe(28);
+    expect(rotateHandleOffsetOverlayPx(10)).toBe(20);
+  });
+
+  it('uses scale 1 when input is non-finite before applying zoom band clamp', () => {
+    expect(clampCanvasScaleForSelectionChrome(Number.NaN)).toBe(1);
+    expect(selectionHandleRadiusOverlayPx(Number.NaN)).toBe(6);
+    expect(rotateHandleOffsetOverlayPx(Number.POSITIVE_INFINITY)).toBe(28);
+  });
+});
 
 describe('SvgCanvasComponent', () => {
   let component: SvgCanvasComponent;
@@ -3561,6 +3596,106 @@ describe('SvgCanvasComponent', () => {
       } finally {
         input.remove();
       }
+    });
+
+    it('] pushes Bring to front (CompositeCommand) for multi-select in DOM order', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="10" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      shapeSelectionService.selectShapes([
+        { id: 'r2', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
+        { id: 'r1', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
+      ]);
+      const pushSpy = vi.spyOn(editorHistoryService, 'pushAndExecute');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: ']', bubbles: true }));
+      expect(pushSpy).toHaveBeenCalledTimes(1);
+      expect(pushSpy.mock.calls[0][0]).toBeInstanceOf(CompositeCommand);
+      expect((pushSpy.mock.calls[0][0] as CompositeCommand).description).toBe('Bring to front');
+      pushSpy.mockRestore();
+    });
+
+    it('[ pushes Send to back for multi-select', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="10" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      shapeSelectionService.selectShapes([
+        { id: 'r1', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
+        { id: 'r2', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
+      ]);
+      const pushSpy = vi.spyOn(editorHistoryService, 'pushAndExecute');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: '[', bubbles: true }));
+      expect(pushSpy).toHaveBeenCalledTimes(1);
+      expect(pushSpy.mock.calls[0][0]).toBeInstanceOf(CompositeCommand);
+      expect((pushSpy.mock.calls[0][0] as CompositeCommand).description).toBe('Send to back');
+      pushSpy.mockRestore();
+    });
+
+    it('does not reorder on ] when focus is in an input', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const pushSpy = vi.spyOn(editorHistoryService, 'pushAndExecute');
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      try {
+        const ev = new KeyboardEvent('keydown', { key: ']', bubbles: true });
+        Object.defineProperty(ev, 'target', { value: input, enumerable: true });
+        component.onKeyDown(ev);
+        expect(pushSpy).not.toHaveBeenCalled();
+      } finally {
+        input.remove();
+        pushSpy.mockRestore();
+      }
+    });
+
+    it('does not reorder on ] when zoom tool is active', async () => {
+      editorToolService.setTool('zoom');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      shapeSelectionService.selectShape({
+        id: 'r1',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const pushSpy = vi.spyOn(editorHistoryService, 'pushAndExecute');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: ']', bubbles: true }));
+      expect(pushSpy).not.toHaveBeenCalled();
+      pushSpy.mockRestore();
     });
 
     it('Delete removes selected shapes and clears selection', async () => {

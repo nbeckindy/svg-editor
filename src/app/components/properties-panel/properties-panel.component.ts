@@ -87,6 +87,90 @@ export class PropertiesPanelComponent {
     return { skewX, skewY };
   });
 
+  /** Degrees: treat rotations as equivalent modulo 360° (e.g. 0° vs 360°). */
+  private static readonly ROTATION_MIXED_EPS_DEG = 0.05;
+
+  private static rotationDiffDeg(a: number, b: number): number {
+    let d = Math.abs(a - b) % 360;
+    if (d > 180) d = 360 - d;
+    return d;
+  }
+
+  /** Map any finite angle in degrees to `[0, 360)`. */
+  private static normDeg0To360(deg: number): number {
+    if (!Number.isFinite(deg)) return NaN;
+    return ((deg % 360) + 360) % 360;
+  }
+
+  /**
+   * Rotation (degrees, 0–360) from the element’s cumulative transform in **root SVG user space**.
+   * Uses the linear 2×2 part of the SVG `matrix(a,b,c,d,e,f)` where `x' = a·x + c·y + e`,
+   * `y' = b·x + d·y + f`. The image of the local +X axis is `(a, b)`, so
+   * **θ = atan2(b, a)** (same atan2 idea as skew readout’s `atan2` on matrix entries).
+   * With non-uniform scale or skew this is an effective “X-axis” angle, not a unique Euler triple.
+   */
+  private static rotationDeg0To360FromMatrix(m: Matrix): number {
+    const v = m.valueOf() as { a: number; b: number; c: number; d: number };
+    const rad = Math.atan2(v.b, v.a);
+    return PropertiesPanelComponent.normDeg0To360((rad * 180) / Math.PI);
+  }
+
+  /**
+   * Read-only X/Y/W/H from union bbox in root SVG user space (`getUnionBBox`), and R from
+   * per-element matrix rotation (see `rotationDeg0To360FromMatrix`). Multi-select: union bbox;
+   * R is **Mixed** when per-shape angles differ beyond `ROTATION_MIXED_EPS_DEG`.
+   */
+  readonly selectionTransformReadout = computed(() => {
+    this.editorHistory.revision();
+    this.svgManipulationService.documentRevision();
+
+    const dash = '—' as const;
+    if (this.editorTool.currentTool() !== 'selector') {
+      return { x: dash, y: dash, w: dash, h: dash, r: dash };
+    }
+
+    const shapes = this.shapeSelectionService.selectedShapes();
+    if (shapes.length === 0) {
+      return { x: dash, y: dash, w: dash, h: dash, r: dash };
+    }
+
+    const ids = shapes.map((s) => s.id);
+    const union = this.svgManipulationService.getUnionBBox(ids);
+    const fmtNum = (n: number) => n.toFixed(1);
+
+    const xStr = union ? fmtNum(union.x) : dash;
+    const yStr = union ? fmtNum(union.y) : dash;
+    const wStr = union ? fmtNum(union.width) : dash;
+    const hStr = union ? fmtNum(union.height) : dash;
+
+    const svg = this.svgManipulationService.getSVGInstance();
+    if (!svg) {
+      return { x: xStr, y: yStr, w: wStr, h: hStr, r: dash };
+    }
+
+    const angles: number[] = [];
+    for (const s of shapes) {
+      const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
+      if (!el || typeof el.matrix !== 'function') continue;
+      const m = el.matrix() as Matrix;
+      const deg = PropertiesPanelComponent.rotationDeg0To360FromMatrix(m);
+      if (!Number.isFinite(deg)) continue;
+      angles.push(deg);
+    }
+
+    let rStr: string = dash;
+    if (angles.length > 0) {
+      const r0 = angles[0];
+      const eps = PropertiesPanelComponent.ROTATION_MIXED_EPS_DEG;
+      const mixed =
+        shapes.length > 1 &&
+        angles.some((deg) => PropertiesPanelComponent.rotationDiffDeg(deg, r0) > eps);
+      rStr = mixed ? 'Mixed' : `${fmtNum(r0)}°`;
+    }
+
+    return { x: xStr, y: yStr, w: wStr, h: hStr, r: rStr };
+  });
+
   readonly alignShortcutLabels = {
     left: 'Ctrl/Cmd+Shift+Left',
     center: 'Ctrl/Cmd+Shift+Down',

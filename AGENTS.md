@@ -12,6 +12,16 @@ bd close <id>         # Complete work
 bd dolt push          # Push beads data to remote
 ```
 
+## Standard Beads Workflow
+
+```bash
+bd ready                 # Pick the next issue
+bd show <id>             # Confirm scope + acceptance criteria
+bd update <id> --claim   # Claim before making code changes
+# implement + test
+bd close <id>            # Close when acceptance criteria are met
+```
+
 ## Non-Interactive Shell Commands
 
 **ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.

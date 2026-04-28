@@ -6,6 +6,7 @@ import { LayerTreeNode, SvgManipulationService } from '../../services/svg-manipu
 import { EditorHistoryService } from '../../services/editor-history.service';
 import {
   ReorderCommand,
+  buildReorderToExtremeCommand,
   ToggleVisibilityCommand,
   GroupCommand,
   UngroupCommand
@@ -88,6 +89,16 @@ export class LayersPanelComponent {
     this.editorHistory.pushAndExecute(
       new ReorderCommand(this.svgManipulation, layerId, 'backward')
     );
+  }
+
+  onMoveToFront(layerId: string): void {
+    const cmd = buildReorderToExtremeCommand(this.svgManipulation, [layerId], 'front');
+    if (cmd) this.editorHistory.pushAndExecute(cmd);
+  }
+
+  onMoveToBack(layerId: string): void {
+    const cmd = buildReorderToExtremeCommand(this.svgManipulation, [layerId], 'back');
+    if (cmd) this.editorHistory.pushAndExecute(cmd);
   }
 
   onGroupSelected(): void {

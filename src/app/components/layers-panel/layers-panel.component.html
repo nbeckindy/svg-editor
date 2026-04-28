@@ -57,10 +57,18 @@
           </div>
 
           <div class="reorder-controls" (click)="$event.stopPropagation()">
+            <button type="button" class="reorder-btn" title="Bring to front"
+                    [attr.data-testid]="'layer-to-front-' + layer.id"
+                    aria-label="Bring layer to front"
+                    (click)="onMoveToFront(layer.id)">⇈</button>
             <button type="button" class="reorder-btn" title="Move forward"
                     [attr.data-testid]="'layer-forward-' + layer.id"
                     aria-label="Move layer forward"
                     (click)="onMoveForward(layer.id)">↑</button>
+            <button type="button" class="reorder-btn" title="Send to back"
+                    [attr.data-testid]="'layer-to-back-' + layer.id"
+                    aria-label="Send layer to back"
+                    (click)="onMoveToBack(layer.id)">⇊</button>
             <button type="button" class="reorder-btn" title="Move backward"
                     [attr.data-testid]="'layer-backward-' + layer.id"
                     aria-label="Move layer backward"

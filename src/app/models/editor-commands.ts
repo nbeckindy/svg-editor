@@ -642,6 +642,57 @@ export class ReorderCommand implements EditorCommand {
   }
 }
 
+/**
+ * Build one undoable command to move elements to the front or back of their respective parents.
+ * Multi-select uses DOM sibling order per parent so relative stacking is preserved:
+ * - `front`: ascending index (move deeper/back nodes in the selection first, then toward front).
+ * - `back`: descending index (move front-most selected nodes first toward back).
+ */
+export function buildReorderToExtremeCommand(
+  svc: SvgManipulationService,
+  elementIds: string[],
+  direction: 'front' | 'back'
+): EditorCommand | null {
+  const svgInstance = svc.getSVGInstance();
+  if (!svgInstance || elementIds.length === 0) return null;
+
+  const seen = new Set<string>();
+  type Entry = { id: string; index: number };
+  const byParent = new Map<Element, Entry[]>();
+
+  for (const rawId of elementIds) {
+    if (seen.has(rawId)) continue;
+    seen.add(rawId);
+    const el = svgInstance.findOne(`#${rawId}`) as SvgJsElement | undefined;
+    if (!el?.node) continue;
+    const node = el.node as Element;
+    const parent = node.parentElement;
+    if (!parent) continue;
+    const index = Array.from(parent.children).indexOf(node);
+    if (index < 0) continue;
+    const list = byParent.get(parent) ?? [];
+    list.push({ id: rawId, index });
+    byParent.set(parent, list);
+  }
+
+  const commands: EditorCommand[] = [];
+  for (const entries of byParent.values()) {
+    entries.sort((a, b) =>
+      direction === 'front' ? a.index - b.index : b.index - a.index
+    );
+    for (const e of entries) {
+      commands.push(new ReorderCommand(svc, e.id, direction));
+    }
+  }
+
+  if (commands.length === 0) return null;
+  if (commands.length === 1) return commands[0];
+  return new CompositeCommand(
+    commands,
+    direction === 'front' ? 'Bring to front' : 'Send to back'
+  );
+}
+
 export class ToggleVisibilityCommand implements EditorCommand {
   readonly description = 'Toggle visibility';
 

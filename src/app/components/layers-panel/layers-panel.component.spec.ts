@@ -282,6 +282,54 @@ describe('LayersPanelComponent', () => {
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReorderCommand);
   });
 
+  it('bring to front button dispatches ReorderCommand with front direction', () => {
+    const node = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    node.id = 'rect-1';
+    const parent = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    parent.appendChild(node);
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => (sel === '#rect-1' ? { node } : null))
+    });
+    getLayerTree.mockReturnValue([
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const btn = (fixture.nativeElement as HTMLElement)
+      .querySelector('[data-testid="layer-to-front-rect-1"]') as HTMLButtonElement;
+    btn.click();
+
+    expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    const cmd = pushAndExecute.mock.calls[0][0] as ReorderCommand;
+    expect(cmd).toBeInstanceOf(ReorderCommand);
+    expect(cmd.description).toContain('front');
+  });
+
+  it('send to back button dispatches ReorderCommand with back direction', () => {
+    const node = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    node.id = 'rect-1';
+    const parent = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    parent.appendChild(node);
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => (sel === '#rect-1' ? { node } : null))
+    });
+    getLayerTree.mockReturnValue([
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const btn = (fixture.nativeElement as HTMLElement)
+      .querySelector('[data-testid="layer-to-back-rect-1"]') as HTMLButtonElement;
+    btn.click();
+
+    expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    const cmd = pushAndExecute.mock.calls[0][0] as ReorderCommand;
+    expect(cmd).toBeInstanceOf(ReorderCommand);
+    expect(cmd.description).toContain('back');
+  });
+
   it('group button is disabled when < 2 shapes selected', () => {
     getLayerTree.mockReturnValue([
       { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }

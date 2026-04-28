@@ -15,6 +15,7 @@ import {
   UnionRotateCommand,
   SkewCommand,
   ReorderCommand,
+  buildReorderToExtremeCommand,
   ToggleVisibilityCommand,
   GroupCommand,
   UngroupCommand,
@@ -704,6 +705,75 @@ describe('ReorderCommand', () => {
     const svc = mockSvc();
     const cmd = new ReorderCommand(svc, 'target', 'forward');
     expect(cmd.description).toContain('forward');
+  });
+});
+
+describe('buildReorderToExtremeCommand', () => {
+  function buildParentWithChildren(ids: string[]) {
+    const parent = document.createElement('div');
+    const elements = new Map<string, { node: Element }>();
+    for (const id of ids) {
+      const child = document.createElement('div');
+      child.id = id;
+      parent.appendChild(child);
+      elements.set(id, { node: child });
+    }
+    return { parent, elements };
+  }
+
+  it('returns null when SVG instance is missing', () => {
+    const svc = mockSvc();
+    expect(buildReorderToExtremeCommand(svc, ['a'], 'front')).toBeNull();
+  });
+
+  it('returns a single ReorderCommand for one valid id', () => {
+    const { elements } = buildParentWithChildren(['a', 'b']);
+    const findOne = vi.fn((sel: string) => elements.get(sel.replace('#', '')));
+    const svc = mockSvc({
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+    });
+    const cmd = buildReorderToExtremeCommand(svc, ['a'], 'front');
+    expect(cmd).toBeInstanceOf(ReorderCommand);
+    expect(cmd!.description).toContain('front');
+  });
+
+  it('for front, runs same-parent moves in ascending DOM index (selection order independent)', () => {
+    const { parent, elements } = buildParentWithChildren(['a', 'b', 'c', 'd']);
+    const findOne = vi.fn((sel: string) => elements.get(sel.replace('#', '')));
+    const callOrder: string[] = [];
+    const svc = mockSvc({
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+      moveElementToFront: vi.fn((id: string) => {
+        callOrder.push(id);
+        parent.appendChild(elements.get(id)!.node);
+      }),
+    });
+    const cmd = buildReorderToExtremeCommand(svc, ['c', 'b'], 'front');
+    expect(cmd).toBeInstanceOf(CompositeCommand);
+    expect(cmd!.description).toBe('Bring to front');
+    cmd!.execute();
+    expect(callOrder).toEqual(['b', 'c']);
+    expect(Array.from(parent.children).map((n) => n.id)).toEqual(['a', 'd', 'b', 'c']);
+  });
+
+  it('for back, runs same-parent moves in descending DOM index', () => {
+    const { parent, elements } = buildParentWithChildren(['a', 'b', 'c', 'd']);
+    const findOne = vi.fn((sel: string) => elements.get(sel.replace('#', '')));
+    const callOrder: string[] = [];
+    const svc = mockSvc({
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+      moveElementToBack: vi.fn((id: string) => {
+        callOrder.push(id);
+        const node = elements.get(id)!.node;
+        parent.insertBefore(node, parent.firstElementChild);
+      }),
+    });
+    const cmd = buildReorderToExtremeCommand(svc, ['b', 'c'], 'back');
+    expect(cmd).toBeInstanceOf(CompositeCommand);
+    expect(cmd!.description).toBe('Send to back');
+    cmd!.execute();
+    expect(callOrder).toEqual(['c', 'b']);
+    expect(Array.from(parent.children).map((n) => n.id)).toEqual(['b', 'c', 'a', 'd']);
   });
 });
 
