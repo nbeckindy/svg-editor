@@ -23,7 +23,9 @@ import {
   StrokeDashArrayCommand,
   StrokeDashOffsetCommand,
   AlignCommand,
-  DistributeCommand
+  DistributeCommand,
+  FontCommand,
+  TextAlignCommand
 } from '../../models/editor-commands';
 
 @Component({
@@ -33,6 +35,15 @@ import {
   styleUrl: './properties-panel.component.css'
 })
 export class PropertiesPanelComponent {
+  readonly fontFamilies = [
+    'Arial, sans-serif',
+    'Helvetica, Arial, sans-serif',
+    '"Times New Roman", serif',
+    'Georgia, serif',
+    '"Courier New", monospace',
+    'Verdana, sans-serif'
+  ] as const;
+
   private shapeSelectionService = inject(ShapeSelectionService);
   readonly selectedShape = this.shapeSelectionService.selectedShape;
   readonly selectionCount = this.shapeSelectionService.selectionCount;
@@ -260,6 +271,155 @@ export class PropertiesPanelComponent {
     if (shapes.length <= 1) return false;
     const keys = new Set(shapes.map((s) => String(s.opacity ?? 1)));
     return keys.size > 1;
+  }
+
+  private textSelection(): ShapeProperties[] {
+    return this.selectedShapesList().filter((s) => s.type === 'text');
+  }
+
+  hasTextSelection(): boolean {
+    return this.textSelection().length > 0;
+  }
+
+  textSelectionMixed(
+    getter: (shape: ShapeProperties) => string | number | undefined
+  ): boolean {
+    const textShapes = this.textSelection();
+    if (textShapes.length <= 1) return false;
+    const keys = new Set(textShapes.map((s) => String(getter(s) ?? '')));
+    return keys.size > 1;
+  }
+
+  textSelectionValue(
+    getter: (shape: ShapeProperties) => string | number | undefined,
+    fallback: string
+  ): string {
+    const textShapes = this.textSelection();
+    if (textShapes.length === 0) return fallback;
+    if (this.textSelectionMixed(getter)) return '';
+    const value = getter(textShapes[0]);
+    return value == null ? fallback : String(value);
+  }
+
+  fontFamiliesMixed(): boolean {
+    return this.textSelectionMixed((s) => s.fontFamily);
+  }
+
+  fontSizesMixed(): boolean {
+    return this.textSelectionMixed((s) => s.fontSize);
+  }
+
+  fontWeightsMixed(): boolean {
+    return this.textSelectionMixed((s) => s.fontWeight);
+  }
+
+  fontStylesMixed(): boolean {
+    return this.textSelectionMixed((s) => s.fontStyle);
+  }
+
+  textAnchorsMixed(): boolean {
+    return this.textSelectionMixed((s) => s.textAnchor);
+  }
+
+  selectedFontFamilyValue(): string {
+    return this.textSelectionValue((s) => s.fontFamily, 'Arial, sans-serif');
+  }
+
+  selectedFontSizeValue(): string {
+    return this.textSelectionValue((s) => s.fontSize, '16');
+  }
+
+  selectedFontWeightValue(): string {
+    return this.textSelectionValue((s) => s.fontWeight, 'normal');
+  }
+
+  selectedFontStyleValue(): string {
+    return this.textSelectionValue((s) => s.fontStyle, 'normal');
+  }
+
+  selectedTextAnchorValue(): 'start' | 'middle' | 'end' {
+    const value = this.textSelectionValue((s) => s.textAnchor, 'start');
+    return value === 'middle' || value === 'end' ? value : 'start';
+  }
+
+  onFontFamilyChange(event: Event): void {
+    const fontFamily = (event.target as HTMLSelectElement).value;
+    const commands = this.textSelection().map((s) =>
+      new FontCommand(
+        this.svgManipulationService,
+        s.id,
+        'fontFamily',
+        s.fontFamily ?? 'Arial, sans-serif',
+        fontFamily
+      )
+    );
+    this.pushCommand(commands, `Set font family to ${fontFamily}`);
+    this.syncAllSelectedFromDom();
+  }
+
+  onFontSizeChange(event: Event): void {
+    const fontSize = Number.parseFloat((event.target as HTMLInputElement).value);
+    if (!Number.isFinite(fontSize) || fontSize <= 0) return;
+    const commands = this.textSelection().map((s) =>
+      new FontCommand(
+        this.svgManipulationService,
+        s.id,
+        'fontSize',
+        s.fontSize ?? 16,
+        fontSize
+      )
+    );
+    this.pushCommand(commands, `Set font size to ${fontSize}`);
+    this.syncAllSelectedFromDom();
+  }
+
+  onToggleBold(): void {
+    const textShapes = this.textSelection();
+    if (textShapes.length === 0) return;
+    const allBold = textShapes.every((s) => (s.fontWeight ?? 'normal') === 'bold');
+    const nextWeight = allBold ? 'normal' : 'bold';
+    const commands = textShapes.map((s) =>
+      new FontCommand(
+        this.svgManipulationService,
+        s.id,
+        'fontWeight',
+        s.fontWeight ?? 'normal',
+        nextWeight
+      )
+    );
+    this.pushCommand(commands, `${nextWeight === 'bold' ? 'Enable' : 'Disable'} bold`);
+    this.syncAllSelectedFromDom();
+  }
+
+  onToggleItalic(): void {
+    const textShapes = this.textSelection();
+    if (textShapes.length === 0) return;
+    const allItalic = textShapes.every((s) => (s.fontStyle ?? 'normal') === 'italic');
+    const nextStyle = allItalic ? 'normal' : 'italic';
+    const commands = textShapes.map((s) =>
+      new FontCommand(
+        this.svgManipulationService,
+        s.id,
+        'fontStyle',
+        s.fontStyle ?? 'normal',
+        nextStyle
+      )
+    );
+    this.pushCommand(commands, `${nextStyle === 'italic' ? 'Enable' : 'Disable'} italic`);
+    this.syncAllSelectedFromDom();
+  }
+
+  onTextAlignChange(textAnchor: 'start' | 'middle' | 'end'): void {
+    const commands = this.textSelection().map((s) =>
+      new TextAlignCommand(
+        this.svgManipulationService,
+        s.id,
+        s.textAnchor ?? 'start',
+        textAnchor
+      )
+    );
+    this.pushCommand(commands, 'Set text alignment');
+    this.syncAllSelectedFromDom();
   }
 
   /** All selected shapes have no visible fill — show “No fill” only in this case (not when mixed). */

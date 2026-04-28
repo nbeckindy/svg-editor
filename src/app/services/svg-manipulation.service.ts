@@ -801,9 +801,23 @@ export class SvgManipulationService {
     const rawDasharray = this.readStrokeDasharray(element, node);
     const rawDashoffset = this.readStrokeDashoffset(element, node);
 
+    const textNode = node.tagName.toLowerCase() === 'text' ? node : null;
+    const rawFontSize = textNode ? Number.parseFloat(textNode.getAttribute('font-size') ?? '') : Number.NaN;
+    const textAnchorAttr = textNode?.getAttribute('text-anchor');
+    const textAnchor =
+      textAnchorAttr === 'middle' || textAnchorAttr === 'end' || textAnchorAttr === 'start'
+        ? textAnchorAttr
+        : undefined;
+
     return {
       id: element.id() || '',
       type: element.type,
+      textContent: textNode?.textContent ?? undefined,
+      fontFamily: textNode?.getAttribute('font-family') ?? undefined,
+      fontSize: Number.isFinite(rawFontSize) ? rawFontSize : undefined,
+      fontWeight: textNode?.getAttribute('font-weight') ?? undefined,
+      fontStyle: textNode?.getAttribute('font-style') ?? undefined,
+      textAnchor,
       fill: fillForPicker,
       stroke: strokeForPicker,
       strokeWidth,
@@ -976,32 +990,57 @@ export class SvgManipulationService {
    * Return editable text for a `<text>` (or its child `<tspan>`), preserving simple inline text for MVP.
    */
   getTextContent(textId: string): string | null {
-    if (!this.svgInstance) return null;
-    const shape = this.svgInstance.findOne(`#${textId}`) as SvgJsElement | undefined;
-    const node = shape?.node as Element | null;
-    if (!node) return null;
-    if (node.tagName.toLowerCase() === 'text') return node.textContent ?? '';
-    if (node.tagName.toLowerCase() === 'tspan') {
-      const parentText = node.closest('text');
-      return parentText?.textContent ?? null;
-    }
-    return null;
+    const textNode = this.resolveTextNode(textId);
+    return textNode?.textContent ?? null;
   }
 
   /**
    * Replace text content for a `<text>` node. `<tspan>` ids are resolved to their parent `<text>`.
    */
   updateTextContent(textId: string, text: string): void {
-    if (!this.svgInstance) return;
+    const textNode = this.resolveTextNode(textId);
+    if (!textNode) return;
+    textNode.textContent = text;
+    this.bumpDocumentRevision();
+  }
+
+  updateTextFontFamily(textId: string, fontFamily: string): void {
+    this.updateTextAttr(textId, 'font-family', fontFamily);
+  }
+
+  updateTextFontSize(textId: string, fontSize: number): void {
+    this.updateTextAttr(textId, 'font-size', `${fontSize}`);
+  }
+
+  updateTextFontWeight(textId: string, fontWeight: string): void {
+    this.updateTextAttr(textId, 'font-weight', fontWeight);
+  }
+
+  updateTextFontStyle(textId: string, fontStyle: string): void {
+    this.updateTextAttr(textId, 'font-style', fontStyle);
+  }
+
+  updateTextAnchor(textId: string, textAnchor: 'start' | 'middle' | 'end'): void {
+    this.updateTextAttr(textId, 'text-anchor', textAnchor);
+  }
+
+  private updateTextAttr(textId: string, attr: string, value: string): void {
+    const textNode = this.resolveTextNode(textId);
+    if (!textNode) return;
+    textNode.setAttribute(attr, value);
+    this.bumpDocumentRevision();
+  }
+
+  private resolveTextNode(textId: string): Element | null {
+    if (!this.svgInstance) return null;
     const shape = this.svgInstance.findOne(`#${textId}`) as SvgJsElement | undefined;
     const startNode = shape?.node as Element | null;
-    if (!startNode) return;
+    if (!startNode) return null;
     const textNode = startNode.tagName.toLowerCase() === 'text'
       ? startNode
       : startNode.closest('text');
-    if (!textNode || textNode.tagName.toLowerCase() !== 'text') return;
-    textNode.textContent = text;
-    this.bumpDocumentRevision();
+    if (!textNode || textNode.tagName.toLowerCase() !== 'text') return null;
+    return textNode;
   }
 
   /**
@@ -1433,7 +1472,10 @@ export class SvgManipulationService {
         y,
         fill: attrs.fill ?? '#000000',
         'font-size': attrs.fontSize ?? 16,
-        'font-family': attrs.fontFamily ?? 'Arial, sans-serif'
+        'font-family': attrs.fontFamily ?? 'Arial, sans-serif',
+        'font-weight': 'normal',
+        'font-style': 'normal',
+        'text-anchor': 'start'
       });
       shape = el;
     }

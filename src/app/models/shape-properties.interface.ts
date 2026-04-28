@@ -22,6 +22,12 @@ export type PaintType = 'solid' | 'gradient' | 'pattern' | 'none';
 export interface ShapeProperties {
   id: string;
   type: string;
+  textContent?: string;
+  fontFamily?: string;
+  fontSize?: number;
+  fontWeight?: string;
+  fontStyle?: string;
+  textAnchor?: 'start' | 'middle' | 'end';
   fill?: string;
   stroke?: string;
   strokeWidth?: number;

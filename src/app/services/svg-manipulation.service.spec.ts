@@ -1730,7 +1730,24 @@ describe('SvgManipulationService', () => {
       const el = container.querySelector(`#${id}`);
       expect(el?.getAttribute('fill')?.toLowerCase()).toBe('#000000');
       expect(el?.getAttribute('font-size')).toBe('16');
+      expect(el?.getAttribute('font-weight')).toBe('normal');
+      expect(el?.getAttribute('font-style')).toBe('normal');
+      expect(el?.getAttribute('text-anchor')).toBe('start');
       expect(el?.textContent).toBe('Text');
+    });
+
+    it('getShapeProperties includes text typography fields', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><text id="t1" x="10" y="20" font-family="Verdana" font-size="18" font-weight="bold" font-style="italic" text-anchor="middle">Hello</text></svg>';
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const text = svg.findOne('#t1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(text);
+      expect(props.textContent).toBe('Hello');
+      expect(props.fontFamily).toBe('Verdana');
+      expect(props.fontSize).toBe(18);
+      expect(props.fontWeight).toBe('bold');
+      expect(props.fontStyle).toBe('italic');
+      expect(props.textAnchor).toBe('middle');
     });
 
     it('applies fill override', () => {
@@ -1825,6 +1842,24 @@ describe('SvgManipulationService', () => {
       const id = service.insertPathIntoContentGroup('M 1 1 L 2 2');
       const contentGroup = container.querySelector('[data-editor-content-group]');
       expect(contentGroup?.querySelector(`#${id}`)).not.toBeNull();
+    });
+  });
+
+  describe('text typography updates', () => {
+    it('updates text typography and anchor attributes', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><text id="t1" x="10" y="20">Hello</text></svg>';
+      service.initializeSVG(container, svgContent);
+      service.updateTextFontFamily('t1', 'Georgia, serif');
+      service.updateTextFontSize('t1', 22);
+      service.updateTextFontWeight('t1', 'bold');
+      service.updateTextFontStyle('t1', 'italic');
+      service.updateTextAnchor('t1', 'end');
+      const el = container.querySelector('#t1');
+      expect(el?.getAttribute('font-family')).toBe('Georgia, serif');
+      expect(el?.getAttribute('font-size')).toBe('22');
+      expect(el?.getAttribute('font-weight')).toBe('bold');
+      expect(el?.getAttribute('font-style')).toBe('italic');
+      expect(el?.getAttribute('text-anchor')).toBe('end');
     });
   });
 

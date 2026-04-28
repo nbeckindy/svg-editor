@@ -24,6 +24,8 @@ import {
   AddPathCommand,
   EditPathNodesCommand,
   TextContentCommand,
+  FontCommand,
+  TextAlignCommand,
   PasteCommand,
   DuplicateCommand,
   type EditorCommand,
@@ -53,6 +55,11 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     pasteClipboardPayload: vi.fn().mockReturnValue({ insertedIds: [], insertedMarkup: [] }),
     updatePathData: vi.fn(),
     updateTextContent: vi.fn(),
+    updateTextFontFamily: vi.fn(),
+    updateTextFontSize: vi.fn(),
+    updateTextFontWeight: vi.fn(),
+    updateTextFontStyle: vi.fn(),
+    updateTextAnchor: vi.fn(),
     getShapeBBox: vi.fn(),
     getUnionBBox: vi.fn(),
     snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
@@ -1256,5 +1263,36 @@ describe('TextContentCommand', () => {
     expect(svc.updateTextContent).toHaveBeenCalledWith('text-a', 'after');
     cmd.undo();
     expect(svc.updateTextContent).toHaveBeenCalledWith('text-a', 'before');
+  });
+});
+
+describe('FontCommand', () => {
+  it('updates font family and restores on undo', () => {
+    const svc = mockSvc();
+    const cmd = new FontCommand(svc, 'text-a', 'fontFamily', 'Arial', 'Verdana');
+    cmd.execute();
+    expect(svc.updateTextFontFamily).toHaveBeenCalledWith('text-a', 'Verdana');
+    cmd.undo();
+    expect(svc.updateTextFontFamily).toHaveBeenCalledWith('text-a', 'Arial');
+  });
+
+  it('updates font size and restores on undo', () => {
+    const svc = mockSvc();
+    const cmd = new FontCommand(svc, 'text-a', 'fontSize', 12, 20);
+    cmd.execute();
+    expect(svc.updateTextFontSize).toHaveBeenCalledWith('text-a', 20);
+    cmd.undo();
+    expect(svc.updateTextFontSize).toHaveBeenCalledWith('text-a', 12);
+  });
+});
+
+describe('TextAlignCommand', () => {
+  it('updates text anchor and restores on undo', () => {
+    const svc = mockSvc();
+    const cmd = new TextAlignCommand(svc, 'text-a', 'start', 'middle');
+    cmd.execute();
+    expect(svc.updateTextAnchor).toHaveBeenCalledWith('text-a', 'middle');
+    cmd.undo();
+    expect(svc.updateTextAnchor).toHaveBeenCalledWith('text-a', 'start');
   });
 });

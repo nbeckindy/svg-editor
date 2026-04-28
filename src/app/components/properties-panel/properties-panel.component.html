@@ -145,6 +145,89 @@
         </div>
       }
 
+      @if (hasTextSelection()) {
+        <div class="property-group">
+          <label class="property-label" for="font-family">Font</label>
+          @if (fontFamiliesMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <select
+            id="font-family"
+            class="dash-select"
+            [class.mixed-control]="fontFamiliesMixed()"
+            [value]="selectedFontFamilyValue()"
+            (change)="onFontFamilyChange($event)">
+            @for (font of fontFamilies; track font) {
+              <option [value]="font">{{ font }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="property-group">
+          <label class="property-label" for="font-size">Font Size</label>
+          @if (fontSizesMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <input
+            id="font-size"
+            type="number"
+            class="range-number"
+            min="1"
+            step="1"
+            [class.mixed-control]="fontSizesMixed()"
+            [value]="selectedFontSizeValue()"
+            [attr.placeholder]="fontSizesMixed() ? '—' : ''"
+            (change)="onFontSizeChange($event)">
+        </div>
+
+        <div class="property-group">
+          <label class="property-label">Style</label>
+          <div class="align-toolbar">
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="!fontWeightsMixed() && selectedFontWeightValue() === 'bold'"
+              (click)="onToggleBold()">
+              Bold
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="!fontStylesMixed() && selectedFontStyleValue() === 'italic'"
+              (click)="onToggleItalic()">
+              Italic
+            </button>
+          </div>
+        </div>
+
+        <div class="property-group">
+          <label class="property-label">Text Align</label>
+          <div class="align-toolbar">
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="!textAnchorsMixed() && selectedTextAnchorValue() === 'start'"
+              (click)="onTextAlignChange('start')">
+              Left
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="!textAnchorsMixed() && selectedTextAnchorValue() === 'middle'"
+              (click)="onTextAlignChange('middle')">
+              Center
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="!textAnchorsMixed() && selectedTextAnchorValue() === 'end'"
+              (click)="onTextAlignChange('end')">
+              Right
+            </button>
+          </div>
+        </div>
+      }
+
       @if (supportsFill(shape)) {
         <div class="property-group">
           <label class="property-label" for="fill-color">Fill Color</label>

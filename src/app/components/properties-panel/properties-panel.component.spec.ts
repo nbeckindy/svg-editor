@@ -62,6 +62,11 @@ describe('PropertiesPanelComponent', () => {
       documentRevision: signal(0),
       updateStrokeDasharray: vi.fn(),
       updateStrokeDashoffset: vi.fn(),
+      updateTextFontFamily: vi.fn(),
+      updateTextFontSize: vi.fn(),
+      updateTextFontWeight: vi.fn(),
+      updateTextFontStyle: vi.fn(),
+      updateTextAnchor: vi.fn(),
       getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 50 })
     };
     const editorToolServiceMock = {
@@ -604,5 +609,35 @@ describe('PropertiesPanelComponent', () => {
     const distHBtn = el.querySelector('button[title*="Distribute horizontally"]') as HTMLButtonElement | null;
     expect(leftBtn?.disabled).toBe(false);
     expect(distHBtn?.disabled).toBe(false);
+  });
+
+  it('shows text controls when selection includes text shapes', () => {
+    selectedShapesSignal.set([{ id: 'text-1', type: 'text', textContent: 'Hello', fontFamily: 'Arial, sans-serif' }]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#font-family')).toBeTruthy();
+    expect(el.textContent).toContain('Text Align');
+  });
+
+  it('hides text controls when no text shape is selected', () => {
+    selectedShapesSignal.set([{ id: 'rect-1', type: 'rect' }]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#font-family')).toBeNull();
+    expect(el.textContent).not.toContain('Text Align');
+  });
+
+  it('updates text font family through command path', () => {
+    selectedShapesSignal.set([{ id: 'text-1', type: 'text', fontFamily: 'Arial, sans-serif' }]);
+    fixture.detectChanges();
+    component.onFontFamilyChange({ target: { value: 'Verdana, sans-serif' } } as unknown as Event);
+    expect(svgManipulationService.updateTextFontFamily).toHaveBeenCalledWith('text-1', 'Verdana, sans-serif');
+  });
+
+  it('updates text alignment through command path', () => {
+    selectedShapesSignal.set([{ id: 'text-1', type: 'text', textAnchor: 'start' }]);
+    fixture.detectChanges();
+    component.onTextAlignChange('middle');
+    expect(svgManipulationService.updateTextAnchor).toHaveBeenCalledWith('text-1', 'middle');
   });
 });
