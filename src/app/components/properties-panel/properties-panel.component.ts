@@ -1,7 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Element as SvgJsElement } from '@svgdotjs/svg.js';
+import { Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
@@ -40,6 +40,53 @@ export class PropertiesPanelComponent {
   private editorHistory = inject(EditorHistoryService);
   private editorTool = inject(EditorToolService);
   readonly isSelectorMode = computed(() => this.editorTool.currentTool() === 'selector');
+
+  /**
+   * Matrix-derived skew angles (degrees). Approximate when rotation and skew are combined.
+   * `skewX ≈ atan2(c, a)`, `skewY ≈ atan2(b, d)` in root transform space.
+   */
+  readonly selectionSkewReadout = computed(() => {
+    this.editorHistory.revision();
+    this.svgManipulationService.documentRevision();
+
+    if (this.editorTool.currentTool() !== 'selector') {
+      return { skewX: '—' as const, skewY: '—' as const };
+    }
+
+    const shapes = this.shapeSelectionService.selectedShapes();
+    if (shapes.length === 0) {
+      return { skewX: '—' as const, skewY: '—' as const };
+    }
+
+    const svg = this.svgManipulationService.getSVGInstance();
+    if (!svg) {
+      return { skewX: '—' as const, skewY: '—' as const };
+    }
+
+    const pairs: { sx: number; sy: number }[] = [];
+    for (const s of shapes) {
+      const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
+      if (!el || typeof el.matrix !== 'function') continue;
+      const m = el.matrix() as Matrix;
+      const { skewX, skewY } = PropertiesPanelComponent.skewDegFromMatrix(m);
+      if (!Number.isFinite(skewX) || !Number.isFinite(skewY)) continue;
+      pairs.push({ sx: skewX, sy: skewY });
+    }
+
+    if (pairs.length === 0) {
+      return { skewX: '—' as const, skewY: '—' as const };
+    }
+
+    const fmt = (n: number) => `${n.toFixed(1)}°`;
+    const sx0 = pairs[0].sx;
+    const sy0 = pairs[0].sy;
+    const skewX =
+      shapes.length > 1 && pairs.some((p) => Math.abs(p.sx - sx0) > 0.05) ? ('Mixed' as const) : fmt(sx0);
+    const skewY =
+      shapes.length > 1 && pairs.some((p) => Math.abs(p.sy - sy0) > 0.05) ? ('Mixed' as const) : fmt(sy0);
+    return { skewX, skewY };
+  });
+
   readonly alignShortcutLabels = {
     left: 'Ctrl/Cmd+Shift+Left',
     center: 'Ctrl/Cmd+Shift+Down',
@@ -59,6 +106,14 @@ export class PropertiesPanelComponent {
   }
 
   /** SVG.js `fill()` / `stroke()` write presentation attributes on the element. */
+  private static skewDegFromMatrix(m: Matrix): { skewX: number; skewY: number } {
+    const v = m.valueOf() as { a: number; b: number; c: number; d: number };
+    return {
+      skewX: (Math.atan2(v.c, v.a) * 180) / Math.PI,
+      skewY: (Math.atan2(v.b, v.d) * 180) / Math.PI
+    };
+  }
+
   private static readonly OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
 
   /** Neutral value for native `<input type="color">` when the selection is mixed (not shown as the real fill). */

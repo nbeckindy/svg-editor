@@ -1855,6 +1855,43 @@ export class SvgManipulationService {
   }
 
   /**
+   * Apply skew about a pivot in root SVG user space: `newMatrix = skew(axis) * snapshotMatrix`.
+   */
+  applyUnionSkewFromSnapshot(
+    shapeIds: string[],
+    axis: 'x' | 'y',
+    angleDeg: number,
+    pivot: { x: number; y: number },
+    snapshot: Map<string, Matrix>
+  ): void {
+    if (!this.svgInstance) return;
+    if (!Number.isFinite(angleDeg)) return;
+    const T =
+      axis === 'x'
+        ? new Matrix().skewX(angleDeg, pivot.x, pivot.y)
+        : new Matrix().skewY(angleDeg, pivot.x, pivot.y);
+    for (const id of shapeIds) {
+      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      const prev = snapshot.get(id);
+      if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
+      const next = T.multiply(prev);
+      const v = next.valueOf() as { a: number; b: number; c: number; d: number; e: number; f: number };
+      if (
+        !Number.isFinite(v.a) ||
+        !Number.isFinite(v.b) ||
+        !Number.isFinite(v.c) ||
+        !Number.isFinite(v.d) ||
+        !Number.isFinite(v.e) ||
+        !Number.isFinite(v.f)
+      ) {
+        continue;
+      }
+      shape.matrix(next);
+    }
+    this.bumpDocumentRevision();
+  }
+
+  /**
    * Build a hierarchical tree of the content group. Groups appear as branch nodes with `children`;
    * leaves are shapes. DOM order (first child = back-most in paint order).
    */

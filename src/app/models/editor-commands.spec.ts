@@ -13,6 +13,7 @@ import {
   TranslateCommand,
   UnionScaleCommand,
   UnionRotateCommand,
+  SkewCommand,
   ReorderCommand,
   ToggleVisibilityCommand,
   GroupCommand,
@@ -37,6 +38,7 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     translateShape: vi.fn(),
     applyUnionScaleFromSnapshot: vi.fn(),
     applyUnionRotationFromSnapshot: vi.fn(),
+    applyUnionSkewFromSnapshot: vi.fn(),
     moveElementForward: vi.fn(),
     moveElementBackward: vi.fn(),
     moveElementToFront: vi.fn(),
@@ -580,6 +582,39 @@ describe('UnionRotateCommand', () => {
   it('should have a non-empty description containing the angle', () => {
     const cmd = new UnionRotateCommand(mockSvc(), ['s1'], pivot, 45, new Map());
     expect(cmd.description).toContain('45');
+  });
+});
+
+describe('SkewCommand', () => {
+  const pivot = { x: 60, y: 45 };
+
+  it('should call applyUnionSkewFromSnapshot on execute for skew X', () => {
+    const snapshot = new Map<string, Matrix>();
+    const svc = mockSvc();
+    const cmd = new SkewCommand(svc, ['s1'], 'x', 12, pivot, snapshot);
+    cmd.execute();
+    expect(svc.applyUnionSkewFromSnapshot).toHaveBeenCalledWith(['s1'], 'x', 12, pivot, snapshot);
+  });
+
+  it('should call applyUnionSkewFromSnapshot on execute for skew Y', () => {
+    const snapshot = new Map<string, Matrix>();
+    const svc = mockSvc();
+    const cmd = new SkewCommand(svc, ['a', 'b'], 'y', -5, pivot, snapshot);
+    cmd.execute();
+    expect(svc.applyUnionSkewFromSnapshot).toHaveBeenCalledWith(['a', 'b'], 'y', -5, pivot, snapshot);
+  });
+
+  it('should restore matrices on undo', () => {
+    const m1 = new Matrix();
+    const el1 = makeMockSvgElement('s1', m1);
+    const findOne = vi.fn().mockReturnValue(el1);
+    const svc = mockSvc({
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+    });
+    const snapshot = new Map([['s1', m1]]);
+    const cmd = new SkewCommand(svc, ['s1'], 'x', 10, pivot, snapshot);
+    cmd.undo();
+    expect(el1.matrix).toHaveBeenCalledWith(m1);
   });
 });
 

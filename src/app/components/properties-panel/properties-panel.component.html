@@ -99,6 +99,19 @@
             </button>
           </div>
         </div>
+
+        <div class="property-group transform-skew-readout">
+          <label class="property-label">Skew X</label>
+          <div class="property-value readonly" data-testid="properties-skew-x">
+            {{ selectionSkewReadout().skewX }}
+          </div>
+        </div>
+        <div class="property-group transform-skew-readout">
+          <label class="property-label">Skew Y</label>
+          <div class="property-value readonly" data-testid="properties-skew-y">
+            {{ selectionSkewReadout().skewY }}
+          </div>
+        </div>
       }
 
       @if (supportsFill(shape)) {

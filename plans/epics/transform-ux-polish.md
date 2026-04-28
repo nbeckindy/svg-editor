@@ -54,7 +54,7 @@
 
 ## Notes
 
-- Skew APIs do **not** exist in the codebase; TUX-8a–8c are greenfield work.
+- **Skew (TUX-8a–8c) is implemented:** middle-edge handles, `SkewGesture`, `SkewCommand`, `SvgManipulationService.applyUnionSkewFromSnapshot`, and read-only **Skew X / Skew Y** in the properties panel (matrix-derived degrees; approximate when rotation and skew are combined). Design + checklists live in this file under “TUX-8a design spike” and following sections.
 - Z-order API (`moveElementToFront`/`moveElementToBack`, `ReorderCommand` with `'front'`/`'back'`) already exists; TUX-9 is pure UI wiring.
 
 ## TUX-8a design spike: skew transform UX

@@ -646,6 +646,19 @@ describe('SvgManipulationService', () => {
       ).not.toThrow();
     });
 
+    it('applyUnionSkewFromSnapshot skews rect about pivot (transform present)', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const union = { x: 10, y: 20, width: 100, height: 50 };
+      const pivot = { x: union.x + union.width / 2, y: union.y + union.height / 2 };
+      const snap = service.snapshotSelectionTransforms(['r1']);
+      const before = service.documentRevision();
+      service.applyUnionSkewFromSnapshot(['r1'], 'x', 15, pivot, snap);
+      expect(service.documentRevision()).toBe(before + 1);
+      const rect = container.querySelector('#r1');
+      expect(rect?.getAttribute('transform')).toBeTruthy();
+    });
+
     it('getSelectionRotationPivot returns union center when local bbox path unavailable (e.g. jsdom)', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
       service.initializeSVG(container, svgContent);

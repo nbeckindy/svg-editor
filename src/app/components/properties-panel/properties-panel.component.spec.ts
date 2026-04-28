@@ -1,8 +1,10 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { computed, signal, WritableSignal } from '@angular/core';
+import { Matrix } from '@svgdotjs/svg.js';
 import { PropertiesPanelComponent } from './properties-panel.component';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { EditorHistoryService } from '../../services/editor-history.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import { DEFAULT_ARTBOARD } from '../../models/artboard.model';
@@ -65,12 +67,27 @@ describe('PropertiesPanelComponent', () => {
       currentTool: editorToolSignal
     };
 
+    const editorHistoryRevision = signal(0);
+    const editorHistoryMock = {
+      revision: editorHistoryRevision,
+      pushAndExecute: vi.fn((cmd: { execute(): void }) => {
+        cmd.execute();
+        editorHistoryRevision.update((n) => n + 1);
+      }),
+      canUndo: computed(() => false),
+      canRedo: computed(() => false),
+      undo: vi.fn(),
+      redo: vi.fn(),
+      clear: vi.fn()
+    };
+
     await TestBed.configureTestingModule({
       imports: [PropertiesPanelComponent],
       providers: [
         { provide: ShapeSelectionService, useValue: shapeSelectionServiceMock },
         { provide: SvgManipulationService, useValue: svgManipulationServiceMock },
-        { provide: EditorToolService, useValue: editorToolServiceMock }
+        { provide: EditorToolService, useValue: editorToolServiceMock },
+        { provide: EditorHistoryService, useValue: editorHistoryMock }
       ]
     }).compileComponents();
 
@@ -115,6 +132,34 @@ describe('PropertiesPanelComponent', () => {
     expect(compiled.querySelector('.properties-content')).toBeTruthy();
     expect(compiled.textContent).toContain('circle');
     expect(compiled.textContent).toContain('shape-1');
+  });
+
+  it('should show Skew X/Y from shape transform matrix', () => {
+    const mockShape: ShapeProperties = {
+      id: 'rect-1',
+      type: 'rect',
+      fill: '#000000',
+      stroke: 'none',
+      strokeWidth: 0,
+      opacity: 1
+    };
+    const m = new Matrix().skewX(12, 40, 25);
+    vi.mocked(svgManipulationService.getSVGInstance).mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '#rect-1') {
+          return { matrix: () => m.clone() };
+        }
+        return null;
+      })
+    } as any);
+
+    selectedShapesSignal.set([mockShape]);
+    fixture.detectChanges();
+
+    const elX = fixture.nativeElement.querySelector('[data-testid="properties-skew-x"]');
+    const elY = fixture.nativeElement.querySelector('[data-testid="properties-skew-y"]');
+    expect(elX?.textContent?.trim()).toContain('12');
+    expect(elY?.textContent?.trim()).toMatch(/0\.0/);
   });
 
   it('should show fill and stroke paint source badges when metadata is set', () => {

@@ -7,6 +7,7 @@ import { CanvasViewService } from '../../services/canvas-view.service';
 import { SnapService } from '../../services/snap.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { computeProportionalResizedUnion, type BBox, type ResizeCorner } from '../../utils/selection-resize';
+import { type SkewEdge } from '../../utils/selection-skew';
 import {
   unionRotationPivot,
   rotationDeltaFromPointerMoveRad,
@@ -36,6 +37,7 @@ import {
   DragGesture,
   ResizeGesture,
   RotateGesture,
+  SkewGesture,
   CreationGesture,
   SelectionMarqueeGesture,
   ZoomMarqueeGesture,
@@ -207,6 +209,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       !this.isDraggingShape &&
       !this.isResizingSelection &&
       !this.isRotatingSelection &&
+      !this.isSkewingSelection &&
       !this.isSelectionMarquee &&
       this.wrapperWidth > 0 &&
       !!this.lastBbox
@@ -389,6 +392,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly drag = new DragGesture();
   private readonly resize = new ResizeGesture();
   private readonly rotate = new RotateGesture();
+  private readonly skew = new SkewGesture();
   private readonly creation = new CreationGesture();
   private readonly selectionMarquee = new SelectionMarqueeGesture();
   private readonly zoomMarquee = new ZoomMarqueeGesture();
@@ -414,6 +418,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   get isDraggingShape(): boolean { return this.drag.isActive; }
   get isResizingSelection(): boolean { return this.resize.isActive; }
   get isRotatingSelection(): boolean { return this.rotate.isActive; }
+  get isSkewingSelection(): boolean { return this.skew.isActive; }
   get isCreatingShape(): boolean { return this.creation.isActive; }
   get isSelectionMarquee(): boolean { return this.selectionMarquee.isActive; }
   get isZoomMarquee(): boolean { return this.zoomMarquee.isActive; }
@@ -575,6 +580,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   get highlightRect(): { x: number; y: number; width: number; height: number } | null {
     if (this.isResizingSelection && this.resize.overlayRect) return this.resize.overlayRect;
+    if (this.isSkewingSelection && this.skew.overlayRect) return this.skew.overlayRect;
     if (this.isRotatingSelection && this.rotate.unionStart && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
       return this.svgBboxToOverlayPixels(this.rotate.unionStart);
     }
@@ -779,6 +785,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       }
       if (this.isResizingSelection) {
         this.resize.cancel(this.gestureCtx);
+        event.preventDefault();
+        return;
+      }
+      if (this.isSkewingSelection) {
+        this.skew.cancel(this.gestureCtx);
         event.preventDefault();
         return;
       }
@@ -1281,6 +1292,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.resize.move(this.gestureCtx, event.clientX, event.clientY, event.altKey);
       return;
     }
+    if (this.isSkewingSelection) {
+      this.skew.move(this.gestureCtx, event.clientX, event.clientY);
+      return;
+    }
     if (this.isRotatingSelection) {
       this.rotate.move(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
       return;
@@ -1325,6 +1340,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     if (this.isResizingSelection) {
       this.resize.end(this.gestureCtx, event.altKey);
+      return;
+    }
+    if (this.isSkewingSelection) {
+      this.skew.end(this.gestureCtx);
       return;
     }
     if (this.isRotatingSelection) {
@@ -1850,6 +1869,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       }
     }
 
+    const skewEl = target.closest?.('[data-skew-handle]');
+    if (skewEl) {
+      const edge = skewEl.getAttribute('data-skew-handle') as SkewEdge | null;
+      if (edge === 'n' || edge === 's' || edge === 'e' || edge === 'w') {
+        if (this.skew.start(this.gestureCtx, edge, event)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+    }
+
     // Rotate handle
     const rotateEl = target.closest?.('[data-rotate-handle]');
     if (rotateEl) {
@@ -1895,6 +1926,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     if (this.drag.consumeJustEnded()) return;
     if (this.resize.consumeJustEnded()) return;
+    if (this.skew.consumeJustEnded()) return;
     if (this.rotate.consumeJustEnded()) return;
     if (this.creation.consumeJustEnded()) return;
     if (this.pathNodeEditState && !this.isPathNodeEditTarget(clickTarget)) {

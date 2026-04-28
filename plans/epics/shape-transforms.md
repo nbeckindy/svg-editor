@@ -17,7 +17,7 @@
 | ST-1 | Spike: bbox and handle UX for transforms | `spike` | Defines handle layout, modifier keys, and numeric precision; references existing helpers if any. | — | 90 |
 | ST-2 | Rotate selection using SVG.js transforms | `story` | Rotation updates `transform` or equivalent consistently; selection outline follows. | ST-1 | 240 |
 | ST-3 | Scale selection (uniform and non-uniform if specified) | `story` | Scaling preserves stroke behavior per product decision in spike; tests for matrix math. | ST-1 | 300 |
-| ST-4 | Skew or defer with documented cut line | `story` | Either basic skew support **or** issue closed with explicit “out of scope” and link to follow-up epic. | ST-2 | 120 |
+| ST-4 | Skew or defer with documented cut line | `story` | Either basic skew support **or** issue closed with explicit “out of scope” and link to follow-up epic. **Implemented:** basic skew in [transform-ux-polish](./transform-ux-polish.md) (TUX-8a–8c); bd `svg-editor-w1t` closed. | ST-2 | 120 |
 | ST-5 | Automated tests for transform utilities | `task` | Coverage for [`selection-rotate`](../../src/app/utils/selection-rotate.ts) / related utils per implementation. | ST-2, ST-3 | 120 |
 
 ## Exit criteria

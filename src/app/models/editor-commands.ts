@@ -2,6 +2,7 @@ import { Matrix, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { SvgManipulationService, type CreatableShapeType, type ShapeCreationAttrs } from '../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../services/shape-selection.service';
 import { type ResizeCorner } from '../utils/selection-resize';
+import { type SkewAxis } from '../utils/selection-skew';
 import { ArtboardModel } from './artboard.model';
 import { type ClipboardPayload } from '../services/clipboard.service';
 
@@ -525,6 +526,43 @@ export class UnionRotateCommand implements EditorCommand {
       this.shapeIds,
       this.pivot,
       this.angleDeg,
+      this.snapshotBefore
+    );
+  }
+
+  undo(): void {
+    const svgInstance = this.svc.getSVGInstance();
+    if (!svgInstance) return;
+    for (const id of this.shapeIds) {
+      const shape = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      const saved = this.snapshotBefore.get(id);
+      if (shape && saved && typeof shape.matrix === 'function') {
+        shape.matrix(saved);
+      }
+    }
+  }
+}
+
+export class SkewCommand implements EditorCommand {
+  readonly description: string;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly shapeIds: string[],
+    private readonly axis: SkewAxis,
+    private readonly angleDeg: number,
+    private readonly pivot: { x: number; y: number },
+    private readonly snapshotBefore: Map<string, Matrix>
+  ) {
+    this.description = this.axis === 'x' ? `Skew X ${angleDeg}°` : `Skew Y ${angleDeg}°`;
+  }
+
+  execute(): void {
+    this.svc.applyUnionSkewFromSnapshot(
+      this.shapeIds,
+      this.axis,
+      this.angleDeg,
+      this.pivot,
       this.snapshotBefore
     );
   }
