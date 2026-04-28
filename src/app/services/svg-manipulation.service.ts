@@ -1426,7 +1426,8 @@ export class SvgManipulationService {
       const x = attrs.x ?? 0;
       const y = attrs.y ?? 0;
       const textContent = attrs.textContent ?? 'Text';
-      const el = contentGroup.text(textContent);
+      // `plain()` avoids svg.js tspan layout calls that rely on getBBox, which jsdom lacks.
+      const el = contentGroup.plain(textContent);
       el.attr({
         x,
         y,
@@ -1496,17 +1497,6 @@ export class SvgManipulationService {
       shape.remove();
       this.bumpDocumentRevision();
     }
-  }
-
-  /**
-   * Update `<text>` content for a text element.
-   */
-  updateTextContent(shapeId: string, textContent: string): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (!shape || shape.type !== 'text') return;
-    shape.node.textContent = textContent;
-    this.bumpDocumentRevision();
   }
 
   /**
