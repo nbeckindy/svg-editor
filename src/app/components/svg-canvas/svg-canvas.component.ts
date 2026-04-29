@@ -2842,7 +2842,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!parsed) {
       return {
         state: null,
-        reason: 'Node editing supports only clean M/L/C/Q/T/Z path commands (smooth T is stored as Q).'
+        reason: 'Node editing supports only clean M/L/C/S/Q/T/Z path commands (smooth S/T are stored as C/Q).'
       };
     }
     return {

@@ -3098,6 +3098,27 @@ describe('SvgCanvasComponent', () => {
       expect(handles.length).toBe(2);
     });
 
+    it('enters node-edit mode for cubic C and smooth S segments', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-s" d="M 10 10 C 20 0 30 0 40 10 S 60 20 70 10" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-s',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+
+      expect(component.isPathNodeEditModeActive).toBe(true);
+      const anchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
+      const handles = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-control-handle"]');
+      expect(anchors.length).toBe(3);
+      expect(handles.length).toBe(4);
+    });
+
     it('drags a quadratic control handle with undo/redo as one drag operation', async () => {
       await loadSvgForSelector(
         '<svg viewBox="0 0 100 100"><path id="path-q-handle" d="M 10 10 Q 20 5 30 10" /></svg>'
@@ -3266,7 +3287,7 @@ describe('SvgCanvasComponent', () => {
 
     it('pen tool does not insert on paths with unsupported commands', async () => {
       await loadSvgAndPenMode(
-        '<svg viewBox="0 0 100 100"><path id="pen-bad-cmd" d="M 0 0 S 20 20 40 0 L 80 0" fill="none" stroke="black"/></svg>'
+        '<svg viewBox="0 0 100 100"><path id="pen-bad-cmd" d="M 0 0 R 20 20 40 0 L 80 0" fill="none" stroke="black"/></svg>'
       );
       const pathEl = fixture.nativeElement.querySelector('#pen-bad-cmd') as SVGPathElement | null;
       expect(pathEl).toBeTruthy();

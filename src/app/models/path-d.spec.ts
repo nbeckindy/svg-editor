@@ -51,9 +51,9 @@ describe('parsePathD', () => {
   });
 
   it('reports unsupported commands as errors', () => {
-    const result = parsePathD('M 0 0 S 10 10 20 20 L 30 40');
+    const result = parsePathD('M 0 0 R 10 10 20 20 L 30 40');
     expect(result.segments).toEqual([{ type: 'M', x: 0, y: 0 }, { type: 'L', x: 30, y: 40 }]);
-    expect(result.errors).toContain('Unsupported path command "S".');
+    expect(result.errors).toContain('Unsupported path command "R".');
   });
 
   it('parses arc commands by normalizing to cubic segments', () => {
@@ -147,6 +147,27 @@ describe('parsePathDForNodeEditing', () => {
     expect(s?.length).toBe(4);
     expect(s?.[1]).toEqual({ type: 'Q', x1: 5, y1: 10, x: 10, y: 0 });
     expect(s?.[2].type).toBe('Q');
+  });
+
+  it('normalizes absolute smooth cubic S to explicit cubic C', () => {
+    const s = parsePathDForNodeEditing('M 0 0 C 10 10 20 10 30 0 S 50 -10 60 0');
+    expect(s?.length).toBe(3);
+    expect(s?.[1]).toEqual({ type: 'C', x1: 10, y1: 10, x2: 20, y2: 10, x: 30, y: 0 });
+    expect(s?.[2]).toEqual({ type: 'C', x1: 40, y1: -10, x2: 50, y2: -10, x: 60, y: 0 });
+  });
+
+  it('normalizes relative smooth cubic s and supports command chaining', () => {
+    const s = parsePathDForNodeEditing('M 10 10 c 10 0 20 0 30 0 s 10 10 20 0 10 -10 20 0');
+    expect(s?.length).toBe(4);
+    expect(s?.[1]).toEqual({ type: 'C', x1: 20, y1: 10, x2: 30, y2: 10, x: 40, y: 10 });
+    expect(s?.[2]).toEqual({ type: 'C', x1: 50, y1: 10, x2: 50, y2: 20, x: 60, y: 10 });
+    expect(s?.[3]).toEqual({ type: 'C', x1: 70, y1: 0, x2: 70, y2: 0, x: 80, y: 10 });
+  });
+
+  it('uses current point as first control for S when previous segment is non-cubic', () => {
+    const s = parsePathDForNodeEditing('M 0 0 Q 10 10 20 0 S 40 0 50 10');
+    expect(s?.length).toBe(3);
+    expect(s?.[2]).toEqual({ type: 'C', x1: 20, y1: 0, x2: 40, y2: 0, x: 50, y: 10 });
   });
 
   it('returns cubic-normalized segments for arc paths', () => {

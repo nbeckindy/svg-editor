@@ -170,7 +170,7 @@ function isNumberToken(token: PathToken | undefined): token is { kind: 'number';
 /**
  * Parse SVG `d` path data into absolute segments.
  *
- * Supports M/L/H/V/C/Q/T/A/Z (uppercase + lowercase); smooth `T`/`t` is normalized to explicit `Q`.
+ * Supports M/L/H/V/C/S/Q/T/A/Z (uppercase + lowercase); smooth `S`/`s` and `T`/`t` are normalized.
  * Unsupported commands are reported in `errors`.
  * Parser is tolerant by design: it never throws and returns any valid prefix it can parse.
  */
@@ -191,10 +191,20 @@ export function parsePathD(pathData: string): ParsePathDResult {
   /** Absolute quadratic control used for implicit `T` reflection (SVG: defaults to current point). */
   let lastQuadAbsX = 0;
   let lastQuadAbsY = 0;
+  /** Absolute cubic second control used for implicit `S` reflection. */
+  let lastCubicAbsX2 = 0;
+  let lastCubicAbsY2 = 0;
+  let canReflectCubic = false;
 
   const syncQuadToCurrent = (): void => {
     lastQuadAbsX = currentX;
     lastQuadAbsY = currentY;
+  };
+
+  const resetCubicReflection = (): void => {
+    canReflectCubic = false;
+    lastCubicAbsX2 = currentX;
+    lastCubicAbsY2 = currentY;
   };
 
   const readNumber = (): number | null => {
@@ -235,6 +245,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
       upper !== 'H' &&
       upper !== 'V' &&
       upper !== 'C' &&
+      upper !== 'S' &&
       upper !== 'Z' &&
       upper !== 'Q' &&
       upper !== 'T' &&
@@ -255,6 +266,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
       currentX = subpathStartX;
       currentY = subpathStartY;
       syncQuadToCurrent();
+      resetCubicReflection();
       continue;
     }
 
@@ -273,6 +285,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
       hasMoveto = true;
       activeCommand = relative ? 'l' : 'L';
       syncQuadToCurrent();
+      resetCubicReflection();
 
       while (isNumberToken(tokens[index])) {
         const lineX = readNumber();
@@ -284,6 +297,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
         currentX = absoluteLineX;
         currentY = absoluteLineY;
         syncQuadToCurrent();
+        resetCubicReflection();
       }
       continue;
     }
@@ -322,6 +336,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
         segments.push({ type: 'L', x: absX, y: currentY });
         currentX = absX;
         syncQuadToCurrent();
+        resetCubicReflection();
       }
       if (!consumedAny) errors.push(`Command ${command} is missing horizontal coordinates.`);
       continue;
@@ -337,6 +352,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
         segments.push({ type: 'L', x: currentX, y: absY });
         currentY = absY;
         syncQuadToCurrent();
+        resetCubicReflection();
       }
       if (!consumedAny) errors.push(`Command ${command} is missing vertical coordinates.`);
       continue;
@@ -360,6 +376,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
         lastQuadAbsY = absY1;
         currentX = absX;
         currentY = absY;
+        resetCubicReflection();
       }
       if (!consumedAny) errors.push(`Command ${command} is missing quadratic coordinate tuples.`);
       continue;
@@ -381,8 +398,36 @@ export function parsePathD(pathData: string): ParsePathDResult {
         lastQuadAbsY = cy;
         currentX = absX;
         currentY = absY;
+        resetCubicReflection();
       }
       if (!consumedAny) errors.push(`Command ${command} is missing coordinate pairs.`);
+      continue;
+    }
+
+    if (upper === 'S') {
+      let consumedAny = false;
+      while (isNumberToken(tokens[index])) {
+        consumedAny = true;
+        const x2 = readNumber();
+        const y2 = readNumber();
+        const x = readNumber();
+        const y = readNumber();
+        if (x2 === null || y2 === null || x === null || y === null) break;
+        const reflectedX1 = canReflectCubic ? 2 * currentX - lastCubicAbsX2 : currentX;
+        const reflectedY1 = canReflectCubic ? 2 * currentY - lastCubicAbsY2 : currentY;
+        const absX2 = relative ? currentX + x2 : x2;
+        const absY2 = relative ? currentY + y2 : y2;
+        const absX = relative ? currentX + x : x;
+        const absY = relative ? currentY + y : y;
+        segments.push({ type: 'C', x1: reflectedX1, y1: reflectedY1, x2: absX2, y2: absY2, x: absX, y: absY });
+        currentX = absX;
+        currentY = absY;
+        syncQuadToCurrent();
+        lastCubicAbsX2 = absX2;
+        lastCubicAbsY2 = absY2;
+        canReflectCubic = true;
+      }
+      if (!consumedAny) errors.push(`Command ${command} is missing smooth cubic coordinate tuples.`);
       continue;
     }
 
@@ -431,6 +476,7 @@ export function parsePathD(pathData: string): ParsePathDResult {
         currentX = absX;
         currentY = absY;
         syncQuadToCurrent();
+        resetCubicReflection();
       }
       if (!consumedAny) errors.push(`Command ${command} is missing arc tuples.`);
       continue;
@@ -456,6 +502,9 @@ export function parsePathD(pathData: string): ParsePathDResult {
       currentX = absX;
       currentY = absY;
       syncQuadToCurrent();
+      lastCubicAbsX2 = absX2;
+      lastCubicAbsY2 = absY2;
+      canReflectCubic = true;
     }
     if (!consumedAny) errors.push(`Command ${command} is missing cubic coordinate tuples.`);
   }
