@@ -3,6 +3,7 @@ import { SvgManipulationService } from '../services/svg-manipulation.service';
 import {
   CompositeCommand,
   FillColorCommand,
+  GradientFillSnapshotCommand,
   StrokeColorCommand,
   AddStrokeCommand,
   RemoveStrokeCommand,
@@ -143,6 +144,60 @@ describe('FillColorCommand', () => {
     const cmd = new FillColorCommand(svc, 'shape1', '#000', '#fff');
     expect(cmd.description).toBeTruthy();
     expect(cmd.description).toContain('#fff');
+  });
+});
+
+describe('GradientFillSnapshotCommand', () => {
+  it('execute applies after snapshot; undo applies before and purges orphan def', () => {
+    const apply = vi.fn();
+    const count = vi.fn().mockReturnValue(0);
+    const remove = vi.fn();
+    const svc = mockSvc({
+      applyPaintGradientSnapshot: apply,
+      countPaintUrlReferencesToDefId: count,
+      removeGradientDefById: remove
+    });
+    const before = { gradientId: null, shapePaintAttr: '#000000', gradientOuterHtml: null };
+    const after = {
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    };
+    const cmd = new GradientFillSnapshotCommand(svc, 'r1', 'fill', before, after);
+    cmd.execute();
+    expect(apply).toHaveBeenLastCalledWith('r1', 'fill', after);
+    cmd.undo();
+    expect(apply).toHaveBeenLastCalledWith('r1', 'fill', before);
+    expect(count).toHaveBeenCalledWith('g1');
+    expect(remove).toHaveBeenCalledWith('g1');
+  });
+
+  it('undo does not remove def when still referenced', () => {
+    const apply = vi.fn();
+    const count = vi.fn().mockReturnValue(1);
+    const remove = vi.fn();
+    const svc = mockSvc({
+      applyPaintGradientSnapshot: apply,
+      countPaintUrlReferencesToDefId: count,
+      removeGradientDefById: remove
+    });
+    const before = { gradientId: null, shapePaintAttr: '#000', gradientOuterHtml: null };
+    const after = { gradientId: 'g1', shapePaintAttr: 'url(#g1)', gradientOuterHtml: '<linearGradient id="g1"/>' };
+    const cmd = new GradientFillSnapshotCommand(svc, 'r1', 'fill', before, after);
+    cmd.undo();
+    expect(remove).not.toHaveBeenCalled();
+  });
+
+  it('coalesceWith keeps original before and latest after', () => {
+    const svc = mockSvc({ applyPaintGradientSnapshot: vi.fn() });
+    const b = { gradientId: 'g', shapePaintAttr: 'url(#g)', gradientOuterHtml: '<linearGradient id="g"/>' };
+    const a1 = { gradientId: 'g', shapePaintAttr: 'url(#g)', gradientOuterHtml: '<linearGradient id="g"><stop/></linearGradient>' };
+    const a2 = { gradientId: 'g', shapePaintAttr: 'url(#g)', gradientOuterHtml: '<linearGradient id="g"><stop/><stop/></linearGradient>' };
+    const first = new GradientFillSnapshotCommand(svc, 'r1', 'fill', b, a1);
+    const second = new GradientFillSnapshotCommand(svc, 'r1', 'fill', a1, a2);
+    const merged = first.coalesceWith(second) as GradientFillSnapshotCommand;
+    expect(merged.before).toEqual(b);
+    expect(merged.after).toEqual(a2);
   });
 });
 

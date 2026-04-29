@@ -264,6 +264,9 @@
               <div class="no-paint-value">
                 <span class="paint-ref-label">{{ paintTypeLabel(shape.fillPaintType) }} fill</span>
               </div>
+              @if (shape.fillPaintType === 'gradient' && selectionCount() === 1) {
+                <app-gradient-fill-editor [shapeId]="shape.id" />
+              }
             } @else if (allSelectedLackFill(shape)) {
               <div class="no-paint-value">
                 <span class="no-paint-label">No fill</span>
@@ -277,6 +280,11 @@
                 [indeterminate]="fillMixed()"
                 (colorChange)="onFillColorChange($event)">
               </app-color-picker>
+            }
+            @if (canCreateGradientFill(shape)) {
+              <button type="button" class="btn-paint-action" (click)="onCreateGradientFill(shape)">
+                Use gradient fill
+              </button>
             }
           </div>
         </div>

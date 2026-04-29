@@ -1,4 +1,5 @@
 import { Matrix, Element as SvgJsElement } from '@svgdotjs/svg.js';
+import type { PaintGradientSnapshot } from './svg-gradient';
 import { SvgManipulationService, type CreatableShapeType, type ShapeCreationAttrs } from '../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../services/shape-selection.service';
 import { type ResizeCorner } from '../utils/selection-resize';
@@ -83,6 +84,39 @@ export class FillColorCommand implements CoalesceableCommand {
   coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
     const n = newer as FillColorCommand;
     return new FillColorCommand(this.svc, this.shapeId, this.oldColor, n.newColor);
+  }
+}
+
+/** Undoable fill/stroke paint swap including serialized `<linearGradient>` / `<radialGradient>` defs. */
+export class GradientFillSnapshotCommand implements CoalesceableCommand {
+  readonly description = 'Edit gradient paint';
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly shapeId: string,
+    private readonly paintProperty: 'fill' | 'stroke',
+    readonly before: PaintGradientSnapshot,
+    readonly after: PaintGradientSnapshot
+  ) {
+    this.coalesceKey = `gradfill:${shapeId}:${paintProperty}`;
+  }
+
+  execute(): void {
+    this.svc.applyPaintGradientSnapshot(this.shapeId, this.paintProperty, this.after);
+  }
+
+  undo(): void {
+    this.svc.applyPaintGradientSnapshot(this.shapeId, this.paintProperty, this.before);
+    const gid = this.after.gradientId;
+    if (gid && this.svc.countPaintUrlReferencesToDefId(gid) === 0) {
+      this.svc.removeGradientDefById(gid);
+    }
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as GradientFillSnapshotCommand;
+    return new GradientFillSnapshotCommand(this.svc, this.shapeId, this.paintProperty, this.before, n.after);
   }
 }
 

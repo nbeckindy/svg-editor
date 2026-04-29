@@ -14,7 +14,7 @@
 
 | Local ref | Title | Type | Acceptance criteria | Depends on | Est (min) |
 |-----------|--------|------|---------------------|------------|-----------|
-| AS-1 | Spike: gradient/pattern support in SVG.js path | `spike` | Lists what SVG.js supports for fills; proposal for minimal gradient editor vs defer. | — | 120 |
+| AS-1 | Spike: gradient/pattern support in SVG.js path | `spike` | Lists what SVG.js supports for fills; proposal for minimal gradient editor vs defer. **Delivered:** [svg-js-gradient-pattern-support.md](../spikes/svg-js-gradient-pattern-support.md) | — | 120 |
 | AS-2 | Stroke dash array editor | `story` | UI + SVG.js updates for `stroke-dasharray` / `stroke-dashoffset` on supported shapes; validation for bad input. | AS-1 | 240 |
 | AS-3 | Line and polyline fill behavior | `task` | Behavior matches [PROJECT_SUMMARY](../PROJECT_SUMMARY.md) matrix or issue documents explicit change. | AS-2 | 90 |
 | AS-4 | Gradient or pattern fill (phase 1) | `story` | Per spike: either simple linear gradient on rect/path **or** deferred with linked follow-up issue. | AS-1 | 360 |

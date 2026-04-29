@@ -1478,6 +1478,63 @@ describe('SvgManipulationService', () => {
     });
   });
 
+  describe('gradient fill API (e1x)', () => {
+    it('createLinearGradientFillForShape assigns url fill and defs entry', () => {
+      const svgContent = `<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="50" height="50" fill="#808080"/></svg>`;
+      service.initializeSVG(container, svgContent);
+      const gradId = service.createLinearGradientFillForShape('r1', '#808080', '#ffffff');
+      expect(gradId.length).toBeGreaterThan(0);
+      const svg = service.getSVGInstance()!;
+      const rect = svg.findOne('#r1')!.node as SVGRectElement;
+      expect(rect.getAttribute('fill')).toContain(`url(#${gradId})`);
+      expect(service.findGradientDomElement(gradId)).not.toBeNull();
+    });
+
+    it('ensureDedicatedPaintGradient clones when two shapes share a gradient', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <linearGradient id="sharedG"><stop offset="0%" stop-color="#f00"/><stop offset="100%" stop-color="#00f"/></linearGradient>
+        </defs>
+        <rect id="r1" x="0" y="0" width="10" height="10" fill="url(#sharedG)"/>
+        <rect id="r2" x="20" y="0" width="10" height="10" fill="url(#sharedG)"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const newId = service.ensureDedicatedPaintGradient('r1', 'fill');
+      expect(newId).not.toBe('sharedG');
+      const svg = service.getSVGInstance()!;
+      const f1 = (svg.findOne('#r1')!.node as SVGRectElement).getAttribute('fill');
+      const f2 = (svg.findOne('#r2')!.node as SVGRectElement).getAttribute('fill');
+      expect(f1).toContain(`url(#${newId})`);
+      expect(f2).toContain('url(#sharedG)');
+    });
+
+    it('applyPaintGradientSnapshot restores solid and removes orphan def on manual undo pattern', () => {
+      const svgContent = `<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="50" height="50" fill="#abc"/></svg>`;
+      service.initializeSVG(container, svgContent);
+      const before = service.capturePaintGradientSnapshot('r1', 'fill');
+      const gid = service.createLinearGradientFillForShape('r1', '#abc', '#def');
+      const after = service.capturePaintGradientSnapshot('r1', 'fill');
+      service.applyPaintGradientSnapshot('r1', 'fill', before);
+      if (service.countPaintUrlReferencesToDefId(gid) === 0) {
+        service.removeGradientDefById(gid);
+      }
+      const svg = service.getSVGInstance()!;
+      const rect = svg.findOne('#r1')!.node as SVGRectElement;
+      const fill = rect.getAttribute('fill')?.toLowerCase() ?? '';
+      expect(['#abc', '#aabbcc']).toContain(fill);
+      expect(service.findGradientDomElement(gid)).toBeNull();
+    });
+
+    it('countPaintUrlReferencesToDefId counts fill attributes', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs><linearGradient id="g1"><stop offset="0%" stop-color="#000"/></linearGradient></defs>
+        <rect id="r1" width="10" height="10" fill="url(#g1)"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.countPaintUrlReferencesToDefId('g1')).toBeGreaterThanOrEqual(1);
+    });
+  });
+
   describe('line/polyline fill behavior', () => {
     it('getShapeProperties for line still returns fill info from DOM', () => {
       const svgContent = `<svg viewBox="0 0 100 100">

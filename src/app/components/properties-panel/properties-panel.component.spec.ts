@@ -67,7 +67,14 @@ describe('PropertiesPanelComponent', () => {
       updateTextFontWeight: vi.fn(),
       updateTextFontStyle: vi.fn(),
       updateTextAnchor: vi.fn(),
-      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 50 })
+      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 50 }),
+      allocateUniqueDefId: vi.fn(() => 'grad-test'),
+      capturePaintGradientSnapshot: vi.fn(() => ({
+        gradientId: null,
+        shapePaintAttr: '#00aa00',
+        gradientOuterHtml: null
+      })),
+      applyPaintGradientSnapshot: vi.fn()
     };
     const editorToolServiceMock = {
       currentTool: editorToolSignal
@@ -550,6 +557,33 @@ describe('PropertiesPanelComponent', () => {
     fixture.detectChanges();
     component.onFillColorChange('#000000');
     expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('shape-1', '#000000');
+  });
+
+  it('onCreateGradientFill captures snapshot and pushes history', () => {
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+    selectedShapesSignal.set([
+      { id: 'shape-1', type: 'rect', fill: '#00aa00', fillPaintType: 'solid' }
+    ]);
+    fixture.detectChanges();
+    component.onCreateGradientFill(selectedShapesSignal()[0]);
+    expect(svgManipulationService.allocateUniqueDefId).toHaveBeenCalled();
+    expect(svgManipulationService.capturePaintGradientSnapshot).toHaveBeenCalledWith('shape-1', 'fill');
+    expect(history.pushAndExecute).toHaveBeenCalled();
+  });
+
+  it('canCreateGradientFill is false for gradient or pattern fills', () => {
+    selectedShapesSignal.set([{ id: 'x', type: 'rect', fillPaintType: 'gradient' } as ShapeProperties]);
+    fixture.detectChanges();
+    expect(component.canCreateGradientFill(selectedShapesSignal()[0])).toBe(false);
+    selectedShapesSignal.set([{ id: 'x', type: 'rect', fillPaintType: 'pattern' } as ShapeProperties]);
+    fixture.detectChanges();
+    expect(component.canCreateGradientFill(selectedShapesSignal()[0])).toBe(false);
+  });
+
+  it('canCreateGradientFill is true for single solid rect', () => {
+    selectedShapesSignal.set([{ id: 'x', type: 'rect', fillPaintType: 'solid' } as ShapeProperties]);
+    fixture.detectChanges();
+    expect(component.canCreateGradientFill(selectedShapesSignal()[0])).toBe(true);
   });
 
   it('Set stroke button adds stroke with width 1', () => {

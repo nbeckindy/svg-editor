@@ -1,0 +1,50 @@
+@if (draftModel; as d) {
+  <div class="gradient-editor">
+    <div class="row">
+      <span class="label">Type</span>
+      <label><input type="radio" name="gk" [checked]="d.kind === 'linear'" (change)="onKindChange('linear')" /> Linear</label>
+      <label><input type="radio" name="gk" [checked]="d.kind === 'radial'" (change)="onKindChange('radial')" /> Radial</label>
+    </div>
+
+    @if (d.kind === 'linear') {
+      <div class="grid4">
+        <label>x1 <input type="text" [(ngModel)]="d.x1" name="x1" /></label>
+        <label>y1 <input type="text" [(ngModel)]="d.y1" name="y1" /></label>
+        <label>x2 <input type="text" [(ngModel)]="d.x2" name="x2" /></label>
+        <label>y2 <input type="text" [(ngModel)]="d.y2" name="y2" /></label>
+      </div>
+    } @else {
+      <div class="grid4">
+        <label>cx <input type="text" [(ngModel)]="d.cx" name="cx" /></label>
+        <label>cy <input type="text" [(ngModel)]="d.cy" name="cy" /></label>
+        <label>r <input type="text" [(ngModel)]="d.r" name="r" /></label>
+        <label>fx <input type="text" [(ngModel)]="d.fx" name="fx" /></label>
+        <label>fy <input type="text" [(ngModel)]="d.fy" name="fy" /></label>
+      </div>
+    }
+
+    <div class="row">
+      <span class="label">Units</span>
+      <select [(ngModel)]="d.gradientUnits" name="gu">
+        <option value="objectBoundingBox">objectBoundingBox</option>
+        <option value="userSpaceOnUse">userSpaceOnUse</option>
+      </select>
+    </div>
+
+    <div class="stops-head">
+      <span class="label">Stops</span>
+      <button type="button" class="btn-mini" (click)="addStop()">Add stop</button>
+    </div>
+    @for (s of d.stops; track $index) {
+      <div class="stop-row">
+        <input type="text" class="offset" [(ngModel)]="s.offset" [name]="'off' + $index" placeholder="0%" />
+        <app-color-picker [color]="s.color" (colorChange)="onStopColor($index, $event)" />
+        @if (d.stops.length > 2) {
+          <button type="button" class="btn-mini" (click)="removeStop($index)">Remove</button>
+        }
+      </div>
+    }
+
+    <button type="button" class="btn-apply" (click)="commit()">Apply gradient</button>
+  </div>
+}

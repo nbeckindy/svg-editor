@@ -9,10 +9,12 @@ import { EditorToolService } from '../../services/editor-tool.service';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-properties.interface';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
 import { DocumentSettingsComponent } from '../document-settings/document-settings.component';
+import { GradientFillEditorComponent } from '../gradient-fill-editor/gradient-fill-editor.component';
 import {
   EditorCommand,
   CompositeCommand,
   FillColorCommand,
+  GradientFillSnapshotCommand,
   StrokeColorCommand,
   AddStrokeCommand,
   RemoveStrokeCommand,
@@ -27,10 +29,11 @@ import {
   FontCommand,
   TextAlignCommand
 } from '../../models/editor-commands';
+import { defaultLinearGradientModel, serializeGradientElementToOuterHtml } from '../../models/svg-gradient';
 
 @Component({
   selector: 'app-properties-panel',
-  imports: [CommonModule, FormsModule, ColorPickerComponent, DocumentSettingsComponent],
+  imports: [CommonModule, FormsModule, ColorPickerComponent, DocumentSettingsComponent, GradientFillEditorComponent],
   templateUrl: './properties-panel.component.html',
   styleUrl: './properties-panel.component.css'
 })
@@ -561,6 +564,34 @@ export class PropertiesPanelComponent {
   /** True when the fill is a url(#...) reference (gradient or pattern) that the hex picker can't edit. */
   isGradientOrPatternFill(shape: ShapeProperties): boolean {
     return shape.fillPaintType === 'gradient' || shape.fillPaintType === 'pattern';
+  }
+
+  /** Single solid (or none) fill selection — offer creating a new gradient fill. */
+  canCreateGradientFill(shape: ShapeProperties): boolean {
+    if (this.selectionCount() !== 1 || !this.supportsFill(shape)) return false;
+    if (shape.fillPaintType === 'gradient' || shape.fillPaintType === 'pattern') return false;
+    return true;
+  }
+
+  onCreateGradientFill(shape: ShapeProperties): void {
+    if (this.selectionCount() !== 1) return;
+    const from =
+      shape.fill && shape.fill.trim() !== '' && shape.fill.toLowerCase() !== 'none'
+        ? shape.fill
+        : '#000000';
+    const id = this.svgManipulationService.allocateUniqueDefId('grad');
+    const model = defaultLinearGradientModel(id, from, '#ffffff');
+    const before = this.svgManipulationService.capturePaintGradientSnapshot(shape.id, 'fill');
+    const after = {
+      gradientId: id,
+      shapePaintAttr: `url(#${id})`,
+      gradientOuterHtml: serializeGradientElementToOuterHtml(model)
+    };
+    this.pushCommand(
+      [new GradientFillSnapshotCommand(this.svgManipulationService, shape.id, 'fill', before, after)],
+      'Add gradient fill'
+    );
+    this.syncAllSelectedFromDom();
   }
 
   isGradientOrPatternStroke(shape: ShapeProperties): boolean {
