@@ -3299,6 +3299,73 @@ describe('SvgCanvasComponent', () => {
       expect(preventDefault).toHaveBeenCalled();
     });
 
+    it('snaps pen anchor placement to grid when only grid snap is enabled', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(true);
+      editorToolService.setShapeSnapEnabled(false);
+      snapService.setGridSize(10);
+      fixture.detectChanges();
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg') as Element | null;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 12,
+        clientY: 18,
+        detail: 1,
+        target: svgRoot,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(component.penSessionPreviewPathD).toContain('M 10 20');
+    });
+
+    it('applies smart-guide snapping to pen anchors when shape snap is enabled', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(true);
+      const shapeGuideSpy = vi.spyOn(snapService, 'snapDeltaToSmartGuides').mockReturnValue({
+        delta: { x: 3, y: -2 },
+        guides: { vertical: [], horizontal: [] },
+        matches: []
+      });
+      fixture.detectChanges();
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg') as Element | null;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 12,
+        clientY: 18,
+        detail: 1,
+        target: svgRoot,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(shapeGuideSpy).toHaveBeenCalled();
+      expect(component.penSessionPreviewPathD).toContain('M 15 16');
+    });
+
+    it('bypasses pen snapping when Shift is held (modifier precedence)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(true);
+      editorToolService.setShapeSnapEnabled(true);
+      const shapeGuideSpy = vi.spyOn(snapService, 'snapDeltaToSmartGuides');
+      fixture.detectChanges();
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg') as Element | null;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 12,
+        clientY: 18,
+        detail: 1,
+        shiftKey: true,
+        target: svgRoot,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(shapeGuideSpy).not.toHaveBeenCalled();
+      expect(component.penSessionPreviewPathD).toContain('M 12 18');
+    });
+
     it('click sequence adds a path; Enter finishes and selects it', async () => {
       await loadEmptySvgAndPenMode();
 

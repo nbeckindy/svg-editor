@@ -1362,7 +1362,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       if (this.penPendingSegment) {
         this.penPendingLastClient = { x: event.clientX, y: event.clientY };
       }
-      const pt = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+      const pt = this.getSnappedPenPoint(event.clientX, event.clientY, event.shiftKey, event.altKey);
       if (pt) {
         if (this.penPendingSegment) {
           this.penPendingDragSvg = { x: pt.x, y: pt.y };
@@ -1929,7 +1929,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         }
         return;
       }
-      const pt = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+      const pt = this.getSnappedPenPoint(event.clientX, event.clientY, event.shiftKey, event.altKey);
       if (!pt) return;
       this.handlePenCanvasMouseDown(event, pt);
       event.preventDefault();
@@ -2435,6 +2435,36 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.penPendingDragSvg = { x: pt.x, y: pt.y };
     this.penPointerSvg = { x: pt.x, y: pt.y };
     this.cdr.markForCheck();
+  }
+
+  /**
+   * Pen anchor placement snapping:
+   * - Shift/Alt preserve modifier precedence and bypass snapping.
+   * - Grid snap applies first.
+   * - Smart-guide snap refines the grid-snapped point when shape snap is enabled.
+   */
+  private getSnappedPenPoint(
+    clientX: number,
+    clientY: number,
+    shiftKey: boolean,
+    altKey: boolean
+  ): { x: number; y: number } | null {
+    const raw = this.clientToEditorSvgPoint(clientX, clientY);
+    if (!raw) return null;
+    if (shiftKey || altKey) return raw;
+
+    const gridSnapped = this.snap.snapToGrid(raw);
+    if (!this.snap.shapeEnabled()) return gridSnapped;
+
+    const guideResult = this.snap.snapDeltaToSmartGuides(
+      { x: gridSnapped.x, y: gridSnapped.y, width: 0, height: 0 },
+      { x: 0, y: 0 },
+      this.getSmartGuideCandidates()
+    );
+    return {
+      x: gridSnapped.x + guideResult.delta.x,
+      y: gridSnapped.y + guideResult.delta.y
+    };
   }
 
   private enterPathNodeEditMode(pathId: string): void {
