@@ -108,14 +108,24 @@ interface PathNodeControlHandle {
   controlPoint: 'x1y1' | 'x2y2';
 }
 
-interface PathNodeEditState {
+interface PathNodeEditPathState {
   pathId: string;
   anchors: PathNodePoint[];
   controlHandles: PathNodeControlHandle[];
 }
 
+interface PathNodeSelectionState {
+  pathId: string;
+  moveSegmentIndex: number;
+}
+
+interface PathNodeEditState {
+  paths: PathNodeEditPathState[];
+  activePathId: string | null;
+}
+
 interface PathNodeEditStateBuildResult {
-  state: PathNodeEditState | null;
+  state: PathNodeEditPathState | null;
   reason: string | null;
 }
 
@@ -609,42 +619,54 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return this.pathNodeEditState !== null;
   }
 
-  get pathNodeAnchorOverlays(): { cx: number; cy: number; selected: boolean }[] {
+  get pathNodeAnchorOverlays(): { cx: number; cy: number; selected: boolean; pathId: string; anchorIndex: number }[] {
     if (!this.pathNodeEditState) return [];
-    return this.pathNodeEditState.anchors.map((anchor) => {
-      const overlay = this.svgBboxToOverlayPixels({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
-      return {
-        cx: overlay.x,
-        cy: overlay.y,
-        selected: anchor.moveSegmentIndex === this.selectedPathNodeMoveSegmentIndex
-      };
-    });
+    return this.pathNodeEditState.paths.flatMap((pathState) =>
+      pathState.anchors.map((anchor, anchorIndex) => {
+        const overlay = this.svgBboxToOverlayPixels({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
+        return {
+          cx: overlay.x,
+          cy: overlay.y,
+          selected:
+            this.selectedPathNode?.pathId === pathState.pathId &&
+            this.selectedPathNode.moveSegmentIndex === anchor.moveSegmentIndex,
+          pathId: pathState.pathId,
+          anchorIndex
+        };
+      })
+    );
   }
 
-  get pathNodeControlHandleOverlays(): { x1: number; y1: number; x2: number; y2: number; cx: number; cy: number }[] {
+  get pathNodeControlHandleOverlays(): {
+    x1: number; y1: number; x2: number; y2: number; cx: number; cy: number; pathId: string; handleIndex: number
+  }[] {
     if (!this.pathNodeEditState) return [];
-    return this.pathNodeEditState.controlHandles.map((handle) => {
-      const anchor = this.svgBboxToOverlayPixels({
-        x: handle.anchorX,
-        y: handle.anchorY,
-        width: 0,
-        height: 0
-      });
-      const control = this.svgBboxToOverlayPixels({
-        x: handle.controlX,
-        y: handle.controlY,
-        width: 0,
-        height: 0
-      });
-      return {
-        x1: anchor.x,
-        y1: anchor.y,
-        x2: control.x,
-        y2: control.y,
-        cx: control.x,
-        cy: control.y
-      };
-    });
+    return this.pathNodeEditState.paths.flatMap((pathState) =>
+      pathState.controlHandles.map((handle, handleIndex) => {
+        const anchor = this.svgBboxToOverlayPixels({
+          x: handle.anchorX,
+          y: handle.anchorY,
+          width: 0,
+          height: 0
+        });
+        const control = this.svgBboxToOverlayPixels({
+          x: handle.controlX,
+          y: handle.controlY,
+          width: 0,
+          height: 0
+        });
+        return {
+          x1: anchor.x,
+          y1: anchor.y,
+          x2: control.x,
+          y2: control.y,
+          cx: control.x,
+          cy: control.y,
+          pathId: pathState.pathId,
+          handleIndex
+        };
+      })
+    );
   }
 
   // --- Shared selection/highlight state ---
@@ -818,7 +840,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private pathNodeEditState: PathNodeEditState | null = null;
   private inlineTextEditState: InlineTextEditState | null = null;
   private inlineTextEditDraft = '';
-  private selectedPathNodeMoveSegmentIndex: number | null = null;
+  private selectedPathNode: PathNodeSelectionState | null = null;
   private pathNodeDragSession: PathNodeDragSession | null = null;
   private pathNodeDragJustEnded = false;
   private duplicateInvocationCount = 0;
@@ -1534,11 +1556,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.editorHistory.revision();
       this.drilledIntoGroupId = null;
       if (this.pathNodeEditState) {
-        const refreshed = this.buildPathNodeEditState(this.pathNodeEditState.pathId);
-        if (refreshed.state) {
-          this.pathNodeEditState = refreshed.state;
-        } else {
+        const selectedPathIds = this.shapeSelection
+          .selectedShapes()
+          .map((shape) => shape.id)
+          .filter((id) => this.isPathElementId(id));
+        if (selectedPathIds.length === 0) {
           this.exitPathNodeEditMode();
+        } else {
+          this.enterPathNodeEditMode(selectedPathIds, this.pathNodeEditState.activePathId ?? selectedPathIds[0]);
         }
       }
       setTimeout(() => this.syncSelectionFromDom(), 0);
@@ -1556,7 +1581,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       }
       if (
         this.pathNodeEditState &&
-        (shapes.length !== 1 || shapes[0].id !== this.pathNodeEditState.pathId)
+        !shapes.some((shape) => this.pathNodeEditState?.paths.some((state) => state.pathId === shape.id))
       ) {
         this.exitPathNodeEditMode();
       }
@@ -1584,17 +1609,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       const currentTool = this.editorTool.currentTool();
       const shapes = this.shapeSelection.selectedShapes();
       if (!this.isNodeEditSelectorTool(currentTool)) return;
-      if (shapes.length !== 1) {
+      const pathIds = shapes
+        .map((shape) => shape.id)
+        .filter((id) => this.isPathElementId(id));
+      if (pathIds.length === 0) {
         this.exitPathNodeEditMode();
         return;
       }
-      const selectedId = shapes[0].id;
-      if (!this.isPathElementId(selectedId)) {
-        this.exitPathNodeEditMode();
-        return;
+      const activePathId = this.pathNodeEditState?.activePathId;
+      const shouldRefresh =
+        !this.pathNodeEditState ||
+        pathIds.length !== this.pathNodeEditState.paths.length ||
+        pathIds.some((id) => !this.pathNodeEditState?.paths.some((state) => state.pathId === id));
+      if (shouldRefresh) {
+        this.enterPathNodeEditMode(pathIds, activePathId ?? pathIds[0]);
       }
-      if (this.pathNodeEditState?.pathId === selectedId) return;
-      this.enterPathNodeEditMode(selectedId);
     });
     effect(() => {
       const acceptedSvgContent = this.acceptedSvgContent();
@@ -2467,23 +2496,35 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     };
   }
 
-  private enterPathNodeEditMode(pathId: string): void {
-    const build = this.buildPathNodeEditState(pathId);
-    if (!build.state) {
+  private enterPathNodeEditMode(pathIds: string[], preferredPathId?: string): void {
+    const states: PathNodeEditPathState[] = [];
+    let lastReason: string | null = null;
+    for (const pathId of pathIds) {
+      const build = this.buildPathNodeEditState(pathId);
+      if (build.state) {
+        states.push(build.state);
+      } else if (build.reason) {
+        lastReason = build.reason;
+      }
+    }
+    if (states.length === 0) {
       this.pathNodeEditState = null;
-      this.selectedPathNodeMoveSegmentIndex = null;
+      this.selectedPathNode = null;
       this.pathNodeDragSession = null;
       this.pathNodeDragJustEnded = false;
-      if (build.reason) {
-        this.showPathNodeEditFeedback(build.reason);
+      if (lastReason) {
+        this.showPathNodeEditFeedback(lastReason);
       } else {
         this.clearPathNodeEditFeedback();
       }
       this.cdr.markForCheck();
       return;
     }
-    this.pathNodeEditState = build.state;
-    this.selectedPathNodeMoveSegmentIndex = null;
+    const activePathId = states.some((state) => state.pathId === preferredPathId)
+      ? (preferredPathId as string)
+      : states[0].pathId;
+    this.pathNodeEditState = { paths: states, activePathId };
+    this.selectedPathNode = null;
     this.drilledIntoGroupId = null;
     this.clearPathNodeEditFeedback();
     this.cdr.markForCheck();
@@ -2492,7 +2533,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private exitPathNodeEditMode(): boolean {
     if (!this.pathNodeEditState) return false;
     this.pathNodeEditState = null;
-    this.selectedPathNodeMoveSegmentIndex = null;
+    this.selectedPathNode = null;
     this.pathNodeDragSession = null;
     this.pathNodeDragJustEnded = false;
     this.clearPathNodeEditFeedback();
@@ -2501,9 +2542,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private isPathNodeEditTarget(target: Element): boolean {
-    const activePathId = this.pathNodeEditState?.pathId;
-    if (!activePathId) return false;
-    if (target.id === activePathId) return true;
+    if (!this.pathNodeEditState) return false;
+    const activePathIds = new Set(this.pathNodeEditState.paths.map((state) => state.pathId));
+    if (target.id && activePathIds.has(target.id)) return true;
     if (typeof target.closest !== 'function') return false;
     return !!target.closest('[data-path-node-edit-target]');
   }
@@ -2514,10 +2555,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const anchorEl = target.closest('[data-path-node-anchor-index]') as Element | null;
     const handleEl = target.closest('[data-path-node-handle-index]') as Element | null;
     if (!anchorEl && !handleEl) return false;
+    const rawPathId = (anchorEl ?? handleEl)?.getAttribute('data-path-node-path-id');
+    if (!rawPathId) return false;
+    const targetPathState = this.pathNodeEditState.paths.find((state) => state.pathId === rawPathId);
+    if (!targetPathState) return false;
 
     const svg = this.svgManipulation.getSVGInstance();
     if (!svg) return false;
-    const pathEl = svg.findOne(`#${this.pathNodeEditState.pathId}`)?.node as SVGPathElement | null;
+    const pathEl = svg.findOne(`#${targetPathState.pathId}`)?.node as SVGPathElement | null;
     if (!pathEl) return false;
 
     const oldD = pathEl.getAttribute('d') ?? '';
@@ -2526,10 +2571,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     if (anchorEl) {
       const index = Number(anchorEl.getAttribute('data-path-node-anchor-index'));
-      if (!Number.isFinite(index) || index < 0 || index >= this.pathNodeEditState.anchors.length) return false;
-      this.selectedPathNodeMoveSegmentIndex = this.pathNodeEditState.anchors[index].moveSegmentIndex;
+      if (!Number.isFinite(index) || index < 0 || index >= targetPathState.anchors.length) return false;
+      this.selectedPathNode = {
+        pathId: targetPathState.pathId,
+        moveSegmentIndex: targetPathState.anchors[index].moveSegmentIndex
+      };
+      this.pathNodeEditState.activePathId = targetPathState.pathId;
       this.pathNodeDragSession = {
-        pathId: this.pathNodeEditState.pathId,
+        pathId: targetPathState.pathId,
         oldD,
         segments: parsed.map((segment) => ({ ...segment })),
         target: { kind: 'anchor', index }
@@ -2540,9 +2589,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
 
     const index = Number(handleEl?.getAttribute('data-path-node-handle-index'));
-    if (!Number.isFinite(index) || index < 0 || index >= this.pathNodeEditState.controlHandles.length) return false;
+    if (!Number.isFinite(index) || index < 0 || index >= targetPathState.controlHandles.length) return false;
+    this.pathNodeEditState.activePathId = targetPathState.pathId;
     this.pathNodeDragSession = {
-      pathId: this.pathNodeEditState.pathId,
+      pathId: targetPathState.pathId,
       oldD,
       segments: parsed.map((segment) => ({ ...segment })),
       target: { kind: 'control', index }
@@ -2554,19 +2604,23 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private tryDeleteSelectedPathNode(): boolean {
     if (!this.pathNodeEditState) return false;
-    if (this.selectedPathNodeMoveSegmentIndex === null) {
+    if (this.selectedPathNode === null) {
       this.showPathNodeEditFeedback('Select a node before deleting.');
       return true;
     }
+    const targetPathState = this.pathNodeEditState.paths.find(
+      (state) => state.pathId === this.selectedPathNode?.pathId
+    );
+    if (!targetPathState) return false;
 
-    const selectedAnchorIndex = this.pathNodeEditState.anchors.findIndex(
-      (anchor) => anchor.moveSegmentIndex === this.selectedPathNodeMoveSegmentIndex
+    const selectedAnchorIndex = targetPathState.anchors.findIndex(
+      (anchor) => anchor.moveSegmentIndex === this.selectedPathNode?.moveSegmentIndex
     );
     if (selectedAnchorIndex < 0) return false;
 
-    const uniqueMoveSegments = new Set(this.pathNodeEditState.anchors.map((anchor) => anchor.moveSegmentIndex));
+    const uniqueMoveSegments = new Set(targetPathState.anchors.map((anchor) => anchor.moveSegmentIndex));
     const svg = this.svgManipulation.getSVGInstance();
-    const pathEl = svg?.findOne(`#${this.pathNodeEditState.pathId}`)?.node as SVGPathElement | null;
+    const pathEl = svg?.findOne(`#${targetPathState.pathId}`)?.node as SVGPathElement | null;
     if (!pathEl) return false;
     const oldD = pathEl.getAttribute('d') ?? '';
     const parsed = this.parsePathDataForNodeEditing(oldD);
@@ -2583,7 +2637,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     const nextSegments = this.removePathAnchorByMoveSegmentIndex(
       parsed,
-      this.selectedPathNodeMoveSegmentIndex
+      this.selectedPathNode.moveSegmentIndex
     );
     if (!nextSegments) {
       this.showPathNodeEditFeedback('Unable to delete that node.');
@@ -2594,18 +2648,22 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (newD === oldD) return true;
 
     pathEl.setAttribute('d', newD);
-    const cmd = new EditPathNodesCommand(this.svgManipulation, this.pathNodeEditState.pathId, oldD, newD, true);
+    const cmd = new EditPathNodesCommand(this.svgManipulation, targetPathState.pathId, oldD, newD, true);
     this.editorHistory.pushAndExecute(cmd);
 
-    const refreshed = this.buildPathNodeEditState(this.pathNodeEditState.pathId);
+    const refreshed = this.buildPathNodeEditState(targetPathState.pathId);
     if (!refreshed.state) {
       this.exitPathNodeEditMode();
       return true;
     }
-
-    this.pathNodeEditState = refreshed.state;
+    this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
+      state.pathId === targetPathState.pathId ? refreshed.state! : state
+    );
+    this.pathNodeEditState.activePathId = targetPathState.pathId;
     const fallbackAnchor = refreshed.state.anchors[Math.max(0, selectedAnchorIndex - 1)];
-    this.selectedPathNodeMoveSegmentIndex = fallbackAnchor?.moveSegmentIndex ?? null;
+    this.selectedPathNode = fallbackAnchor
+      ? { pathId: targetPathState.pathId, moveSegmentIndex: fallbackAnchor.moveSegmentIndex }
+      : null;
     this.clearPathNodeEditFeedback();
     this.cdr.markForCheck();
     return true;
@@ -2664,11 +2722,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     pathEl.setAttribute('d', nextD);
 
     this.pathNodeDragSession.segments = nextSegments;
-    this.pathNodeEditState = {
-      pathId: this.pathNodeEditState.pathId,
-      anchors: this.collectPathNodeAnchors(nextSegments),
-      controlHandles: this.collectPathControlHandles(nextSegments)
-    };
+    this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
+      state.pathId === this.pathNodeDragSession?.pathId
+        ? {
+            pathId: state.pathId,
+            anchors: this.collectPathNodeAnchors(nextSegments),
+            controlHandles: this.collectPathControlHandles(nextSegments)
+          }
+        : state
+    );
+    this.pathNodeEditState.activePathId = this.pathNodeDragSession.pathId;
     this.cdr.markForCheck();
   }
 
@@ -2693,7 +2756,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private applyAnchorDrag(segments: PathSegment[], anchorIndex: number, x: number, y: number): void {
-    const anchor = this.pathNodeEditState?.anchors[anchorIndex];
+    const pathId = this.pathNodeDragSession?.pathId;
+    const pathState = this.pathNodeEditState?.paths.find((state) => state.pathId === pathId);
+    const anchor = pathState?.anchors[anchorIndex];
     if (!anchor) return;
     const moveSegment = segments[anchor.moveSegmentIndex];
     if (!moveSegment || moveSegment.type === 'Z') return;
@@ -2742,7 +2807,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   private applyControlDrag(segments: PathSegment[], handleIndex: number, x: number, y: number): void {
-    const handle = this.pathNodeEditState?.controlHandles[handleIndex];
+    const pathId = this.pathNodeDragSession?.pathId;
+    const pathState = this.pathNodeEditState?.paths.find((state) => state.pathId === pathId);
+    const handle = pathState?.controlHandles[handleIndex];
     if (!handle) return;
     const segment = segments[handle.segmentIndex];
     if (!segment) return;
@@ -2846,11 +2913,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this._highlightRectCacheKey = '';
     }
 
-    if (this.pathNodeEditState?.pathId === pathId) {
+    if (this.pathNodeEditState?.paths.some((state) => state.pathId === pathId)) {
       const refreshed = this.buildPathNodeEditState(pathId);
       if (refreshed.state) {
-        this.pathNodeEditState = refreshed.state;
-        this.selectedPathNodeMoveSegmentIndex = null;
+        this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
+          state.pathId === pathId ? refreshed.state! : state
+        );
+        this.pathNodeEditState.activePathId = pathId;
+        this.selectedPathNode = null;
       } else {
         this.exitPathNodeEditMode();
       }

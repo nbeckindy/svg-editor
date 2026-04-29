@@ -2566,6 +2566,68 @@ describe('SvgCanvasComponent', () => {
       expect(controlHandles.length).toBe(2);
     });
 
+    it('renders node affordances for all selected editable paths in multi-select', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 20 20 L 30 10" /><path id="path-b" d="M 50 50 C 60 50 70 60 80 80" /><rect id="rect-non-path" x="5" y="60" width="10" height="10" /></svg>'
+      );
+      shapeSelectionService.selectShapes([
+        { id: 'path-a', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
+        { id: 'path-b', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
+        { id: 'rect-non-path', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
+      ]);
+      await activateNodeEditSelectorTool();
+
+      expect(component.isPathNodeEditModeActive).toBe(true);
+      const anchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
+      const controlHandles = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-control-handle"]');
+      expect(anchors.length).toBe(5);
+      expect(controlHandles.length).toBe(2);
+      expect(
+        Array.from(anchors).some((node) => (node as Element).getAttribute('data-path-node-path-id') === 'path-a')
+      ).toBe(true);
+      expect(
+        Array.from(anchors).some((node) => (node as Element).getAttribute('data-path-node-path-id') === 'path-b')
+      ).toBe(true);
+    });
+
+    it('edits only the targeted path node while preserving multi-selection context', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-left" d="M 10 10 L 20 20" /><path id="path-right" d="M 60 60 L 80 80" /><rect id="rect-keep" x="40" y="40" width="8" height="8" /></svg>'
+      );
+      shapeSelectionService.selectShapes([
+        { id: 'path-left', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
+        { id: 'path-right', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
+        { id: 'rect-keep', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
+      ]);
+      await activateNodeEditSelectorTool();
+
+      const leftPath = fixture.nativeElement.querySelector('#path-left') as SVGPathElement;
+      const rightPath = fixture.nativeElement.querySelector('#path-right') as SVGPathElement;
+      const leftBefore = leftPath.getAttribute('d');
+      const rightBefore = rightPath.getAttribute('d');
+      const rightAnchor = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-path-node-anchor"][data-path-node-path-id="path-right"][data-path-node-anchor-index="0"]'
+      ) as Element;
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 60,
+        clientY: 60,
+        target: rightAnchor,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 65, clientY: 70 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 65, clientY: 70 } as MouseEvent);
+      fixture.detectChanges();
+
+      expect(rightPath.getAttribute('d')).not.toBe(rightBefore);
+      expect(leftPath.getAttribute('d')).toBe(leftBefore);
+      expect(shapeSelectionService.getSelectedShapes().map((shape) => shape.id).sort()).toEqual(
+        ['path-left', 'path-right', 'rect-keep'].sort()
+      );
+    });
+
     it('marks a clicked node as selected in node-edit mode', async () => {
       await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-select-node" d="M 10 10 L 20 20 L 30 30" /></svg>');
       shapeSelectionService.selectShape({
