@@ -38,6 +38,13 @@
 - [`src/app/services/svg-manipulation.service.ts`](../../src/app/services/svg-manipulation.service.ts) — path mutation helpers (insert/delete/conversion)
 - [`src/app/models/editor-commands.ts`](../../src/app/models/editor-commands.ts) — command objects for undoable node operations
 
+## Discovery deliverables (APE-3, APE-4)
+
+| Local ref | Document |
+|-----------|----------|
+| APE-3 (`svg-editor-18f`) | [Convert-to-path spike](../spikes/convert-to-path-node-editing.md) |
+| APE-4 (`svg-editor-f31`) | [Bezier anchor and handle UX baseline](../ux/bezier-anchor-handle-interactions.md) |
+
 ## Notes
 
 - This epic is intentionally post-foundation: base path node editing is tracked in [path-node-editing](./path-node-editing.md), while this epic captures advanced editing and UX/discovery follow-ups.

@@ -26,7 +26,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `CLOSED` | 9/9 (100%) | Shape creation (epic 7) helpful |
 | 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `CLOSED` | 7/7 (100%) | Shape creation (SC-1, shares tool infra); optional beads tfs.8–11 open in bd |
 | 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `CLOSED` | 5/5 (100%) | Pen tool (PP-2a segment model) |
-| 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `OPEN` | 5/10 (50%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
+| 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `CLOSED` | 10/10 (100%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
 
 ## Free-standing issues
 
@@ -106,13 +106,13 @@ flowchart LR
 6. ~~**Epic 12** (snap / guides)~~ -- **DONE**
 7. ~~**Epic 6** (transform UX polish)~~ -- **DONE**
 8. ~~**Epic 10** (text editing)~~ -- **DONE**
-9. **Epic 16** (advanced path editing) -- advanced path structure and node workflow improvements
+9. ~~**Epic 16** (advanced path editing)~~ -- **DONE**
 10. **`svg-editor-e1x`** (gradient editor) -- after `svg-editor-brz` fix lands
 
 ## Beads epic references
 
 Epic issues in `bd` (see `bd list -t epic` or `bd show <id>` if this table drifts).
-Status/progress below is current as of 2026-04-28.
+Status/progress below is current as of 2026-04-29.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
@@ -131,7 +131,7 @@ Status/progress below is current as of 2026-04-28.
 | pen-path-tool | `svg-editor-tfs` | Pen and path tool | `CLOSED` | 7/7 |
 | canvas-artboard | `svg-editor-dl9` | Canvas and artboard | `CLOSED` | 7/7 |
 | path-node-editing | `svg-editor-cfc` | Path node editing | `CLOSED` | 5/5 |
-| advanced-path-editing | `svg-editor-4nz` | Advanced path editing | `OPEN` | 5/10 |
+| advanced-path-editing | `svg-editor-4nz` | Advanced path editing | `CLOSED` | 10/10 |
 
 ## How to use this roadmap
 
