@@ -1,18 +1,23 @@
 .tool-strip {
   display: flex;
-  gap: 4px;
-  align-items: center;
+  flex-direction: column;
+  gap: 8px;
+  align-items: stretch;
+  padding: 10px 8px;
 }
 
 .tool-btn {
-  padding: 8px 14px;
-  font-size: 14px;
+  width: 100%;
+  min-height: 34px;
+  padding: 7px 9px;
+  font-size: 12px;
   border: 1px solid #ddd;
-  border-radius: 4px;
+  border-radius: 6px;
   background: #fff;
   color: #333;
   cursor: pointer;
   transition: all 0.2s ease;
+  text-align: left;
 }
 
 .tool-btn:hover {
@@ -27,7 +32,7 @@
 }
 
 .tool-btn-icon {
-  display: inline-flex;
+  display: flex;
   align-items: center;
   gap: 6px;
 }
@@ -42,7 +47,7 @@
 }
 
 .tool-label {
-  font-size: 14px;
+  font-size: 12px;
 }
 
 .tool-btn:disabled {
@@ -51,9 +56,33 @@
   pointer-events: none;
 }
 
-.tool-separator {
-  width: 1px;
-  height: 24px;
-  background: #ddd;
-  margin: 0 4px;
+.tool-group {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.tool-group:last-child {
+  border-bottom: 0;
+  padding-bottom: 0;
+}
+
+@media (max-width: 1040px) {
+  .tool-strip {
+    padding: 10px 6px;
+  }
+
+  .tool-label {
+    display: none;
+  }
+
+  .tool-btn {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-height: 30px;
+    padding: 6px;
+  }
 }

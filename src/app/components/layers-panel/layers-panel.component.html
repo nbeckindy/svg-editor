@@ -22,8 +22,7 @@
   @if (flattenedLayers().length > 0) {
     <div class="layers-list" data-testid="layers-list">
       @for (layer of flattenedLayers(); track layer.id) {
-        <button
-          type="button"
+        <div
           class="layer-row"
           [class.selected]="layer.selected"
           [class.group-row]="layer.isGroup"
@@ -74,7 +73,7 @@
                     aria-label="Move layer backward"
                     (click)="onMoveBackward(layer.id)">↓</button>
           </div>
-        </button>
+        </div>
       }
     </div>
   } @else {

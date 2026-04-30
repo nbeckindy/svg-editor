@@ -1,1 +1,22 @@
-/* You can add global styles to this file, and also import other style files */
+/* Global layout tokens for editor shell and panels. */
+:root {
+  --editor-border: #d5dceb;
+  --editor-surface: #ffffff;
+  --editor-canvas-bg: #f4f6fb;
+  --editor-left-rail-width: 300px;
+  --editor-right-dock-width: 320px;
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+  color: #1f2937;
+}

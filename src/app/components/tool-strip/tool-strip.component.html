@@ -1,5 +1,6 @@
-<div class="tool-strip" data-testid="tool-strip">
-  <button
+<div class="tool-strip" data-testid="tool-strip" role="toolbar" aria-label="Editor tools">
+  <div class="tool-group tool-group-history" aria-label="History">
+    <button
     type="button"
     class="tool-btn tool-btn-icon"
     data-testid="tool-undo"
@@ -13,8 +14,8 @@
       </svg>
     </span>
     <span class="tool-label">Undo</span>
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn tool-btn-icon"
     data-testid="tool-redo"
@@ -28,9 +29,11 @@
       </svg>
     </span>
     <span class="tool-label">Redo</span>
-  </button>
-  <span class="tool-separator" aria-hidden="true"></span>
-  <button
+    </button>
+  </div>
+
+  <div class="tool-group" aria-label="Selection and view">
+    <button
     type="button"
     class="tool-btn"
     data-testid="tool-selector"
@@ -39,8 +42,8 @@
     title="Selector"
     [attr.aria-pressed]="editorTool.currentTool() === 'selector'">
     Selector
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn"
     data-testid="tool-node-edit-selector"
@@ -49,8 +52,8 @@
     title="Node Edit Selector"
     [attr.aria-pressed]="editorTool.currentTool() === 'node-edit-selector'">
     Node Edit
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn"
     data-testid="tool-zoom"
@@ -59,8 +62,8 @@
     title="Zoom (click to zoom in, Alt+click to zoom out)"
     [attr.aria-pressed]="editorTool.currentTool() === 'zoom'">
     Zoom
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn tool-btn-icon"
     data-testid="tool-pan"
@@ -77,8 +80,8 @@
       </svg>
     </span>
     <span class="tool-label">Pan</span>
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn"
     data-testid="tool-grid-snap-toggle"
@@ -87,8 +90,8 @@
     title="Toggle grid snap"
     [attr.aria-pressed]="editorTool.isGridSnapEnabled()">
     Grid snap
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn"
     data-testid="tool-shape-snap-toggle"
@@ -97,9 +100,11 @@
     title="Toggle shape snap"
     [attr.aria-pressed]="editorTool.isShapeSnapEnabled()">
     Shape snap
-  </button>
-  <span class="tool-separator" aria-hidden="true"></span>
-  <button
+    </button>
+  </div>
+
+  <div class="tool-group" aria-label="Creation tools">
+    <button
     type="button"
     class="tool-btn tool-btn-icon"
     data-testid="tool-rect"
@@ -113,8 +118,8 @@
       </svg>
     </span>
     <span class="tool-label">Rect</span>
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn tool-btn-icon"
     data-testid="tool-ellipse"
@@ -128,8 +133,8 @@
       </svg>
     </span>
     <span class="tool-label">Ellipse</span>
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn tool-btn-icon"
     data-testid="tool-line"
@@ -143,8 +148,8 @@
       </svg>
     </span>
     <span class="tool-label">Line</span>
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn tool-btn-icon"
     data-testid="tool-text"
@@ -160,8 +165,8 @@
       </svg>
     </span>
     <span class="tool-label">Text</span>
-  </button>
-  <button
+    </button>
+    <button
     type="button"
     class="tool-btn tool-btn-icon"
     data-testid="tool-pen"
@@ -178,5 +183,6 @@
       </svg>
     </span>
     <span class="tool-label">Pen</span>
-  </button>
+    </button>
+  </div>
 </div>
