@@ -37,7 +37,7 @@ These beads are not part of an epic and can be tackled independently.
 | `svg-editor-60f` | Extract gesture handlers from svg-canvas | P2 | DONE (refactoring prerequisite for epic 6) |
 | `svg-editor-ag5` | Undo delete should restore selection | P2 | DONE (small UX fix) |
 | `svg-editor-brz` | Bug: normalizeColorForPicker destroys gradient fills | P2 | DONE (bug fix) |
-| `svg-editor-e1x` | Full gradient editor UI | P3 | Depends on `svg-editor-brz` fix; plan [gradient-editor](./epics/gradient-editor.md) |
+| `svg-editor-e1x` | Full gradient editor UI | P3 | **DONE** — plan [gradient-editor](./epics/gradient-editor.md) |
 | `svg-editor-cno` | Bug: dragging Tree group hides child layer elements after drop | P2 | Drag/drop visibility bug with nested groups |
 | `svg-editor-0lx` | Investigate group/ungroup behavior with pre-existing groups | P2 | Edge-case exploration for nested group operations |
 | `svg-editor-5el` | Bug: artboard boundary stroke scales with zoom despite vector-effect | P2 | `vector-effect: non-scaling-stroke` ineffective under `preserveAspectRatio="none"` |
@@ -107,12 +107,12 @@ flowchart LR
 7. ~~**Epic 6** (transform UX polish)~~ -- **DONE**
 8. ~~**Epic 10** (text editing)~~ -- **DONE**
 9. ~~**Epic 16** (advanced path editing)~~ -- **DONE**
-10. **`svg-editor-e1x`** (gradient editor) -- after `svg-editor-brz` fix lands
+10. ~~**`svg-editor-e1x`** (gradient editor)~~ -- **DONE**
 
 ## Beads epic references
 
 Epic issues in `bd` (see `bd list -t epic` or `bd show <id>` if this table drifts).
-Status/progress below is current as of 2026-04-29.
+Status/progress below is current as of 2026-04-30.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|

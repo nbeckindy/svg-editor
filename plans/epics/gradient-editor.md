@@ -4,7 +4,7 @@
 
 | Field | Value |
 |--------|--------|
-| **bd id** | `svg-editor-e1x` |
+| **bd id** | `svg-editor-e1x` (bd: **closed** 2026-04-30) |
 | **Title** | Full gradient editor UI (phase 2) |
 | **Depends on** | `svg-editor-brz` (gradient fill picker guard — **closed**) |
 
@@ -18,7 +18,7 @@
 ## Phases (implementation)
 
 1. **Service + model** — [`svg-gradient.ts`](../../src/app/models/svg-gradient.ts), [`SvgManipulationService`](../../src/app/services/svg-manipulation.service.ts): resolve id, refcount, dedicate clone, read/write `EditableGradientModel`, create linear default.
-2. **History** — [`SetPaintGradientSnapshotCommand`](../../src/app/models/editor-commands.ts).
+2. **History** — [`GradientFillSnapshotCommand`](../../src/app/models/editor-commands.ts).
 3. **UI** — gradient section in properties (linear fields, stops, type toggle radial when implemented); single-select only for v1.
 4. **Harden** — Vitest for service + panel; shared-gradient dedication; stroke deferred to same APIs in a follow-up pass (see spike).
 
