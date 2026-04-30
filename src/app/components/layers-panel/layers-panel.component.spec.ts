@@ -10,7 +10,8 @@ import {
   ToggleVisibilityCommand,
   ReorderCommand,
   GroupCommand,
-  UngroupCommand
+  UngroupCommand,
+  UngroupElementsCommand
 } from '../../models/editor-commands';
 
 describe('LayersPanelComponent', () => {
@@ -364,7 +365,7 @@ describe('LayersPanelComponent', () => {
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(GroupCommand);
   });
 
-  it('ungroup button is disabled when selection is not a single group', () => {
+  it('ungroup button is disabled when no group is selected', () => {
     getLayerTree.mockReturnValue([
       { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
     ]);
@@ -377,7 +378,37 @@ describe('LayersPanelComponent', () => {
     expect(ungroupBtn.disabled).toBe(true);
   });
 
-  it('ungroup button dispatches UngroupCommand for a selected group', () => {
+  it('ungroup button is enabled when two groups are selected', () => {
+    getLayerTree.mockReturnValue([
+      {
+        id: 'g1', type: 'g', name: 'g1', visible: true,
+        elementMarkup: '<g id="g1"></g>', children: []
+      },
+      {
+        id: 'g2', type: 'g', name: 'g2', visible: true,
+        elementMarkup: '<g id="g2"></g>', children: []
+      }
+    ]);
+    selectedShapes.set([{ id: 'g1', type: 'g' }, { id: 'g2', type: 'g' }]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const ungroupBtn = (fixture.nativeElement as HTMLElement)
+      .querySelector('[data-testid="layers-ungroup-btn"]') as HTMLButtonElement;
+    expect(ungroupBtn.disabled).toBe(false);
+  });
+
+  it('ungroup button dispatches UngroupCommand and selects freed children', () => {
+    const childEl = { id: () => 'child-1', type: 'circle' };
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '#group-1') {
+          return { node: { children: [{ id: 'child-1' }] } };
+        }
+        if (sel === '#child-1') return childEl;
+        return null;
+      })
+    });
     getLayerTree.mockReturnValue([
       {
         id: 'group-1', type: 'g', name: 'group-1', visible: true,
@@ -398,7 +429,49 @@ describe('LayersPanelComponent', () => {
 
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(UngroupCommand);
-    expect(clearSelection).toHaveBeenCalled();
+    expect(selectShapes).toHaveBeenCalledWith([{ id: 'child-1', type: 'circle' }]);
+  });
+
+  it('ungroup button dispatches UngroupElementsCommand when two groups are selected', () => {
+    const mockSvg = {
+      findOne: vi.fn((sel: string) => {
+        if (sel === '#g1') return { node: { children: [{ id: 'a' }] } };
+        if (sel === '#g2') return { node: { children: [{ id: 'b' }] } };
+        if (sel === '#a') return { id: () => 'a', type: 'rect' };
+        if (sel === '#b') return { id: () => 'b', type: 'rect' };
+        return null;
+      })
+    };
+    getSVGInstance.mockReturnValue(mockSvg);
+
+    getLayerTree.mockReturnValue([
+      { id: 'g1', type: 'g', name: 'g1', visible: true, elementMarkup: '<g id="g1"/>', children: [] },
+      { id: 'g2', type: 'g', name: 'g2', visible: true, elementMarkup: '<g id="g2"/>', children: [] }
+    ]);
+    selectedShapes.set([
+      { id: 'g1', type: 'g' },
+      { id: 'g2', type: 'g' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    pushAndExecute.mockImplementation((cmd: { execute(): void }) => {
+      cmd.execute();
+    });
+    const stubSvc = TestBed.inject(SvgManipulationService) as unknown as {
+      ungroupElements: (ids: string[]) => { allChildElementIds: string[]; undoSnapshots: string[][] };
+    };
+    stubSvc.ungroupElements = vi.fn().mockReturnValue({
+      allChildElementIds: ['a', 'b'],
+      undoSnapshots: [['a'], ['b']]
+    });
+
+    const ungroupBtn = (fixture.nativeElement as HTMLElement)
+      .querySelector('[data-testid="layers-ungroup-btn"]') as HTMLButtonElement;
+    ungroupBtn.click();
+
+    expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(UngroupElementsCommand);
+    expect(selectShapes).toHaveBeenCalled();
   });
 
   it('hidden layers have .hidden-layer class', () => {

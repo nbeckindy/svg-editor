@@ -20,6 +20,7 @@ import {
   ToggleVisibilityCommand,
   GroupCommand,
   UngroupCommand,
+  UngroupElementsCommand,
   RemoveShapesCommand,
   AddShapeCommand,
   AddPathCommand,
@@ -51,6 +52,7 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     toggleLayerVisibility: vi.fn(),
     groupSelectedElements: vi.fn(),
     ungroupElement: vi.fn(),
+    ungroupElements: vi.fn().mockReturnValue({ allChildElementIds: [], undoSnapshots: [] }),
     removeShapes: vi.fn(),
     createClipboardPayload: vi.fn().mockReturnValue({ shapes: [] }),
     pasteClipboardPayload: vi.fn().mockReturnValue({ insertedIds: [], insertedMarkup: [] }),
@@ -899,6 +901,16 @@ describe('GroupCommand', () => {
   it('should have description "Group elements"', () => {
     expect(new GroupCommand(mockSvc(), ['a']).description).toBe('Group elements');
   });
+
+  it('createdGroupId reflects execute result', () => {
+    const svc = mockSvc({
+      groupSelectedElements: vi.fn().mockReturnValue('group-xyz'),
+    });
+    const cmd = new GroupCommand(svc, ['a', 'b']);
+    expect(cmd.createdGroupId).toBeNull();
+    cmd.execute();
+    expect(cmd.createdGroupId).toBe('group-xyz');
+  });
 });
 
 describe('UngroupCommand', () => {
@@ -933,6 +945,41 @@ describe('UngroupCommand', () => {
 
   it('should have description "Ungroup elements"', () => {
     expect(new UngroupCommand(mockSvc(), 'g1').description).toBe('Ungroup elements');
+  });
+});
+
+describe('UngroupElementsCommand', () => {
+  it('should call ungroupElements on execute', () => {
+    const svc = mockSvc({
+      ungroupElements: vi
+        .fn()
+        .mockReturnValue({ allChildElementIds: ['a', 'b'], undoSnapshots: [['a', 'b']] }),
+    });
+    const cmd = new UngroupElementsCommand(svc, ['g1', 'g2']);
+    cmd.execute();
+    expect(svc.ungroupElements).toHaveBeenCalledWith(['g1', 'g2']);
+    expect(cmd.ungroupedChildIds).toEqual(['a', 'b']);
+  });
+
+  it('should regroup each snapshot in reverse on undo', () => {
+    const svc = mockSvc({
+      ungroupElements: vi.fn().mockReturnValue({
+        allChildElementIds: ['a', 'b', 'c'],
+        undoSnapshots: [
+          ['a', 'b'],
+          ['c'],
+        ],
+      }),
+    });
+    const cmd = new UngroupElementsCommand(svc, ['g1', 'g2']);
+    cmd.execute();
+    cmd.undo();
+    expect(svc.groupSelectedElements).toHaveBeenNthCalledWith(1, ['c']);
+    expect(svc.groupSelectedElements).toHaveBeenNthCalledWith(2, ['a', 'b']);
+  });
+
+  it('should have description "Ungroup elements"', () => {
+    expect(new UngroupElementsCommand(mockSvc(), ['g1']).description).toBe('Ungroup elements');
   });
 });
 

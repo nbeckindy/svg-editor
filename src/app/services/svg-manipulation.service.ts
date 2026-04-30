@@ -2169,6 +2169,9 @@ export class SvgManipulationService {
    * Create a new `<g>` element containing the given elements. The group is inserted at the
    * position of the first element in DOM order; elements are moved into it preserving relative
    * order. Returns the new group id or null on failure.
+   *
+   * After moving, any former parent `<g>` that becomes empty (no element children) is removed,
+   * walking up the chain so nested empty wrappers do not linger.
    */
   groupSelectedElements(elementIds: string[]): string | null {
     if (!this.svgInstance || elementIds.length === 0) return null;
@@ -2190,20 +2193,30 @@ export class SvgManipulationService {
       return 0;
     });
 
+    const formerParents = new Set<Element>();
+    for (const { node } of elements) {
+      const p = node.parentElement;
+      if (p) formerParents.add(p);
+    }
+
+    const contentRoot = contentGroup.node as Element;
     const firstNode = elements[0].node;
-    const parent = firstNode.parentNode;
-    if (!parent) return null;
+    let anchor: Element = firstNode;
+    while (anchor.parentElement && anchor.parentElement !== contentRoot) {
+      anchor = anchor.parentElement;
+    }
 
     const groupId = `group-${Math.random().toString(36).substr(2, 9)}`;
     const svgNs = 'http://www.w3.org/2000/svg';
     const gEl = document.createElementNS(svgNs, 'g');
     gEl.setAttribute('id', groupId);
 
-    parent.insertBefore(gEl, firstNode);
+    contentRoot.insertBefore(gEl, anchor);
     for (const { node } of elements) {
       gEl.appendChild(node);
     }
 
+    this.pruneEmptyGroupsAfterReparent(formerParents);
     this.bumpDocumentRevision();
     return groupId;
   }
@@ -2213,13 +2226,142 @@ export class SvgManipulationService {
    * the empty `<g>`. Returns the ids of the ungrouped children.
    */
   ungroupElement(groupId: string): string[] {
-    if (!this.svgInstance) return [];
+    const childIds = this.ungroupOneGroupNoBump(groupId);
+    if (childIds !== null) {
+      this.bumpDocumentRevision();
+      return childIds;
+    }
+    return [];
+  }
+
+  /**
+   * Ungroup several groups in one document revision. If the id list includes nested groups,
+   * only the innermost selected groups are ungrouped (when an ancestor and descendant are both
+   * selected, the ancestor is skipped). Groups are processed in document order.
+   * Returns child ids in DOM order (flattened) plus per-group snapshots for undo.
+   */
+  ungroupElements(
+    groupIds: string[]
+  ): { allChildElementIds: string[]; undoSnapshots: string[][] } {
+    if (!this.svgInstance || groupIds.length === 0) {
+      return { allChildElementIds: [], undoSnapshots: [] };
+    }
+
+    const leafIds = this.filterLeafGroupsForUngroup(groupIds);
+    const sorted = this.sortGroupIdsByDocumentOrder(leafIds);
+    const undoSnapshots: string[][] = [];
+    let changed = false;
+
+    for (const gid of sorted) {
+      const snap = this.snapshotDirectChildIds(gid);
+      if (snap === null) continue;
+      const result = this.ungroupOneGroupNoBump(gid);
+      if (result === null) continue;
+      undoSnapshots.push(snap);
+      changed = true;
+    }
+
+    if (changed) this.bumpDocumentRevision();
+
+    const flat = undoSnapshots.flat();
+    const allChildElementIds = this.sortElementIdsByDocumentOrder(flat);
+    return { allChildElementIds, undoSnapshots };
+  }
+
+  private snapshotDirectChildIds(groupId: string): string[] | null {
+    if (!this.svgInstance) return null;
     const el = this.svgInstance.findOne(`#${groupId}`) as SvgJsElement | undefined;
-    if (!el?.node) return [];
+    if (!el?.node) return null;
     const node = el.node as Element;
-    if (node.tagName?.toLowerCase() !== 'g') return [];
+    if (node.tagName?.toLowerCase() !== 'g') return null;
+    return Array.from(node.children)
+      .filter((c): c is Element => c instanceof Element && Boolean(c.id))
+      .map((c) => c.id);
+  }
+
+  /** True if `ancestorId` is a strict DOM ancestor of `descendantId`. */
+  private isStrictAncestorElement(ancestorId: string, descendantId: string): boolean {
+    if (!this.svgInstance) return false;
+    const anc = this.svgInstance.findOne(`#${ancestorId}`)?.node as Element | undefined;
+    const desc = this.svgInstance.findOne(`#${descendantId}`)?.node as Element | undefined;
+    if (!anc || !desc) return false;
+    return anc !== desc && anc.contains(desc);
+  }
+
+  /**
+   * When multiple groups are selected, drop any group that still contains another selected group
+   * (keep inner selections only).
+   */
+  private filterLeafGroupsForUngroup(groupIds: string[]): string[] {
+    const unique = [...new Set(groupIds)];
+    return unique.filter(
+      (id) => !unique.some((other) => other !== id && this.isStrictAncestorElement(id, other))
+    );
+  }
+
+  private sortGroupIdsByDocumentOrder(ids: string[]): string[] {
+    if (!this.svgInstance) return ids;
+    const svg = this.svgInstance;
+    return [...ids].sort((a, b) => {
+      const na = svg.findOne(`#${a}`)?.node;
+      const nb = svg.findOne(`#${b}`)?.node;
+      if (!na || !nb) return 0;
+      const pos = na.compareDocumentPosition(nb);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      return 0;
+    });
+  }
+
+  private sortElementIdsByDocumentOrder(ids: string[]): string[] {
+    if (!this.svgInstance) return ids;
+    const svg = this.svgInstance;
+    const unique = [...new Set(ids)];
+    return unique.sort((a, b) => {
+      const na = svg.findOne(`#${a}`)?.node;
+      const nb = svg.findOne(`#${b}`)?.node;
+      if (!na || !nb) return 0;
+      const pos = na.compareDocumentPosition(nb);
+      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
+      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
+      return 0;
+    });
+  }
+
+  private isRemovableEmptyGroup(el: Element): boolean {
+    if (el.tagName?.toLowerCase() !== 'g') return false;
+    if (el.getAttribute(EDITOR_CONTENT_GROUP_ID) === 'true') return false;
+    return el.children.length === 0;
+  }
+
+  /**
+   * Remove empty `<g>` wrappers starting from parents that lost children, walking up while each
+   * removed node leaves another empty group.
+   */
+  private pruneEmptyGroupsAfterReparent(formerParents: ReadonlySet<Element>): void {
+    for (const start of formerParents) {
+      let el: Element | null = start;
+      while (el) {
+        if (!this.isRemovableEmptyGroup(el)) break;
+        const nextUp: Element | null = el.parentElement;
+        el.parentNode?.removeChild(el);
+        el = nextUp;
+      }
+    }
+  }
+
+  /**
+   * Hoist children and remove the group node. Returns `null` if the group did not exist or was
+   * not a `<g>`. Returns `[]` if the group was removed but had no id-bearing children.
+   */
+  private ungroupOneGroupNoBump(groupId: string): string[] | null {
+    if (!this.svgInstance) return null;
+    const el = this.svgInstance.findOne(`#${groupId}`) as SvgJsElement | undefined;
+    if (!el?.node) return null;
+    const node = el.node as Element;
+    if (node.tagName?.toLowerCase() !== 'g') return null;
     const parent = node.parentNode;
-    if (!parent) return [];
+    if (!parent) return null;
 
     const childIds: string[] = [];
     const children = Array.from(node.children);
@@ -2228,7 +2370,6 @@ export class SvgManipulationService {
       parent.insertBefore(child, node);
     }
     parent.removeChild(node);
-    this.bumpDocumentRevision();
     return childIds;
   }
 

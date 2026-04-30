@@ -9,7 +9,8 @@ import {
   buildReorderToExtremeCommand,
   ToggleVisibilityCommand,
   GroupCommand,
-  UngroupCommand
+  UngroupCommand,
+  UngroupElementsCommand
 } from '../../models/editor-commands';
 
 interface LayerTreeViewModel {
@@ -50,7 +51,7 @@ export class LayersPanelComponent {
 
   readonly canUngroup = computed(() => {
     const shapes = this.shapeSelection.selectedShapes();
-    return shapes.length === 1 && shapes[0].type === 'g';
+    return shapes.length > 0 && shapes.every((s) => s.type === 'g');
   });
 
   readonly flattenedLayers = computed<LayerTreeViewModel[]>(() => {
@@ -105,18 +106,55 @@ export class LayersPanelComponent {
     const selected = this.shapeSelection.selectedShapes();
     if (selected.length < 2) return;
     const ids = selected.map((s) => s.id);
-    this.editorHistory.pushAndExecute(
-      new GroupCommand(this.svgManipulation, ids)
-    );
+    const cmd = new GroupCommand(this.svgManipulation, ids);
+    this.editorHistory.pushAndExecute(cmd);
+    const newGroupId = cmd.createdGroupId;
+    if (newGroupId) {
+      const svg = this.svgManipulation.getSVGInstance();
+      const groupEl = svg?.findOne(`#${newGroupId}`) as SvgJsElement | undefined;
+      if (groupEl) {
+        const groupProps = this.svgManipulation.getShapeProperties(groupEl);
+        this.shapeSelection.selectShapes([groupProps]);
+      }
+    }
   }
 
   onUngroupSelected(): void {
     const selected = this.shapeSelection.selectedShapes();
-    if (selected.length !== 1 || selected[0].type !== 'g') return;
-    this.editorHistory.pushAndExecute(
-      new UngroupCommand(this.svgManipulation, selected[0].id)
-    );
-    this.shapeSelection.clearSelection();
+    const groupIds = selected.filter((s) => s.type === 'g').map((s) => s.id);
+    if (groupIds.length === 0) return;
+
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg) return;
+
+    const selectFreedChildren = (childIds: string[]): void => {
+      const shapes = childIds
+        .map((id) => svg.findOne(`#${id}`) as SvgJsElement | null)
+        .filter((el): el is SvgJsElement => el != null)
+        .map((el) => this.svgManipulation.getShapeProperties(el));
+      if (shapes.length > 0) {
+        this.shapeSelection.selectShapes(shapes);
+      } else {
+        this.shapeSelection.clearSelection();
+      }
+    };
+
+    if (groupIds.length === 1) {
+      const groupId = groupIds[0];
+      const childIds: string[] = [];
+      const groupNode = svg.findOne(`#${groupId}`)?.node;
+      if (groupNode) {
+        for (const child of Array.from(groupNode.children)) {
+          if (child.id) childIds.push(child.id);
+        }
+      }
+      this.editorHistory.pushAndExecute(new UngroupCommand(this.svgManipulation, groupId));
+      selectFreedChildren(childIds);
+    } else {
+      const multi = new UngroupElementsCommand(this.svgManipulation, groupIds);
+      this.editorHistory.pushAndExecute(multi);
+      selectFreedChildren(multi.ungroupedChildIds);
+    }
   }
 
   onLayerClick(layerId: string, event?: MouseEvent): void {

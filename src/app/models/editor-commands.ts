@@ -753,6 +753,11 @@ export class GroupCommand implements EditorCommand {
     private readonly elementIds: string[]
   ) {}
 
+  /** New wrapper `<g>` id after the last `execute()` (or `null` if grouping failed). */
+  get createdGroupId(): string | null {
+    return this.groupId;
+  }
+
   execute(): void {
     this.groupId = this.svc.groupSelectedElements(this.elementIds);
   }
@@ -781,6 +786,37 @@ export class UngroupCommand implements EditorCommand {
   undo(): void {
     if (this.childIds.length > 0) {
       this.svc.groupSelectedElements(this.childIds);
+    }
+  }
+}
+
+export class UngroupElementsCommand implements EditorCommand {
+  readonly description = 'Ungroup elements';
+  private undoSnapshots: string[][] = [];
+  private allChildElementIds: string[] = [];
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly groupIds: string[]
+  ) {}
+
+  /** Direct child ids (flattened, DOM order) after the last `execute()`. */
+  get ungroupedChildIds(): string[] {
+    return this.allChildElementIds;
+  }
+
+  execute(): void {
+    const r = this.svc.ungroupElements(this.groupIds);
+    this.undoSnapshots = r.undoSnapshots;
+    this.allChildElementIds = r.allChildElementIds;
+  }
+
+  undo(): void {
+    for (let i = this.undoSnapshots.length - 1; i >= 0; i--) {
+      const ids = this.undoSnapshots[i];
+      if (ids.length > 0) {
+        this.svc.groupSelectedElements(ids);
+      }
     }
   }
 }

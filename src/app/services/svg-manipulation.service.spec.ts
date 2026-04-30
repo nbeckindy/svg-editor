@@ -1182,6 +1182,48 @@ describe('SvgManipulationService', () => {
       service.groupSelectedElements(['r1', 'c1']);
       expect(service.documentRevision()).toBe(before + 1);
     });
+
+    it('removes empty former parent groups when grouping across separate groups', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="g-left"><rect id="r1" x="0" y="0" width="10" height="10"/></g>
+        <g id="g-right"><rect id="r2" x="20" y="0" width="10" height="10"/></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.groupSelectedElements(['r1', 'r2']);
+      expect(container.querySelector('#g-left')).toBeNull();
+      expect(container.querySelector('#g-right')).toBeNull();
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const groups = contentGroup.querySelectorAll('g');
+      expect(groups.length).toBe(1);
+      expect(groups[0].querySelector('#r1')).toBeTruthy();
+      expect(groups[0].querySelector('#r2')).toBeTruthy();
+    });
+
+    it('wraps two sibling groups in a new outer group', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="ga"><rect id="r1" width="5" height="5"/></g>
+        <g id="gb"><rect id="r2" width="5" height="5"/></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const gid = service.groupSelectedElements(['ga', 'gb']);
+      expect(gid).toBeTruthy();
+      const outer = container.querySelector(`#${gid}`);
+      expect(outer?.querySelector('#ga')).toBeTruthy();
+      expect(outer?.querySelector('#gb')).toBeTruthy();
+    });
+
+    it('wraps a group and a top-level shape together', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="ga"><rect id="r1" width="5" height="5"/></g>
+        <rect id="r2" width="5" height="5"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const gid = service.groupSelectedElements(['ga', 'r2']);
+      expect(gid).toBeTruthy();
+      const outer = container.querySelector(`#${gid}`);
+      expect(outer?.querySelector('#ga')).toBeTruthy();
+      expect(outer?.querySelector('#r2')).toBeTruthy();
+    });
   });
 
   describe('ungroupElement', () => {
@@ -1238,6 +1280,56 @@ describe('SvgManipulationService', () => {
       const before = service.documentRevision();
       service.ungroupElement('grp');
       expect(service.documentRevision()).toBe(before + 1);
+    });
+
+    it('hoists nested group children to the outer group', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="outer">
+          <g id="inner">
+            <rect id="r1" x="0" y="0" width="10" height="10"/>
+            <rect id="r2" x="20" y="0" width="10" height="10"/>
+          </g>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.ungroupElement('inner');
+      const outer = container.querySelector('#outer')!;
+      expect(outer.querySelector('#inner')).toBeNull();
+      const ids = Array.from(outer.children).map((el) => el.id);
+      expect(ids).toEqual(['r1', 'r2']);
+    });
+  });
+
+  describe('ungroupElements', () => {
+    it('ungroups two sibling groups in one revision', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="g1"><rect id="a" width="2" height="2"/></g>
+        <g id="g2"><rect id="b" width="2" height="2"/></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      const { allChildElementIds, undoSnapshots } = service.ungroupElements(['g1', 'g2']);
+      expect(service.documentRevision()).toBe(before + 1);
+      expect(container.querySelector('#g1')).toBeNull();
+      expect(container.querySelector('#g2')).toBeNull();
+      expect(allChildElementIds).toEqual(['a', 'b']);
+      expect(undoSnapshots).toEqual([['a'], ['b']]);
+    });
+
+    it('with nested selection, ungroups only the inner selected group', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="outer">
+          <g id="inner">
+            <rect id="r1" width="2" height="2"/>
+          </g>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.ungroupElements(['outer', 'inner']);
+      expect(container.querySelector('#inner')).toBeNull();
+      expect(container.querySelector('#outer')).toBeTruthy();
+      const outer = container.querySelector('#outer')!;
+      expect(outer.querySelector('#r1')).toBeTruthy();
     });
   });
 
