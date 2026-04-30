@@ -8,6 +8,7 @@ import {
   type ResizeCorner
 } from '../../../utils/selection-resize';
 import type { GestureContext, GhostPreviewFragment, Rect } from './gesture-context';
+import { computeGestureVisibilityToggleIds } from './gesture-visibility';
 import { GhostSession } from './ghost-session';
 
 const GHOST_SVG_MIN_PX = 1e-6;
@@ -23,6 +24,7 @@ export class ResizeGesture {
   private ghostFragments: GhostPreviewFragment[] = [];
   private ghost = new GhostSession();
   private smartGuides: SmartGuideResult['guides'] = { vertical: [], horizontal: [] };
+  private visibilityShapeIds: string[] = [];
 
   overlayRect: Rect | null = null;
 
@@ -40,16 +42,23 @@ export class ResizeGesture {
     this.handle = corner;
     this.snapshot = ctx.svgManipulation.snapshotSelectionTransforms(selectedIds);
 
-    for (const id of selectedIds) {
-      ctx.svgManipulation.setShapeVisibility(id, false);
-    }
-
     this.lastUnion = union;
     this.overlayRect = ctx.svgBboxToOverlayPixels(union);
 
     const svgInstance = ctx.svgManipulation.getSVGInstance();
-    if (svgInstance) {
-      this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.svgManipulation, union, selectedIds);
+    if (!svgInstance) {
+      return false;
+    }
+    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.svgManipulation, union, selectedIds);
+    if (this.ghostFragments.length === 0) {
+      return false;
+    }
+
+    const ordered = ctx.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const primary = ordered[0] ?? selectedIds[0];
+    this.visibilityShapeIds = computeGestureVisibilityToggleIds(svgInstance, selectedIds, primary);
+    for (const id of this.visibilityShapeIds) {
+      ctx.svgManipulation.setShapeVisibility(id, false);
     }
 
     this.isActive = true;
@@ -82,7 +91,7 @@ export class ResizeGesture {
       ctx.editorHistory.pushAndExecute(cmd);
     }
 
-    for (const id of ids) {
+    for (const id of this.visibilityShapeIds) {
       ctx.svgManipulation.setShapeVisibility(id, true);
     }
 
@@ -99,8 +108,7 @@ export class ResizeGesture {
 
   cancel(ctx: GestureContext): void {
     if (!this.isActive) return;
-    const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
-    for (const id of ids) {
+    for (const id of this.visibilityShapeIds) {
       ctx.svgManipulation.setShapeVisibility(id, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
@@ -140,6 +148,7 @@ export class ResizeGesture {
     this.snapshot = new Map();
     this.ghostFragments = [];
     this.smartGuides = { vertical: [], horizontal: [] };
+    this.visibilityShapeIds = [];
   }
 
   get activeGuides(): SmartGuideResult['guides'] {

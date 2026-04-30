@@ -10,6 +10,7 @@ import {
   type SkewEdge
 } from '../../../utils/selection-skew';
 import type { GestureContext, GhostPreviewFragment, Point, Rect } from './gesture-context';
+import { computeGestureVisibilityToggleIds } from './gesture-visibility';
 import { GhostSession } from './ghost-session';
 
 export class SkewGesture {
@@ -24,6 +25,7 @@ export class SkewGesture {
   private snapshot: Map<string, Matrix> = new Map();
   private ghostFragments: GhostPreviewFragment[] = [];
   private ghost = new GhostSession();
+  private visibilityShapeIds: string[] = [];
 
   overlayRect: Rect | null = null;
 
@@ -43,24 +45,25 @@ export class SkewGesture {
     this.currentAngleDeg = 0;
     this.snapshot = ctx.svgManipulation.snapshotSelectionTransforms(selectedIds);
 
-    for (const id of selectedIds) {
-      ctx.svgManipulation.setShapeVisibility(id, false);
-    }
-
     this.overlayRect = ctx.svgBboxToOverlayPixels(union);
 
     const svgInstance = ctx.svgManipulation.getSVGInstance();
     if (!svgInstance) {
-      for (const id of selectedIds) ctx.svgManipulation.setShapeVisibility(id, true);
       this.reset();
       return false;
     }
 
     this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.svgManipulation, union, selectedIds);
     if (this.ghostFragments.length === 0) {
-      for (const id of selectedIds) ctx.svgManipulation.setShapeVisibility(id, true);
       this.reset();
       return false;
+    }
+
+    const ordered = ctx.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const primary = ordered[0] ?? selectedIds[0];
+    this.visibilityShapeIds = computeGestureVisibilityToggleIds(svgInstance, selectedIds, primary);
+    for (const id of this.visibilityShapeIds) {
+      ctx.svgManipulation.setShapeVisibility(id, false);
     }
 
     this.isActive = true;
@@ -96,7 +99,7 @@ export class SkewGesture {
       ctx.editorHistory.pushAndExecute(cmd);
     }
 
-    for (const id of ids) {
+    for (const id of this.visibilityShapeIds) {
       ctx.svgManipulation.setShapeVisibility(id, true);
     }
 
@@ -113,8 +116,7 @@ export class SkewGesture {
 
   cancel(ctx: GestureContext): void {
     if (!this.isActive) return;
-    const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
-    for (const id of ids) {
+    for (const id of this.visibilityShapeIds) {
       ctx.svgManipulation.setShapeVisibility(id, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
@@ -150,5 +152,6 @@ export class SkewGesture {
     this.snapshot = new Map();
     this.ghostFragments = [];
     this.overlayRect = null;
+    this.visibilityShapeIds = [];
   }
 }

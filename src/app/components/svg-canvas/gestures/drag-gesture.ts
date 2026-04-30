@@ -6,6 +6,7 @@ import {
 } from '../../../models/editor-commands';
 import { SmartGuideResult } from '../../../services/snap.service';
 import type { GestureContext, GhostPreviewFragment, Rect, Point } from './gesture-context';
+import { computeGestureVisibilityToggleIds } from './gesture-visibility';
 import { GhostSession } from './ghost-session';
 
 export class DragGesture {
@@ -15,6 +16,8 @@ export class DragGesture {
   justEnded = false;
 
   private shapeIds: string[] = [];
+  /** Elements toggled for drag preview hide/show (often one ancestor `<g>`, not every leaf). */
+  private visibilityShapeIds: string[] = [];
   private startSvg: Point | null = null;
   private startBbox: Rect | null = null;
   private snapAnchor: Point | null = null;
@@ -37,40 +40,51 @@ export class DragGesture {
     const svgInstance = ctx.svgManipulation.getSVGInstance();
     if (!svgInstance) return false;
 
-    for (const id of selectedIds) {
+    this.visibilityShapeIds = computeGestureVisibilityToggleIds(
+      svgInstance,
+      selectedIds,
+      effectiveDragId
+    );
+
+    try {
+      if (selectedIds.length === 1) {
+        const bbox = ctx.svgManipulation.getShapeBBox(effectiveDragId);
+        if (!bbox) {
+          this.visibilityShapeIds = [];
+          return false;
+        }
+        this.startBbox = bbox;
+        const effectiveEl = svgInstance.findOne(`#${effectiveDragId}`) as SvgJsElement | undefined;
+        const effectiveNode = effectiveEl?.node as Element | undefined;
+        const target = event.target as Element;
+        const shapeScreenRect =
+          effectiveNode && typeof effectiveNode.getBoundingClientRect === 'function'
+            ? effectiveNode.getBoundingClientRect()
+            : target.getBoundingClientRect();
+        this.createSingleGhost(ctx, effectiveDragId, bbox, shapeScreenRect);
+      } else {
+        const unionBbox = ctx.svgManipulation.getUnionBBox(selectedIds);
+        if (!unionBbox) {
+          this.visibilityShapeIds = [];
+          return false;
+        }
+        this.startBbox = unionBbox;
+        this.overlayRect = ctx.svgBboxToOverlayPixels(unionBbox);
+        this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.svgManipulation, unionBbox, selectedIds);
+        ctx.cdr.detectChanges();
+      }
+
+      if (this.ghostFragments.length === 0) {
+        this.visibilityShapeIds = [];
+        return false;
+      }
+    } catch (e: unknown) {
+      this.visibilityShapeIds = [];
+      throw e instanceof Error ? e : new Error(String(e));
+    }
+
+    for (const id of this.visibilityShapeIds) {
       ctx.svgManipulation.setShapeVisibility(id, false);
-    }
-
-    if (selectedIds.length === 1) {
-      const bbox = ctx.svgManipulation.getShapeBBox(effectiveDragId);
-      if (!bbox) {
-        for (const id of selectedIds) ctx.svgManipulation.setShapeVisibility(id, true);
-        return false;
-      }
-      this.startBbox = bbox;
-      const effectiveEl = svgInstance.findOne(`#${effectiveDragId}`) as SvgJsElement | undefined;
-      const effectiveNode = effectiveEl?.node as Element | undefined;
-      const target = event.target as Element;
-      const shapeScreenRect =
-        effectiveNode && typeof effectiveNode.getBoundingClientRect === 'function'
-          ? effectiveNode.getBoundingClientRect()
-          : target.getBoundingClientRect();
-      this.createSingleGhost(ctx, effectiveDragId, bbox, shapeScreenRect);
-    } else {
-      const unionBbox = ctx.svgManipulation.getUnionBBox(selectedIds);
-      if (!unionBbox) {
-        for (const id of selectedIds) ctx.svgManipulation.setShapeVisibility(id, true);
-        return false;
-      }
-      this.startBbox = unionBbox;
-      this.overlayRect = ctx.svgBboxToOverlayPixels(unionBbox);
-      this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.svgManipulation, unionBbox, selectedIds);
-      ctx.cdr.detectChanges();
-    }
-
-    if (this.ghostFragments.length === 0) {
-      for (const id of selectedIds) ctx.svgManipulation.setShapeVisibility(id, true);
-      return false;
     }
 
     this.isActive = true;
@@ -130,7 +144,7 @@ export class DragGesture {
     ctx.editorHistory.pushAndExecute(
       dragCmds.length === 1 ? dragCmds[0] : new CompositeCommand(dragCmds, 'Move shapes')
     );
-    for (const shapeId of this.shapeIds) {
+    for (const shapeId of this.visibilityShapeIds) {
       ctx.svgManipulation.setShapeVisibility(shapeId, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
@@ -147,7 +161,7 @@ export class DragGesture {
 
   cancel(ctx: GestureContext): void {
     if (!this.isActive) return;
-    for (const shapeId of this.shapeIds) {
+    for (const shapeId of this.visibilityShapeIds) {
       ctx.svgManipulation.setShapeVisibility(shapeId, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
@@ -156,10 +170,18 @@ export class DragGesture {
     ctx.cdr.detectChanges();
   }
 
+  private restoreDragVisibility(ctx: GestureContext): void {
+    for (const id of this.visibilityShapeIds) {
+      ctx.svgManipulation.setShapeVisibility(id, true);
+    }
+    this.visibilityShapeIds = [];
+  }
+
   private reset(): void {
     this.overlayRect = null;
     this.isActive = false;
     this.shapeIds = [];
+    this.visibilityShapeIds = [];
     this.startSvg = null;
     this.startBbox = null;
     this.snapAnchor = null;

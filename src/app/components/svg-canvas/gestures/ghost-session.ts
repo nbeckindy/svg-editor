@@ -143,8 +143,22 @@ export class GhostSession {
     worldToUnion.matrix(new Matrix().translate(-unionBbox.x, -unionBbox.y));
     worldToUnion.node.appendChild(subtree);
 
-    contentGroupEl.insertBefore(outer.node, insertBefore);
+    contentGroupEl.insertBefore(outer.node, this.resolveInsertAnchor(contentGroupEl, insertBefore));
     return { outerGroup: outer, nestedSvg: nested, worldToUnion };
+  }
+
+  /**
+   * Ensure insertBefore anchor is a direct child of `contentGroupEl`.
+   * Selections may target nested descendants inside groups.
+   */
+  private resolveInsertAnchor(contentGroupEl: Element, insertBefore: Element): Element | null {
+    if (insertBefore.parentElement === contentGroupEl) return insertBefore;
+    let cur: Element | null = insertBefore;
+    while (cur && cur.parentElement && cur.parentElement !== contentGroupEl) {
+      cur = cur.parentElement;
+    }
+    if (cur && cur.parentElement === contentGroupEl) return cur;
+    return null;
   }
 
   buildFragmentsForUnion(

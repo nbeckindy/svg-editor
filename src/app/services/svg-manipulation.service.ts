@@ -1164,7 +1164,11 @@ export class SvgManipulationService {
     if (!this.svgInstance) return;
     const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
     if (shape) {
-      shape.attr('visibility', visible ? 'visible' : 'hidden');
+      if (visible) {
+        shape.attr('visibility', null);
+      } else {
+        shape.attr('visibility', 'hidden');
+      }
     }
   }
 

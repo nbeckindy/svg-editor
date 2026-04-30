@@ -8,6 +8,7 @@ import {
 } from '../../../utils/selection-rotate';
 import type { BBox } from '../../../utils/selection-resize';
 import type { GestureContext, GhostPreviewFragment, Point } from './gesture-context';
+import { computeGestureVisibilityToggleIds } from './gesture-visibility';
 import { GhostSession } from './ghost-session';
 
 /** Hotspot (px) for the 32×32 rotate cursor artwork. */
@@ -42,6 +43,8 @@ export class RotateGesture {
   unionStart: BBox | null = null;
   pivotDoc: Point | null = null;
   accumulatedRad = 0;
+  /** Same ids passed to {@link computeGestureVisibilityToggleIds} after ghost build; restored on end/cancel. */
+  private visibilityShapeIds: string[] = [];
 
   start(ctx: GestureContext, event: MouseEvent): boolean {
     const selectedIds = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
@@ -58,13 +61,8 @@ export class RotateGesture {
     this.accumulatedRad = 0;
     this.snapshot = ctx.svgManipulation.snapshotSelectionTransforms(selectedIds);
 
-    for (const id of selectedIds) {
-      ctx.svgManipulation.setShapeVisibility(id, false);
-    }
-
     const p0 = ctx.clientToEditorSvgPoint(event.clientX, event.clientY);
     if (!p0) {
-      for (const id of selectedIds) ctx.svgManipulation.setShapeVisibility(id, true);
       this.reset();
       return false;
     }
@@ -73,16 +71,21 @@ export class RotateGesture {
 
     const svgInstance = ctx.svgManipulation.getSVGInstance();
     if (!svgInstance) {
-      for (const id of selectedIds) ctx.svgManipulation.setShapeVisibility(id, true);
       this.reset();
       return false;
     }
 
     this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.svgManipulation, union, selectedIds);
     if (this.ghostFragments.length === 0) {
-      for (const id of selectedIds) ctx.svgManipulation.setShapeVisibility(id, true);
       this.reset();
       return false;
+    }
+
+    const ordered = ctx.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const primary = ordered[0] ?? selectedIds[0];
+    this.visibilityShapeIds = computeGestureVisibilityToggleIds(svgInstance, selectedIds, primary);
+    for (const id of this.visibilityShapeIds) {
+      ctx.svgManipulation.setShapeVisibility(id, false);
     }
 
     this.pushRotateCursor();
@@ -117,8 +120,7 @@ export class RotateGesture {
 
   cancel(ctx: GestureContext): void {
     if (!this.isActive) return;
-    const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
-    for (const id of ids) {
+    for (const id of this.visibilityShapeIds) {
       ctx.svgManipulation.setShapeVisibility(id, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
@@ -137,7 +139,7 @@ export class RotateGesture {
     );
     ctx.editorHistory.pushAndExecute(cmd);
 
-    for (const id of ids) {
+    for (const id of this.visibilityShapeIds) {
       ctx.svgManipulation.setShapeVisibility(id, true);
     }
 
@@ -178,6 +180,7 @@ export class RotateGesture {
     this.startPointerRad = null;
     this.snapshot = new Map();
     this.ghostFragments = [];
+    this.visibilityShapeIds = [];
   }
 
   private pointerAngleRad(pointer: Point): number | null {
