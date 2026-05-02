@@ -1,0 +1,38 @@
+<section
+  class="tool-context-bar"
+  data-testid="editor-tool-context-bar"
+  role="region"
+  aria-label="Tool options">
+  @switch (editorTool.currentTool()) {
+    @case ('selector') {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+    @case ('node-edit-selector') {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+    @case ('zoom') {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+    @case ('pan') {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+    @case ('rect') {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+    @case ('ellipse') {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+    @case ('line') {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+    @case ('text') {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+    @case ('pen') {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+    @default {
+      <div class="context-slot" aria-hidden="true"></div>
+    }
+  }
+</section>

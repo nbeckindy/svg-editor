@@ -1,6 +1,5 @@
 import { Component } from '@angular/core';
 import { EditorToolService, EditorTool } from '../../services/editor-tool.service';
-import { EditorHistoryService } from '../../services/editor-history.service';
 
 @Component({
   selector: 'app-tool-strip',
@@ -10,28 +9,9 @@ import { EditorHistoryService } from '../../services/editor-history.service';
   styleUrl: './tool-strip.component.css'
 })
 export class ToolStripComponent {
-  constructor(
-    public editorTool: EditorToolService,
-    public editorHistory: EditorHistoryService
-  ) {}
+  constructor(public editorTool: EditorToolService) {}
 
   setTool(tool: EditorTool): void {
     this.editorTool.setTool(tool);
-  }
-
-  toggleGridSnap(): void {
-    this.editorTool.toggleGridSnap();
-  }
-
-  toggleShapeSnap(): void {
-    this.editorTool.toggleShapeSnap();
-  }
-
-  onUndo(): void {
-    this.editorHistory.undo();
-  }
-
-  onRedo(): void {
-    this.editorHistory.redo();
   }
 }

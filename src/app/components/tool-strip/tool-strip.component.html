@@ -1,188 +1,154 @@
 <div class="tool-strip" data-testid="tool-strip" role="toolbar" aria-label="Editor tools">
-  <div class="tool-group tool-group-history" aria-label="History">
-    <button
-    type="button"
-    class="tool-btn tool-btn-icon"
-    data-testid="tool-undo"
-    (click)="onUndo()"
-    [disabled]="!editorHistory.canUndo()"
-    title="Undo (Ctrl+Z)">
-    <span class="tool-icon" aria-hidden="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M3 7v6h6"/>
-        <path d="M21 17a9 9 0 0 0-9-9 9 9 0 0 0-6.69 3L3 13"/>
-      </svg>
-    </span>
-    <span class="tool-label">Undo</span>
-    </button>
-    <button
-    type="button"
-    class="tool-btn tool-btn-icon"
-    data-testid="tool-redo"
-    (click)="onRedo()"
-    [disabled]="!editorHistory.canRedo()"
-    title="Redo (Ctrl+Shift+Z)">
-    <span class="tool-icon" aria-hidden="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M21 7v6h-6"/>
-        <path d="M3 17a9 9 0 0 1 9-9 9 9 0 0 1 6.69 3L21 13"/>
-      </svg>
-    </span>
-    <span class="tool-label">Redo</span>
-    </button>
-  </div>
-
   <div class="tool-group" aria-label="Selection and view">
     <button
-    type="button"
-    class="tool-btn"
-    data-testid="tool-selector"
-    [class.active]="editorTool.currentTool() === 'selector'"
-    (click)="setTool('selector')"
-    title="Selector"
-    [attr.aria-pressed]="editorTool.currentTool() === 'selector'">
-    Selector
+      type="button"
+      class="tool-btn tool-btn-icon"
+      data-testid="tool-selector"
+      [class.active]="editorTool.currentTool() === 'selector'"
+      (click)="setTool('selector')"
+      title="Selector"
+      aria-label="Selector"
+      [attr.aria-pressed]="editorTool.currentTool() === 'selector'">
+      <span class="tool-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 4l7 17 2-8 8-2-17-7z" />
+        </svg>
+      </span>
     </button>
     <button
-    type="button"
-    class="tool-btn"
-    data-testid="tool-node-edit-selector"
-    [class.active]="editorTool.currentTool() === 'node-edit-selector'"
-    (click)="setTool('node-edit-selector')"
-    title="Node Edit Selector"
-    [attr.aria-pressed]="editorTool.currentTool() === 'node-edit-selector'">
-    Node Edit
+      type="button"
+      class="tool-btn tool-btn-icon"
+      data-testid="tool-node-edit-selector"
+      [class.active]="editorTool.currentTool() === 'node-edit-selector'"
+      (click)="setTool('node-edit-selector')"
+      title="Node edit"
+      aria-label="Node edit"
+      [attr.aria-pressed]="editorTool.currentTool() === 'node-edit-selector'">
+      <span class="tool-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 12h16" />
+          <circle cx="4" cy="12" r="2" />
+          <circle cx="12" cy="12" r="2" />
+          <circle cx="20" cy="12" r="2" />
+        </svg>
+      </span>
     </button>
     <button
-    type="button"
-    class="tool-btn"
-    data-testid="tool-zoom"
-    [class.active]="editorTool.currentTool() === 'zoom'"
-    (click)="setTool('zoom')"
-    title="Zoom (click to zoom in, Alt+click to zoom out)"
-    [attr.aria-pressed]="editorTool.currentTool() === 'zoom'">
-    Zoom
+      type="button"
+      class="tool-btn tool-btn-icon"
+      data-testid="tool-zoom"
+      [class.active]="editorTool.currentTool() === 'zoom'"
+      (click)="setTool('zoom')"
+      title="Zoom (Alt+click to zoom out)"
+      aria-label="Zoom"
+      [attr.aria-pressed]="editorTool.currentTool() === 'zoom'">
+      <span class="tool-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="11" cy="11" r="7" />
+          <path d="M21 21l-4.35-4.35" />
+        </svg>
+      </span>
     </button>
     <button
-    type="button"
-    class="tool-btn tool-btn-icon"
-    data-testid="tool-pan"
-    [class.active]="editorTool.currentTool() === 'pan'"
-    (click)="setTool('pan')"
-    title="Pan (drag to move the canvas)"
-    [attr.aria-pressed]="editorTool.currentTool() === 'pan'">
-    <span class="tool-icon" aria-hidden="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0"/>
-        <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2"/>
-        <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
-        <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-16 0v-2a2 2 0 0 1 4 0"/>
-      </svg>
-    </span>
-    <span class="tool-label">Pan</span>
-    </button>
-    <button
-    type="button"
-    class="tool-btn"
-    data-testid="tool-grid-snap-toggle"
-    [class.active]="editorTool.isGridSnapEnabled()"
-    (click)="toggleGridSnap()"
-    title="Toggle grid snap"
-    [attr.aria-pressed]="editorTool.isGridSnapEnabled()">
-    Grid snap
-    </button>
-    <button
-    type="button"
-    class="tool-btn"
-    data-testid="tool-shape-snap-toggle"
-    [class.active]="editorTool.isShapeSnapEnabled()"
-    (click)="toggleShapeSnap()"
-    title="Toggle shape snap"
-    [attr.aria-pressed]="editorTool.isShapeSnapEnabled()">
-    Shape snap
+      type="button"
+      class="tool-btn tool-btn-icon"
+      data-testid="tool-pan"
+      [class.active]="editorTool.currentTool() === 'pan'"
+      (click)="setTool('pan')"
+      title="Pan"
+      aria-label="Pan"
+      [attr.aria-pressed]="editorTool.currentTool() === 'pan'">
+      <span class="tool-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v0" />
+          <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v2" />
+          <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8" />
+          <path d="M18 8a2 2 0 1 1 4 0v6a8 8 0 0 1-16 0v-2a2 2 0 0 1 4 0" />
+        </svg>
+      </span>
     </button>
   </div>
 
   <div class="tool-group" aria-label="Creation tools">
     <button
-    type="button"
-    class="tool-btn tool-btn-icon"
-    data-testid="tool-rect"
-    [class.active]="editorTool.currentTool() === 'rect'"
-    (click)="setTool('rect')"
-    title="Rectangle"
-    [attr.aria-pressed]="editorTool.currentTool() === 'rect'">
-    <span class="tool-icon" aria-hidden="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <rect x="3" y="3" width="18" height="18" rx="2"/>
-      </svg>
-    </span>
-    <span class="tool-label">Rect</span>
+      type="button"
+      class="tool-btn tool-btn-icon"
+      data-testid="tool-rect"
+      [class.active]="editorTool.currentTool() === 'rect'"
+      (click)="setTool('rect')"
+      title="Rectangle"
+      aria-label="Rectangle"
+      [attr.aria-pressed]="editorTool.currentTool() === 'rect'">
+      <span class="tool-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <rect x="3" y="3" width="18" height="18" rx="2" />
+        </svg>
+      </span>
     </button>
     <button
-    type="button"
-    class="tool-btn tool-btn-icon"
-    data-testid="tool-ellipse"
-    [class.active]="editorTool.currentTool() === 'ellipse'"
-    (click)="setTool('ellipse')"
-    title="Ellipse"
-    [attr.aria-pressed]="editorTool.currentTool() === 'ellipse'">
-    <span class="tool-icon" aria-hidden="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <ellipse cx="12" cy="12" rx="10" ry="7"/>
-      </svg>
-    </span>
-    <span class="tool-label">Ellipse</span>
+      type="button"
+      class="tool-btn tool-btn-icon"
+      data-testid="tool-ellipse"
+      [class.active]="editorTool.currentTool() === 'ellipse'"
+      (click)="setTool('ellipse')"
+      title="Ellipse"
+      aria-label="Ellipse"
+      [attr.aria-pressed]="editorTool.currentTool() === 'ellipse'">
+      <span class="tool-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <ellipse cx="12" cy="12" rx="10" ry="7" />
+        </svg>
+      </span>
     </button>
     <button
-    type="button"
-    class="tool-btn tool-btn-icon"
-    data-testid="tool-line"
-    [class.active]="editorTool.currentTool() === 'line'"
-    (click)="setTool('line')"
-    title="Line"
-    [attr.aria-pressed]="editorTool.currentTool() === 'line'">
-    <span class="tool-icon" aria-hidden="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <line x1="4" y1="20" x2="20" y2="4"/>
-      </svg>
-    </span>
-    <span class="tool-label">Line</span>
+      type="button"
+      class="tool-btn tool-btn-icon"
+      data-testid="tool-line"
+      [class.active]="editorTool.currentTool() === 'line'"
+      (click)="setTool('line')"
+      title="Line"
+      aria-label="Line"
+      [attr.aria-pressed]="editorTool.currentTool() === 'line'">
+      <span class="tool-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <line x1="4" y1="20" x2="20" y2="4" />
+        </svg>
+      </span>
     </button>
     <button
-    type="button"
-    class="tool-btn tool-btn-icon"
-    data-testid="tool-text"
-    [class.active]="editorTool.currentTool() === 'text'"
-    (click)="setTool('text')"
-    title="Text"
-    [attr.aria-pressed]="editorTool.currentTool() === 'text'">
-    <span class="tool-icon" aria-hidden="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M4 6h16"/>
-        <path d="M12 6v14"/>
-        <path d="M8 20h8"/>
-      </svg>
-    </span>
-    <span class="tool-label">Text</span>
+      type="button"
+      class="tool-btn tool-btn-icon"
+      data-testid="tool-text"
+      [class.active]="editorTool.currentTool() === 'text'"
+      (click)="setTool('text')"
+      title="Text"
+      aria-label="Text"
+      [attr.aria-pressed]="editorTool.currentTool() === 'text'">
+      <span class="tool-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M4 6h16" />
+          <path d="M12 6v14" />
+          <path d="M8 20h8" />
+        </svg>
+      </span>
     </button>
     <button
-    type="button"
-    class="tool-btn tool-btn-icon"
-    data-testid="tool-pen"
-    [class.active]="editorTool.currentTool() === 'pen'"
-    (click)="setTool('pen')"
-    title="Pen (paths)"
-    [attr.aria-pressed]="editorTool.currentTool() === 'pen'">
-    <span class="tool-icon" aria-hidden="true">
-      <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
-        <path d="M12 19l7-7 3 3-7 7-3-3z"/>
-        <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z"/>
-        <path d="M2 2l7.586 7.586"/>
-        <circle cx="11" cy="11" r="2"/>
-      </svg>
-    </span>
-    <span class="tool-label">Pen</span>
+      type="button"
+      class="tool-btn tool-btn-icon"
+      data-testid="tool-pen"
+      [class.active]="editorTool.currentTool() === 'pen'"
+      (click)="setTool('pen')"
+      title="Pen"
+      aria-label="Pen"
+      [attr.aria-pressed]="editorTool.currentTool() === 'pen'">
+      <span class="tool-icon" aria-hidden="true">
+        <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+          <path d="M12 19l7-7 3 3-7 7-3-3z" />
+          <path d="M18 13l-1.5-7.5L2 2l3.5 14.5L13 18l5-5z" />
+          <path d="M2 2l7.586 7.586" />
+          <circle cx="11" cy="11" r="2" />
+        </svg>
+      </span>
     </button>
   </div>
 </div>

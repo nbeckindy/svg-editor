@@ -1,0 +1,9 @@
+<aside class="left-rail" data-testid="editor-left-rail">
+  <app-tool-strip data-testid="editor-tool-strip"></app-tool-strip>
+  <section class="asset-library" data-testid="editor-asset-library">
+    <h2>Assets</h2>
+    <app-icon-palette
+      data-testid="editor-icon-palette"
+      (svgLoaded)="svgLoaded.emit($event)"></app-icon-palette>
+  </section>
+</aside>

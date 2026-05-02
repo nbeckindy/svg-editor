@@ -1,0 +1,23 @@
+/* Layout tokens for editor shell (grid tracks, surfaces). Imported from styles.scss. */
+:root {
+  --editor-border: #d5dceb;
+  --editor-surface: #ffffff;
+  --editor-canvas-bg: #f4f6fb;
+  --editor-left-rail-width: 300px;
+  --editor-right-dock-width: 320px;
+  --editor-context-bar-height: 40px;
+}
+
+@media (max-width: 1280px) {
+  :root {
+    --editor-left-rail-width: 250px;
+    --editor-right-dock-width: 290px;
+  }
+}
+
+@media (max-width: 1040px) {
+  :root {
+    --editor-left-rail-width: 66px;
+    --editor-right-dock-width: 52px;
+  }
+}

@@ -1,0 +1,60 @@
+<header class="top-bar" data-testid="editor-top-bar">
+  <div class="brand-cluster">
+    <h1>Angular SVG Editor</h1>
+    <span class="mode-badge">Illustration workspace</span>
+  </div>
+  <div class="top-actions" role="toolbar" aria-label="Document actions">
+    <div class="snap-menu-root" #snapRoot>
+      <button
+        type="button"
+        class="action-btn snap-trigger"
+        data-testid="editor-snap-menu-button"
+        [class.active]="editorTool.isGridSnapEnabled() || editorTool.isShapeSnapEnabled()"
+        [attr.aria-expanded]="snapMenuOpen()"
+        title="Snap options"
+        (click)="toggleSnapMenu()">
+        Snap
+        <span class="snap-chevron" aria-hidden="true">▾</span>
+      </button>
+      @if (snapMenuOpen()) {
+        <div
+          class="snap-popover"
+          role="group"
+          aria-label="Snap options"
+          data-testid="editor-snap-popover">
+          <label class="snap-option">
+            <input
+              type="checkbox"
+              data-testid="editor-snap-grid-checkbox"
+              [checked]="editorTool.isGridSnapEnabled()"
+              (change)="onGridSnapCheckbox($event)" />
+            Grid snap
+          </label>
+          <label class="snap-option">
+            <input
+              type="checkbox"
+              data-testid="editor-snap-shape-checkbox"
+              [checked]="editorTool.isShapeSnapEnabled()"
+              (change)="onShapeSnapCheckbox($event)" />
+            Shape snap
+          </label>
+        </div>
+      }
+    </div>
+    <button
+      type="button"
+      class="action-btn primary"
+      data-testid="new-canvas-button"
+      (click)="newCanvas.emit()">
+      New
+    </button>
+    <button
+      type="button"
+      class="action-btn"
+      data-testid="download-svg-button"
+      [disabled]="!hasSvgContent()"
+      (click)="download.emit()">
+      Download SVG
+    </button>
+  </div>
+</header>

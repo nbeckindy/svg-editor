@@ -1,0 +1,63 @@
+:host {
+  display: contents;
+}
+
+.right-dock {
+  min-height: 0;
+  border-left: 1px solid var(--editor-border);
+  background: var(--editor-surface);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.dock-tabs {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  padding: 6px;
+  gap: 6px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+.dock-tab {
+  border: 1px solid #c2cadb;
+  background: #f8fafc;
+  color: #334155;
+  border-radius: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 6px 8px;
+  cursor: pointer;
+}
+
+.dock-tab.active {
+  color: #1d4ed8;
+  border-color: #93c5fd;
+  background: #eff6ff;
+}
+
+.dock-panel {
+  min-height: 0;
+  overflow: hidden;
+}
+
+.dock-panel.hidden {
+  display: none;
+}
+
+.dock-panel app-properties-panel,
+.dock-panel app-layers-panel {
+  display: block;
+  height: 100%;
+}
+
+@media (max-width: 1040px) {
+  .dock-tabs {
+    grid-template-columns: 1fr;
+  }
+
+  .dock-tab {
+    writing-mode: vertical-rl;
+    text-orientation: mixed;
+    min-height: 88px;
+  }
+}

@@ -1,0 +1,32 @@
+:host {
+  display: contents;
+}
+
+.left-rail {
+  min-height: 0;
+  border-right: 1px solid var(--editor-border);
+  background: var(--editor-surface);
+  display: grid;
+  grid-template-rows: auto minmax(0, 1fr);
+}
+
+.asset-library {
+  min-height: 0;
+  padding: 10px 12px 12px;
+  border-top: 1px solid #e5e7eb;
+  overflow: auto;
+}
+
+.asset-library h2 {
+  margin: 0 0 8px;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #6b7280;
+}
+
+@media (max-width: 1040px) {
+  .asset-library {
+    display: none;
+  }
+}

@@ -1,0 +1,40 @@
+<aside class="right-dock" data-testid="editor-right-dock">
+  <div class="dock-tabs" role="tablist" aria-label="Inspector panels">
+    <button
+      type="button"
+      role="tab"
+      class="dock-tab"
+      data-testid="dock-tab-properties"
+      [class.active]="activeDockPanel() === 'properties'"
+      [attr.aria-selected]="activeDockPanel() === 'properties'"
+      [attr.aria-pressed]="activeDockPanel() === 'properties'"
+      (click)="activeDockPanelChange.emit('properties')">
+      Properties
+    </button>
+    <button
+      type="button"
+      role="tab"
+      class="dock-tab"
+      data-testid="dock-tab-layers"
+      [class.active]="activeDockPanel() === 'layers'"
+      [attr.aria-selected]="activeDockPanel() === 'layers'"
+      [attr.aria-pressed]="activeDockPanel() === 'layers'"
+      (click)="activeDockPanelChange.emit('layers')">
+      Layers
+    </button>
+  </div>
+
+  <section
+    class="dock-panel properties-panel"
+    data-testid="editor-properties-area"
+    [class.hidden]="activeDockPanel() !== 'properties'">
+    <app-properties-panel data-testid="editor-properties-panel"></app-properties-panel>
+  </section>
+
+  <section
+    class="dock-panel layers-panel"
+    data-testid="editor-layers-area"
+    [class.hidden]="activeDockPanel() !== 'layers'">
+    <app-layers-panel data-testid="editor-layers-panel"></app-layers-panel>
+  </section>
+</aside>

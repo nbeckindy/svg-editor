@@ -1,62 +1,42 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { ToolStripComponent } from './tool-strip.component';
 import { EditorToolService } from '../../services/editor-tool.service';
-import { EditorHistoryService } from '../../services/editor-history.service';
 
 describe('ToolStripComponent', () => {
-  let component: ToolStripComponent;
   let fixture: ComponentFixture<ToolStripComponent>;
   let editorToolService: EditorToolService;
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [ToolStripComponent],
-      providers: [EditorToolService, EditorHistoryService]
+      providers: [EditorToolService]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ToolStripComponent);
-    component = fixture.componentInstance;
     editorToolService = TestBed.inject(EditorToolService);
     fixture.detectChanges();
   });
 
   it('should create', () => {
-    expect(component).toBeTruthy();
+    expect(fixture.componentInstance).toBeTruthy();
   });
 
   it('should have Selector active by default', () => {
     expect(editorToolService.getCurrentTool()).toBe('selector');
     const compiled = fixture.nativeElement as HTMLElement;
-    const selectorBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
-      (el) => (el as HTMLElement).textContent?.trim() === 'Selector'
-    );
-    expect(selectorBtn?.classList.contains('active')).toBe(true);
+    const selectorBtn = compiled.querySelector('[data-testid="tool-selector"]') as HTMLElement;
+    expect(selectorBtn.classList.contains('active')).toBe(true);
   });
 
-  it('should display Undo, Redo, Selector, Node Edit, Zoom, Pan, Grid snap, Shape snap, Rect, Ellipse, Line, Text, and Pen buttons', () => {
+  it('should render nine tool buttons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
-    const buttons = compiled.querySelectorAll('.tool-btn');
-    expect(buttons.length).toBe(13);
-    expect((buttons[0] as HTMLElement).textContent?.trim()).toContain('Undo');
-    expect((buttons[1] as HTMLElement).textContent?.trim()).toContain('Redo');
-    expect((buttons[2] as HTMLElement).textContent?.trim()).toBe('Selector');
-    expect((buttons[3] as HTMLElement).textContent?.trim()).toBe('Node Edit');
-    expect((buttons[4] as HTMLElement).textContent?.trim()).toBe('Zoom');
-    expect((buttons[5] as HTMLElement).textContent?.trim()).toContain('Pan');
-    expect((buttons[6] as HTMLElement).textContent?.trim()).toBe('Grid snap');
-    expect((buttons[7] as HTMLElement).textContent?.trim()).toBe('Shape snap');
-    expect((buttons[8] as HTMLElement).textContent?.trim()).toContain('Rect');
-    expect((buttons[9] as HTMLElement).textContent?.trim()).toContain('Ellipse');
-    expect((buttons[10] as HTMLElement).textContent?.trim()).toContain('Line');
-    expect((buttons[11] as HTMLElement).textContent?.trim()).toContain('Text');
-    expect((buttons[12] as HTMLElement).textContent?.trim()).toContain('Pen');
+    expect(compiled.querySelectorAll('.tool-btn').length).toBe(9);
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {
     const setToolSpy = vi.spyOn(editorToolService, 'setTool');
-    const compiled = fixture.nativeElement as HTMLElement;
-    const zoomBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
-      (el) => (el as HTMLElement).textContent?.trim() === 'Zoom'
+    const zoomBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-zoom"]'
     ) as HTMLElement;
 
     zoomBtn.click();
@@ -71,9 +51,8 @@ describe('ToolStripComponent', () => {
     fixture.detectChanges();
 
     const setToolSpy = vi.spyOn(editorToolService, 'setTool');
-    const compiled = fixture.nativeElement as HTMLElement;
-    const selectorBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
-      (el) => (el as HTMLElement).textContent?.trim() === 'Selector'
+    const selectorBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-selector"]'
     ) as HTMLElement;
 
     selectorBtn.click();
@@ -84,9 +63,9 @@ describe('ToolStripComponent', () => {
   });
 
   it('should set tool to node-edit-selector when Node Edit button is clicked', () => {
-    const compiled = fixture.nativeElement as HTMLElement;
-    const nodeEditBtn = compiled.querySelector('[data-testid="tool-node-edit-selector"]') as HTMLElement;
-    expect(nodeEditBtn).toBeTruthy();
+    const nodeEditBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-node-edit-selector"]'
+    ) as HTMLElement;
 
     nodeEditBtn.click();
     fixture.detectChanges();
@@ -96,9 +75,8 @@ describe('ToolStripComponent', () => {
 
   it('should set tool to pan when Pan button is clicked', () => {
     const setToolSpy = vi.spyOn(editorToolService, 'setTool');
-    const compiled = fixture.nativeElement as HTMLElement;
-    const panBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
-      (el) => (el as HTMLElement).textContent?.trim().includes('Pan')
+    const panBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-pan"]'
     ) as HTMLElement;
 
     panBtn.click();
@@ -113,12 +91,8 @@ describe('ToolStripComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const zoomBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
-      (el) => (el as HTMLElement).textContent?.trim() === 'Zoom'
-    );
-    const selectorBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
-      (el) => (el as HTMLElement).textContent?.trim() === 'Selector'
-    );
+    const zoomBtn = compiled.querySelector('[data-testid="tool-zoom"]');
+    const selectorBtn = compiled.querySelector('[data-testid="tool-selector"]');
     expect(zoomBtn?.classList.contains('active')).toBe(true);
     expect(selectorBtn?.classList.contains('active')).toBe(false);
   });
@@ -128,88 +102,16 @@ describe('ToolStripComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement as HTMLElement;
-    const panBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
-      (el) => (el as HTMLElement).textContent?.trim().includes('Pan')
-    );
-    const selectorBtn = Array.from(compiled.querySelectorAll('.tool-btn')).find(
-      (el) => (el as HTMLElement).textContent?.trim() === 'Selector'
-    );
+    const panBtn = compiled.querySelector('[data-testid="tool-pan"]');
+    const selectorBtn = compiled.querySelector('[data-testid="tool-selector"]');
     expect(panBtn?.classList.contains('active')).toBe(true);
     expect(selectorBtn?.classList.contains('active')).toBe(false);
   });
 
-  it('should toggle grid snap from Grid snap button without changing active tool', () => {
-    editorToolService.setTool('zoom');
-    fixture.detectChanges();
-
-    const toggleSpy = vi.spyOn(editorToolService, 'toggleGridSnap');
-    const compiled = fixture.nativeElement as HTMLElement;
-    const snapBtn = compiled.querySelector('[data-testid="tool-grid-snap-toggle"]') as HTMLElement;
-    expect(snapBtn).toBeTruthy();
-    expect(editorToolService.isGridSnapEnabled()).toBe(false);
-
-    snapBtn.click();
-    fixture.detectChanges();
-
-    expect(toggleSpy).toHaveBeenCalledTimes(1);
-    expect(editorToolService.isGridSnapEnabled()).toBe(true);
-    expect(editorToolService.getCurrentTool()).toBe('zoom');
-  });
-
-  it('should toggle shape snap from Shape snap button without changing active tool', () => {
-    editorToolService.setTool('pan');
-    fixture.detectChanges();
-
-    const toggleSpy = vi.spyOn(editorToolService, 'toggleShapeSnap');
-    const compiled = fixture.nativeElement as HTMLElement;
-    const snapBtn = compiled.querySelector('[data-testid="tool-shape-snap-toggle"]') as HTMLElement;
-    expect(snapBtn).toBeTruthy();
-    expect(editorToolService.isShapeSnapEnabled()).toBe(false);
-
-    snapBtn.click();
-    fixture.detectChanges();
-
-    expect(toggleSpy).toHaveBeenCalledTimes(1);
-    expect(editorToolService.isShapeSnapEnabled()).toBe(true);
-    expect(editorToolService.getCurrentTool()).toBe('pan');
-  });
-
-  it('should show Grid snap button active state from grid snap signal', () => {
-    editorToolService.setGridSnapEnabled(true);
-    fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    const snapBtn = compiled.querySelector('[data-testid="tool-grid-snap-toggle"]') as HTMLElement;
-    expect(snapBtn.classList.contains('active')).toBe(true);
-    expect(snapBtn.getAttribute('aria-pressed')).toBe('true');
-
-    editorToolService.setGridSnapEnabled(false);
-    fixture.detectChanges();
-
-    expect(snapBtn.classList.contains('active')).toBe(false);
-    expect(snapBtn.getAttribute('aria-pressed')).toBe('false');
-  });
-
-  it('should show Shape snap button active state from shape snap signal', () => {
-    editorToolService.setShapeSnapEnabled(true);
-    fixture.detectChanges();
-
-    const compiled = fixture.nativeElement as HTMLElement;
-    const snapBtn = compiled.querySelector('[data-testid="tool-shape-snap-toggle"]') as HTMLElement;
-    expect(snapBtn.classList.contains('active')).toBe(true);
-    expect(snapBtn.getAttribute('aria-pressed')).toBe('true');
-
-    editorToolService.setShapeSnapEnabled(false);
-    fixture.detectChanges();
-
-    expect(snapBtn.classList.contains('active')).toBe(false);
-    expect(snapBtn.getAttribute('aria-pressed')).toBe('false');
-  });
-
   it('should set tool to rect when Rect button is clicked', () => {
-    const compiled = fixture.nativeElement as HTMLElement;
-    const rectBtn = compiled.querySelector('[data-testid="tool-rect"]') as HTMLElement;
-    expect(rectBtn).toBeTruthy();
+    const rectBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-rect"]'
+    ) as HTMLElement;
 
     rectBtn.click();
     fixture.detectChanges();
@@ -218,9 +120,9 @@ describe('ToolStripComponent', () => {
   });
 
   it('should set tool to ellipse when Ellipse button is clicked', () => {
-    const compiled = fixture.nativeElement as HTMLElement;
-    const ellipseBtn = compiled.querySelector('[data-testid="tool-ellipse"]') as HTMLElement;
-    expect(ellipseBtn).toBeTruthy();
+    const ellipseBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-ellipse"]'
+    ) as HTMLElement;
 
     ellipseBtn.click();
     fixture.detectChanges();
@@ -229,9 +131,9 @@ describe('ToolStripComponent', () => {
   });
 
   it('should set tool to line when Line button is clicked', () => {
-    const compiled = fixture.nativeElement as HTMLElement;
-    const lineBtn = compiled.querySelector('[data-testid="tool-line"]') as HTMLElement;
-    expect(lineBtn).toBeTruthy();
+    const lineBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-line"]'
+    ) as HTMLElement;
 
     lineBtn.click();
     fixture.detectChanges();
@@ -255,9 +157,9 @@ describe('ToolStripComponent', () => {
   });
 
   it('should set tool to text when Text button is clicked', () => {
-    const compiled = fixture.nativeElement as HTMLElement;
-    const textBtn = compiled.querySelector('[data-testid="tool-text"]') as HTMLElement;
-    expect(textBtn).toBeTruthy();
+    const textBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-text"]'
+    ) as HTMLElement;
 
     textBtn.click();
     fixture.detectChanges();
@@ -266,9 +168,9 @@ describe('ToolStripComponent', () => {
   });
 
   it('should set tool to pen when Pen button is clicked', () => {
-    const compiled = fixture.nativeElement as HTMLElement;
-    const penBtn = compiled.querySelector('[data-testid="tool-pen"]') as HTMLElement;
-    expect(penBtn).toBeTruthy();
+    const penBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-pen"]'
+    ) as HTMLElement;
 
     penBtn.click();
     fixture.detectChanges();

@@ -5,6 +5,7 @@ test.describe('Editor shell layout', () => {
     await page.goto('/');
 
     await expect(page.getByTestId('editor-top-bar')).toBeVisible();
+    await expect(page.getByTestId('editor-tool-context-bar')).toBeVisible();
     await expect(page.getByTestId('editor-left-rail')).toBeVisible();
     await expect(page.getByTestId('editor-canvas-area')).toBeVisible();
     await expect(page.getByTestId('editor-right-dock')).toBeVisible();
