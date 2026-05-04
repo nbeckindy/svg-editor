@@ -28,6 +28,7 @@ import {
   RemoveShapesCommand,
   GroupCommand,
   UngroupCommand,
+  UngroupElementsCommand,
   AddShapeCommand,
   AddPathCommand,
   EditPathNodesCommand,
@@ -1333,7 +1334,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const ids = selected.map((s) => s.id);
     const cmd = new GroupCommand(this.svgManipulation, ids);
     this.editorHistory.pushAndExecute(cmd);
-    const newGroupId = this.svgManipulation.getNearestGroupAncestorId(ids[0]);
+    const newGroupId = cmd.createdGroupId;
     if (newGroupId) {
       const svg = this.svgManipulation.getSVGInstance();
       const groupEl = svg?.findOne(`#${newGroupId}`) as SVGElement | undefined;
@@ -1347,25 +1348,38 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private ungroupSelectedShape(): void {
     const selected = this.shapeSelection.getSelectedShapes();
-    if (selected.length !== 1) return;
-    const groupId = selected[0].id;
+    const groupIds = selected.filter((s) => s.type === 'g').map((s) => s.id);
+    if (groupIds.length === 0) return;
+
     const svg = this.svgManipulation.getSVGInstance();
     if (!svg) return;
-    const groupNode = svg.findOne(`#${groupId}`)?.node as Element | null;
-    if (!groupNode || groupNode.tagName?.toLowerCase() !== 'g') return;
-    const childIds: string[] = [];
-    for (const child of Array.from(groupNode.children)) {
-      if (child.id) childIds.push(child.id);
-    }
-    const cmd = new UngroupCommand(this.svgManipulation, groupId);
-    this.editorHistory.pushAndExecute(cmd);
-    const childShapes: ShapeProperties[] = [];
-    for (const id of childIds) {
-      const el = svg.findOne(`#${id}`) as SVGElement | undefined;
-      if (el) childShapes.push(this.svgManipulation.getShapeProperties(el));
-    }
-    if (childShapes.length > 0) {
-      this.shapeSelection.selectShapes(childShapes);
+
+    const collectChildShapes = (childIds: string[]): void => {
+      const childShapes: ShapeProperties[] = [];
+      for (const id of childIds) {
+        const el = svg.findOne(`#${id}`) as SVGElement | undefined;
+        if (el) childShapes.push(this.svgManipulation.getShapeProperties(el));
+      }
+      if (childShapes.length > 0) {
+        this.shapeSelection.selectShapes(childShapes);
+      }
+    };
+
+    if (groupIds.length === 1) {
+      const groupId = groupIds[0];
+      const groupNode = svg.findOne(`#${groupId}`)?.node as Element | null;
+      if (!groupNode || groupNode.tagName?.toLowerCase() !== 'g') return;
+      const childIds: string[] = [];
+      for (const child of Array.from(groupNode.children)) {
+        if (child.id) childIds.push(child.id);
+      }
+      const cmd = new UngroupCommand(this.svgManipulation, groupId);
+      this.editorHistory.pushAndExecute(cmd);
+      collectChildShapes(childIds);
+    } else {
+      const cmd = new UngroupElementsCommand(this.svgManipulation, groupIds);
+      this.editorHistory.pushAndExecute(cmd);
+      collectChildShapes(cmd.ungroupedChildIds);
     }
     this.drilledIntoGroupId = null;
   }
