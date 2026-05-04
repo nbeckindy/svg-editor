@@ -16,6 +16,18 @@ This workspace follows a balanced vector-editing model based on recurring patter
 - **SVGator/Animate alignment:** keep a timeline-ready extension point without forcing animation UI now.
 - **Current product balance:** optimize for static vector editing first while retaining an extensible shell.
 
+## Phasing (tracker alignment)
+
+Work is split so **responsive / small-viewport behavior** can be designed deliberately without blocking shell polish:
+
+| Bead | Scope |
+|------|--------|
+| **`svg-editor-8x1.4`** (Phase 4) | **Debug strip off the primary path:** **collapsed by default** in all builds (expand to view XML). Does **not** include breakpoints, min canvas viewport, or compact-width shell layout. |
+| **`svg-editor-8x1.6`** (backlog) | **Responsive shell:** tokenized breakpoints, compact-width wireframe behavior, minimum canvas viewport, replacing hardcoded layout numbers. |
+| **`svg-editor-8x1.5`** (follows 8x1.4) | Playwright **structural** layout (shell, dock tabs, selection states). **Compact-width / narrow-viewport** E2E assertions wait until **`svg-editor-8x1.6`** ships. |
+
+The wireframes below remain the **target UX**; only the **schedule** for compact width is deferred.
+
 ## Low-fidelity wireframes
 
 ### 1) Default editing workspace
@@ -61,7 +73,9 @@ Single selection  -> Properties shows transform, appearance, type-specific contr
 Multi selection   -> Properties emphasizes shared controls + align/distribute actions
 ```
 
-### 4) Compact width behavior
+### 4) Compact width behavior *(implementation: `svg-editor-8x1.6`)*
+
+Target layout when the shell is narrow or on small screens; **not** part of Phase 4 (`svg-editor-8x1.4`).
 
 ```text
 +--------------------------------------------------------------------+
@@ -90,7 +104,7 @@ Multi selection   -> Properties emphasizes shared controls + align/distribute ac
 
 - **Top bar:** title, document actions, global command affordances.
 - **Left rail:** tool switching and quick creation controls.
-- **Center column:** canvas plus debug strip.
+- **Center column:** canvas plus debug strip. Phase 4 (`svg-editor-8x1.4`): debug body is **collapsed until the user expands it** (see phasing table).
 - **Right dock:** tabbed host for properties/layers.
 
 ## Playwright validation strategy
@@ -100,7 +114,7 @@ Add layout-oriented E2E coverage in addition to existing geometry-heavy gesture 
 1. Shell structure is visible and stable by `data-testid`.
 2. Right dock defaults to `Properties`.
 3. Dock tab clicks switch visibility between `Properties` and `Layers`.
-4. Compact viewport keeps tool rail and tab-only dock accessible.
+4. After **`svg-editor-8x1.6`**: compact viewport keeps tool rail and tab-only dock accessible (defer narrow-width assertions until then).
 
 ### Selector standards
 
@@ -114,4 +128,4 @@ Add layout-oriented E2E coverage in addition to existing geometry-heavy gesture 
   - verifies top bar / left rail / canvas / right dock presence
   - verifies default active dock tab
   - verifies tab switching
-  - verifies compact mode structural fallback at narrow width
+  - after responsive shell (`svg-editor-8x1.6`): compact mode structural fallback at narrow width

@@ -14,7 +14,7 @@ import { formatSvgXmlWithHighlightSegments } from '../../utils/svg-debug-xml';
 export class SvgDebugPanelComponent {
   private shapeSelection = inject(ShapeSelectionService);
   private svgManipulation = inject(SvgManipulationService);
-  readonly isCollapsed = signal(false);
+  readonly isCollapsed = signal(true);
 
   readonly segments = computed(() => {
     this.svgManipulation.documentRevision();

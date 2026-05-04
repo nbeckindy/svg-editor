@@ -35,6 +35,9 @@ describe('SvgDebugPanelComponent', () => {
   it('should show empty state when exportSVG is empty', () => {
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.debug-xml')).toBeNull();
+    (el.querySelector('.debug-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges();
     expect(el.querySelector('.debug-panel-empty')).toBeTruthy();
     expect(el.querySelector('.debug-xml')).toBeNull();
   });
@@ -47,6 +50,8 @@ describe('SvgDebugPanelComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.debug-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges();
     expect(el.querySelector('.debug-panel-empty')).toBeNull();
     const pre = el.querySelector('.debug-xml');
     expect(pre).toBeTruthy();
@@ -63,6 +68,8 @@ describe('SvgDebugPanelComponent', () => {
     fixture.detectChanges();
 
     const el = fixture.nativeElement as HTMLElement;
+    (el.querySelector('.debug-toggle') as HTMLButtonElement).click();
+    fixture.detectChanges();
     const highlighted = el.querySelectorAll('.selected');
     expect(highlighted.length).toBeGreaterThan(0);
   });
@@ -77,7 +84,13 @@ describe('SvgDebugPanelComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     const button = el.querySelector('.debug-toggle') as HTMLButtonElement;
     expect(button).toBeTruthy();
+    expect(el.querySelector('.debug-xml')).toBeNull();
+    expect(button.textContent).toContain('Expand');
+
+    button.click();
+    fixture.detectChanges();
     expect(el.querySelector('.debug-xml')).toBeTruthy();
+    expect(button.textContent).toContain('Collapse');
 
     button.click();
     fixture.detectChanges();
