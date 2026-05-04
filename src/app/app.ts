@@ -1,11 +1,12 @@
-import { Component, inject } from '@angular/core';
+import { Component, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { IconPaletteComponent } from './components/icon-palette/icon-palette.component';
-import { ToolStripComponent } from './components/tool-strip/tool-strip.component';
 import { SvgCanvasComponent } from './components/svg-canvas/svg-canvas.component';
-import { PropertiesPanelComponent } from './components/properties-panel/properties-panel.component';
 import { SvgDebugPanelComponent } from './components/svg-debug-panel/svg-debug-panel.component';
-import { LayersPanelComponent } from './components/layers-panel/layers-panel.component';
+import { EditorDockPanel } from './components/editor-dock-panel';
+import { EditorTopBarComponent } from './components/editor-top-bar/editor-top-bar.component';
+import { EditorToolContextBarComponent } from './components/editor-tool-context-bar/editor-tool-context-bar.component';
+import { EditorLeftRailComponent } from './components/editor-left-rail/editor-left-rail.component';
+import { EditorRightDockComponent } from './components/editor-right-dock/editor-right-dock.component';
 import { SvgManipulationService } from './services/svg-manipulation.service';
 import { ShapeSelectionService } from './services/shape-selection.service';
 import { EditorHistoryService } from './services/editor-history.service';
@@ -14,11 +15,11 @@ import { EditorHistoryService } from './services/editor-history.service';
   selector: 'app-root',
   imports: [
     CommonModule,
-    ToolStripComponent,
-    IconPaletteComponent,
+    EditorTopBarComponent,
+    EditorToolContextBarComponent,
+    EditorLeftRailComponent,
     SvgCanvasComponent,
-    LayersPanelComponent,
-    PropertiesPanelComponent,
+    EditorRightDockComponent,
     SvgDebugPanelComponent
   ],
   templateUrl: './app.html',
@@ -31,7 +32,9 @@ export class AppComponent {
 
   svgContent: string = '';
   uploadedFileName: string = '';
-  activeDockPanel: 'properties' | 'layers' = 'properties';
+  activeDockPanel: EditorDockPanel = 'properties';
+  /** Session-only; resets on full page reload (expanded). */
+  readonly dockCollapsed = signal(false);
 
   private static readonly DEFAULT_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600"></svg>';
@@ -53,10 +56,6 @@ export class AppComponent {
 
   onSVGLoaded(content: string): void {
     this.svgContent = content;
-  }
-
-  setActiveDockPanel(panel: 'properties' | 'layers'): void {
-    this.activeDockPanel = panel;
   }
 
   downloadSvg(): void {
