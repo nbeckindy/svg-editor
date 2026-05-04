@@ -20,6 +20,11 @@
   min-height: 0;
 }
 
+.workspace.workspace--dock-collapsed {
+  grid-template-columns:
+    var(--editor-left-rail-width) minmax(0, 1fr) var(--editor-right-dock-collapsed-width);
+}
+
 .canvas-column {
   min-height: 0;
   display: flex;

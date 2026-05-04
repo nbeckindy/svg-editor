@@ -1,40 +1,69 @@
 <aside class="right-dock" data-testid="editor-right-dock">
-  <div class="dock-tabs" role="tablist" aria-label="Inspector panels">
-    <button
-      type="button"
-      role="tab"
-      class="dock-tab"
-      data-testid="dock-tab-properties"
-      [class.active]="activeDockPanel() === 'properties'"
-      [attr.aria-selected]="activeDockPanel() === 'properties'"
-      [attr.aria-pressed]="activeDockPanel() === 'properties'"
-      (click)="activeDockPanelChange.emit('properties')">
-      Properties
-    </button>
-    <button
-      type="button"
-      role="tab"
-      class="dock-tab"
-      data-testid="dock-tab-layers"
-      [class.active]="activeDockPanel() === 'layers'"
-      [attr.aria-selected]="activeDockPanel() === 'layers'"
-      [attr.aria-pressed]="activeDockPanel() === 'layers'"
-      (click)="activeDockPanelChange.emit('layers')">
-      Layers
-    </button>
+  <div
+    class="dock-expanded"
+    data-testid="dock-expanded-region"
+    [hidden]="dockCollapsed()">
+    <div class="dock-tab-row">
+      <div class="dock-tabs" role="tablist" aria-label="Inspector panels">
+        <button
+          type="button"
+          role="tab"
+          class="dock-tab"
+          data-testid="dock-tab-properties"
+          [class.active]="activeDockPanel() === 'properties'"
+          [attr.aria-selected]="activeDockPanel() === 'properties'"
+          (click)="activeDockPanelChange.emit('properties')">
+          Properties
+        </button>
+        <button
+          type="button"
+          role="tab"
+          class="dock-tab"
+          data-testid="dock-tab-layers"
+          [class.active]="activeDockPanel() === 'layers'"
+          [attr.aria-selected]="activeDockPanel() === 'layers'"
+          (click)="activeDockPanelChange.emit('layers')">
+          Layers
+        </button>
+      </div>
+      <button
+        type="button"
+        class="dock-collapse-btn"
+        data-testid="dock-collapse"
+        aria-label="Collapse inspector"
+        (click)="collapseDock()">
+        <span class="dock-collapse-glyph" aria-hidden="true">⟩</span>
+      </button>
+    </div>
+
+    <section
+      class="dock-panel properties-panel"
+      data-testid="editor-properties-area"
+      [hidden]="propertiesInactive()"
+      [attr.inert]="propertiesInactive() ? '' : null"
+      role="tabpanel"
+      aria-label="Properties">
+      <app-properties-panel data-testid="editor-properties-panel"></app-properties-panel>
+    </section>
+
+    <section
+      class="dock-panel layers-panel"
+      data-testid="editor-layers-area"
+      [hidden]="layersInactive()"
+      [attr.inert]="layersInactive() ? '' : null"
+      role="tabpanel"
+      aria-label="Layers">
+      <app-layers-panel data-testid="editor-layers-panel"></app-layers-panel>
+    </section>
   </div>
 
-  <section
-    class="dock-panel properties-panel"
-    data-testid="editor-properties-area"
-    [class.hidden]="activeDockPanel() !== 'properties'">
-    <app-properties-panel data-testid="editor-properties-panel"></app-properties-panel>
-  </section>
-
-  <section
-    class="dock-panel layers-panel"
-    data-testid="editor-layers-area"
-    [class.hidden]="activeDockPanel() !== 'layers'">
-    <app-layers-panel data-testid="editor-layers-panel"></app-layers-panel>
-  </section>
+  <button
+    type="button"
+    class="dock-expand-handle"
+    data-testid="dock-expand-handle"
+    aria-label="Expand inspector"
+    [hidden]="!dockCollapsed()"
+    (click)="expandDock()">
+    <span class="dock-expand-glyph" aria-hidden="true">⟨</span>
+  </button>
 </aside>

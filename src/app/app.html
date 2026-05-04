@@ -7,7 +7,10 @@
 
   <app-editor-tool-context-bar />
 
-  <main class="workspace" data-testid="editor-main">
+  <main
+    class="workspace"
+    data-testid="editor-main"
+    [class.workspace--dock-collapsed]="dockCollapsed()">
     <app-editor-left-rail (svgLoaded)="onSVGLoaded($event)" />
 
     <section class="canvas-column" data-testid="editor-canvas-column">
@@ -19,6 +22,10 @@
       </div>
     </section>
 
-    <app-editor-right-dock [(activeDockPanel)]="activeDockPanel" />
+    <app-editor-right-dock
+      [(activeDockPanel)]="activeDockPanel"
+      [dockCollapsed]="dockCollapsed()"
+      (dockCollapsedChange)="dockCollapsed.set($event)"
+    />
   </main>
 </div>

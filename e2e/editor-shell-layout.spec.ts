@@ -43,4 +43,21 @@ test.describe('Editor shell layout', () => {
     await expect(page.getByTestId('dock-tab-layers')).toBeVisible();
     await expect(page.getByTestId('editor-canvas-area')).toBeVisible();
   });
+
+  test('collapses dock to strip and expands while preserving active tab', async ({ page }) => {
+    await page.goto('/');
+
+    await page.getByTestId('dock-tab-layers').click();
+    await expect(page.getByTestId('dock-tab-layers')).toHaveAttribute('aria-selected', 'true');
+
+    await page.getByTestId('dock-collapse').click();
+    await expect(page.getByTestId('dock-expanded-region')).toBeHidden();
+    await expect(page.getByTestId('dock-expand-handle')).toBeVisible();
+
+    await page.getByTestId('dock-expand-handle').click();
+    await expect(page.getByTestId('dock-expanded-region')).toBeVisible();
+    await expect(page.getByTestId('dock-tab-layers')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('editor-layers-area')).toBeVisible();
+    await expect(page.getByTestId('editor-properties-area')).toBeHidden();
+  });
 });

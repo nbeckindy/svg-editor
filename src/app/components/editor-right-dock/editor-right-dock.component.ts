@@ -13,4 +13,18 @@ import { EditorDockPanel } from '../editor-dock-panel';
 export class EditorRightDockComponent {
   readonly activeDockPanel = input.required<EditorDockPanel>();
   readonly activeDockPanelChange = output<EditorDockPanel>();
+
+  readonly dockCollapsed = input<boolean>(false);
+  readonly dockCollapsedChange = output<boolean>();
+
+  readonly layersInactive = (): boolean => this.activeDockPanel() !== 'layers';
+  readonly propertiesInactive = (): boolean => this.activeDockPanel() !== 'properties';
+
+  collapseDock(): void {
+    this.dockCollapsedChange.emit(true);
+  }
+
+  expandDock(): void {
+    this.dockCollapsedChange.emit(false);
+  }
 }
