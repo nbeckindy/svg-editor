@@ -64,7 +64,8 @@ import {
   penPathSegmentsAreValid,
   penPathSegmentsToD,
   penReflectStateAfterCommitted,
-  penSvgDistanceSq
+  penSvgDistanceSq,
+  type PenPathSegment
 } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
 import { insertPenNodeOnParsedPath } from '../../models/path-pen-insert';
@@ -514,6 +515,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private penPendingDragSvg: { x: number; y: number } | null = null;
   /** Last pointer position during pen authoring (viewport pixels), for stroke-start hover hit test. */
   private penHoverClientPx: { x: number; y: number } | null = null;
+  /** Editing an existing open path (continue-from-end); undo uses {@link EditPathNodesCommand}. */
+  private penContinuingPathRewrite: { pathId: string; originalD: string } | null = null;
 
   // Proxy getters for template bindings and inter-gesture guards
   get isDraggingShape(): boolean { return this.drag.isActive; }
@@ -2351,29 +2354,150 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private isPenPointerWithinCloseRadius(clientX: number, clientY: number): boolean {
     const m = this.penPathStartMv();
     if (!m) return false;
-    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
-    if (!mainSvg) return false;
-    const scr = rootSvgUserPointToScreenPoint(mainSvg, m.x, m.y);
-    let sx: number;
-    let sy: number;
-    if (scr) {
-      sx = scr.x;
-      sy = scr.y;
-    } else {
-      const vb = this.parseOverlayViewBox();
-      const r = mainSvg.getBoundingClientRect();
-      if (!vb || r.width <= 0 || r.height <= 0) return false;
-      sx = r.left + ((m.x - vb.vbMinX) / vb.vbW) * r.width;
-      sy = r.top + ((m.y - vb.vbMinY) / vb.vbH) * r.height;
-    }
-    const dx = clientX - sx;
-    const dy = clientY - sy;
-    return dx * dx + dy * dy <= PEN_SINGLE_CLICK_CLOSE_RADIUS_PX * PEN_SINGLE_CLICK_CLOSE_RADIUS_PX;
+    return this.penClientPxWithinJoinToleranceVsSvgPoint(clientX, clientY, m.x, m.y);
   }
 
-  /** @returns squared distance between two root-SVG-user points mapped to viewport pixels (`null` if unmapped). */
+  /** Viewport-pixel tolerance match for pen join / single-click-close (never true if mapping fails). */
+  private penClientPxWithinJoinToleranceVsSvgPoint(
+    clientX: number,
+    clientY: number,
+    svgX: number,
+    svgY: number,
+    tolPx = PEN_SINGLE_CLICK_CLOSE_RADIUS_PX
+  ): boolean {
+    const c = this.svgUserPointToApproxClient(svgX, svgY);
+    if (!c) return false;
+    const dx = clientX - c.x;
+    const dy = clientY - c.y;
+    return dx * dx + dy * dy <= tolPx * tolPx;
+  }
+
+  private svgUserPointToApproxClient(
+    userX: number,
+    userY: number
+  ): { x: number; y: number } | null {
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) return null;
+    const scr = rootSvgUserPointToScreenPoint(mainSvg, userX, userY);
+    if (scr) return scr;
+    const vb = this.parseOverlayViewBox();
+    const r = mainSvg.getBoundingClientRect();
+    if (!vb || r.width <= 0 || r.height <= 0) return null;
+    return {
+      x: r.left + ((userX - vb.vbMinX) / vb.vbW) * r.width,
+      y: r.top + ((userY - vb.vbMinY) / vb.vbH) * r.height
+    };
+  }
+
+  /** Squared distance in viewport pixels between two root-SVG-user points (`null` if mapping fails). */
   private penScreenDistanceSq(ax: number, ay: number, bx: number, by: number): number | null {
-    const ma = this.svgUserPointToApproxClient(px: number, py: number) - BAD
+    const ma = this.svgUserPointToApproxClient(ax, ay);
+    const mb = this.svgUserPointToApproxClient(bx, by);
+    if (!ma || !mb) return null;
+    const dx = ma.x - mb.x;
+    const dy = ma.y - mb.y;
+    return dx * dx + dy * dy;
+  }
+
+  /** Pen: join hit test (~{@link PEN_SINGLE_CLICK_CLOSE_RADIUS_PX} viewport px). Returns false if mapping fails so we never merge accidentally. */
+  private penEndpointsWithinJoinTolerance(ax: number, ay: number, bx: number, by: number): boolean {
+    const d = this.penScreenDistanceSq(ax, ay, bx, by);
+    if (d === null) return false;
+    const r = PEN_SINGLE_CLICK_CLOSE_RADIUS_PX;
+    return d <= r * r;
+  }
+
+  /** Parse `<path>` `d`; must be **open** and pen-compatible drawable segments */
+  private openPenDrawableForJoin(pathId: string): { segments: PenPathSegment[]; d: string } | null {
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg) return null;
+    const node = svg.findOne(`#${pathId}`)?.node as SVGPathElement | null;
+    const rawD = node?.getAttribute('d');
+    if (!rawD?.trim()) return null;
+    const parsed = parsePathDForNodeEditing(rawD);
+    if (!parsed || parsed.some((s) => s.type === 'Z')) return null;
+    const drawable = parsed as PenPathSegment[];
+    if (!penPathSegmentsAreValid(drawable)) return null;
+    return { segments: drawable, d: rawD };
+  }
+
+  private combinePenContinuationSegments(
+    primary: readonly PenPathSegment[],
+    continuation: readonly PenPathSegment[]
+  ): PenPathSegment[] | null {
+    if (!penPathSegmentsAreValid(primary) || continuation.length < 2 || continuation[0].type !== 'M') {
+      return null;
+    }
+    return [...primary, ...continuation.slice(1)];
+  }
+
+  private tryPickUpPenOpenPathContinuation(event: MouseEvent): boolean {
+    if (this.penSession.getSegments().length !== 0) return false;
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg) return false;
+
+    const items = [...this.svgManipulation.getLayerStackItems()].reverse();
+    for (const item of items) {
+      if (item.type !== 'path') continue;
+      const open = this.openPenDrawableForJoin(item.id);
+      if (!open) continue;
+      const tail = lastCommittedVertex(open.segments);
+      if (!tail) continue;
+      if (
+        !this.penClientPxWithinJoinToleranceVsSvgPoint(event.clientX, event.clientY, tail.x, tail.y)
+      ) {
+        continue;
+      }
+
+      this.penContinuingPathRewrite = { pathId: item.id, originalD: open.d };
+      this.penSession.restoreDrawableSegments(open.segments);
+      this.penPointerSvg = { x: tail.x, y: tail.y };
+      this.penHoverClientPx = { x: event.clientX, y: event.clientY };
+      this.cdr.markForCheck();
+      return true;
+    }
+    return false;
+  }
+
+  private findPenOpenPathFinishJoin(
+    finishingSegs: readonly PenPathSegment[]
+  ):
+    | { pathId: string; originalD: string; existing: PenPathSegment[]; stitch: 'appendToExistingTail' | 'prependBeforeExisting' }
+    | null {
+    if (!penPathSegmentsAreValid(finishingSegs)) return null;
+    const drawnEnd = lastCommittedVertex(finishingSegs);
+    if (!drawnEnd) return null;
+
+    const items = [...this.svgManipulation.getLayerStackItems()].reverse();
+    for (const item of items) {
+      if (item.type !== 'path') continue;
+      const open = this.openPenDrawableForJoin(item.id);
+      if (!open) continue;
+      const existing = open.segments;
+      const fv = existing[0];
+      if (fv.type !== 'M') continue;
+      const lv = lastCommittedVertex(existing);
+      if (!lv) continue;
+
+      if (this.penEndpointsWithinJoinTolerance(drawnEnd.x, drawnEnd.y, lv.x, lv.y)) {
+        return {
+          pathId: item.id,
+          originalD: open.d,
+          existing,
+          stitch: 'appendToExistingTail'
+        };
+      }
+      if (this.penEndpointsWithinJoinTolerance(drawnEnd.x, drawnEnd.y, fv.x, fv.y)) {
+        return {
+          pathId: item.id,
+          originalD: open.d,
+          existing,
+          stitch: 'prependBeforeExisting'
+        };
+      }
+    }
+    return null;
+  }
 
   /** Pen tool: Backspace pops last committed anchor; cancels in-progress segment first. */
   private tryPenBackspaceShortcut(): boolean {
@@ -2412,7 +2536,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penPointerSvg !== null ||
       this.penPendingSegment !== null ||
       this.penPendingDragSvg !== null ||
-      this.penHoverClientPx !== null;
+      this.penHoverClientPx !== null ||
+      this.penContinuingPathRewrite !== null;
     const hadFeedback = this.penFinishFeedbackMessage !== null;
     if (!hadPenState && !hadFeedback) return;
     if (hadPenState) {
@@ -2420,6 +2545,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penPendingLastClient = null;
       this.penPendingDragSvg = null;
       this.penHoverClientPx = null;
+      this.penContinuingPathRewrite = null;
       this.penSession.reset();
       this.penPointerSvg = null;
     }
@@ -2603,14 +2729,74 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private tryFinishPenPath(closePath: boolean): void {
     this.flushPenPendingAsCurrentPointer();
+    const finishingSegsSnapshot = [...this.penSession.getSegments()] as PenPathSegment[];
+
     const d = this.penSession.finishPath();
     if (!d) {
       this.showPenFinishFeedback();
       return;
     }
     this.clearPenFinishFeedback();
-    const finalD = closePath ? `${d} Z` : d;
-    const id = this.svgManipulation.insertPathIntoContentGroup(finalD, undefined, { closedPath: closePath });
+    let finalClosed = closePath ? `${d} Z` : d;
+
+    const cont = this.penContinuingPathRewrite;
+    if (cont) {
+      this.svgManipulation.updatePathData(cont.pathId, finalClosed);
+      const cmd = new EditPathNodesCommand(this.svgManipulation, cont.pathId, cont.originalD, finalClosed, true);
+      this.editorHistory.pushAndExecute(cmd);
+      const svgSel = this.svgManipulation.getSVGInstance();
+      const mergedEl = svgSel?.findOne(`#${cont.pathId}`) as SVGElement | undefined;
+      if (mergedEl) {
+        this.shapeSelection.selectShape(this.svgManipulation.getShapeProperties(mergedEl));
+      }
+      const shapeBboxContinue = this.svgManipulation.getShapeBBox(cont.pathId);
+      if (shapeBboxContinue) {
+        this.lastBbox = shapeBboxContinue;
+        this._highlightRectCacheKey = '';
+      }
+      this.clearPenDrawingState();
+      this.editorTool.setTool('selector');
+      this.cdr.markForCheck();
+      return;
+    }
+
+    const joinHit = penPathSegmentsAreValid(finishingSegsSnapshot)
+      ? this.findPenOpenPathFinishJoin(finishingSegsSnapshot)
+      : null;
+    if (joinHit) {
+      const mergedSegments =
+        joinHit.stitch === 'appendToExistingTail'
+          ? this.combinePenContinuationSegments(joinHit.existing, finishingSegsSnapshot)
+          : this.combinePenContinuationSegments(finishingSegsSnapshot, joinHit.existing);
+      if (mergedSegments) {
+        finalClosed = closePath ? `${penPathSegmentsToD(mergedSegments)} Z` : penPathSegmentsToD(mergedSegments);
+        this.svgManipulation.updatePathData(joinHit.pathId, finalClosed);
+        const joinCmd = new EditPathNodesCommand(
+          this.svgManipulation,
+          joinHit.pathId,
+          joinHit.originalD,
+          finalClosed,
+          true
+        );
+        this.editorHistory.pushAndExecute(joinCmd);
+        const svgJoin = this.svgManipulation.getSVGInstance();
+        const joinedEl = svgJoin?.findOne(`#${joinHit.pathId}`) as SVGElement | undefined;
+        if (joinedEl) {
+          this.shapeSelection.selectShape(this.svgManipulation.getShapeProperties(joinedEl));
+        }
+        const jb = this.svgManipulation.getShapeBBox(joinHit.pathId);
+        if (jb) {
+          this.lastBbox = jb;
+          this._highlightRectCacheKey = '';
+        }
+        this.clearPenDrawingState();
+        this.editorTool.setTool('selector');
+        this.cdr.markForCheck();
+        return;
+      }
+    }
+
+    const id = this.svgManipulation.insertPathIntoContentGroup(finalClosed, undefined, { closedPath: closePath });
     if (!id) {
       this.clearPenDrawingState();
       return;
@@ -2651,6 +2837,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     const segs = this.penSession.getSegments();
     if (segs.length === 0) {
+      this.penContinuingPathRewrite = null;
+      if (this.tryPickUpPenOpenPathContinuation(event)) {
+        this.cdr.markForCheck();
+        return;
+      }
       this.penSession.beginPath(pt.x, pt.y);
       this.penPointerSvg = { x: pt.x, y: pt.y };
       this.cdr.markForCheck();
