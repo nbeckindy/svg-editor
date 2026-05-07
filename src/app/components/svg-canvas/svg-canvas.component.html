@@ -34,8 +34,8 @@
           }
         </svg>
       </div>
-      <div class="ruler-left" aria-hidden="true">
-        <svg [attr.width]="RULER_SIZE" [attr.height]="wrapperHeight" class="ruler-svg">
+      <div class="ruler-left" #rulerLeft aria-hidden="true">
+        <svg [attr.width]="RULER_SIZE" class="ruler-svg">
           @for (tick of verticalRulerTicks; track tick.position + ',' + tick.value) {
             <line [attr.x1]="RULER_SIZE" [attr.y1]="tick.position" [attr.x2]="tick.major ? RULER_SIZE - 8 : RULER_SIZE - 4" [attr.y2]="tick.position" stroke="#666"/>
             @if (tick.major) {

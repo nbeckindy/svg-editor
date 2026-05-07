@@ -36,6 +36,8 @@
   min-height: 0;
   padding: 14px;
   overflow: auto;
+  display: flex;
+  flex-direction: column;
 }
 
 .debug-strip {

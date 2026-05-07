@@ -223,6 +223,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   readonly zoomWrapper = viewChild<ElementRef<HTMLElement>>('zoomWrapper');
   readonly highlightOverlayContainer = viewChild<ElementRef<HTMLElement>>('highlightOverlayContainer');
   readonly canvasViewport = viewChild<ElementRef<HTMLElement>>('canvasViewport');
+  readonly rulerLeft = viewChild<ElementRef<HTMLElement>>('rulerLeft');
   readonly inlineTextEditor = viewChild<ElementRef<HTMLTextAreaElement>>('inlineTextEditor');
   altKeyPressed = false;
   isPanning = false;
@@ -1717,7 +1718,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         : el?.closest('.canvas-container')) as HTMLElement | undefined;
     if (viewportEl && viewportEl.clientWidth > 0 && viewportEl.clientHeight > 0) {
       this.wrapperWidth = viewportEl.clientWidth;
-      this.wrapperHeight = viewportEl.clientHeight;
+      const rulerLeftEl = this.rulerLeft()?.nativeElement;
+      this.wrapperHeight =
+        rulerLeftEl && rulerLeftEl.clientHeight > 0
+          ? rulerLeftEl.clientHeight
+          : viewportEl.clientHeight;
       if (this.svgContent() && el?.parentElement) {
         const viewportRect = viewportEl.getBoundingClientRect();
         const innerRect = el.parentElement.getBoundingClientRect();
