@@ -3,7 +3,7 @@
   --editor-border: #d5dceb;
   --editor-surface: #ffffff;
   --editor-canvas-bg: #f4f6fb;
-  --editor-left-rail-width: 300px;
+  --editor-left-rail-width: 72px;
   --editor-right-dock-width: 320px;
   --editor-right-dock-collapsed-width: 36px;
   --editor-context-bar-height: 40px;
@@ -11,7 +11,7 @@
 
 @media (max-width: 1280px) {
   :root {
-    --editor-left-rail-width: 250px;
+    --editor-left-rail-width: 72px;
     --editor-right-dock-width: 290px;
   }
 }

@@ -1,9 +1,26 @@
 <aside class="left-rail" data-testid="editor-left-rail">
   <app-tool-strip data-testid="editor-tool-strip"></app-tool-strip>
-  <section class="asset-library" data-testid="editor-asset-library">
-    <h2>Assets</h2>
-    <app-icon-palette
-      data-testid="editor-icon-palette"
-      (svgLoaded)="svgLoaded.emit($event)"></app-icon-palette>
-  </section>
+  @if (showDevAssetsMenu) {
+    <section class="assets-dev-menu" data-testid="editor-assets-dev-menu">
+      <div class="assets-menu-root" #assetsMenuRoot>
+        <button
+          type="button"
+          class="assets-trigger"
+          data-testid="editor-assets-menu-button"
+          title="Assets"
+          aria-label="Assets"
+          [attr.aria-expanded]="assetsMenuOpen()"
+          (click)="toggleAssetsMenu()">
+          ◫
+        </button>
+        @if (assetsMenuOpen()) {
+          <div class="assets-popover" data-testid="editor-assets-popover">
+            <app-icon-palette
+              data-testid="editor-icon-palette"
+              (svgLoaded)="svgLoaded.emit($event)"></app-icon-palette>
+          </div>
+        }
+      </div>
+    </section>
+  }
 </aside>
