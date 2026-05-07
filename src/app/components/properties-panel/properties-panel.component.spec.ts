@@ -147,6 +147,7 @@ describe('PropertiesPanelComponent', () => {
     expect(compiled.querySelector('.properties-content')).toBeTruthy();
     expect(compiled.textContent).toContain('circle');
     expect(compiled.textContent).toContain('shape-1');
+    expect(compiled.querySelector('[data-testid="document-settings-panel"]')).toBeTruthy();
   });
 
   it('should show Skew X/Y from shape transform matrix', () => {
