@@ -1737,14 +1737,13 @@ describe('SvgManipulationService', () => {
       expect(exported).toContain('viewBox="0 0 500 400"');
     });
 
-    it('artboard boundary rect has non-scaling-stroke', () => {
+    it('artboard document rect has no stroke (outline is on zoom-independent overlay)', () => {
       const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
       const svg = service.getSVGInstance()!;
       const viewBoxRect = svg.findOne('[data-editor-viewbox-rect]');
       expect(viewBoxRect).toBeTruthy();
-      const ve = viewBoxRect!.attr('vector-effect');
-      expect(ve).toBe('non-scaling-stroke');
+      expect(String(viewBoxRect!.attr('stroke') ?? 'none').toLowerCase()).toBe('none');
     });
 
     it('artboard boundary rect has drop shadow filter', () => {

@@ -607,12 +607,13 @@ export class SvgManipulationService {
     const shadowFilter = editorSvg.defs().element('filter').attr({ id: 'artboard-shadow', x: '-5%', y: '-5%', width: '110%', height: '110%' });
     shadowFilter.element('feDropShadow').attr({ dx: '0', dy: '1', stdDeviation: '3', 'flood-color': 'rgba(0,0,0,0.2)' });
 
+    // Artboard outline is drawn on the canvas overlay (not here): the stage SVG sits under
+    // a CSS transform scale for zoom, and vector-effect does not counteract HTML transforms.
     editorSvg
       .rect(vbW, vbH)
       .move(vbMinX, vbMinY)
       .fill('#ffffff')
-      .stroke({ color: '#cccccc', width: 1 })
-      .attr('vector-effect', 'non-scaling-stroke')
+      .stroke('none')
       .attr('filter', 'url(#artboard-shadow)')
       .attr(EDITOR_VIEWBOX_RECT_ATTR, 'true');
 

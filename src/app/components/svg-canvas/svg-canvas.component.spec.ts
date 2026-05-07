@@ -2492,8 +2492,10 @@ describe('SvgCanvasComponent', () => {
   });
 
   describe('viewBox visibility in editor', () => {
-    it('should render viewBox as a rect with white fill and thin black stroke when SVG has viewBox', async () => {
+    it('should render viewBox as a white-filled rect with a thin non-scaling overlay stroke when SVG has viewBox', async () => {
       fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
+      component.wrapperWidth = 100;
+      component.wrapperHeight = 100;
       fixture.detectChanges();
       await new Promise((r) => setTimeout(r, 50));
       fixture.detectChanges();
@@ -2502,7 +2504,12 @@ describe('SvgCanvasComponent', () => {
       const viewBoxFillRect = canvasSvg?.querySelector('rect[data-editor-viewbox-rect]');
       expect(viewBoxFillRect).toBeTruthy();
       expect(viewBoxFillRect?.getAttribute('fill')?.toLowerCase()).toBe('#ffffff');
-      expect(component.viewBoxOverlayRect).toBeDefined();
+      expect(viewBoxFillRect?.getAttribute('stroke')?.toLowerCase()).toBe('none');
+      expect(component.viewBoxOverlayRect).not.toBeNull();
+      const boundaryRect = fixture.nativeElement.querySelector('[data-testid="canvas-viewbox-boundary-overlay"]');
+      expect(boundaryRect).toBeTruthy();
+      expect(boundaryRect?.getAttribute('stroke')?.toLowerCase()).toBe('#cccccc');
+      expect(boundaryRect?.getAttribute('vector-effect')).toBe('non-scaling-stroke');
     });
 
     it('should show elements outside viewBox in the DOM (all elements visible)', async () => {
