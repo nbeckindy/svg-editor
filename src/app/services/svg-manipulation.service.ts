@@ -1,4 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import { SVG, Svg, Element as SvgJsElement, Matrix, G } from '@svgdotjs/svg.js';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../models/shape-properties.interface';
 
@@ -53,6 +53,7 @@ import {
   type AxisAlignedRect
 } from '../utils/marquee-selection';
 import { localBBoxToRootUserAabb, screenRectToRootSvgUserRect } from '../utils/svg-screen-user';
+import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
 
 /** Class name for the editor content group (shapes live here). */
 const EDITOR_CONTENT_GROUP_ID = 'data-editor-content-group';
@@ -103,6 +104,7 @@ interface RenderedPaint {
   providedIn: 'root'
 })
 export class SvgManipulationService {
+  private readonly drawingStyleDefaults = inject(DrawingStyleDefaultsService);
   private getRenderedPaint(node: Element): RenderedPaint {
     if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return {};
     try {
@@ -1466,16 +1468,19 @@ export class SvgManipulationService {
 
     let shape: SvgJsElement;
 
+    const defaults = this.drawingStyleDefaults.defaults();
+    const fill = attrs.fill ?? defaults.fill;
+    const stroke = attrs.stroke ?? defaults.stroke;
+    const strokeWidth = attrs.strokeWidth ?? defaults.strokeWidth;
+
     if (type === 'rect') {
       const w = attrs.width ?? 100;
       const h = attrs.height ?? 100;
       const x = attrs.x ?? 0;
       const y = attrs.y ?? 0;
       const el = contentGroup.rect(w, h).move(x, y);
-      el.fill(attrs.fill ?? '#000000');
-      if (attrs.stroke) {
-        el.stroke({ color: attrs.stroke, width: attrs.strokeWidth ?? 1 });
-      }
+      el.fill(fill);
+      el.stroke({ color: stroke, width: strokeWidth });
       shape = el;
     } else if (type === 'ellipse') {
       const rx = attrs.rx ?? 50;
@@ -1483,10 +1488,8 @@ export class SvgManipulationService {
       const cx = attrs.cx ?? rx;
       const cy = attrs.cy ?? ry;
       const el = contentGroup.ellipse(rx * 2, ry * 2).center(cx, cy);
-      el.fill(attrs.fill ?? '#000000');
-      if (attrs.stroke) {
-        el.stroke({ color: attrs.stroke, width: attrs.strokeWidth ?? 1 });
-      }
+      el.fill(fill);
+      el.stroke({ color: stroke, width: strokeWidth });
       shape = el;
     } else if (type === 'line') {
       const x1 = attrs.x1 ?? 0;
@@ -1494,8 +1497,9 @@ export class SvgManipulationService {
       const x2 = attrs.x2 ?? 100;
       const y2 = attrs.y2 ?? 100;
       const el = contentGroup.line(x1, y1, x2, y2);
+      // Canonical rule: line creation ignores fill.
       el.fill('none');
-      el.stroke({ color: attrs.stroke ?? '#000000', width: attrs.strokeWidth ?? 2 });
+      el.stroke({ color: stroke, width: strokeWidth });
       shape = el;
     } else {
       const x = attrs.x ?? 0;
@@ -1506,7 +1510,9 @@ export class SvgManipulationService {
       el.attr({
         x,
         y,
-        fill: attrs.fill ?? '#000000',
+        fill,
+        stroke,
+        'stroke-width': strokeWidth,
         'font-size': attrs.fontSize ?? 16,
         'font-family': attrs.fontFamily ?? 'Arial, sans-serif',
         'font-weight': 'normal',
@@ -1532,7 +1538,8 @@ export class SvgManipulationService {
    */
   insertPathIntoContentGroup(
     d: string,
-    attrs?: { fill?: string; stroke?: string; strokeWidth?: number }
+    attrs?: { fill?: string; stroke?: string; strokeWidth?: number },
+    options?: { closedPath?: boolean }
   ): string | null {
     if (!this.svgInstance) return null;
     const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`) as G | null;
@@ -1548,13 +1555,15 @@ export class SvgManipulationService {
       newId = `shape-${Math.random().toString(36).substr(2, 9)}`;
     } while (usedIds.has(newId));
 
+    const defaults = this.drawingStyleDefaults.defaults();
     const pathFactory = contentGroup as G & { path(pathD: string): SvgJsElement };
     const shape = pathFactory.path(d);
     shape.id(newId);
-    shape.fill(attrs?.fill ?? 'none');
+    const fill = attrs?.fill ?? (options?.closedPath ? defaults.fill : 'none');
+    shape.fill(fill);
     shape.stroke({
-      color: attrs?.stroke ?? '#000000',
-      width: attrs?.strokeWidth ?? 2
+      color: attrs?.stroke ?? defaults.stroke,
+      width: attrs?.strokeWidth ?? defaults.strokeWidth
     });
     try {
       shape.css({ cursor: 'pointer' });

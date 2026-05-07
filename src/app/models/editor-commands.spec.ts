@@ -30,9 +30,11 @@ import {
   TextAlignCommand,
   PasteCommand,
   DuplicateCommand,
+  UpdateDrawingDefaultsCommand,
   type EditorCommand,
 } from './editor-commands';
 import { ShapeSelectionService } from '../services/shape-selection.service';
+import { DrawingStyleDefaultsService } from '../services/drawing-style-defaults.service';
 
 function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown>> = {}) {
   return {
@@ -1396,5 +1398,41 @@ describe('TextAlignCommand', () => {
     expect(svc.updateTextAnchor).toHaveBeenCalledWith('text-a', 'middle');
     cmd.undo();
     expect(svc.updateTextAnchor).toHaveBeenCalledWith('text-a', 'start');
+  });
+});
+
+describe('UpdateDrawingDefaultsCommand', () => {
+  it('applies next defaults on execute and restores previous defaults on undo', () => {
+    const defaultsSvc = {
+      setDefaults: vi.fn()
+    } as unknown as DrawingStyleDefaultsService;
+    const before = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
+    const after = { fill: '#ff0000', stroke: '#00ff00', strokeWidth: 5 };
+    const cmd = new UpdateDrawingDefaultsCommand(defaultsSvc, before, after, 'all');
+
+    cmd.execute();
+    expect(defaultsSvc.setDefaults).toHaveBeenCalledWith(after);
+
+    cmd.undo();
+    expect(defaultsSvc.setDefaults).toHaveBeenLastCalledWith(before);
+  });
+
+  it('coalesces by scope while preserving original before snapshot', () => {
+    const defaultsSvc = {
+      setDefaults: vi.fn()
+    } as unknown as DrawingStyleDefaultsService;
+    const before = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
+    const afterA = { fill: '#111111', stroke: '#000000', strokeWidth: 2 };
+    const afterB = { fill: '#222222', stroke: '#000000', strokeWidth: 2 };
+
+    const first = new UpdateDrawingDefaultsCommand(defaultsSvc, before, afterA, 'fill');
+    const second = new UpdateDrawingDefaultsCommand(defaultsSvc, afterA, afterB, 'fill');
+    const merged = first.coalesceWith(second) as UpdateDrawingDefaultsCommand;
+
+    merged.undo();
+    merged.execute();
+
+    expect(defaultsSvc.setDefaults).toHaveBeenNthCalledWith(1, before);
+    expect(defaultsSvc.setDefaults).toHaveBeenNthCalledWith(2, afterB);
   });
 });

@@ -33,6 +33,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | Order | Epic | Slug | bd epic ID | Status | Notes |
 |------:|------|------|-------------|--------|-------|
 | 17 | Tool parity and pen authoring | [tool-parity-pen](./epics/tool-parity-pen.md) | `svg-editor-j24` | `OPEN` | Transform/readout gaps + six pen parity children; does not reopen closed epics |
+| 18 | Always-visible paint defaults | [always-visible-paint-defaults](./epics/always-visible-paint-defaults.md) | `svg-editor-6g0` | `OPEN` | Single contextual paint controls + drawing defaults across creation flows |
 
 ## Free-standing issues
 
@@ -57,6 +58,16 @@ All items below are **children of epic** [`svg-editor-j24`](./epics/tool-parity-
 |--------|--------|
 | Transform / readouts | `svg-editor-e9a`, `svg-editor-jqe`, `svg-editor-zc7`, `svg-editor-269`, `svg-editor-0zh`, `svg-editor-hya` |
 | Pen authoring parity | `svg-editor-j24.1` … `svg-editor-j24.6` |
+
+## Always-visible paint defaults (epic `svg-editor-6g0`)
+
+All items below are **children of epic** [`svg-editor-6g0`](./epics/always-visible-paint-defaults.md) (`bd show svg-editor-6g0`).
+
+| Theme | bd IDs |
+|--------|--------|
+| Defaults/state foundation | `svg-editor-6g0.1`, `svg-editor-6g0.2` |
+| Properties panel UI | `svg-editor-9i5` |
+| Creation + coverage | `svg-editor-6g0.3`, `svg-editor-6g0.4` |
 
 ## Post-MVP
 
@@ -112,9 +123,12 @@ flowchart LR
 
   subgraph phase3 [Phase 3 - Backlog]
     e17[tool_parity_pen_j24]
+    e18[always_visible_paint_defaults_6g0]
   end
 
   e15 --> e17
+  e5 --> e18
+  e7 --> e18
 ```
 
 ## Recommended execution order
@@ -130,6 +144,7 @@ flowchart LR
 9. ~~**Epic 16** (advanced path editing)~~ -- **DONE**
 10. ~~**`svg-editor-e1x`** (gradient editor)~~ -- **DONE**
 11. **Epic 17 ([tool-parity-pen](./epics/tool-parity-pen.md), `svg-editor-j24`):** transform parity (`svg-editor-e9a` … `svg-editor-hya`) and pen parity (`svg-editor-j24.1` … `svg-editor-j24.6`); see epic plan for order and acceptance.
+12. **Epic 18 ([always-visible-paint-defaults](./epics/always-visible-paint-defaults.md), `svg-editor-6g0`):** always-visible fill/stroke/stroke-width controls, canonical defaults service, creation-flow wiring, and regression coverage.
 
 ## Beads epic references
 
@@ -139,6 +154,7 @@ Status/progress below is current as of 2026-05-06.
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
 | tool-parity-pen | `svg-editor-j24` | Tool parity and pen authoring | `OPEN` | 0/12 |
+| always-visible-paint-defaults | `svg-editor-6g0` | Always-visible paint defaults | `OPEN` | 0/5 |
 | selection-interaction | `svg-editor-3b7` | Multi-select and keyboard shortcuts | `CLOSED` | 8/8 |
 | editing-history | `svg-editor-bbc` | Undo and redo | `CLOSED` | 5/5 |
 | shape-transforms | `svg-editor-2zo` | Shape transforms | `CLOSED` | 5/5 |

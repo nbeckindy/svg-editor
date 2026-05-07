@@ -3,30 +3,92 @@
     <h3>Properties</h3>
   </div>
 
+  <div class="paint-segment">
+    <p class="paint-target-indicator">{{ paintTargetLabel() }}</p>
+
+    <div class="property-group paint-segment-group">
+      <label class="property-label" for="fill-color">Fill Color</label>
+      @if (selectedShape(); as shape) {
+        @if (supportsFill(shape)) {
+          <div class="color-input-group">
+            @if (isGradientOrPatternFill(shape)) {
+              <div class="no-paint-value">
+                <span class="paint-ref-label">{{ paintTypeLabel(shape.fillPaintType) }} fill</span>
+              </div>
+            } @else if (allSelectedLackFill(shape)) {
+              <div class="no-paint-value">
+                <span class="no-paint-label">No fill</span>
+                <button type="button" class="btn-set-paint" (click)="onFillColorChange('#000000')">
+                  Set fill
+                </button>
+              </div>
+            } @else {
+              <app-color-picker
+                [color]="fillPickerColor(shape)"
+                [indeterminate]="fillMixed()"
+                (colorChange)="onFillColorChange($event)">
+              </app-color-picker>
+            }
+          </div>
+        } @else {
+          <div class="no-paint-value">
+            <span class="no-paint-label">Not applicable for {{ shapeTypeLabel(shape) }}</span>
+          </div>
+        }
+      } @else {
+        <div class="color-input-group">
+          <app-color-picker
+            [color]="defaultFillPickerColor()"
+            [indeterminate]="false"
+            (colorChange)="onFillColorChange($event)">
+          </app-color-picker>
+        </div>
+      }
+    </div>
+
+    <div class="property-group paint-segment-group">
+      <label class="property-label" for="stroke-color">Stroke Color</label>
+      @if (selectedShape(); as shape) {
+        <div class="color-input-group">
+          @if (isGradientOrPatternStroke(shape)) {
+            <div class="no-paint-value">
+              <span class="paint-ref-label">{{ paintTypeLabel(shape.strokePaintType) }} stroke</span>
+            </div>
+          } @else if (allSelectedLackStroke(shape)) {
+            <div class="no-paint-value">
+              <span class="no-paint-label">No stroke</span>
+              <button type="button" class="btn-set-paint" (click)="onAddStrokeClick()">
+                Set stroke
+              </button>
+            </div>
+          } @else {
+            <app-color-picker
+              [color]="strokePickerColor(shape)"
+              [indeterminate]="strokeMixed()"
+              (colorChange)="onStrokeColorChange($event)">
+            </app-color-picker>
+          }
+        </div>
+      } @else {
+        <div class="color-input-group">
+          <app-color-picker
+            [color]="defaultStrokePickerColor()"
+            [indeterminate]="false"
+            (colorChange)="onStrokeColorChange($event)">
+          </app-color-picker>
+        </div>
+      }
+    </div>
+  </div>
+
   <div class="panel-scroll">
     @if (selectedShape(); as shape) {
       <div class="properties-content">
-      @if (selectionCount() > 1) {
-        <p class="multi-select-hint">
-          {{ selectionCount() }} shapes selected. Edits apply to every selected shape.
+        <p class="paint-effective-hint">
+          Colors match what you see on the canvas (computed from attributes, CSS, and inheritance).
         </p>
-      }
 
-      <p class="paint-effective-hint">
-        Colors match what you see on the canvas (computed from attributes, CSS, and inheritance).
-      </p>
-
-      <div class="property-group">
-        <label class="property-label">Shape Type</label>
-        <div class="property-value readonly">{{ shapeTypeLabel(shape) }}</div>
-      </div>
-
-      <div class="property-group">
-        <label class="property-label">ID</label>
-        <div class="property-value readonly">{{ idLabel(shape) }}</div>
-      </div>
-
-      @if (isSelectorMode()) {
+        @if (isSelectorMode()) {
         <div class="property-group align-distribute-group">
           <label class="property-label">Align</label>
           <div class="align-toolbar">
@@ -144,9 +206,54 @@
             {{ selectionSkewReadout().skewY }}
           </div>
         </div>
-      }
+        }
 
-      @if (hasTextSelection()) {
+      <div class="property-group">
+        <label class="property-label" for="stroke-width">Stroke Width</label>
+        @if (strokeWidthsMixed()) {
+          <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+        }
+        <div class="range-input-group">
+          <input
+            type="range"
+            id="stroke-width"
+            class="range-slider"
+            [class.mixed-control]="strokeWidthsMixed()"
+            min="0"
+            max="20"
+            step="0.5"
+            [value]="strokeWidthsMixed() ? 0 : (shape.strokeWidth || 0)"
+            (input)="onStrokeWidthChange($event)">
+          <input
+            type="number"
+            class="range-number"
+            [class.mixed-control]="strokeWidthsMixed()"
+            min="0"
+            max="100"
+            step="0.5"
+            [value]="strokeWidthsMixed() ? '' : (shape.strokeWidth || 0)"
+            [attr.placeholder]="strokeWidthsMixed() ? '—' : ''"
+            (change)="onStrokeWidthChange($event)">
+        </div>
+      </div>
+
+        @if (selectionCount() > 1) {
+          <p class="multi-select-hint">
+            {{ selectionCount() }} shapes selected. Edits apply to every selected shape.
+          </p>
+        }
+
+        <div class="property-group">
+          <label class="property-label">Shape Type</label>
+          <div class="property-value readonly">{{ shapeTypeLabel(shape) }}</div>
+        </div>
+
+        <div class="property-group">
+          <label class="property-label">ID</label>
+          <div class="property-value readonly">{{ idLabel(shape) }}</div>
+        </div>
+
+        @if (hasTextSelection()) {
         <div class="property-group">
           <label class="property-label" for="font-family">Font</label>
           @if (fontFamiliesMixed()) {
@@ -227,261 +334,111 @@
             </button>
           </div>
         </div>
-      }
-
-      @if (supportsFill(shape)) {
-        <div class="property-group">
-          <label class="property-label" for="fill-color">Fill Color</label>
-          @if (selectionCount() === 1 && shape.fillSource) {
-            <div
-              class="paint-source-row"
-              [class.class-controlled]="isClassControlled(shape.fillSource)">
-              <span class="paint-source-badge">{{ paintSourceText(shape.fillSource) }}</span>
-              @if (shape.fillSource.classNames?.length) {
-                <span
-                  class="paint-source-classes"
-                  [attr.title]="(shape.fillSource.classNames ?? []).join(' ')">
-                  {{ (shape.fillSource.classNames ?? []).join(' ') }}
-                </span>
-              }
-              @if (shouldOfferBakeFill(shape)) {
-                <button type="button" class="btn-paint-action" (click)="onBakeFillClick()">
-                  Apply to this shape
-                </button>
-              }
-            </div>
-          } @else if (selectionCount() > 1) {
-            <p class="paint-multi-hint">
-              Paint source details are hidden for multi-selection; fill edits update every selected shape.
-            </p>
-            @if (shouldOfferBakeFillOnAny()) {
-              <button type="button" class="btn-paint-action" (click)="onBakeFillClick()">
-                Bake effective fill on all selected
-              </button>
-            }
-          }
-          <div class="color-input-group">
-            @if (isGradientOrPatternFill(shape)) {
-              <div class="no-paint-value">
-                <span class="paint-ref-label">{{ paintTypeLabel(shape.fillPaintType) }} fill</span>
-              </div>
-              @if (shape.fillPaintType === 'gradient' && selectionCount() === 1) {
-                <app-gradient-fill-editor [shapeId]="shape.id" />
-              }
-            } @else if (allSelectedLackFill(shape)) {
-              <div class="no-paint-value">
-                <span class="no-paint-label">No fill</span>
-                <button type="button" class="btn-set-paint" (click)="onFillColorChange('#000000')">
-                  Set fill
-                </button>
-              </div>
-            } @else {
-              <app-color-picker
-                [color]="fillPickerColor(shape)"
-                [indeterminate]="fillMixed()"
-                (colorChange)="onFillColorChange($event)">
-              </app-color-picker>
-            }
-            @if (canCreateGradientFill(shape)) {
-              <button type="button" class="btn-paint-action" (click)="onCreateGradientFill(shape)">
-                Use gradient fill
-              </button>
-            }
-          </div>
-        </div>
-      } @else {
-        <div class="property-group">
-          <label class="property-label">Fill Color</label>
-          <div class="no-paint-value">
-            <span class="no-paint-label">Not applicable for {{ shapeTypeLabel(shape) }}</span>
-          </div>
-        </div>
-      }
-
-      <div class="property-group">
-        <label class="property-label" for="stroke-color">Stroke Color</label>
-        @if (selectionCount() === 1 && shape.strokeSource) {
-          <div
-            class="paint-source-row"
-            [class.class-controlled]="isClassControlled(shape.strokeSource)">
-            <span class="paint-source-badge">{{ paintSourceText(shape.strokeSource) }}</span>
-            @if (shape.strokeSource.classNames?.length) {
-              <span
-                class="paint-source-classes"
-                [attr.title]="(shape.strokeSource.classNames ?? []).join(' ')">
-                {{ (shape.strokeSource.classNames ?? []).join(' ') }}
-              </span>
-            }
-            @if (shouldOfferBakeStroke(shape)) {
-              <button type="button" class="btn-paint-action" (click)="onBakeStrokeClick()">
-                Apply to this shape
-              </button>
-            }
-          </div>
-        } @else if (selectionCount() > 1) {
-          <p class="paint-multi-hint">
-            Stroke source details are hidden for multi-selection; stroke edits update every selected shape.
-          </p>
-          @if (shouldOfferBakeStrokeOnAny()) {
-            <button type="button" class="btn-paint-action" (click)="onBakeStrokeClick()">
-              Bake effective stroke on all selected
-            </button>
-          }
         }
-        <div class="color-input-group">
-          @if (isGradientOrPatternStroke(shape)) {
-            <div class="no-paint-value">
-              <span class="paint-ref-label">{{ paintTypeLabel(shape.strokePaintType) }} stroke</span>
-            </div>
-          } @else if (allSelectedLackStroke(shape)) {
-            <div class="no-paint-value">
-              <span class="no-paint-label">No stroke</span>
-              <button type="button" class="btn-set-paint" (click)="onAddStrokeClick()">
-                Set stroke
-              </button>
-            </div>
-          } @else {
-            <app-color-picker
-              [color]="strokePickerColor(shape)"
-              [indeterminate]="strokeMixed()"
-              (colorChange)="onStrokeColorChange($event)">
-            </app-color-picker>
-          }
-        </div>
-      </div>
 
-      <div class="property-group">
-        <label class="property-label" for="stroke-width">Stroke Width</label>
-        @if (strokeWidthsMixed()) {
-          <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
-        }
-        <div class="range-input-group">
-          <input
-            type="range"
-            id="stroke-width"
-            class="range-slider"
-            [class.mixed-control]="strokeWidthsMixed()"
-            min="0"
-            max="20"
-            step="0.5"
-            [value]="strokeWidthsMixed() ? 0 : (shape.strokeWidth || 0)"
-            (input)="onStrokeWidthChange($event)">
-          <input
-            type="number"
-            class="range-number"
-            [class.mixed-control]="strokeWidthsMixed()"
-            min="0"
-            max="100"
-            step="0.5"
-            [value]="strokeWidthsMixed() ? '' : (shape.strokeWidth || 0)"
-            [attr.placeholder]="strokeWidthsMixed() ? '—' : ''"
-            (change)="onStrokeWidthChange($event)">
-        </div>
-      </div>
-
-      @if (hasAnyStroke()) {
-        <div class="property-group">
-          <label class="property-label" for="dash-pattern">Dash Pattern</label>
-          @if (dashArraysMixed()) {
-            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
-          }
-          <select
-            id="dash-pattern"
-            class="dash-select"
-            [class.mixed-control]="dashArraysMixed()"
-            [value]="currentDashPreset(shape)"
-            (change)="onDashPresetChange($event)">
-            @for (preset of dashPresets; track preset.value) {
-              <option [value]="preset.value">{{ preset.label }}</option>
-            }
-          </select>
-          @if (showCustomDashInput(shape)) {
-            <input
-              type="text"
-              class="dash-custom-input"
-              placeholder="e.g. 5,3,2,3"
-              [value]="shape.strokeDasharray ?? ''"
-              (change)="onCustomDashArrayChange($event)">
-          }
-        </div>
-
-        @if (shape.strokeDasharray) {
+        @if (hasAnyStroke()) {
           <div class="property-group">
-            <label class="property-label" for="dash-offset">Dash Offset</label>
-            @if (dashOffsetsMixed()) {
+            <label class="property-label" for="dash-pattern">Dash Pattern</label>
+            @if (dashArraysMixed()) {
               <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
             }
-            <div class="range-input-group">
+            <select
+              id="dash-pattern"
+              class="dash-select"
+              [class.mixed-control]="dashArraysMixed()"
+              [value]="currentDashPreset(shape)"
+              (change)="onDashPresetChange($event)">
+              @for (preset of dashPresets; track preset.value) {
+                <option [value]="preset.value">{{ preset.label }}</option>
+              }
+            </select>
+            @if (showCustomDashInput(shape)) {
               <input
-                type="range"
-                id="dash-offset"
-                class="range-slider"
-                [class.mixed-control]="dashOffsetsMixed()"
-                min="0"
-                max="50"
-                step="0.5"
-                [value]="dashOffsetsMixed() ? 0 : (shape.strokeDashoffset ?? 0)"
-                (input)="onDashOffsetChange($event)">
-              <input
-                type="number"
-                class="range-number"
-                [class.mixed-control]="dashOffsetsMixed()"
-                min="0"
-                max="100"
-                step="0.5"
-                [value]="dashOffsetsMixed() ? '' : (shape.strokeDashoffset ?? 0)"
-                [attr.placeholder]="dashOffsetsMixed() ? '—' : ''"
-                (change)="onDashOffsetChange($event)">
+                type="text"
+                class="dash-custom-input"
+                placeholder="e.g. 5,3,2,3"
+                [value]="shape.strokeDasharray ?? ''"
+                (change)="onCustomDashArrayChange($event)">
+            }
+          </div>
+
+          @if (shape.strokeDasharray) {
+            <div class="property-group">
+              <label class="property-label" for="dash-offset">Dash Offset</label>
+              @if (dashOffsetsMixed()) {
+                <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+              }
+              <div class="range-input-group">
+                <input
+                  type="range"
+                  id="dash-offset"
+                  class="range-slider"
+                  [class.mixed-control]="dashOffsetsMixed()"
+                  min="0"
+                  max="50"
+                  step="0.5"
+                  [value]="dashOffsetsMixed() ? 0 : (shape.strokeDashoffset ?? 0)"
+                  (input)="onDashOffsetChange($event)">
+                <input
+                  type="number"
+                  class="range-number"
+                  [class.mixed-control]="dashOffsetsMixed()"
+                  min="0"
+                  max="100"
+                  step="0.5"
+                  [value]="dashOffsetsMixed() ? '' : (shape.strokeDashoffset ?? 0)"
+                  [attr.placeholder]="dashOffsetsMixed() ? '—' : ''"
+                  (change)="onDashOffsetChange($event)">
+              </div>
             </div>
+          }
+        }
+
+        @if (shouldOfferSelectParentGroup(shape)) {
+          <div class="paint-parent-row">
+            <button type="button" class="btn-paint-action secondary" (click)="onSelectParentGroupClick()">
+              Select parent group
+            </button>
+            @if (parentGroupId(shape); as pid) {
+              <span class="parent-id-hint" [attr.title]="pid">#{{ pid }}</span>
+            }
           </div>
         }
-      }
 
-      @if (shouldOfferSelectParentGroup(shape)) {
-        <div class="paint-parent-row">
-          <button type="button" class="btn-paint-action secondary" (click)="onSelectParentGroupClick()">
-            Select parent group
-          </button>
-          @if (parentGroupId(shape); as pid) {
-            <span class="parent-id-hint" [attr.title]="pid">#{{ pid }}</span>
+        <div class="property-group">
+          <label class="property-label" for="opacity">Opacity</label>
+          @if (opacitiesMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
           }
+          <div class="range-input-group">
+            <input
+              type="range"
+              id="opacity"
+              class="range-slider"
+              [class.mixed-control]="opacitiesMixed()"
+              min="0"
+              max="1"
+              step="0.01"
+              [value]="opacitiesMixed() ? 1 : (shape.opacity || 1)"
+              (input)="onOpacityChange($event)">
+            <input
+              type="number"
+              class="range-number"
+              [class.mixed-control]="opacitiesMixed()"
+              min="0"
+              max="1"
+              step="0.01"
+              [value]="opacitiesMixed() ? '' : (shape.opacity || 1)"
+              [attr.placeholder]="opacitiesMixed() ? '—' : ''"
+              (change)="onOpacityChange($event)">
+          </div>
         </div>
-      }
 
-      <div class="property-group">
-        <label class="property-label" for="opacity">Opacity</label>
-        @if (opacitiesMixed()) {
-          <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
-        }
-        <div class="range-input-group">
-          <input
-            type="range"
-            id="opacity"
-            class="range-slider"
-            [class.mixed-control]="opacitiesMixed()"
-            min="0"
-            max="1"
-            step="0.01"
-            [value]="opacitiesMixed() ? 1 : (shape.opacity || 1)"
-            (input)="onOpacityChange($event)">
-          <input
-            type="number"
-            class="range-number"
-            [class.mixed-control]="opacitiesMixed()"
-            min="0"
-            max="1"
-            step="0.01"
-            [value]="opacitiesMixed() ? '' : (shape.opacity || 1)"
-            [attr.placeholder]="opacitiesMixed() ? '—' : ''"
-            (change)="onOpacityChange($event)">
+        <div class="panel-actions">
+          <button class="btn-secondary" (click)="onClearSelection()">
+            Clear Selection
+          </button>
         </div>
-      </div>
-
-      <div class="panel-actions">
-        <button class="btn-secondary" (click)="onClearSelection()">
-          Clear Selection
-        </button>
-      </div>
 
         <app-document-settings
           class="document-settings-inline"

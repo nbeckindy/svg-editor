@@ -1,5 +1,11 @@
 import { EditorHistoryService, COALESCE_WINDOW_MS } from './editor-history.service';
-import { EditorCommand, CoalesceableCommand } from '../models/editor-commands';
+import {
+  CompositeCommand,
+  EditorCommand,
+  CoalesceableCommand,
+  UpdateDrawingDefaultsCommand
+} from '../models/editor-commands';
+import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
 
 function makeCommand(description = 'test'): EditorCommand & { executeCalls: number; undoCalls: number } {
   const cmd = {
@@ -185,6 +191,45 @@ describe('EditorHistoryService', () => {
     expect(svc.canUndo()).toBe(false);
   });
 
+  it('undo/redo restores shape edit and defaults sync in one composite transaction', () => {
+    let fill = '#000000';
+    const fillCommand: EditorCommand = {
+      description: 'Change fill',
+      execute: () => {
+        fill = '#ff0000';
+      },
+      undo: () => {
+        fill = '#000000';
+      }
+    };
+
+    let defaults = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
+    const defaultsSvc = {
+      setDefaults: vi.fn((next: typeof defaults) => {
+        defaults = next;
+      })
+    } as unknown as DrawingStyleDefaultsService;
+    const defaultsCommand = new UpdateDrawingDefaultsCommand(
+      defaultsSvc,
+      defaults,
+      { ...defaults, fill: '#ff0000' },
+      'fill'
+    );
+    const composite = new CompositeCommand([fillCommand, defaultsCommand], 'Paint edit + defaults');
+
+    svc.pushAndExecute(composite);
+    expect(fill).toBe('#ff0000');
+    expect(defaults.fill).toBe('#ff0000');
+
+    svc.undo();
+    expect(fill).toBe('#000000');
+    expect(defaults.fill).toBe('#000000');
+
+    svc.redo();
+    expect(fill).toBe('#ff0000');
+    expect(defaults.fill).toBe('#ff0000');
+  });
+
   describe('command coalescing', () => {
     beforeEach(() => {
       vi.useFakeTimers();
@@ -330,6 +375,37 @@ describe('EditorHistoryService', () => {
       let undoCount = 0;
       while (svc.canUndo()) { svc.undo(); undoCount++; }
       expect(undoCount).toBe(2);
+    });
+
+    it('coalesces defaults commands by scope and undo restores original defaults', () => {
+      let defaults = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
+      const defaultsSvc = {
+        setDefaults: vi.fn((next: typeof defaults) => {
+          defaults = next;
+        })
+      } as unknown as DrawingStyleDefaultsService;
+
+      const first = new UpdateDrawingDefaultsCommand(
+        defaultsSvc,
+        defaults,
+        { ...defaults, fill: '#111111' },
+        'fill'
+      );
+      svc.pushAndExecute(first);
+      vi.advanceTimersByTime(100);
+
+      const second = new UpdateDrawingDefaultsCommand(
+        defaultsSvc,
+        { ...defaults, fill: '#111111' },
+        { ...defaults, fill: '#222222' },
+        'fill'
+      );
+      svc.pushAndExecute(second);
+
+      expect(defaults.fill).toBe('#222222');
+      svc.undo();
+      expect(defaults.fill).toBe('#000000');
+      expect(svc.canUndo()).toBe(false);
     });
   });
 });

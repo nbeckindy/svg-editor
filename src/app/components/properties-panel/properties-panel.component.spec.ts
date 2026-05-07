@@ -6,6 +6,7 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { EditorToolService } from '../../services/editor-tool.service';
+import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import { DEFAULT_ARTBOARD, ArtboardResizeAnchor } from '../../models/artboard.model';
 import { vi } from 'vitest';
@@ -17,9 +18,11 @@ describe('PropertiesPanelComponent', () => {
   let svgManipulationService: SvgManipulationService;
   let editorToolService: EditorToolService;
   let selectedShapesSignal: WritableSignal<ShapeProperties[]>;
+  let drawingDefaultsSignal: WritableSignal<{ fill: string; stroke: string; strokeWidth: number }>;
 
   beforeEach(async () => {
     selectedShapesSignal = signal<ShapeProperties[]>([]);
+    drawingDefaultsSignal = signal({ fill: '#000000', stroke: '#000000', strokeWidth: 2 });
 
     const shapeSelectionServiceMock = {
       selectedShapes: selectedShapesSignal,
@@ -81,6 +84,15 @@ describe('PropertiesPanelComponent', () => {
     const editorToolServiceMock = {
       currentTool: editorToolSignal
     };
+    const drawingStyleDefaultsServiceMock = {
+      defaults: computed(() => drawingDefaultsSignal()),
+      fill: computed(() => drawingDefaultsSignal().fill),
+      stroke: computed(() => drawingDefaultsSignal().stroke),
+      strokeWidth: computed(() => drawingDefaultsSignal().strokeWidth),
+      setDefaults: vi.fn((next: { fill: string; stroke: string; strokeWidth: number }) => {
+        drawingDefaultsSignal.set(next);
+      })
+    };
 
     const editorHistoryRevision = signal(0);
     const editorHistoryMock = {
@@ -102,6 +114,7 @@ describe('PropertiesPanelComponent', () => {
         { provide: ShapeSelectionService, useValue: shapeSelectionServiceMock },
         { provide: SvgManipulationService, useValue: svgManipulationServiceMock },
         { provide: EditorToolService, useValue: editorToolServiceMock },
+        { provide: DrawingStyleDefaultsService, useValue: drawingStyleDefaultsServiceMock },
         { provide: EditorHistoryService, useValue: editorHistoryMock }
       ]
     }).compileComponents();
@@ -128,6 +141,28 @@ describe('PropertiesPanelComponent', () => {
       (el: any) => el.textContent.includes('Click on a shape')
     );
     expect(hintState).toBeTruthy();
+  });
+
+  it('keeps fill/stroke controls visible with no selection', () => {
+    selectedShapesSignal.set([]);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.textContent).toContain('Fill Color');
+    expect(compiled.textContent).toContain('Stroke Color');
+    expect(compiled.textContent).toContain('Target: New shapes');
+  });
+
+  it('updates defaults when paint controls are used with no selection', () => {
+    selectedShapesSignal.set([]);
+    fixture.detectChanges();
+    component.onFillColorChange('#112233');
+    component.onStrokeColorChange('#445566');
+    component.onStrokeWidthChange({ target: { value: '3.5' } } as unknown as Event);
+    expect(drawingDefaultsSignal()).toEqual({
+      fill: '#112233',
+      stroke: '#445566',
+      strokeWidth: 3.5
+    });
   });
 
   it('should display properties when a shape is selected', () => {
@@ -282,7 +317,7 @@ describe('PropertiesPanelComponent', () => {
     );
   });
 
-  it('should show fill and stroke paint source badges when metadata is set', () => {
+  it('shows paint segment controls even when shape has paint source metadata', () => {
     const mockShape: ShapeProperties = {
       id: 'shape-1',
       type: 'circle',
@@ -297,12 +332,9 @@ describe('PropertiesPanelComponent', () => {
     fixture.detectChanges();
 
     const compiled = fixture.nativeElement;
-    const badges = compiled.querySelectorAll('.paint-source-badge');
-    expect(badges.length).toBe(2);
-    expect(badges[0].textContent).toContain('CSS');
-    expect(compiled.textContent).toContain('accent');
-    expect(badges[1].textContent).toContain('On this shape');
-    expect(compiled.querySelector('.paint-source-row.class-controlled')).toBeTruthy();
+    expect(compiled.textContent).toContain('Fill Color');
+    expect(compiled.textContent).toContain('Stroke Color');
+    expect(compiled.querySelectorAll('app-color-picker').length).toBeGreaterThan(0);
   });
 
   it('should update fill color when color picker changes', () => {
@@ -325,6 +357,7 @@ describe('PropertiesPanelComponent', () => {
       fill: newColor,
       fillSource: { kind: 'presentation-attr' }
     });
+    expect(drawingDefaultsSignal().fill).toBe(newColor);
   });
 
   it('should apply fill change to every shape when multiple are selected', () => {
@@ -362,6 +395,7 @@ describe('PropertiesPanelComponent', () => {
       stroke: newColor,
       strokeSource: { kind: 'presentation-attr' }
     });
+    expect(drawingDefaultsSignal().stroke).toBe(newColor);
   });
 
   it('should remove stroke when stroke color is set to "none"', () => {
@@ -408,6 +442,7 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: newWidth,
       strokeSource: { kind: 'presentation-attr' }
     });
+    expect(drawingDefaultsSignal().strokeWidth).toBe(newWidth);
   });
 
   it('should remove stroke when stroke width is set to 0', () => {

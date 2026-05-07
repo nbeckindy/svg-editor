@@ -27,9 +27,11 @@ import {
   AlignCommand,
   DistributeCommand,
   FontCommand,
-  TextAlignCommand
+  TextAlignCommand,
+  UpdateDrawingDefaultsCommand
 } from '../../models/editor-commands';
 import { defaultLinearGradientModel, serializeGradientElementToOuterHtml } from '../../models/svg-gradient';
+import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 
 @Component({
   selector: 'app-properties-panel',
@@ -51,9 +53,14 @@ export class PropertiesPanelComponent {
   readonly selectedShape = this.shapeSelectionService.selectedShape;
   readonly selectionCount = this.shapeSelectionService.selectionCount;
   private svgManipulationService = inject(SvgManipulationService);
+  private drawingDefaults = inject(DrawingStyleDefaultsService);
   private editorHistory = inject(EditorHistoryService);
   private editorTool = inject(EditorToolService);
   readonly isSelectorMode = computed(() => this.editorTool.currentTool() === 'selector');
+  readonly hasSelection = computed(() => this.selectionCount() > 0);
+  readonly paintTargetLabel = computed(() =>
+    this.hasSelection() ? 'Target: Selection + defaults' : 'Target: New shapes'
+  );
 
   /**
    * Matrix-derived skew angles (degrees). Approximate when rotation and skew are combined.
@@ -443,9 +450,21 @@ export class PropertiesPanelComponent {
     return shape.fill ?? this.mixedColorPickerFallback;
   }
 
+  defaultFillPickerColor(): string {
+    return this.drawingDefaults.fill();
+  }
+
   strokePickerColor(shape: ShapeProperties): string {
     if (this.strokeMixed()) return this.mixedColorPickerFallback;
     return shape.stroke ?? this.mixedColorPickerFallback;
+  }
+
+  defaultStrokePickerColor(): string {
+    return this.drawingDefaults.stroke();
+  }
+
+  defaultStrokeWidthValue(): number {
+    return this.drawingDefaults.strokeWidth();
   }
 
   shapeTypeLabel(shape: ShapeProperties): string {
@@ -633,8 +652,17 @@ export class PropertiesPanelComponent {
   onAddStrokeClick(): void {
     const color = '#000000';
     const width = 1;
-    const commands = this.selectedShapesList().map(
+    const commands: EditorCommand[] = this.selectedShapesList().map(
       (s) => new AddStrokeCommand(this.svgManipulationService, s.id, color, width)
+    );
+    const defaultsBefore = this.drawingDefaults.defaults();
+    commands.push(
+      new UpdateDrawingDefaultsCommand(
+        this.drawingDefaults,
+        defaultsBefore,
+        { ...defaultsBefore, stroke: color, strokeWidth: width },
+        'all'
+      )
     );
     this.pushCommand(commands, 'Add stroke');
     this.shapeSelectionService.patchAllSelected({
@@ -645,8 +673,17 @@ export class PropertiesPanelComponent {
   }
 
   onFillColorChange(color: string): void {
-    const commands = this.selectedShapesList().map(
+    const commands: EditorCommand[] = this.selectedShapesList().map(
       (s) => new FillColorCommand(this.svgManipulationService, s.id, s.fill ?? '', color)
+    );
+    const defaultsBefore = this.drawingDefaults.defaults();
+    commands.push(
+      new UpdateDrawingDefaultsCommand(
+        this.drawingDefaults,
+        defaultsBefore,
+        { ...defaultsBefore, fill: color },
+        'fill'
+      )
     );
     this.pushCommand(commands, `Change fill to ${color}`);
     this.shapeSelectionService.patchAllSelected({
@@ -657,8 +694,17 @@ export class PropertiesPanelComponent {
 
   onStrokeColorChange(color: string): void {
     if (color === 'none' || color === '') {
-      const commands = this.selectedShapesList().map(
+      const commands: EditorCommand[] = this.selectedShapesList().map(
         (s) => new RemoveStrokeCommand(this.svgManipulationService, s.id, s.stroke ?? '#000000', s.strokeWidth ?? 1)
+      );
+      const defaultsBefore = this.drawingDefaults.defaults();
+      commands.push(
+        new UpdateDrawingDefaultsCommand(
+          this.drawingDefaults,
+          defaultsBefore,
+          { ...defaultsBefore, stroke: color },
+          'stroke'
+        )
       );
       this.pushCommand(commands, 'Remove stroke');
       this.shapeSelectionService.patchAllSelected({
@@ -667,8 +713,17 @@ export class PropertiesPanelComponent {
         strokeSource: { kind: 'default' }
       });
     } else {
-      const commands = this.selectedShapesList().map(
+      const commands: EditorCommand[] = this.selectedShapesList().map(
         (s) => new StrokeColorCommand(this.svgManipulationService, s.id, s.stroke ?? '', color)
+      );
+      const defaultsBefore = this.drawingDefaults.defaults();
+      commands.push(
+        new UpdateDrawingDefaultsCommand(
+          this.drawingDefaults,
+          defaultsBefore,
+          { ...defaultsBefore, stroke: color },
+          'stroke'
+        )
       );
       this.pushCommand(commands, `Change stroke to ${color}`);
       this.shapeSelectionService.patchAllSelected({
@@ -692,6 +747,15 @@ export class PropertiesPanelComponent {
         color, width
       );
     });
+    const defaultsBefore = this.drawingDefaults.defaults();
+    commands.push(
+      new UpdateDrawingDefaultsCommand(
+        this.drawingDefaults,
+        defaultsBefore,
+        { ...defaultsBefore, strokeWidth: width },
+        'strokeWidth'
+      )
+    );
     this.pushCommand(commands, width === 0 ? 'Remove stroke' : `Set stroke width ${width}`);
     if (width === 0) {
       this.shapeSelectionService.patchAllSelected({

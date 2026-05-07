@@ -2426,7 +2426,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     this.clearPenFinishFeedback();
     const finalD = closePath ? `${d} Z` : d;
-    const id = this.svgManipulation.insertPathIntoContentGroup(finalD);
+    const id = this.svgManipulation.insertPathIntoContentGroup(finalD, undefined, { closedPath: closePath });
     if (!id) {
       this.clearPenDrawingState();
       return;

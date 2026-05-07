@@ -2,14 +2,17 @@ import { TestBed } from '@angular/core/testing';
 import { SvgManipulationService, CreatableShapeType } from './svg-manipulation.service';
 import { AddPathCommand, ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
 import { ShapeSelectionService } from './shape-selection.service';
+import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
 
 describe('SvgManipulationService', () => {
   let service: SvgManipulationService;
+  let drawingDefaults: DrawingStyleDefaultsService;
   let container: HTMLElement;
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
     service = TestBed.inject(SvgManipulationService);
+    drawingDefaults = TestBed.inject(DrawingStyleDefaultsService);
     
     // Create a container element for SVG
     container = document.createElement('div');
@@ -1882,22 +1885,26 @@ describe('SvgManipulationService', () => {
       expect(el?.textContent).toBe('Text');
     });
 
-    it('applies default paint (black fill) for rect when no overrides given', () => {
+    it('applies canonical default paint for rect when no overrides given', () => {
       const svgContent = '<svg viewBox="0 0 200 200"></svg>';
       service.initializeSVG(container, svgContent);
       const id = service.addShape('rect', {});
       expect(id).toBeTruthy();
       const el = container.querySelector(`#${id}`);
       expect(el?.getAttribute('fill')?.toLowerCase()).toBe('#000000');
+      expect(el?.getAttribute('stroke')?.toLowerCase()).toBe('#000000');
+      expect(el?.getAttribute('stroke-width')).toBe('2');
     });
 
-    it('applies default paint (black fill) for ellipse when no overrides given', () => {
+    it('applies canonical default paint for ellipse when no overrides given', () => {
       const svgContent = '<svg viewBox="0 0 200 200"></svg>';
       service.initializeSVG(container, svgContent);
       const id = service.addShape('ellipse', {});
       expect(id).toBeTruthy();
       const el = container.querySelector(`#${id}`);
       expect(el?.getAttribute('fill')?.toLowerCase()).toBe('#000000');
+      expect(el?.getAttribute('stroke')?.toLowerCase()).toBe('#000000');
+      expect(el?.getAttribute('stroke-width')).toBe('2');
     });
 
     it('applies default paint (black stroke, fill none) for line when no overrides given', () => {
@@ -1918,11 +1925,46 @@ describe('SvgManipulationService', () => {
       expect(id).toBeTruthy();
       const el = container.querySelector(`#${id}`);
       expect(el?.getAttribute('fill')?.toLowerCase()).toBe('#000000');
+      expect(el?.getAttribute('stroke')?.toLowerCase()).toBe('#000000');
+      expect(el?.getAttribute('stroke-width')).toBe('2');
       expect(el?.getAttribute('font-size')).toBe('16');
       expect(el?.getAttribute('font-weight')).toBe('normal');
       expect(el?.getAttribute('font-style')).toBe('normal');
       expect(el?.getAttribute('text-anchor')).toBe('start');
       expect(el?.textContent).toBe('Text');
+    });
+
+    it('uses updated canonical defaults across rect/ellipse/line/text creation', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      drawingDefaults.updateDefaults({
+        fill: '#123456',
+        stroke: '#abcdef',
+        strokeWidth: 7
+      });
+
+      const rectId = service.addShape('rect', {});
+      const ellipseId = service.addShape('ellipse', {});
+      const lineId = service.addShape('line', {});
+      const textId = service.addShape('text', {});
+
+      expect(container.querySelector(`#${rectId}`)?.getAttribute('fill')?.toLowerCase()).toBe('#123456');
+      expect(container.querySelector(`#${rectId}`)?.getAttribute('stroke')?.toLowerCase()).toBe('#abcdef');
+      expect(container.querySelector(`#${ellipseId}`)?.getAttribute('fill')?.toLowerCase()).toBe('#123456');
+      expect(container.querySelector(`#${ellipseId}`)?.getAttribute('stroke-width')).toBe('7');
+      expect(container.querySelector(`#${textId}`)?.getAttribute('fill')?.toLowerCase()).toBe('#123456');
+      expect(container.querySelector(`#${textId}`)?.getAttribute('stroke')?.toLowerCase()).toBe('#abcdef');
+      expect(container.querySelector(`#${lineId}`)?.getAttribute('fill')).toBe('none');
+      expect(container.querySelector(`#${lineId}`)?.getAttribute('stroke')?.toLowerCase()).toBe('#abcdef');
+      expect(container.querySelector(`#${lineId}`)?.getAttribute('stroke-width')).toBe('7');
+    });
+
+    it('line creation ignores fill even when fill override is provided', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('line', { fill: '#ff00ff' });
+      const el = container.querySelector(`#${id}`);
+      expect(el?.getAttribute('fill')).toBe('none');
     });
 
     it('getShapeProperties includes text typography fields', () => {
@@ -2031,6 +2073,24 @@ describe('SvgManipulationService', () => {
       const id = service.insertPathIntoContentGroup('M 1 1 L 2 2');
       const contentGroup = container.querySelector('[data-editor-content-group]');
       expect(contentGroup?.querySelector(`#${id}`)).not.toBeNull();
+    });
+
+    it('uses canonical fill only when path is closed', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      drawingDefaults.updateDefaults({ fill: '#fedcba', stroke: '#654321', strokeWidth: 4 });
+
+      const openId = service.insertPathIntoContentGroup('M 1 1 L 2 2');
+      const closedId = service.insertPathIntoContentGroup('M 3 3 L 4 4 Z', undefined, { closedPath: true });
+      const openEl = container.querySelector(`#${openId}`);
+      const closedEl = container.querySelector(`#${closedId}`);
+
+      expect(openEl?.getAttribute('fill')).toBe('none');
+      expect(openEl?.getAttribute('stroke')?.toLowerCase()).toBe('#654321');
+      expect(openEl?.getAttribute('stroke-width')).toBe('4');
+      expect(closedEl?.getAttribute('fill')?.toLowerCase()).toBe('#fedcba');
+      expect(closedEl?.getAttribute('stroke')?.toLowerCase()).toBe('#654321');
+      expect(closedEl?.getAttribute('stroke-width')).toBe('4');
     });
   });
 

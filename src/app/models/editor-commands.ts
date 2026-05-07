@@ -6,6 +6,7 @@ import { type ResizeCorner } from '../utils/selection-resize';
 import { type SkewAxis } from '../utils/selection-skew';
 import { ArtboardModel } from './artboard.model';
 import { type ClipboardPayload } from '../services/clipboard.service';
+import { DrawingStyleDefaults, DrawingStyleDefaultsService } from '../services/drawing-style-defaults.service';
 
 export interface EditorCommand {
   readonly description: string;
@@ -306,6 +307,33 @@ export class StrokeDashOffsetCommand implements CoalesceableCommand {
   coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
     const n = newer as StrokeDashOffsetCommand;
     return new StrokeDashOffsetCommand(this.svc, this.shapeId, this.oldOffset, n.newOffset);
+  }
+}
+
+export class UpdateDrawingDefaultsCommand implements CoalesceableCommand {
+  readonly description = 'Update drawing defaults';
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly defaultsSvc: DrawingStyleDefaultsService,
+    private readonly before: DrawingStyleDefaults,
+    private readonly after: DrawingStyleDefaults,
+    private readonly scope: 'fill' | 'stroke' | 'strokeWidth' | 'all' = 'all'
+  ) {
+    this.coalesceKey = `drawing-defaults:${scope}`;
+  }
+
+  execute(): void {
+    this.defaultsSvc.setDefaults(this.after);
+  }
+
+  undo(): void {
+    this.defaultsSvc.setDefaults(this.before);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as UpdateDrawingDefaultsCommand;
+    return new UpdateDrawingDefaultsCommand(this.defaultsSvc, this.before, n.after, this.scope);
   }
 }
 

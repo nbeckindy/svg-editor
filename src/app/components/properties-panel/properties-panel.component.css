@@ -36,6 +36,21 @@
   -webkit-overflow-scrolling: touch;
 }
 
+.paint-segment {
+  flex-shrink: 0;
+  padding: 12px 16px 10px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+}
+
+.paint-segment-group {
+  margin-bottom: 12px;
+}
+
+.paint-segment-group:last-child {
+  margin-bottom: 0;
+}
+
 .properties-content {
   padding: 16px;
 }
@@ -49,6 +64,17 @@
   font-size: 12px;
   line-height: 1.4;
   color: #777;
+}
+
+.paint-target-indicator {
+  margin: 0 0 12px 0;
+  padding: 6px 10px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #2f5f8f;
+  background: #eaf3fb;
+  border: 1px solid #c8def2;
+  border-radius: 4px;
 }
 
 .multi-select-hint {
