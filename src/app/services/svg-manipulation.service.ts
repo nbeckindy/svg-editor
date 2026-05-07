@@ -24,7 +24,13 @@ export interface ShapeCreationAttrs {
   stroke?: string;
   strokeWidth?: number;
 }
-import { ArtboardModel, DEFAULT_ARTBOARD } from '../models/artboard.model';
+import {
+  ArtboardModel,
+  ArtboardResizeAnchor,
+  DEFAULT_ARTBOARD,
+  DEFAULT_ARTBOARD_RESIZE_ANCHOR,
+  computeArtboardOriginForResize
+} from '../models/artboard.model';
 import {
   applyEditableGradientModelToElement,
   defaultLinearGradientModel,
@@ -374,6 +380,10 @@ export class SvgManipulationService {
   /** Reactive artboard state (width, height, origin, background color). */
   readonly artboard = computed(() => this._artboard());
 
+  private readonly _artboardResizeAnchor = signal<ArtboardResizeAnchor>(DEFAULT_ARTBOARD_RESIZE_ANCHOR);
+  /** Fixed point used when changing artboard dimensions (editor preference, not exported). */
+  readonly artboardResizeAnchor = computed(() => this._artboardResizeAnchor());
+
   private svgInstance: Svg | null = null;
   /** Stored document viewBox for export and overlay (e.g. "0 0 100 100"). */
   private documentViewBox = '0 0 100 100';
@@ -390,16 +400,24 @@ export class SvgManipulationService {
    * Update artboard dimensions. Syncs the viewBox rect, outside rect, and stage viewBox
    * without changing the root SVG element's pixel size (that's managed by zoom/layout).
    * Rejects zero/negative values.
+   *
+   * By default, `minX`/`minY` are chosen from {@link artboardResizeAnchor} so the chosen
+   * corner/edge/center stays fixed. Pass `explicitOrigin` (e.g. on undo) to set the origin directly.
    */
-  setArtboardSize(width: number, height: number): void {
+  setArtboardSize(
+    width: number,
+    height: number,
+    explicitOrigin?: { minX: number; minY: number }
+  ): void {
     if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) return;
     if (!this.svgInstance) return;
 
     const prev = this._artboard();
-    const minX = prev.minX;
-    const minY = prev.minY;
+    const { minX, minY } =
+      explicitOrigin ??
+      computeArtboardOriginForResize(prev, width, height, this._artboardResizeAnchor());
 
-    this._artboard.set({ ...prev, width, height });
+    this._artboard.set({ ...prev, width, height, minX, minY });
     this.documentViewBox = `${minX} ${minY} ${width} ${height}`;
 
     const outsideRect = this.svgInstance.findOne(`[${EDITOR_OUTSIDE_RECT_ATTR}]`) as SvgJsElement | null;
@@ -420,6 +438,11 @@ export class SvgManipulationService {
 
     this.syncStageViewBox();
     this.bumpDocumentRevision();
+  }
+
+  /** Editor preference: which point stays fixed when resizing the artboard (not undoable). */
+  setArtboardResizeAnchor(anchor: ArtboardResizeAnchor): void {
+    this._artboardResizeAnchor.set(anchor);
   }
 
   /**

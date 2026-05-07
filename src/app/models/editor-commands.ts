@@ -1111,6 +1111,8 @@ export class ArtboardSizeCommand implements CoalesceableCommand {
     private readonly svc: SvgManipulationService,
     private readonly oldWidth: number,
     private readonly oldHeight: number,
+    private readonly oldMinX: number,
+    private readonly oldMinY: number,
     private readonly newWidth: number,
     private readonly newHeight: number
   ) {
@@ -1122,12 +1124,23 @@ export class ArtboardSizeCommand implements CoalesceableCommand {
   }
 
   undo(): void {
-    this.svc.setArtboardSize(this.oldWidth, this.oldHeight);
+    this.svc.setArtboardSize(this.oldWidth, this.oldHeight, {
+      minX: this.oldMinX,
+      minY: this.oldMinY
+    });
   }
 
   coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
     const n = newer as ArtboardSizeCommand;
-    return new ArtboardSizeCommand(this.svc, this.oldWidth, this.oldHeight, n.newWidth, n.newHeight);
+    return new ArtboardSizeCommand(
+      this.svc,
+      this.oldWidth,
+      this.oldHeight,
+      this.oldMinX,
+      this.oldMinY,
+      n.newWidth,
+      n.newHeight
+    );
   }
 }
 

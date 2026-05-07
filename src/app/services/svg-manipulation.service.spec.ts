@@ -1687,6 +1687,31 @@ describe('SvgManipulationService', () => {
       expect(service.getDocumentViewBox()).toBe('0 0 500 400');
     });
 
+    it('setArtboardSize with bottom-right anchor keeps bottom-right corner fixed', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setArtboardResizeAnchor('bottom-right');
+      service.setArtboardSize(200, 150);
+      const ab = service.getArtboard();
+      expect(ab.minX).toBe(-100);
+      expect(ab.minY).toBe(-50);
+      expect(ab.width).toBe(200);
+      expect(ab.height).toBe(150);
+      expect(service.getDocumentViewBox()).toBe('-100 -50 200 150');
+    });
+
+    it('setArtboardSize explicitOrigin bypasses anchor math', () => {
+      const svgContent = '<svg viewBox="10 20 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setArtboardResizeAnchor('center');
+      service.setArtboardSize(200, 200, { minX: 10, minY: 20 });
+      const ab = service.getArtboard();
+      expect(ab.minX).toBe(10);
+      expect(ab.minY).toBe(20);
+      expect(ab.width).toBe(200);
+      expect(ab.height).toBe(200);
+    });
+
     it('setArtboardSize rejects zero dimensions', () => {
       const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
@@ -1761,12 +1786,29 @@ describe('SvgManipulationService', () => {
       const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
 
-      const cmd = new ArtboardSizeCommand(service, 100, 100, 500, 400);
+      const cmd = new ArtboardSizeCommand(service, 100, 100, 0, 0, 500, 400);
       cmd.execute();
       expect(service.getArtboard().width).toBe(500);
       expect(service.getArtboard().height).toBe(400);
 
       cmd.undo();
+      expect(service.getArtboard().width).toBe(100);
+      expect(service.getArtboard().height).toBe(100);
+    });
+
+    it('ArtboardSizeCommand undo restores origin after center-anchored resize', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setArtboardResizeAnchor('center');
+
+      const cmd = new ArtboardSizeCommand(service, 100, 100, 0, 0, 200, 200);
+      cmd.execute();
+      expect(service.getArtboard().minX).toBe(-50);
+      expect(service.getArtboard().minY).toBe(-50);
+
+      cmd.undo();
+      expect(service.getArtboard().minX).toBe(0);
+      expect(service.getArtboard().minY).toBe(0);
       expect(service.getArtboard().width).toBe(100);
       expect(service.getArtboard().height).toBe(100);
     });

@@ -4,7 +4,7 @@ import { signal, computed, WritableSignal } from '@angular/core';
 import { DocumentSettingsComponent } from './document-settings.component';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
-import { DEFAULT_ARTBOARD, ArtboardModel } from '../../models/artboard.model';
+import { DEFAULT_ARTBOARD, ArtboardModel, ArtboardResizeAnchor } from '../../models/artboard.model';
 
 describe('DocumentSettingsComponent', () => {
   let fixture: ComponentFixture<DocumentSettingsComponent>;
@@ -13,15 +13,19 @@ describe('DocumentSettingsComponent', () => {
   let mockHistory: any;
   let svgInstanceValue: any;
   let artboardSig: WritableSignal<ArtboardModel>;
+  let resizeAnchorSig: WritableSignal<ArtboardResizeAnchor>;
 
   beforeEach(async () => {
     svgInstanceValue = {};
     artboardSig = signal({ ...DEFAULT_ARTBOARD });
+    resizeAnchorSig = signal('top-left');
     mockSvgManip = {
       artboard: computed(() => artboardSig()),
+      artboardResizeAnchor: computed(() => resizeAnchorSig()),
       getArtboard: () => artboardSig(),
       getSVGInstance: vi.fn(() => svgInstanceValue),
       setArtboardSize: vi.fn(),
+      setArtboardResizeAnchor: vi.fn((a: ArtboardResizeAnchor) => resizeAnchorSig.set(a)),
       setBackgroundColor: vi.fn(),
       documentRevision: signal(0)
     };
@@ -118,5 +122,15 @@ describe('DocumentSettingsComponent', () => {
     fixture.detectChanges();
 
     expect(mockHistory.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('should call setArtboardResizeAnchor when an anchor cell is clicked', () => {
+    const btn = fixture.nativeElement.querySelector(
+      '[data-testid="artboard-resize-anchor-bottom-right"]'
+    ) as HTMLButtonElement;
+    expect(btn).toBeTruthy();
+    btn.click();
+    fixture.detectChanges();
+    expect(mockSvgManip.setArtboardResizeAnchor).toHaveBeenCalledWith('bottom-right');
   });
 });

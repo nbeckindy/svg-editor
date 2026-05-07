@@ -7,7 +7,7 @@ import { SvgManipulationService } from '../../services/svg-manipulation.service'
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
-import { DEFAULT_ARTBOARD } from '../../models/artboard.model';
+import { DEFAULT_ARTBOARD, ArtboardResizeAnchor } from '../../models/artboard.model';
 import { vi } from 'vitest';
 
 describe('PropertiesPanelComponent', () => {
@@ -56,8 +56,10 @@ describe('PropertiesPanelComponent', () => {
       getSVGInstance: vi.fn(),
       getShapeProperties: vi.fn(),
       artboard: computed(() => artboardSig()),
+      artboardResizeAnchor: computed(() => 'top-left' as ArtboardResizeAnchor),
       getArtboard: () => artboardSig(),
       setArtboardSize: vi.fn(),
+      setArtboardResizeAnchor: vi.fn(),
       setBackgroundColor: vi.fn(),
       documentRevision: signal(0),
       updateStrokeDasharray: vi.fn(),
