@@ -284,6 +284,32 @@
               stroke-dasharray="6 3"
               vector-effect="non-scaling-stroke"/>
           }
+          @if (penOutgoingHandleGuideOverlay; as og) {
+            <line
+              class="pen-outgoing-handle-guide"
+              data-testid="canvas-pen-outgoing-handle-guide"
+              [attr.x1]="og.x1"
+              [attr.y1]="og.y1"
+              [attr.x2]="og.x2"
+              [attr.y2]="og.y2"
+              stroke="#2196f3"
+              stroke-width="1.25"
+              stroke-dasharray="4 3"
+              vector-effect="non-scaling-stroke"/>
+          }
+          @if (penOutgoingHandleKnobOverlay; as pk) {
+            <circle
+              class="pen-outgoing-handle"
+              data-pen-outgoing-handle="true"
+              data-testid="canvas-pen-outgoing-handle"
+              [attr.cx]="pk.cx"
+              [attr.cy]="pk.cy"
+              r="4"
+              fill="#ffffff"
+              stroke="#2196f3"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"/>
+          }
           @if (penCloseTargetHoverOverlay; as closeRing) {
             <circle
               class="creation-ghost-shape pen-close-target-ring"

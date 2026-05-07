@@ -13,6 +13,7 @@ import { EditorHistoryService } from '../../services/editor-history.service';
 import { ClipboardService } from '../../services/clipboard.service';
 import { SnapService } from '../../services/snap.service';
 import { CompositeCommand } from '../../models/editor-commands';
+import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
 
 /** Mock SVG.js shape with clone() for drag-ghost tests. clone() returns a real DOM node so SVG.js add() can adopt it. */
 function mockSvgJsShape(
@@ -3442,7 +3443,7 @@ describe('SvgCanvasComponent', () => {
       expect(component.penSessionPreviewPathD).toContain('M 15 16');
     });
 
-    it('bypasses pen snapping when Shift is held (modifier precedence)', async () => {
+    it('still applies grid snap when Shift is held on first anchor (Shift constrains Bézier handles while dragging)', async () => {
       await loadEmptySvgAndPenMode();
       editorToolService.setGridSnapEnabled(true);
       editorToolService.setShapeSnapEnabled(true);
@@ -3460,8 +3461,143 @@ describe('SvgCanvasComponent', () => {
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
 
+      expect(shapeGuideSpy).toHaveBeenCalled();
+      expect(component.penSessionPreviewPathD).toContain('M 10 20');
+    });
+
+    it('bypasses pen snapping when Cmd/Ctrl is held (j24.1)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(true);
+      editorToolService.setShapeSnapEnabled(true);
+      const shapeGuideSpy = vi.spyOn(snapService, 'snapDeltaToSmartGuides');
+      fixture.detectChanges();
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg') as Element | null;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 12,
+        clientY: 18,
+        detail: 1,
+        metaKey: true,
+        target: svgRoot,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+
       expect(shapeGuideSpy).not.toHaveBeenCalled();
       expect(component.penSessionPreviewPathD).toContain('M 12 18');
+    });
+
+    it('pen outgoing handle drag is undone with Ctrl+Z (provisional PenSegmentReplaceCommand)', async () => {
+      await loadEmptySvgAndPenMode();
+      const bend = MARQUEE_MIN_DRAG_PX + 8;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 70,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 70, clientY: 20 + bend } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 70, clientY: 20 + bend } as MouseEvent);
+      fixture.detectChanges();
+
+      const penSession = (component as unknown as { penSession: { getSegments: () => unknown[] } }).penSession;
+      const beforeHandle = JSON.stringify(penSession.getSegments());
+      const knob = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-pen-outgoing-handle"]'
+      ) as SVGCircleElement | null;
+      expect(knob).toBeTruthy();
+      const r = knob!.getBoundingClientRect();
+      const mx = r.left + r.width / 2;
+      const my = r.top + r.height / 2;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: mx,
+        clientY: my,
+        detail: 1,
+        target: knob!,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: mx + 12, clientY: my + 8 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: mx + 12, clientY: my + 8 } as MouseEvent);
+      fixture.detectChanges();
+      expect(JSON.stringify(penSession.getSegments())).not.toBe(beforeHandle);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+      fixture.detectChanges();
+      expect(JSON.stringify(penSession.getSegments())).toBe(beforeHandle);
+    });
+
+    it('after outgoing handle adjust and new line point, Ctrl+Z restores cubic to pre-handle geometry but keeps the new line', async () => {
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      await loadEmptySvgAndPenMode();
+      const bend = MARQUEE_MIN_DRAG_PX + 8;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 70,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 70, clientY: 20 + bend } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 70, clientY: 20 + bend } as MouseEvent);
+      fixture.detectChanges();
+
+      const penSession = (component as unknown as { penSession: { getSegments: () => { type: string }[] } }).penSession;
+      const afterCurve = JSON.stringify(penSession.getSegments());
+      const knob = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-pen-outgoing-handle"]'
+      ) as SVGCircleElement | null;
+      expect(knob).toBeTruthy();
+      const r = knob!.getBoundingClientRect();
+      const mx = r.left + r.width / 2;
+      const my = r.top + r.height / 2;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: mx,
+        clientY: my,
+        detail: 1,
+        target: knob!,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: mx + 10, clientY: my + 6 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: mx + 10, clientY: my + 6 } as MouseEvent);
+      fixture.detectChanges();
+      expect(JSON.stringify(penSession.getSegments())).not.toBe(afterCurve);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 90,
+        clientY: 80,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 90, clientY: 80 } as MouseEvent);
+      fixture.detectChanges();
+      expect(penSession.getSegments().length).toBe(3);
+      expect(penSession.getSegments()[2].type).toBe('L');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+      fixture.detectChanges();
+      const segs = penSession.getSegments();
+      expect(segs.length).toBe(3);
+      expect(JSON.stringify(segs.slice(0, 2))).toBe(afterCurve);
+      expect(segs[2].type).toBe('L');
     });
 
     it('shows close-target ring when pointer hovers near pen path start anchor', async () => {

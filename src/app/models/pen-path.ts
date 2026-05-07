@@ -228,7 +228,8 @@ export function dragBendCubicControlPoints(
   p0: { x: number; y: number },
   p3: { x: number; y: number },
   dragStart: { x: number; y: number },
-  dragCurrent: { x: number; y: number }
+  dragCurrent: { x: number; y: number },
+  breakHandleSymmetry = false
 ): CubicControlPoints {
   const base = symmetricCubicControlPoints(p0, p3);
   const dx = p3.x - p0.x;
@@ -241,6 +242,15 @@ export function dragBendCubicControlPoints(
   const dragDx = dragCurrent.x - dragStart.x;
   const dragDy = dragCurrent.y - dragStart.y;
   const bend = dragDx * nx + dragDy * ny;
+
+  if (breakHandleSymmetry) {
+    return {
+      x1: base.x1,
+      y1: base.y1,
+      x2: base.x2 + nx * bend,
+      y2: base.y2 + ny * bend
+    };
+  }
 
   return {
     x1: base.x1 + nx * bend,
@@ -277,9 +287,10 @@ export function dragBendSmoothCubicSecondControl(
   p0: { x: number; y: number },
   p3: { x: number; y: number },
   dragStart: { x: number; y: number },
-  dragCurrent: { x: number; y: number }
+  dragCurrent: { x: number; y: number },
+  breakHandleSymmetry = false
 ): { x2: number; y2: number } {
-  const c = dragBendCubicControlPoints(p0, p3, dragStart, dragCurrent);
+  const c = dragBendCubicControlPoints(p0, p3, dragStart, dragCurrent, breakHandleSymmetry);
   return { x2: c.x2, y2: c.y2 };
 }
 
@@ -365,6 +376,79 @@ export function lastCommittedVertex(
   return { x: last.x, y: last.y };
 }
 
+/** Reflection of the smooth-quadratic control across the point `st` (used for `T` preview). */
+export function impliedSmoothQuadraticControlFromState(st: PenSvgReflectState): { x: number; y: number } {
+  return { x: 2 * st.x - st.quadCpX, y: 2 * st.y - st.quadCpY };
+}
+
+/**
+ * Last-vertex outgoing Bézier handle in SVG user space (endpoint → control), when the segment shows a handle.
+ * `L` / `M` return null.
+ */
+export function penLastOutgoingHandleSvg(
+  segments: readonly PenPathSegment[]
+): { anchorX: number; anchorY: number; hx: number; hy: number } | null {
+  if (segments.length < 2) return null;
+  const last = segments[segments.length - 1];
+  if (last.type === 'C' || last.type === 'S') {
+    return { anchorX: last.x, anchorY: last.y, hx: last.x2, hy: last.y2 };
+  }
+  if (last.type === 'Q') {
+    return { anchorX: last.x, anchorY: last.y, hx: last.x1, hy: last.y1 };
+  }
+  if (last.type === 'T') {
+    const st = pathSvgReflectStateAfter(segments.slice(0, -1));
+    if (!st) return null;
+    const im = impliedSmoothQuadraticControlFromState(st);
+    return { anchorX: last.x, anchorY: last.y, hx: im.x, hy: im.y };
+  }
+  return null;
+}
+
+/** Mutates the outgoing control(s) for the path's last drawable segment; converts trailing `T` to `Q`. */
+export function movePenLastOutgoingHandleTo(
+  segments: readonly PenPathSegment[],
+  hx: number,
+  hy: number
+): PenPathSegment[] | null {
+  if (segments.length < 2) return null;
+  const segs = segments.map((s) => ({ ...s })) as PenPathSegment[];
+  const last = segs[segs.length - 1];
+  const idx = segs.length - 1;
+  switch (last.type) {
+    case 'C':
+    case 'S':
+      segs[idx] = { ...last, x2: hx, y2: hy };
+      return segs;
+    case 'Q':
+      segs[idx] = { ...last, x1: hx, y1: hy };
+      return segs;
+    case 'T':
+      segs[idx] = { type: 'Q', x1: hx, y1: hy, x: last.x, y: last.y };
+      return segs;
+    default:
+      return null;
+  }
+}
+
+/**
+ * Snap so that `target` lies on a ray from `origin` whose angle is a multiple of 45° in user space.
+ * Preserves `Math.hypot(target - origin)`.
+ */
+export function snapVectorTo45DegFrom(
+  origin: { x: number; y: number },
+  target: { x: number; y: number }
+): { x: number; y: number } {
+  const dx = target.x - origin.x;
+  const dy = target.y - origin.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-12) return { x: origin.x, y: origin.y };
+  let ang = Math.atan2(dy, dx);
+  const step = Math.PI / 4;
+  ang = Math.round(ang / step) * step;
+  return { x: origin.x + Math.cos(ang) * len, y: origin.y + Math.sin(ang) * len };
+}
+
 /** At least one moveto and one additional drawable vertex (line or curve end). */
 export function penPathSegmentsAreValid(segments: readonly PenPathSegment[]): boolean {
   if (segments.length < 2) return false;
@@ -424,6 +508,12 @@ export class PenSession {
   /** Replace the in-progress path (e.g. continue-from-existing). */
   restoreDrawableSegments(segments: readonly PenPathSegment[]): void {
     this.segments = segments.map((s) => ({ ...s })) as PenPathSegment[];
+  }
+
+  /** Replace one segment (pen handle adjust, undo, etc.). */
+  replaceSegmentAt(index: number, segment: PenPathSegment): void {
+    if (index < 0 || index >= this.segments.length) return;
+    this.segments[index] = { ...segment } as PenPathSegment;
   }
 
   /**

@@ -73,6 +73,12 @@ export class EditorHistoryService {
     this.revision.update((r) => r + 1);
   }
 
+  /** Remove matching commands from the undo stack (e.g. provisional pen edits). Clears redo. */
+  discardWhere(predicate: (command: EditorCommand) => boolean): void {
+    this.undoStack.update((s) => s.filter((c) => !predicate(c)));
+    this.redoStack.set([]);
+  }
+
   clear(): void {
     this.undoStack.set([]);
     this.redoStack.set([]);

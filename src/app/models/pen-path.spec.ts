@@ -7,11 +7,14 @@ import {
   dragBendQuadraticControlPoint,
   dragBendSmoothCubicSecondControl,
   lastCommittedVertex,
+  movePenLastOutgoingHandleTo,
   pathSvgReflectStateAfter,
   penDragCurveAuthoringKind,
+  penLastOutgoingHandleSvg,
   penPathOnlyMoveto,
   penPathSegmentsAreValid,
   penPathSegmentsToD,
+  snapVectorTo45DegFrom,
   symmetricCubicControlPoints
 } from './pen-path';
 import { parsePathD } from './path-d';
@@ -355,5 +358,84 @@ describe('PenSession', () => {
     const s = new PenSession();
     s.appendCubic(0, 0, 1, 1, 2, 2);
     expect(s.finishPath()).toBe(null);
+  });
+
+  it('replaceSegmentAt swaps one drawable segment', () => {
+    const s = new PenSession();
+    s.beginPath(0, 0);
+    s.addLinePoint(10, 0);
+    s.appendCubic(12, 2, 8, 2, 20, 0);
+    s.replaceSegmentAt(1, { type: 'L', x: 15, y: 5 });
+    expect(s.getSegments()[1]).toEqual({ type: 'L', x: 15, y: 5 });
+  });
+});
+
+describe('movePenLastOutgoingHandleTo', () => {
+  it('updates trailing C second control', () => {
+    const segs = [
+      { type: 'M' as const, x: 0, y: 0 },
+      { type: 'C' as const, x1: 0, y1: 0, x2: 5, y2: 5, x: 10, y: 10 }
+    ];
+    const next = movePenLastOutgoingHandleTo(segs, 8, 2);
+    expect(next?.[1]).toMatchObject({ type: 'C', x2: 8, y2: 2, x: 10, y: 10 });
+  });
+
+  it('converts trailing T to Q when dragging implied control', () => {
+    const segs = [
+      { type: 'M' as const, x: 0, y: 0 },
+      { type: 'Q' as const, x1: 5, y1: 10, x: 10, y: 0 },
+      { type: 'T' as const, x: 20, y: 0 }
+    ];
+    const next = movePenLastOutgoingHandleTo(segs, 12, 4)!;
+    expect(next[2]).toEqual({ type: 'Q', x1: 12, y1: 4, x: 20, y: 0 });
+  });
+});
+
+describe('penLastOutgoingHandleSvg', () => {
+  it('returns endpoint to second control for C', () => {
+    const segs = [
+      { type: 'M' as const, x: 0, y: 0 },
+      { type: 'C' as const, x1: 0, y1: 0, x2: 4, y2: 4, x: 10, y: 10 }
+    ];
+    expect(penLastOutgoingHandleSvg(segs)).toEqual({
+      anchorX: 10,
+      anchorY: 10,
+      hx: 4,
+      hy: 4
+    });
+  });
+});
+
+describe('snapVectorTo45DegFrom', () => {
+  it('snaps to nearest 45° increment preserving length from origin', () => {
+    const o = { x: 0, y: 0 };
+    const t = { x: 1.1, y: 0.2 };
+    const s = snapVectorTo45DegFrom(o, t);
+    const ang = (Math.atan2(s.y - o.y, s.x - o.x) * 180) / Math.PI;
+    expect(ang).toBeCloseTo(0, 5);
+    expect(Math.hypot(s.x - o.x, s.y - o.y)).toBeCloseTo(Math.hypot(t.x - o.x, t.y - o.y), 5);
+  });
+});
+
+describe('dragBendCubicControlPoints breakHandleSymmetry', () => {
+  it('freezes first control at symmetric baseline while bending only the second', () => {
+    const sym = dragBendCubicControlPoints(
+      { x: 0, y: 0 },
+      { x: 90, y: 0 },
+      { x: 45, y: 0 },
+      { x: 45, y: -30 },
+      false
+    );
+    const asym = dragBendCubicControlPoints(
+      { x: 0, y: 0 },
+      { x: 90, y: 0 },
+      { x: 45, y: 0 },
+      { x: 45, y: -30 },
+      true
+    );
+    const base = symmetricCubicControlPoints({ x: 0, y: 0 }, { x: 90, y: 0 });
+    expect(asym.x1).toBeCloseTo(base.x1, 6);
+    expect(asym.y1).toBeCloseTo(base.y1, 6);
+    expect(sym.y1).not.toBeCloseTo(asym.y1, 2);
   });
 });

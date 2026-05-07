@@ -31,6 +31,7 @@ import {
   AddShapeCommand,
   AddPathCommand,
   EditPathNodesCommand,
+  PenSegmentReplaceCommand,
   PasteCommand,
   DuplicateCommand,
   TextContentCommand,
@@ -64,6 +65,9 @@ import {
   penPathSegmentsToD,
   penReflectStateAfterCommitted,
   penSvgDistanceSq,
+  penLastOutgoingHandleSvg,
+  movePenLastOutgoingHandleTo,
+  snapVectorTo45DegFrom,
   type PenPathSegment
 } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
@@ -507,15 +511,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     anchor: { x: number; y: number };
     startClient: { x: number; y: number };
     startSvg: { x: number; y: number };
-    /** When true (Ctrl or ⌘ while placing the point), dragging authors `Q` / `S` / `T` vs default `C`. */
+    /** When true (Ctrl while placing the point; ⌘ reserved for snap-off per j24.1), dragging authors `Q` / `S` / `T` vs default `C`. */
     ctrlCurve: boolean;
   } | null = null;
   private penPendingLastClient: { x: number; y: number } | null = null;
   private penPendingDragSvg: { x: number; y: number } | null = null;
+  /** Alt/Option during Bézier drag: break handle symmetry (corner conversion on commit where applicable). */
+  private penPendingCurveAltChord = false;
+  /** Shift during Bézier / outgoing-handle drag: snap handle direction to 45° from anchor/end. */
+  private penPendingShiftAngleSnap = false;
   /** Last pointer position during pen authoring (viewport pixels), for stroke-start hover hit test. */
   private penHoverClientPx: { x: number; y: number } | null = null;
   /** Editing an existing open path (continue-from-end); undo uses {@link EditPathNodesCommand}. */
   private penContinuingPathRewrite: { pathId: string; originalD: string } | null = null;
+  /** Dragging the committed last-segment outgoing handle (rubber-band phase); undo via {@link PenSegmentReplaceCommand}. */
+  private penOutgoingHandleDrag: { segmentIndex: number; before: PenPathSegment } | null = null;
 
   // Proxy getters for template bindings and inter-gesture guards
   get isDraggingShape(): boolean { return this.drag.isActive; }
@@ -593,7 +603,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
-        const { x1, y1, x2, y2 } = dragBendCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
+        let { x1, y1, x2, y2 } = dragBendCubicControlPoints(
+          anchor,
+          end,
+          pending.startSvg,
+          dragCurrent,
+          this.penPendingCurveAltChord
+        );
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: x2, y: y2 });
+          x2 = s.x;
+          y2 = s.y;
+        }
         const p1 = toOverlay(x1, y1);
         const p2 = toOverlay(x2, y2);
         return [
@@ -602,7 +623,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         ];
       }
       case 'quadratic': {
-        const qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+        let qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
+          qc = { x1: s.x, y1: s.y };
+        }
         const p = toOverlay(qc.x1, qc.y1);
         return [{ cx: p.x, cy: p.y }];
       }
@@ -611,7 +636,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         if (!st) return [];
         const sx1 = st.canReflectCubic ? 2 * anchor.x - st.cubicCp2X : anchor.x;
         const sy1 = st.canReflectCubic ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-        const s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent);
+        const br = this.penPendingCurveAltChord;
+        let s2 = dragBendSmoothCubicSecondControl(
+          anchor,
+          end,
+          pending.startSvg,
+          dragCurrent,
+          br
+        );
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
+          s2 = { x2: s.x, y2: s.y };
+        }
         const p1 = toOverlay(sx1, sy1);
         const p2 = toOverlay(s2.x2, s2.y2);
         return [
@@ -622,8 +658,22 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       default: {
         const st = penReflectStateAfterCommitted(this.penSession.getSegments());
         if (!st) return [];
-        const ix = 2 * anchor.x - st.quadCpX;
-        const iy = 2 * anchor.y - st.quadCpY;
+        if (this.penPendingCurveAltChord) {
+          let qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+          if (this.penPendingShiftAngleSnap) {
+            const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
+            qc = { x1: s.x, y1: s.y };
+          }
+          const p = toOverlay(qc.x1, qc.y1);
+          return [{ cx: p.x, cy: p.y }];
+        }
+        let ix = 2 * anchor.x - st.quadCpX;
+        let iy = 2 * anchor.y - st.quadCpY;
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
+          ix = s.x;
+          iy = s.y;
+        }
         const p = toOverlay(ix, iy);
         return [{ cx: p.x, cy: p.y }];
       }
@@ -647,6 +697,35 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       height: 0
     });
     return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  }
+
+  /** Dashed guide from last vertex to outgoing handle while rubber-banding the next segment. */
+  get penOutgoingHandleGuideOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
+    const h = this.penCommittedOutgoingHandleSvg();
+    if (!h) return null;
+    const p1 = this.svgBboxToOverlayPixels({ x: h.anchorX, y: h.anchorY, width: 0, height: 0 });
+    const p2 = this.svgBboxToOverlayPixels({ x: h.hx, y: h.hy, width: 0, height: 0 });
+    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  }
+
+  get penOutgoingHandleKnobOverlay(): { cx: number; cy: number } | null {
+    const h = this.penCommittedOutgoingHandleSvg();
+    if (!h) return null;
+    const p2 = this.svgBboxToOverlayPixels({ x: h.hx, y: h.hy, width: 0, height: 0 });
+    return { cx: p2.x, cy: p2.y };
+  }
+
+  private penCommittedOutgoingHandleSvg(): {
+    anchorX: number;
+    anchorY: number;
+    hx: number;
+    hy: number;
+  } | null {
+    if (this.editorTool.getCurrentTool() !== 'pen' || !this.isPenSessionActive || !this.penPointerSvg) {
+      return null;
+    }
+    if (this.penPendingSegment && this.penPendingShowsCurvePreview) return null;
+    return penLastOutgoingHandleSvg(this.penSession.getSegments());
   }
 
   /** First-anchor close target when pointer is inside single-click-close radius — overlay px (cx/cy). */
@@ -1448,10 +1527,37 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
       this.penHoverClientPx = { x: event.clientX, y: event.clientY };
+      if (this.penOutgoingHandleDrag) {
+        const raw = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+        if (raw) {
+          let hx = raw.x;
+          let hy = raw.y;
+          if (event.shiftKey) {
+            const h0 = penLastOutgoingHandleSvg(this.penSession.getSegments());
+            if (h0) {
+              const s = snapVectorTo45DegFrom({ x: h0.anchorX, y: h0.anchorY }, { x: hx, y: hy });
+              hx = s.x;
+              hy = s.y;
+            }
+          }
+          const next = movePenLastOutgoingHandleTo(this.penSession.getSegments(), hx, hy);
+          if (next) {
+            this.penSession.restoreDrawableSegments(next);
+          }
+          this.cdr.markForCheck();
+        }
+        return;
+      }
+      this.penPendingCurveAltChord = !!this.penPendingSegment && event.altKey;
+      this.penPendingShiftAngleSnap = !!this.penPendingSegment && event.shiftKey;
       if (this.penPendingSegment) {
         this.penPendingLastClient = { x: event.clientX, y: event.clientY };
       }
-      const pt = this.getSnappedPenPoint(event.clientX, event.clientY, event.shiftKey, event.altKey);
+      const pt = this.getSnappedPenPoint(
+        event.clientX,
+        event.clientY,
+        event.altKey || event.metaKey || event.ctrlKey
+      );
       if (pt) {
         if (this.penPendingSegment) {
           this.penPendingDragSvg = { x: pt.x, y: pt.y };
@@ -1498,6 +1604,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (event.button !== 0) return;
     if (this.pathNodeDragSession) {
       this.finishPathNodeDrag();
+      return;
+    }
+
+    if (this.editorTool.getCurrentTool() === 'pen' && this.penOutgoingHandleDrag) {
+      this.finishPenOutgoingHandleDrag();
       return;
     }
 
@@ -2017,6 +2128,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     if (this.editorTool.getCurrentTool() === 'pen') {
       if (!this.svgContent() || !this.canvasView.isInitialized()) return;
+      const outgoingKnob = (event.target as Element | null)?.closest?.('[data-pen-outgoing-handle]');
+      if (outgoingKnob && this.isPenSessionActive && !this.penPendingSegment) {
+        if (penLastOutgoingHandleSvg(this.penSession.getSegments())) {
+          const segs = this.penSession.getSegments();
+          const last = segs[segs.length - 1];
+          this.penOutgoingHandleDrag = { segmentIndex: segs.length - 1, before: { ...last } as PenPathSegment };
+          event.preventDefault();
+          return;
+        }
+      }
       const penTarget = event.target as Element | null;
       if (penTarget && this.isEditorContentShapeTarget(penTarget)) {
         if (
@@ -2029,7 +2150,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         }
         return;
       }
-      const pt = this.getSnappedPenPoint(event.clientX, event.clientY, event.shiftKey, event.altKey);
+      const pt = this.getSnappedPenPoint(
+        event.clientX,
+        event.clientY,
+        event.altKey || event.metaKey || event.ctrlKey
+      );
       if (!pt) return;
       this.handlePenCanvasMouseDown(event, pt);
       event.preventDefault();
@@ -2503,10 +2628,20 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (this.editorTool.getCurrentTool() !== 'pen' || !this.isPenSessionActive) return false;
     if (this.pathNodeEditState || this.inlineTextEditState) return false;
 
+    if (this.penOutgoingHandleDrag) {
+      const { segmentIndex, before } = this.penOutgoingHandleDrag;
+      this.penOutgoingHandleDrag = null;
+      this.penSession.replaceSegmentAt(segmentIndex, before);
+      this.cdr.markForCheck();
+      return true;
+    }
+
     if (this.penPendingSegment) {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
       this.penPendingDragSvg = null;
+      this.penPendingCurveAltChord = false;
+      this.penPendingShiftAngleSnap = false;
       const anchor = lastCommittedVertex(this.penSession.getSegments());
       if (anchor) {
         this.penPointerSvg = { x: anchor.x, y: anchor.y };
@@ -2536,15 +2671,24 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penPendingSegment !== null ||
       this.penPendingDragSvg !== null ||
       this.penHoverClientPx !== null ||
-      this.penContinuingPathRewrite !== null;
+      this.penContinuingPathRewrite !== null ||
+      this.penOutgoingHandleDrag !== null;
     const hadFeedback = this.penFinishFeedbackMessage !== null;
     if (!hadPenState && !hadFeedback) return;
     if (hadPenState) {
+      if (this.penOutgoingHandleDrag) {
+        const { segmentIndex, before } = this.penOutgoingHandleDrag;
+        this.penSession.replaceSegmentAt(segmentIndex, before);
+      }
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
       this.penPendingDragSvg = null;
       this.penHoverClientPx = null;
       this.penContinuingPathRewrite = null;
+      this.penOutgoingHandleDrag = null;
+      this.penPendingCurveAltChord = false;
+      this.penPendingShiftAngleSnap = false;
+      this.purgeProvisionalPenSegmentHistory();
       this.penSession.reset();
       this.penPointerSvg = null;
     }
@@ -2612,20 +2756,95 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
-        const controls = dragBendCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
+        let controls = dragBendCubicControlPoints(
+          anchor,
+          end,
+          pending.startSvg,
+          dragCurrent,
+          this.penPendingCurveAltChord
+        );
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: controls.x2, y: controls.y2 });
+          controls = { ...controls, x2: s.x, y2: s.y };
+        }
         return appendCubicToD(baseD, controls, end);
       }
       case 'quadratic': {
-        const qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+        let qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
+          qc = { x1: s.x, y1: s.y };
+        }
         return appendQuadraticToD(baseD, qc.x1, qc.y1, end.x, end.y);
       }
       case 'smoothCubic': {
-        const s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent);
+        if (this.penPendingCurveAltChord) {
+          const st = penReflectStateAfterCommitted(segs);
+          if (!st) {
+            const s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent, false);
+            return appendSmoothCubicToD(baseD, s2.x2, s2.y2, end.x, end.y);
+          }
+          const x1 = st.canReflectCubic ? 2 * anchor.x - st.cubicCp2X : anchor.x;
+          const y1 = st.canReflectCubic ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
+          let s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent, true);
+          if (this.penPendingShiftAngleSnap) {
+            const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
+            s2 = { x2: s.x, y2: s.y };
+          }
+          return appendCubicToD(baseD, { x1, y1, x2: s2.x2, y2: s2.y2 }, end);
+        }
+        let s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent, false);
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
+          s2 = { x2: s.x, y2: s.y };
+        }
         return appendSmoothCubicToD(baseD, s2.x2, s2.y2, end.x, end.y);
       }
-      default:
+      default: {
+        if (this.penPendingCurveAltChord) {
+          let qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+          if (this.penPendingShiftAngleSnap) {
+            const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
+            qc = { x1: s.x, y1: s.y };
+          }
+          return appendQuadraticToD(baseD, qc.x1, qc.y1, end.x, end.y);
+        }
+        if (this.penPendingShiftAngleSnap) {
+          const st = penReflectStateAfterCommitted(segs);
+          if (st) {
+            let ix = 2 * anchor.x - st.quadCpX;
+            let iy = 2 * anchor.y - st.quadCpY;
+            const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
+            return appendQuadraticToD(baseD, s.x, s.y, end.x, end.y);
+          }
+        }
         return appendSmoothQuadraticToD(baseD, end.x, end.y);
+      }
     }
+  }
+
+  private finishPenOutgoingHandleDrag(): void {
+    const drag = this.penOutgoingHandleDrag;
+    this.penOutgoingHandleDrag = null;
+    if (!drag) return;
+    const cur = this.penSession.getSegments()[drag.segmentIndex];
+    if (!cur) return;
+    if (JSON.stringify(cur) === JSON.stringify(drag.before)) return;
+    const cmd = new PenSegmentReplaceCommand(
+      drag.segmentIndex,
+      drag.before,
+      { ...cur } as PenPathSegment,
+      (i, s) => {
+        this.penSession.replaceSegmentAt(i, s);
+        this.cdr.markForCheck();
+      },
+      true
+    );
+    this.editorHistory.pushAndExecute(cmd);
+  }
+
+  private purgeProvisionalPenSegmentHistory(): void {
+    this.editorHistory.discardWhere((c) => c instanceof PenSegmentReplaceCommand);
   }
 
   private commitPenDraggedCurve(
@@ -2636,24 +2855,84 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   ): void {
     const end = startSvg;
     const kind = penDragCurveAuthoringKind(ctrlCurve, this.penSession.getSegments());
+    const segs = this.penSession.getSegments();
     switch (kind) {
       case 'cubic': {
-        const c = dragBendCubicControlPoints(anchor, end, startSvg, dragCurrent);
+        let c = dragBendCubicControlPoints(
+          anchor,
+          end,
+          startSvg,
+          dragCurrent,
+          this.penPendingCurveAltChord
+        );
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: c.x2, y: c.y2 });
+          c = { ...c, x2: s.x, y2: s.y };
+        }
         this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
         break;
       }
       case 'quadratic': {
-        const q = dragBendQuadraticControlPoint(anchor, end, startSvg, dragCurrent);
+        let q = dragBendQuadraticControlPoint(anchor, end, startSvg, dragCurrent);
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: q.x1, y: q.y1 });
+          q = { x1: s.x, y1: s.y };
+        }
         this.penSession.appendQuadratic(q.x1, q.y1, end.x, end.y);
         break;
       }
       case 'smoothCubic': {
-        const s2 = dragBendSmoothCubicSecondControl(anchor, end, startSvg, dragCurrent);
+        if (this.penPendingCurveAltChord) {
+          const st = penReflectStateAfterCommitted(segs);
+          if (!st) {
+            let s2 = dragBendSmoothCubicSecondControl(anchor, end, startSvg, dragCurrent, false);
+            if (this.penPendingShiftAngleSnap) {
+              const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
+              s2 = { x2: s.x, y2: s.y };
+            }
+            this.penSession.appendSmoothCubic(s2.x2, s2.y2, end.x, end.y);
+            break;
+          }
+          const x1 = st.canReflectCubic ? 2 * anchor.x - st.cubicCp2X : anchor.x;
+          const y1 = st.canReflectCubic ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
+          let s2 = dragBendSmoothCubicSecondControl(anchor, end, startSvg, dragCurrent, true);
+          if (this.penPendingShiftAngleSnap) {
+            const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
+            s2 = { x2: s.x, y2: s.y };
+          }
+          this.penSession.appendCubic(x1, y1, s2.x2, s2.y2, end.x, end.y);
+          break;
+        }
+        let s2 = dragBendSmoothCubicSecondControl(anchor, end, startSvg, dragCurrent, false);
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
+          s2 = { x2: s.x, y2: s.y };
+        }
         this.penSession.appendSmoothCubic(s2.x2, s2.y2, end.x, end.y);
         break;
       }
-      default:
+      default: {
+        if (this.penPendingCurveAltChord) {
+          let q = dragBendQuadraticControlPoint(anchor, end, startSvg, dragCurrent);
+          if (this.penPendingShiftAngleSnap) {
+            const s = snapVectorTo45DegFrom(end, { x: q.x1, y: q.y1 });
+            q = { x1: s.x, y1: s.y };
+          }
+          this.penSession.appendQuadratic(q.x1, q.y1, end.x, end.y);
+          break;
+        }
+        if (this.penPendingShiftAngleSnap) {
+          const st = penReflectStateAfterCommitted(segs);
+          if (st) {
+            let ix = 2 * anchor.x - st.quadCpX;
+            let iy = 2 * anchor.y - st.quadCpY;
+            const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
+            this.penSession.appendQuadratic(s.x, s.y, end.x, end.y);
+            break;
+          }
+        }
         this.penSession.appendSmoothQuadratic(end.x, end.y);
+      }
     }
   }
 
@@ -2667,6 +2946,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
       this.penPendingDragSvg = null;
+      this.penPendingCurveAltChord = false;
+      this.penPendingShiftAngleSnap = false;
       this.tryFinishPenPath(true);
       return;
     }
@@ -2677,6 +2958,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
       this.penPendingDragSvg = null;
+      this.penPendingCurveAltChord = false;
+      this.penPendingShiftAngleSnap = false;
       this.cdr.markForCheck();
       return;
     }
@@ -2691,6 +2974,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.penPendingSegment = null;
     this.penPendingLastClient = null;
     this.penPendingDragSvg = null;
+    this.penPendingCurveAltChord = false;
+    this.penPendingShiftAngleSnap = false;
     this.penPointerSvg = { x: end.x, y: end.y };
     this.cdr.markForCheck();
   }
@@ -2701,6 +2986,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
       this.penPendingDragSvg = null;
+      this.penPendingCurveAltChord = false;
+      this.penPendingShiftAngleSnap = false;
       return;
     }
     const { anchor, startClient, startSvg } = this.penPendingSegment;
@@ -2709,6 +2996,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
       this.penPendingDragSvg = null;
+      this.penPendingCurveAltChord = false;
+      this.penPendingShiftAngleSnap = false;
       return;
     }
     const lc = this.penPendingLastClient ?? startClient;
@@ -2722,12 +3011,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.penPendingSegment = null;
     this.penPendingLastClient = null;
     this.penPendingDragSvg = null;
+    this.penPendingCurveAltChord = false;
+    this.penPendingShiftAngleSnap = false;
     this.penPointerSvg = { x: end.x, y: end.y };
     this.cdr.markForCheck();
   }
 
   private tryFinishPenPath(closePath: boolean): void {
+    if (this.penOutgoingHandleDrag) {
+      this.finishPenOutgoingHandleDrag();
+    }
     this.flushPenPendingAsCurrentPointer();
+    this.purgeProvisionalPenSegmentHistory();
     const finishingSegsSnapshot = [...this.penSession.getSegments()] as PenPathSegment[];
 
     const d = this.penSession.finishPath();
@@ -2822,6 +3117,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
       this.penPendingDragSvg = null;
+      this.penPendingCurveAltChord = false;
+      this.penPendingShiftAngleSnap = false;
       if (this.penSession.getSegments().length === 0) {
         this.penSession.beginPath(pt.x, pt.y);
         this.penPointerSvg = { x: pt.x, y: pt.y };
@@ -2852,7 +3149,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       anchor: { x: anchor.x, y: anchor.y },
       startClient: { x: event.clientX, y: event.clientY },
       startSvg: { x: pt.x, y: pt.y },
-      ctrlCurve: event.ctrlKey || event.metaKey
+      ctrlCurve: event.ctrlKey
     };
     this.penPendingLastClient = { x: event.clientX, y: event.clientY };
     this.penPendingDragSvg = { x: pt.x, y: pt.y };
@@ -2862,19 +3159,19 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   /**
    * Pen anchor placement snapping:
-   * - Shift/Alt preserve modifier precedence and bypass snapping.
-   * - Grid snap applies first.
+   * - Alt/Cmd/Ctrl temporarily bypass grid and smart-guide snap (j24.1).
+   * - Shift snaps Bézier handle direction during drag (not anchor snap bypass).
+   * - Grid snap applies first when snap is enabled.
    * - Smart-guide snap refines the grid-snapped point when shape snap is enabled.
    */
   private getSnappedPenPoint(
     clientX: number,
     clientY: number,
-    shiftKey: boolean,
-    altKey: boolean
+    suspendSnap: boolean
   ): { x: number; y: number } | null {
     const raw = this.clientToEditorSvgPoint(clientX, clientY);
     if (!raw) return null;
-    if (shiftKey || altKey) return raw;
+    if (suspendSnap) return raw;
 
     const gridSnapped = this.snap.snapToGrid(raw);
     if (!this.snap.shapeEnabled()) return gridSnapped;

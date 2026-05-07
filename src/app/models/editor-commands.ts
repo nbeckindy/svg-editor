@@ -7,6 +7,7 @@ import { type SkewAxis } from '../utils/selection-skew';
 import { ArtboardModel } from './artboard.model';
 import { type ClipboardPayload } from '../services/clipboard.service';
 import { DrawingStyleDefaults, DrawingStyleDefaultsService } from '../services/drawing-style-defaults.service';
+import type { PenPathSegment } from './pen-path';
 
 export interface EditorCommand {
   readonly description: string;
@@ -1338,6 +1339,38 @@ export class EditPathNodesCommand implements EditorCommand {
 
   undo(): void {
     this.svc.updatePathData(this.pathId, this.oldD);
+  }
+}
+
+/**
+ * Undoable edit to a single segment while authoring a pen path (before finish).
+ * Dropped from history when the pen session ends so geometry stays baked into the finished path.
+ */
+export class PenSegmentReplaceCommand implements EditorCommand {
+  readonly description = 'Pen segment edit';
+
+  private appliedAlready: boolean;
+
+  constructor(
+    private readonly segmentIndex: number,
+    private readonly before: PenPathSegment,
+    private readonly after: PenPathSegment,
+    private readonly applySegmentAt: (index: number, segment: PenPathSegment) => void,
+    appliedAlready = true
+  ) {
+    this.appliedAlready = appliedAlready;
+  }
+
+  execute(): void {
+    if (this.appliedAlready) {
+      this.appliedAlready = false;
+      return;
+    }
+    this.applySegmentAt(this.segmentIndex, { ...this.after } as PenPathSegment);
+  }
+
+  undo(): void {
+    this.applySegmentAt(this.segmentIndex, { ...this.before } as PenPathSegment);
   }
 }
 

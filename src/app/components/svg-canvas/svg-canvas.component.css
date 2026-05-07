@@ -237,6 +237,19 @@
   pointer-events: none;
 }
 
+.pen-outgoing-handle-guide {
+  pointer-events: none;
+}
+
+.pen-outgoing-handle {
+  pointer-events: auto;
+  cursor: grab;
+}
+
+.pen-outgoing-handle:active {
+  cursor: grabbing;
+}
+
 .path-node-control-line {
   pointer-events: none;
 }
