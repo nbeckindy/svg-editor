@@ -43,6 +43,19 @@ These beads are not part of an epic and can be tackled independently.
 | `svg-editor-5el` | Bug: artboard boundary stroke scales with zoom despite vector-effect | P2 | `vector-effect: non-scaling-stroke` ineffective under `preserveAspectRatio="none"` |
 | `svg-editor-j1a` | Enhancement: artboard resize anchor point selector (9-point) | P3 | Choose which corner/edge/center stays fixed when resizing |
 
+## Tool parity gaps (open)
+
+Backlog tracked from gap analysis vs common vector editors (uniform-only selection resize today: [`selection-resize.ts`](../src/app/utils/selection-resize.ts), [`resize-gesture.ts`](../src/app/components/svg-canvas/gestures/resize-gesture.ts)).
+
+| bd ID | Title | Priority | Notes |
+|-------|-------|----------|-------|
+| `svg-editor-e9a` | Non-uniform selection resize (edge handles + modifier parity) | P2 | Axis-aligned W/H from edges/corners; Shift (or agreed modifier) for aspect lock; commands + tests |
+| `svg-editor-jqe` | Editable numeric selection bbox (X/Y/W/H) in properties panel | P3 | Read-only transform readouts today; numeric apply + undo |
+| `svg-editor-zc7` | Eyedropper: sample fill/stroke from canvas | P3 | Pick computed color under pointer |
+| `svg-editor-269` | Stroke scaling policy when transforming selection (non-scaling stroke UX) | P3 | Document behavior; optional toggle vs `vector-effect` |
+| `svg-editor-0zh` | Boolean path operations (union / subtract / intersect) | P4 | Spike/MVP path; heavy browser scope |
+| `svg-editor-hya` | Symbols or reusable instances (document-level reuse) | P4 | Discovery / epic-sized; children after spike |
+
 ## Post-MVP
 
 | bd ID | Title | Priority | Notes |
@@ -108,6 +121,7 @@ flowchart LR
 8. ~~**Epic 10** (text editing)~~ -- **DONE**
 9. ~~**Epic 16** (advanced path editing)~~ -- **DONE**
 10. ~~**`svg-editor-e1x`** (gradient editor)~~ -- **DONE**
+11. **Tool parity (optional):** start with [`svg-editor-e9a`](#tool-parity-gaps-open) (non-uniform selection resize); then [`svg-editor-jqe`](#tool-parity-gaps-open), [`svg-editor-zc7`](#tool-parity-gaps-open), [`svg-editor-269`](#tool-parity-gaps-open); backlog [`svg-editor-0zh`](#tool-parity-gaps-open), [`svg-editor-hya`](#tool-parity-gaps-open) when prioritized.
 
 ## Beads epic references
 
