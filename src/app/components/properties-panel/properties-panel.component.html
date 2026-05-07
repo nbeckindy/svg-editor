@@ -3,8 +3,9 @@
     <h3>Properties</h3>
   </div>
 
-  @if (selectedShape(); as shape) {
-    <div class="properties-content">
+  <div class="panel-scroll">
+    @if (selectedShape(); as shape) {
+      <div class="properties-content">
       @if (selectionCount() > 1) {
         <p class="multi-select-hint">
           {{ selectionCount() }} shapes selected. Edits apply to every selected shape.
@@ -481,11 +482,16 @@
           Clear Selection
         </button>
       </div>
-    </div>
-  } @else {
-    <app-document-settings data-testid="document-settings-panel"></app-document-settings>
-    <div class="empty-state">
-      <p class="hint">Click on a shape in the canvas to edit its properties</p>
-    </div>
-  }
+
+        <app-document-settings
+          class="document-settings-inline"
+          data-testid="document-settings-panel"></app-document-settings>
+      </div>
+    } @else {
+      <app-document-settings data-testid="document-settings-panel"></app-document-settings>
+      <div class="empty-state">
+        <p class="hint">Click on a shape in the canvas to edit its properties</p>
+      </div>
+    }
+  </div>
 </div>
