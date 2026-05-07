@@ -28,6 +28,12 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `CLOSED` | 5/5 (100%) | Pen tool (PP-2a segment model) |
 | 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `CLOSED` | 10/10 (100%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
 
+## Active epics (phase 3)
+
+| Order | Epic | Slug | bd epic ID | Status | Notes |
+|------:|------|------|-------------|--------|-------|
+| 17 | Tool parity and pen authoring | [tool-parity-pen](./epics/tool-parity-pen.md) | `svg-editor-j24` | `OPEN` | Transform/readout gaps + six pen parity children; does not reopen closed epics |
+
 ## Free-standing issues
 
 These beads are not part of an epic and can be tackled independently.
@@ -43,18 +49,14 @@ These beads are not part of an epic and can be tackled independently.
 | `svg-editor-5el` | Bug: artboard boundary stroke scales with zoom despite vector-effect | P2 | `vector-effect: non-scaling-stroke` ineffective under `preserveAspectRatio="none"` |
 | `svg-editor-j1a` | Enhancement: artboard resize anchor point selector (9-point) | P3 | Choose which corner/edge/center stays fixed when resizing |
 
-## Tool parity gaps (open)
+## Tool parity and pen authoring (epic `svg-editor-j24`)
 
-Backlog tracked from gap analysis vs common vector editors (uniform-only selection resize today: [`selection-resize.ts`](../src/app/utils/selection-resize.ts), [`resize-gesture.ts`](../src/app/components/svg-canvas/gestures/resize-gesture.ts)).
+All items below are **children of epic** [`svg-editor-j24`](./epics/tool-parity-pen.md) (`bd show svg-editor-j24`). See the epic plan for local refs **TP-1…TP-6** (transform/UI) and **PPEN-1…PPEN-6** (pen).
 
-| bd ID | Title | Priority | Notes |
-|-------|-------|----------|-------|
-| `svg-editor-e9a` | Non-uniform selection resize (edge handles + modifier parity) | P2 | Axis-aligned W/H from edges/corners; Shift (or agreed modifier) for aspect lock; commands + tests |
-| `svg-editor-jqe` | Editable numeric selection bbox (X/Y/W/H) in properties panel | P3 | Read-only transform readouts today; numeric apply + undo |
-| `svg-editor-zc7` | Eyedropper: sample fill/stroke from canvas | P3 | Pick computed color under pointer |
-| `svg-editor-269` | Stroke scaling policy when transforming selection (non-scaling stroke UX) | P3 | Document behavior; optional toggle vs `vector-effect` |
-| `svg-editor-0zh` | Boolean path operations (union / subtract / intersect) | P4 | Spike/MVP path; heavy browser scope |
-| `svg-editor-hya` | Symbols or reusable instances (document-level reuse) | P4 | Discovery / epic-sized; children after spike |
+| Theme | bd IDs |
+|--------|--------|
+| Transform / readouts | `svg-editor-e9a`, `svg-editor-jqe`, `svg-editor-zc7`, `svg-editor-269`, `svg-editor-0zh`, `svg-editor-hya` |
+| Pen authoring parity | `svg-editor-j24.1` … `svg-editor-j24.6` |
 
 ## Post-MVP
 
@@ -107,6 +109,12 @@ flowchart LR
     e13 --> e15
     bugfix_brz --> gradient_e1x
   end
+
+  subgraph phase3 [Phase 3 - Backlog]
+    e17[tool_parity_pen_j24]
+  end
+
+  e15 --> e17
 ```
 
 ## Recommended execution order
@@ -121,15 +129,16 @@ flowchart LR
 8. ~~**Epic 10** (text editing)~~ -- **DONE**
 9. ~~**Epic 16** (advanced path editing)~~ -- **DONE**
 10. ~~**`svg-editor-e1x`** (gradient editor)~~ -- **DONE**
-11. **Tool parity (optional):** start with [`svg-editor-e9a`](#tool-parity-gaps-open) (non-uniform selection resize); then [`svg-editor-jqe`](#tool-parity-gaps-open), [`svg-editor-zc7`](#tool-parity-gaps-open), [`svg-editor-269`](#tool-parity-gaps-open); backlog [`svg-editor-0zh`](#tool-parity-gaps-open), [`svg-editor-hya`](#tool-parity-gaps-open) when prioritized.
+11. **Epic 17 ([tool-parity-pen](./epics/tool-parity-pen.md), `svg-editor-j24`):** transform parity (`svg-editor-e9a` … `svg-editor-hya`) and pen parity (`svg-editor-j24.1` … `svg-editor-j24.6`); see epic plan for order and acceptance.
 
 ## Beads epic references
 
 Epic issues in `bd` (see `bd list -t epic` or `bd show <id>` if this table drifts).
-Status/progress below is current as of 2026-04-30.
+Status/progress below is current as of 2026-05-06.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
+| tool-parity-pen | `svg-editor-j24` | Tool parity and pen authoring | `OPEN` | 0/12 |
 | selection-interaction | `svg-editor-3b7` | Multi-select and keyboard shortcuts | `CLOSED` | 8/8 |
 | editing-history | `svg-editor-bbc` | Undo and redo | `CLOSED` | 5/5 |
 | shape-transforms | `svg-editor-2zo` | Shape transforms | `CLOSED` | 5/5 |
