@@ -1,7 +1,7 @@
 import type { PenPathSegment } from './pen-path';
 
-/** Parsed absolute segments for editing; `Q` stores quadratic control + end (smooth `T` is normalized to `Q`). */
-export type PathSegment = PenPathSegment | { type: 'Z' } | { type: 'Q'; x1: number; y1: number; x: number; y: number };
+/** Parsed absolute segments for editing; smooth `S`/`T` normalize to explicit `C`/`Q`. */
+export type PathSegment = PenPathSegment | { type: 'Z' };
 
 export interface ParsePathDResult {
   segments: PathSegment[];
@@ -546,6 +546,20 @@ export function pathSegmentsToD(segments: readonly PathSegment[]): string {
         formatCoord(segment.x),
         formatCoord(segment.y)
       );
+      continue;
+    }
+    if (segment.type === 'S') {
+      parts.push(
+        'S',
+        formatCoord(segment.x2),
+        formatCoord(segment.y2),
+        formatCoord(segment.x),
+        formatCoord(segment.y)
+      );
+      continue;
+    }
+    if (segment.type === 'T') {
+      parts.push('T', formatCoord(segment.x), formatCoord(segment.y));
       continue;
     }
     parts.push('Z');

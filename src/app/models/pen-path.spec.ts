@@ -4,12 +4,17 @@ import {
   appendCubicToD,
   appendSymmetricCubicToD,
   dragBendCubicControlPoints,
+  dragBendQuadraticControlPoint,
+  dragBendSmoothCubicSecondControl,
   lastCommittedVertex,
+  pathSvgReflectStateAfter,
+  penDragCurveAuthoringKind,
   penPathOnlyMoveto,
   penPathSegmentsAreValid,
   penPathSegmentsToD,
   symmetricCubicControlPoints
 } from './pen-path';
+import { parsePathD } from './path-d';
 
 describe('symmetricCubicControlPoints', () => {
   it('places controls at 1/3 and 2/3 along chord', () => {
@@ -29,6 +34,63 @@ describe('appendCubicToD', () => {
   it('appends explicit cubic controls to base d', () => {
     const d = appendCubicToD('M 0 0', { x1: 2, y1: 4, x2: 6, y2: 8 }, { x: 9, y: 9 });
     expect(d).toBe('M 0 0 C 2 4 6 8 9 9');
+  });
+});
+
+describe('dragBendQuadraticControlPoint', () => {
+  it('offsets control normal to chord like cubic bend', () => {
+    const q = dragBendQuadraticControlPoint(
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 5, y: 0 },
+      { x: 5, y: -4 }
+    );
+    expect(q.x1).toBeCloseTo(5, 6);
+    expect(q.y1).toBeCloseTo(-4, 6);
+  });
+});
+
+describe('penDragCurveAuthoringKind', () => {
+  it('selects authoring mode based on Ctrl and last segment', () => {
+    const mOnly = [{ type: 'M' as const, x: 0, y: 0 }];
+    expect(penDragCurveAuthoringKind(false, mOnly)).toBe('cubic');
+    expect(penDragCurveAuthoringKind(true, mOnly)).toBe('quadratic');
+
+    const afterL = [
+      ...mOnly,
+      { type: 'L' as const, x: 1, y: 1 }
+    ];
+    expect(penDragCurveAuthoringKind(true, afterL)).toBe('quadratic');
+
+    const afterC = [...afterL, { type: 'C' as const, x1: 0, y1: 0, x2: 1, y2: 1, x: 2, y: 2 }];
+    expect(penDragCurveAuthoringKind(true, afterC)).toBe('smoothCubic');
+
+    const afterS = [
+      ...afterC,
+      { type: 'S' as const, x2: 3, y2: 3, x: 4, y: 4 }
+    ];
+    expect(penDragCurveAuthoringKind(true, afterS)).toBe('smoothCubic');
+
+    const afterQ = [
+      ...mOnly,
+      { type: 'Q' as const, x1: 1, y1: 2, x: 3, y: 0 }
+    ];
+    expect(penDragCurveAuthoringKind(true, afterQ)).toBe('smoothQuadratic');
+  });
+});
+
+describe('pathSvgReflectStateAfter', () => {
+  it('resets quadratic and cubic reflection after Z like parsePathD', () => {
+    const st = pathSvgReflectStateAfter([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 0, y1: 10, x2: 10, y2: 10, x: 10, y: 0 },
+      { type: 'L', x: 20, y: 0 },
+      { type: 'Z' },
+      { type: 'M', x: 100, y: 100 }
+    ]);
+    expect(st?.x).toBe(100);
+    expect(st?.canReflectCubic).toBe(false);
+    expect(st?.quadCpX).toBe(100);
   });
 });
 
@@ -80,6 +142,48 @@ describe('penPathSegmentsToD', () => {
     ]);
     expect(d).toBe('M 0 0 L 5 0 C 6.666667 3.333333 8.333333 6.666667 10 10');
   });
+
+  it('emits uppercase Q S T with stable shorthand for smooth segments', () => {
+    const d = penPathSegmentsToD([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 10, y: 0 },
+      { type: 'C', x1: 10, y1: 5, x2: 15, y2: 5, x: 20, y: 0 },
+      { type: 'S', x2: 25, y2: 5, x: 30, y: 0 },
+      { type: 'Q', x1: 32, y1: 8, x: 35, y: 0 },
+      { type: 'T', x: 40, y: 0 }
+    ]);
+    expect(d).toContain(' Q ');
+    expect(d).toContain(' S ');
+    expect(d).toContain(' T ');
+    expect(d.startsWith('M 0 0')).toBe(true);
+  });
+
+  it('normalizes authored pen path through parsePathD without geometric errors', () => {
+    const segments = [
+      { type: 'M' as const, x: 0, y: 0 },
+      { type: 'Q' as const, x1: 5, y1: 10, x: 10, y: 0 },
+      { type: 'T' as const, x: 14, y: -2 },
+      { type: 'S' as const, x2: 24, y2: 0, x: 26, y: -2 }
+    ] as const;
+    const d = penPathSegmentsToD([...segments]);
+    const parsed = parsePathD(d);
+    expect(parsed.errors).toEqual([]);
+    expect(parsed.segments.some((s) => s.type === 'Q')).toBe(true);
+    expect(parsed.segments.some((s) => s.type === 'C')).toBe(true);
+  });
+});
+
+describe('dragBendSmoothCubicSecondControl', () => {
+  it('inherits symmetric cubic outgoing control for S-authoring UX', () => {
+    const s2 = dragBendSmoothCubicSecondControl(
+      { x: 0, y: 0 },
+      { x: 9, y: 0 },
+      { x: 4, y: 0 },
+      { x: 4, y: -3 }
+    );
+    expect(s2.x2).toBeCloseTo(6, 6);
+    expect(s2.y2).toBeCloseTo(-3, 6);
+  });
 });
 
 describe('penPathSegmentsAreValid', () => {
@@ -105,6 +209,29 @@ describe('penPathSegmentsAreValid', () => {
       ])
     ).toBe(true);
   });
+
+  it('accepts M followed by Q, S, or T', () => {
+    expect(
+      penPathSegmentsAreValid([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'Q', x1: 1, y1: 1, x: 2, y: 2 }
+      ])
+    ).toBe(true);
+    expect(
+      penPathSegmentsAreValid([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'C', x1: 0, y1: 0, x2: 1, y2: 0, x: 2, y: 0 },
+        { type: 'S', x2: 3, y2: 1, x: 4, y: 0 }
+      ])
+    ).toBe(true);
+    expect(
+      penPathSegmentsAreValid([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'Q', x1: 1, y1: 2, x: 3, y: 0 },
+        { type: 'T', x: 5, y: -1 }
+      ])
+    ).toBe(true);
+  });
 });
 
 describe('lastCommittedVertex', () => {
@@ -112,7 +239,7 @@ describe('lastCommittedVertex', () => {
     expect(lastCommittedVertex([{ type: 'M', x: 3, y: 4 }])).toEqual({ x: 3, y: 4 });
   });
 
-  it('returns end of last L or C', () => {
+  it('returns end vertex of last segment', () => {
     expect(
       lastCommittedVertex([
         { type: 'M', x: 0, y: 0 },
@@ -136,6 +263,33 @@ describe('penPathOnlyMoveto', () => {
 });
 
 describe('PenSession', () => {
+  it('popLastCommittedSegment clears moveto-only session', () => {
+    const s = new PenSession();
+    s.beginPath(1, 2);
+    expect(s.popLastCommittedSegment()).toBe('cleared');
+    expect(s.getSegments().length).toBe(0);
+  });
+
+  it('popLastCommittedSegment removes last L and ends session when only M remains', () => {
+    const s = new PenSession();
+    s.beginPath(0, 0);
+    s.addLinePoint(5, 5);
+    expect(s.popLastCommittedSegment()).toBe('cleared');
+    expect(s.getSegments().length).toBe(0);
+  });
+
+  it('popLastCommittedSegment pops last segment when anchors remain', () => {
+    const s = new PenSession();
+    s.beginPath(0, 0);
+    s.addLinePoint(10, 0);
+    s.addLinePoint(10, 10);
+    expect(s.popLastCommittedSegment()).toBe('popped');
+    expect(s.getSegments()).toEqual([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 10, y: 0 }
+    ]);
+  });
+
   it('finishPath returns null until at least two vertices', () => {
     const s = new PenSession();
     expect(s.finishPath()).toBe(null);
@@ -161,6 +315,20 @@ describe('PenSession', () => {
     const c = symmetricCubicControlPoints({ x: 5, y: 0 }, { x: 10, y: 10 });
     s.appendCubic(c.x1, c.y1, c.x2, c.y2, 10, 10);
     expect(s.finishPath()).toBe('M 0 0 L 5 0 C 6.666667 3.333333 8.333333 6.666667 10 10');
+  });
+
+  it('finishPath serializes Q, S, and T from session', () => {
+    const s = new PenSession();
+    s.beginPath(0, 0);
+    s.addLinePoint(10, 0);
+    s.appendCubic(10, 5, 15, 5, 20, 0);
+    s.appendSmoothCubic(25, 5, 30, 0);
+    s.appendQuadratic(32, 8, 35, 0);
+    s.appendSmoothQuadratic(40, 0);
+    const d = s.finishPath();
+    expect(d).toMatch(/ Q /);
+    expect(d).toMatch(/ S /);
+    expect(d).toMatch(/ T /);
   });
 
   it('finishPath is null for moveto-only after reset and beginPath', () => {

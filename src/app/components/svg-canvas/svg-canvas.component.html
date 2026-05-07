@@ -284,6 +284,19 @@
               stroke-dasharray="6 3"
               vector-effect="non-scaling-stroke"/>
           }
+          @if (penCloseTargetHoverOverlay; as closeRing) {
+            <circle
+              class="creation-ghost-shape pen-close-target-ring"
+              data-testid="canvas-pen-close-hover"
+              [attr.cx]="closeRing.cx"
+              [attr.cy]="closeRing.cy"
+              r="8"
+              fill="none"
+              stroke="#00c853"
+              stroke-width="2"
+              stroke-dasharray="4 3"
+              vector-effect="non-scaling-stroke"/>
+          }
           @if (isPathNodeEditModeActive) {
             @for (handle of pathNodeControlHandleOverlays; track $index) {
               <line

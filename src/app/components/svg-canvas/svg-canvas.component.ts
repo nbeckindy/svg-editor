@@ -15,7 +15,7 @@ import {
   rotateGhostWorldToUnionMatrix
 } from '../../utils/selection-rotate';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
-import { screenPointToRootSvgUserPoint } from '../../utils/svg-screen-user';
+import { rootSvgUserPointToScreenPoint, screenPointToRootSvgUserPoint } from '../../utils/svg-screen-user';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   EditorCommand,
@@ -52,10 +52,18 @@ import {
   PenSession,
   appendCubicToD,
   appendLineToD,
+  appendQuadraticToD,
+  appendSmoothCubicToD,
+  appendSmoothQuadraticToD,
   dragBendCubicControlPoints,
+  dragBendQuadraticControlPoint,
+  dragBendSmoothCubicSecondControl,
   lastCommittedVertex,
+  penDragCurveAuthoringKind,
   penPathOnlyMoveto,
+  penPathSegmentsAreValid,
   penPathSegmentsToD,
+  penReflectStateAfterCommitted,
   penSvgDistanceSq
 } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
@@ -83,6 +91,9 @@ const CONTENT_SHAPE_TAGS = new Set([
 /** After loading SVG, fit the editor stage in the canvas with this much inset (margin). */
 const INITIAL_LOAD_VIEWPORT_FIT_FRACTION = 0.88;
 const PEN_FINISH_FEEDBACK_DURATION_MS = 1200;
+
+/** Cursor proximity to initial anchor for pen single-click-close (viewport pixels). */
+const PEN_SINGLE_CLICK_CLOSE_RADIUS_PX = 8;
 const PATH_NODE_EDIT_FEEDBACK_DURATION_MS = 1400;
 const ALIGN_LEFT_SHORTCUT = 'ArrowLeft';
 const ALIGN_RIGHT_SHORTCUT = 'ArrowRight';
@@ -496,9 +507,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     anchor: { x: number; y: number };
     startClient: { x: number; y: number };
     startSvg: { x: number; y: number };
+    /** When true (Ctrl or ⌘ while placing the point), dragging authors `Q` / `S` / `T` vs default `C`. */
+    ctrlCurve: boolean;
   } | null = null;
   private penPendingLastClient: { x: number; y: number } | null = null;
   private penPendingDragSvg: { x: number; y: number } | null = null;
+  /** Last pointer position during pen authoring (viewport pixels), for stroke-start hover hit test. */
+  private penHoverClientPx: { x: number; y: number } | null = null;
 
   // Proxy getters for template bindings and inter-gesture guards
   get isDraggingShape(): boolean { return this.drag.isActive; }
@@ -544,20 +559,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!anchor) return base;
 
     if (this.penPendingSegment && this.penPendingShowsCurvePreview) {
-      const fixedEnd = this.penPendingSegment.startSvg;
-      const dragCurrent = this.penPendingDragSvg ?? fixedEnd;
-      const controls = dragBendCubicControlPoints(
-        this.penPendingSegment.anchor,
-        fixedEnd,
-        this.penPendingSegment.startSvg,
-        dragCurrent
-      );
-      return appendCubicToD(base, controls, fixedEnd);
+      return this.appendPenPendingCurveToBaseD(base);
     }
     return appendLineToD(base, this.penPointerSvg.x, this.penPointerSvg.y);
   }
 
-  /** Live cubic preview `d` (committed segments + drag-bent C to pointer). */
+  /** Live Bézier preview `d` (committed segments + pending segment: default `C`, Ctrl+drag `Q` / `S` / `T`). */
   get penCurvePreviewPathD(): string | null {
     if (
       !this.penPendingSegment ||
@@ -568,34 +575,57 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return null;
     }
     const base = penPathSegmentsToD(this.penSession.getSegments());
-    const fixedEnd = this.penPendingSegment.startSvg;
-    const dragCurrent = this.penPendingDragSvg ?? fixedEnd;
-    const controls = dragBendCubicControlPoints(
-      this.penPendingSegment.anchor,
-      fixedEnd,
-      this.penPendingSegment.startSvg,
-      dragCurrent
-    );
-    return appendCubicToD(base, controls, fixedEnd);
+    return this.appendPenPendingCurveToBaseD(base);
   }
 
-  /** Control handle centers (overlay px) while dragging a cubic preview. */
+  /** Control handle centers (overlay px) while dragging a curved segment preview. */
   get penCurveHandleOverlays(): { cx: number; cy: number }[] {
     if (!this.penCurvePreviewPathD || !this.penPendingSegment || !this.penPointerSvg) return [];
-    const fixedEnd = this.penPendingSegment.startSvg;
-    const dragCurrent = this.penPendingDragSvg ?? fixedEnd;
-    const { x1, y1, x2, y2 } = dragBendCubicControlPoints(
-      this.penPendingSegment.anchor,
-      fixedEnd,
-      this.penPendingSegment.startSvg,
-      dragCurrent
-    );
-    const p1 = this.svgBboxToOverlayPixels({ x: x1, y: y1, width: 0, height: 0 });
-    const p2 = this.svgBboxToOverlayPixels({ x: x2, y: y2, width: 0, height: 0 });
-    return [
-      { cx: p1.x, cy: p1.y },
-      { cx: p2.x, cy: p2.y }
-    ];
+    const pending = this.penPendingSegment;
+    const anchor = pending.anchor;
+    const end = pending.startSvg;
+    const dragCurrent = this.penPendingDragSvg ?? end;
+    const kind = penDragCurveAuthoringKind(pending.ctrlCurve, this.penSession.getSegments());
+    const toOverlay = (x: number, y: number) =>
+      this.svgBboxToOverlayPixels({ x, y, width: 0, height: 0 });
+
+    switch (kind) {
+      case 'cubic': {
+        const { x1, y1, x2, y2 } = dragBendCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
+        const p1 = toOverlay(x1, y1);
+        const p2 = toOverlay(x2, y2);
+        return [
+          { cx: p1.x, cy: p1.y },
+          { cx: p2.x, cy: p2.y }
+        ];
+      }
+      case 'quadratic': {
+        const qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+        const p = toOverlay(qc.x1, qc.y1);
+        return [{ cx: p.x, cy: p.y }];
+      }
+      case 'smoothCubic': {
+        const st = penReflectStateAfterCommitted(this.penSession.getSegments());
+        if (!st) return [];
+        const sx1 = st.canReflectCubic ? 2 * anchor.x - st.cubicCp2X : anchor.x;
+        const sy1 = st.canReflectCubic ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
+        const s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent);
+        const p1 = toOverlay(sx1, sy1);
+        const p2 = toOverlay(s2.x2, s2.y2);
+        return [
+          { cx: p1.x, cy: p1.y },
+          { cx: p2.x, cy: p2.y }
+        ];
+      }
+      default: {
+        const st = penReflectStateAfterCommitted(this.penSession.getSegments());
+        if (!st) return [];
+        const ix = 2 * anchor.x - st.quadCpX;
+        const iy = 2 * anchor.y - st.quadCpY;
+        const p = toOverlay(ix, iy);
+        return [{ cx: p.x, cy: p.y }];
+      }
+    }
   }
 
   get penRubberBandOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
@@ -615,6 +645,20 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       height: 0
     });
     return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+  }
+
+  /** First-anchor close target when pointer is inside single-click-close radius — overlay px (cx/cy). */
+  get penCloseTargetHoverOverlay(): { cx: number; cy: number } | null {
+    if (this.editorTool.getCurrentTool() !== 'pen' || !this.isPenSessionActive || !this.penHoverClientPx) {
+      return null;
+    }
+    const segs = this.penSession.getSegments();
+    if (!penPathSegmentsAreValid(segs)) return null;
+    const first = segs[0];
+    if (first.type !== 'M') return null;
+    if (!this.isPenPointerWithinCloseRadius(this.penHoverClientPx.x, this.penHoverClientPx.y)) return null;
+    const o = this.svgBboxToOverlayPixels({ x: first.x, y: first.y, width: 0, height: 0 });
+    return { cx: o.x, cy: o.y };
   }
 
   get isPathNodeEditModeActive(): boolean {
@@ -931,6 +975,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         event.preventDefault();
         return;
       }
+    }
+
+    if (event.key === 'Backspace' && this.tryPenBackspaceShortcut()) {
+      event.preventDefault();
+      return;
     }
 
     if (!this.svgContent()) return;
@@ -1396,6 +1445,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
+      this.penHoverClientPx = { x: event.clientX, y: event.clientY };
       if (this.penPendingSegment) {
         this.penPendingLastClient = { x: event.clientX, y: event.clientY };
       }
@@ -2290,18 +2340,86 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return true;
   }
 
+  private penPathStartMv(): { x: number; y: number } | null {
+    const s = this.penSession.getSegments()[0];
+    return s?.type === 'M' ? { x: s.x, y: s.y } : null;
+  }
+
+  /**
+   * True if (clientX, clientY) is within {@link PEN_SINGLE_CLICK_CLOSE_RADIUS_PX} px of pen path start.
+   */
+  private isPenPointerWithinCloseRadius(clientX: number, clientY: number): boolean {
+    const m = this.penPathStartMv();
+    if (!m) return false;
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) return false;
+    const scr = rootSvgUserPointToScreenPoint(mainSvg, m.x, m.y);
+    let sx: number;
+    let sy: number;
+    if (scr) {
+      sx = scr.x;
+      sy = scr.y;
+    } else {
+      const vb = this.parseOverlayViewBox();
+      const r = mainSvg.getBoundingClientRect();
+      if (!vb || r.width <= 0 || r.height <= 0) return false;
+      sx = r.left + ((m.x - vb.vbMinX) / vb.vbW) * r.width;
+      sy = r.top + ((m.y - vb.vbMinY) / vb.vbH) * r.height;
+    }
+    const dx = clientX - sx;
+    const dy = clientY - sy;
+    return dx * dx + dy * dy <= PEN_SINGLE_CLICK_CLOSE_RADIUS_PX * PEN_SINGLE_CLICK_CLOSE_RADIUS_PX;
+  }
+
+  /** @returns squared distance between two root-SVG-user points mapped to viewport pixels (`null` if unmapped). */
+  private penScreenDistanceSq(ax: number, ay: number, bx: number, by: number): number | null {
+    const ma = this.svgUserPointToApproxClient(px: number, py: number) - BAD
+
+  /** Pen tool: Backspace pops last committed anchor; cancels in-progress segment first. */
+  private tryPenBackspaceShortcut(): boolean {
+    if (this.editorTool.getCurrentTool() !== 'pen' || !this.isPenSessionActive) return false;
+    if (this.pathNodeEditState || this.inlineTextEditState) return false;
+
+    if (this.penPendingSegment) {
+      this.penPendingSegment = null;
+      this.penPendingLastClient = null;
+      this.penPendingDragSvg = null;
+      const anchor = lastCommittedVertex(this.penSession.getSegments());
+      if (anchor) {
+        this.penPointerSvg = { x: anchor.x, y: anchor.y };
+      }
+      this.cdr.markForCheck();
+      return true;
+    }
+
+    const popResult = this.penSession.popLastCommittedSegment();
+    if (popResult === 'none') return false;
+    if (popResult === 'cleared') {
+      this.clearPenDrawingState();
+      return true;
+    }
+    const v = lastCommittedVertex(this.penSession.getSegments());
+    if (v) {
+      this.penPointerSvg = { x: v.x, y: v.y };
+    }
+    this.cdr.markForCheck();
+    return true;
+  }
+
   private clearPenDrawingState(): void {
     const hadPenState =
       this.isPenSessionActive ||
       this.penPointerSvg !== null ||
       this.penPendingSegment !== null ||
-      this.penPendingDragSvg !== null;
+      this.penPendingDragSvg !== null ||
+      this.penHoverClientPx !== null;
     const hadFeedback = this.penFinishFeedbackMessage !== null;
     if (!hadPenState && !hadFeedback) return;
     if (hadPenState) {
       this.penPendingSegment = null;
       this.penPendingLastClient = null;
       this.penPendingDragSvg = null;
+      this.penHoverClientPx = null;
       this.penSession.reset();
       this.penPointerSvg = null;
     }
@@ -2358,8 +2476,76 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  private appendPenPendingCurveToBaseD(baseD: string): string {
+    const pending = this.penPendingSegment;
+    if (!pending) return baseD;
+    const segs = this.penSession.getSegments();
+    const kind = penDragCurveAuthoringKind(pending.ctrlCurve, segs);
+    const anchor = pending.anchor;
+    const end = pending.startSvg;
+    const dragCurrent = this.penPendingDragSvg ?? end;
+
+    switch (kind) {
+      case 'cubic': {
+        const controls = dragBendCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
+        return appendCubicToD(baseD, controls, end);
+      }
+      case 'quadratic': {
+        const qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+        return appendQuadraticToD(baseD, qc.x1, qc.y1, end.x, end.y);
+      }
+      case 'smoothCubic': {
+        const s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent);
+        return appendSmoothCubicToD(baseD, s2.x2, s2.y2, end.x, end.y);
+      }
+      default:
+        return appendSmoothQuadraticToD(baseD, end.x, end.y);
+    }
+  }
+
+  private commitPenDraggedCurve(
+    anchor: { x: number; y: number },
+    startSvg: { x: number; y: number },
+    dragCurrent: { x: number; y: number },
+    ctrlCurve: boolean
+  ): void {
+    const end = startSvg;
+    const kind = penDragCurveAuthoringKind(ctrlCurve, this.penSession.getSegments());
+    switch (kind) {
+      case 'cubic': {
+        const c = dragBendCubicControlPoints(anchor, end, startSvg, dragCurrent);
+        this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
+        break;
+      }
+      case 'quadratic': {
+        const q = dragBendQuadraticControlPoint(anchor, end, startSvg, dragCurrent);
+        this.penSession.appendQuadratic(q.x1, q.y1, end.x, end.y);
+        break;
+      }
+      case 'smoothCubic': {
+        const s2 = dragBendSmoothCubicSecondControl(anchor, end, startSvg, dragCurrent);
+        this.penSession.appendSmoothCubic(s2.x2, s2.y2, end.x, end.y);
+        break;
+      }
+      default:
+        this.penSession.appendSmoothQuadratic(end.x, end.y);
+    }
+  }
+
   private commitPenPendingSegment(event: MouseEvent): void {
     if (!this.penPendingSegment) return;
+
+    if (
+      penPathSegmentsAreValid(this.penSession.getSegments()) &&
+      this.isPenPointerWithinCloseRadius(event.clientX, event.clientY)
+    ) {
+      this.penPendingSegment = null;
+      this.penPendingLastClient = null;
+      this.penPendingDragSvg = null;
+      this.tryFinishPenPath(true);
+      return;
+    }
+
     const { anchor, startClient, startSvg } = this.penPendingSegment;
     const end = startSvg;
     if (penSvgDistanceSq(anchor, end) < 1e-12) {
@@ -2375,8 +2561,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (screenDist < MARQUEE_MIN_DRAG_PX) {
       this.penSession.addLinePoint(end.x, end.y);
     } else {
-      const c = dragBendCubicControlPoints(anchor, end, startSvg, dragCurrent);
-      this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
+      this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve);
     }
     this.penPendingSegment = null;
     this.penPendingLastClient = null;
@@ -2407,8 +2592,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       this.penSession.addLinePoint(end.x, end.y);
     } else {
       const dragCurrent = this.penPendingDragSvg ?? startSvg;
-      const c = dragBendCubicControlPoints(anchor, end, startSvg, dragCurrent);
-      this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
+      this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve);
     }
     this.penPendingSegment = null;
     this.penPendingLastClient = null;
@@ -2477,7 +2661,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.penPendingSegment = {
       anchor: { x: anchor.x, y: anchor.y },
       startClient: { x: event.clientX, y: event.clientY },
-      startSvg: { x: pt.x, y: pt.y }
+      startSvg: { x: pt.x, y: pt.y },
+      ctrlCurve: event.ctrlKey || event.metaKey
     };
     this.penPendingLastClient = { x: event.clientX, y: event.clientY };
     this.penPendingDragSvg = { x: pt.x, y: pt.y };

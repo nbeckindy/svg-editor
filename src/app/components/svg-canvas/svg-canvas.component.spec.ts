@@ -3464,6 +3464,224 @@ describe('SvgCanvasComponent', () => {
       expect(component.penSessionPreviewPathD).toContain('M 12 18');
     });
 
+    it('shows close-target ring when pointer hovers near pen path start anchor', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 90,
+        clientY: 90,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 90,
+        clientY: 90
+      } as MouseEvent);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 88,
+        clientY: 88,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({
+        clientX: 12,
+        clientY: 10,
+        shiftKey: false,
+        altKey: false
+      } as MouseEvent);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-pen-close-hover"]')).toBeTruthy();
+    });
+
+    it('closes path on mouseup inside radius of pen start anchor (single-click close)', async () => {
+      await loadEmptySvgAndPenMode();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 90,
+        clientY: 90,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 90,
+        clientY: 90
+      } as MouseEvent);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 50,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({
+        clientX: 16,
+        clientY: 14,
+        shiftKey: false,
+        altKey: false
+      } as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 16,
+        clientY: 14
+      } as MouseEvent);
+      fixture.detectChanges();
+
+      const path = fixture.nativeElement
+        .querySelector('[data-editor-content-group]')
+        ?.querySelector('path');
+      expect(path).toBeTruthy();
+      expect((path?.getAttribute('d') ?? '').trim().endsWith('Z'));
+      expect(editorToolService.getCurrentTool()).toBe('selector');
+    });
+
+    it('Backspace clears moveto-only pen session', async () => {
+      await loadEmptySvgAndPenMode();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+      const evt = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true });
+      const pd = vi.spyOn(evt, 'preventDefault');
+      component.onKeyDown(evt);
+      expect(component.isPenSessionActive).toBe(false);
+      expect(pd).toHaveBeenCalled();
+    });
+
+    it('Backspace removes last committed segment and keeps drawing when anchors remain', async () => {
+      await loadEmptySvgAndPenMode();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 30,
+        clientY: 40,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 30,
+        clientY: 40
+      } as MouseEvent);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 60,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 50,
+        clientY: 60
+      } as MouseEvent);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      fixture.detectChanges();
+      expect(editorToolService.getCurrentTool()).toBe('pen');
+      expect(component.isPenSessionActive).toBe(true);
+      const segs = (component as unknown as { penSession: { getSegments: () => unknown[] } }).penSession.getSegments();
+      expect(segs.map((s: { type: string }) => s.type).join('')).toBe('ML');
+      expect(component.penSessionPreviewPathD).toBeTruthy();
+    });
+
+    it('Backspace after two anchors clears session (M-only exit)', async () => {
+      await loadEmptySvgAndPenMode();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 30,
+        clientY: 40,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 30,
+        clientY: 40
+      } as MouseEvent);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      expect(component.isPenSessionActive).toBe(false);
+    });
+
+    it('Backspace cancels in-progress pen segment without removing last committed anchor', async () => {
+      await loadEmptySvgAndPenMode();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 30,
+        clientY: 40,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 30,
+        clientY: 40
+      } as MouseEvent);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 60,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.penSessionPreviewPathD).toBeTruthy();
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
+      fixture.detectChanges();
+      expect(component.isPenSessionActive).toBe(true);
+      const segs = (component as unknown as { penSession: { getSegments: () => unknown[] } }).penSession.getSegments();
+      expect(segs.map((s: { type: string }) => s.type).join('')).toBe('ML');
+      expect(component.penSessionPreviewPathD).toBeTruthy();
+    });
+
     it('click sequence adds a path; Enter finishes and selects it', async () => {
       await loadEmptySvgAndPenMode();
 

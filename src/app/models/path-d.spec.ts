@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { penPathSegmentsToD } from './pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD } from './path-d';
 
 describe('parsePathD', () => {
@@ -129,6 +130,23 @@ describe('parsePathD', () => {
     const again = parsePathD(out);
     expect(again.errors).toEqual([]);
     expect(again.segments).toEqual(parsed.segments);
+  });
+
+  it('round-trips pen-authored M L C S Q T through parse → explicit d → parse', () => {
+    const d = penPathSegmentsToD([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 10, y: 0 },
+      { type: 'C', x1: 10, y1: 5, x2: 15, y2: 5, x: 20, y: 0 },
+      { type: 'S', x2: 25, y2: 5, x: 30, y: 0 },
+      { type: 'Q', x1: 32, y1: 8, x: 35, y: 0 },
+      { type: 'T', x: 40, y: 0 }
+    ]);
+    const first = parsePathD(d);
+    expect(first.errors).toEqual([]);
+    const serialized = pathSegmentsToD(first.segments);
+    const second = parsePathD(serialized);
+    expect(second.errors).toEqual([]);
+    expect(second.segments).toEqual(first.segments);
   });
 });
 

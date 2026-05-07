@@ -1,3 +1,4 @@
+import { pathSvgReflectStateAfter } from './pen-path';
 import { parsePathD, pathSegmentsToD, type PathSegment } from './path-d';
 
 const DEFAULT_MIN_T = 0.02;
@@ -172,6 +173,8 @@ export type PenPathInsertHit =
   | { kind: 'L'; segmentIndex: number; x: number; y: number }
   | { kind: 'Q'; segmentIndex: number; t: number }
   | { kind: 'C'; segmentIndex: number; t: number }
+  | { kind: 'S'; segmentIndex: number; t: number }
+  | { kind: 'T'; segmentIndex: number; t: number }
   | { kind: 'Z'; segmentIndex: number; x: number; y: number };
 
 export function findPenPathInsertHit(
@@ -182,9 +185,9 @@ export function findPenPathInsertHit(
   minT = DEFAULT_MIN_T,
   maxT = DEFAULT_MAX_T
 ): PenPathInsertHit | null {
+  let subpathStart = { x: 0, y: 0 };
   let cx = 0;
   let cy = 0;
-  let subpathStart = { x: 0, y: 0 };
   let hasSubpath = false;
   let bestHit: PenPathInsertHit | null = null;
   let bestDistSq = Infinity;
@@ -209,26 +212,48 @@ export function findPenPathInsertHit(
     }
     if (!hasSubpath) continue;
 
-    if (seg.type === 'L') {
-      const cp = closestPointOnSegment(cx, cy, seg.x, seg.y, px, py);
-      consider({ kind: 'L', segmentIndex: i, x: cp.x, y: cp.y }, cp.distSq, cp.t);
-      cx = seg.x;
-      cy = seg.y;
-    } else if (seg.type === 'Q') {
-      const cp = closestPointOnQuadratic(cx, cy, seg.x1, seg.y1, seg.x, seg.y, px, py);
-      consider({ kind: 'Q', segmentIndex: i, t: cp.t }, cp.distSq, cp.t);
-      cx = seg.x;
-      cy = seg.y;
-    } else if (seg.type === 'C') {
-      const cp = closestPointOnCubic(cx, cy, seg.x1, seg.y1, seg.x2, seg.y2, seg.x, seg.y, px, py);
-      consider({ kind: 'C', segmentIndex: i, t: cp.t }, cp.distSq, cp.t);
-      cx = seg.x;
-      cy = seg.y;
-    } else if (seg.type === 'Z') {
+    if (seg.type === 'Z') {
       const cp = closestPointOnSegment(cx, cy, subpathStart.x, subpathStart.y, px, py);
       consider({ kind: 'Z', segmentIndex: i, x: cp.x, y: cp.y }, cp.distSq, cp.t);
       cx = subpathStart.x;
       cy = subpathStart.y;
+      continue;
+    }
+
+    const st = pathSvgReflectStateAfter(segments.slice(0, i));
+    if (!st) continue;
+    const sx = st.x;
+    const sy = st.y;
+
+    if (seg.type === 'L') {
+      const cp = closestPointOnSegment(sx, sy, seg.x, seg.y, px, py);
+      consider({ kind: 'L', segmentIndex: i, x: cp.x, y: cp.y }, cp.distSq, cp.t);
+      cx = seg.x;
+      cy = seg.y;
+    } else if (seg.type === 'Q') {
+      const cp = closestPointOnQuadratic(sx, sy, seg.x1, seg.y1, seg.x, seg.y, px, py);
+      consider({ kind: 'Q', segmentIndex: i, t: cp.t }, cp.distSq, cp.t);
+      cx = seg.x;
+      cy = seg.y;
+    } else if (seg.type === 'C') {
+      const cp = closestPointOnCubic(sx, sy, seg.x1, seg.y1, seg.x2, seg.y2, seg.x, seg.y, px, py);
+      consider({ kind: 'C', segmentIndex: i, t: cp.t }, cp.distSq, cp.t);
+      cx = seg.x;
+      cy = seg.y;
+    } else if (seg.type === 'S') {
+      const x1 = st.canReflectCubic ? 2 * sx - st.cubicCp2X : sx;
+      const y1 = st.canReflectCubic ? 2 * sy - st.cubicCp2Y : sy;
+      const cp = closestPointOnCubic(sx, sy, x1, y1, seg.x2, seg.y2, seg.x, seg.y, px, py);
+      consider({ kind: 'S', segmentIndex: i, t: cp.t }, cp.distSq, cp.t);
+      cx = seg.x;
+      cy = seg.y;
+    } else if (seg.type === 'T') {
+      const tcx = 2 * sx - st.quadCpX;
+      const tcy = 2 * sy - st.quadCpY;
+      const cp = closestPointOnQuadratic(sx, sy, tcx, tcy, seg.x, seg.y, px, py);
+      consider({ kind: 'T', segmentIndex: i, t: cp.t }, cp.distSq, cp.t);
+      cx = seg.x;
+      cy = seg.y;
     }
   }
 
@@ -320,7 +345,7 @@ function pointBeforeSegmentIndex(
     } else if (s.type === 'L') {
       cx = s.x;
       cy = s.y;
-    } else if (s.type === 'C') {
+    } else if (s.type === 'C' || s.type === 'S' || s.type === 'T') {
       cx = s.x;
       cy = s.y;
     } else if (s.type === 'Q') {
@@ -370,6 +395,50 @@ export function applyPenPathInsert(segments: readonly PathSegment[], hit: PenPat
     if (!start) return null;
     const [c1, c2] = splitCubicAtT(start.x, start.y, seg, hit.t);
     next.splice(i, 1, c1, c2);
+    return next;
+  }
+  if (hit.kind === 'S') {
+    const i = hit.segmentIndex;
+    const seg = next[i];
+    if (!seg || seg.type !== 'S') return null;
+    const start = pointBeforeSegmentIndex(segments, i);
+    if (!start) return null;
+    const st = pathSvgReflectStateAfter(segments.slice(0, i));
+    if (!st) return null;
+    const impliedX1 = st.canReflectCubic ? 2 * start.x - st.cubicCp2X : start.x;
+    const impliedY1 = st.canReflectCubic ? 2 * start.y - st.cubicCp2Y : start.y;
+    const asC: Extract<PathSegment, { type: 'C' }> = {
+      type: 'C',
+      x1: impliedX1,
+      y1: impliedY1,
+      x2: seg.x2,
+      y2: seg.y2,
+      x: seg.x,
+      y: seg.y
+    };
+    const [c1, c2] = splitCubicAtT(start.x, start.y, asC, hit.t);
+    next.splice(i, 1, c1, c2);
+    return next;
+  }
+  if (hit.kind === 'T') {
+    const i = hit.segmentIndex;
+    const seg = next[i];
+    if (!seg || seg.type !== 'T') return null;
+    const start = pointBeforeSegmentIndex(segments, i);
+    if (!start) return null;
+    const st = pathSvgReflectStateAfter(segments.slice(0, i));
+    if (!st) return null;
+    const impliedX1 = 2 * start.x - st.quadCpX;
+    const impliedY1 = 2 * start.y - st.quadCpY;
+    const asQ: Extract<PathSegment, { type: 'Q' }> = {
+      type: 'Q',
+      x1: impliedX1,
+      y1: impliedY1,
+      x: seg.x,
+      y: seg.y
+    };
+    const [q1, q2] = splitQuadraticAtT(start.x, start.y, asQ, hit.t);
+    next.splice(i, 1, q1, q2);
     return next;
   }
   return null;

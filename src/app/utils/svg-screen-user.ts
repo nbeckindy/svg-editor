@@ -117,3 +117,21 @@ export function screenPointToRootSvgUserPoint(
   const u = p.matrixTransform(inv);
   return { x: u.x, y: u.y };
 }
+
+/** Inverse of mapping in {@link screenPointToRootSvgUserPoint} — user space → CSS pixel offset (same coords as clientX/Y). */
+export function rootSvgUserPointToScreenPoint(
+  rootSvg: SVGSVGElement,
+  userX: number,
+  userY: number
+): { x: number; y: number } | null {
+  if (typeof rootSvg.getScreenCTM !== 'function' || typeof rootSvg.createSVGPoint !== 'function') {
+    return null;
+  }
+  const ctm = rootSvg.getScreenCTM();
+  if (!ctm) return null;
+  const p = rootSvg.createSVGPoint();
+  p.x = userX;
+  p.y = userY;
+  const s = p.matrixTransform(ctm);
+  return { x: s.x, y: s.y };
+}

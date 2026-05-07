@@ -1,6 +1,6 @@
 /**
  * Structured segments for incremental pen paths (maps to SVG d).
- * PP-3 adds runtime use of {@link PenPathCubicSegment}; generation is supported here so the model stays unified.
+ * Phase 1 (j24.2): `Q` / smooth `S` / smooth `T` alongside `M` / `L` / `C` (explicit uppercase in export).
  */
 export type PenPathSegment =
   | { type: 'M'; x: number; y: number }
@@ -13,9 +13,25 @@ export type PenPathSegment =
       y2: number;
       x: number;
       y: number;
-    };
+    }
+  | { type: 'Q'; x1: number; y1: number; x: number; y: number }
+  /** Smooth cubic shorthand: first control is implied from the previous `C`/`S` (SVG `S`). */
+  | { type: 'S'; x2: number; y2: number; x: number; y: number }
+  /** Smooth quadratic shorthand: control is implied from the previous `Q`/`T` (SVG `T`). */
+  | { type: 'T'; x: number; y: number };
 
 export type CubicControlPoints = { x1: number; y1: number; x2: number; y2: number };
+
+/** SVG reflection state after walking committed pen segments (matches `parsePathD` rules). */
+export type PenSvgReflectState = {
+  x: number;
+  y: number;
+  quadCpX: number;
+  quadCpY: number;
+  cubicCp2X: number;
+  cubicCp2Y: number;
+  canReflectCubic: boolean;
+};
 
 function formatCoord(n: number): string {
   if (!Number.isFinite(n)) return '0';
@@ -23,24 +39,160 @@ function formatCoord(n: number): string {
   return String(rounded);
 }
 
-/** Build a single `d` string from segments (no implicit commands). */
-export function penPathSegmentsToD(segments: readonly PenPathSegment[]): string {
-  const parts: string[] = [];
+function movetoReflectState(m: Extract<PenPathSegment, { type: 'M' }>): PenSvgReflectState {
+  return {
+    x: m.x,
+    y: m.y,
+    quadCpX: m.x,
+    quadCpY: m.y,
+    cubicCp2X: m.x,
+    cubicCp2Y: m.y,
+    canReflectCubic: false
+  };
+}
+
+function advancePenReflectState(st: PenSvgReflectState, s: Exclude<PenPathSegment, { type: 'M' }>): void {
+  switch (s.type) {
+    case 'L':
+      st.x = s.x;
+      st.y = s.y;
+      st.quadCpX = s.x;
+      st.quadCpY = s.y;
+      return;
+    case 'C':
+      st.cubicCp2X = s.x2;
+      st.cubicCp2Y = s.y2;
+      st.canReflectCubic = true;
+      st.x = s.x;
+      st.y = s.y;
+      st.quadCpX = s.x;
+      st.quadCpY = s.y;
+      return;
+    case 'S':
+      st.cubicCp2X = s.x2;
+      st.cubicCp2Y = s.y2;
+      st.canReflectCubic = true;
+      st.x = s.x;
+      st.y = s.y;
+      st.quadCpX = s.x;
+      st.quadCpY = s.y;
+      return;
+    case 'Q':
+      st.quadCpX = s.x1;
+      st.quadCpY = s.y1;
+      st.x = s.x;
+      st.y = s.y;
+      st.cubicCp2X = s.x;
+      st.cubicCp2Y = s.y;
+      st.canReflectCubic = false;
+      return;
+    case 'T': {
+      const tcx = 2 * st.x - st.quadCpX;
+      const tcy = 2 * st.y - st.quadCpY;
+      st.quadCpX = tcx;
+      st.quadCpY = tcy;
+      st.x = s.x;
+      st.y = s.y;
+      st.cubicCp2X = s.x;
+      st.cubicCp2Y = s.y;
+      st.canReflectCubic = false;
+      return;
+    }
+  }
+}
+
+/**
+ * Reflection state after walking drawable segments (`M`/`L`/`C`/`S`/`Q`/`T`/`Z`; no leading `Z` before moveto).
+ * Used where paths may contain close commands (`PathSegment`) as well as pen segments.
+ */
+export function pathSvgReflectStateAfter(
+  segments: readonly (PenPathSegment | { type: 'Z' })[]
+): PenSvgReflectState | null {
+  if (segments.length === 0) return null;
+  let st: PenSvgReflectState | null = null;
+  let subpathStartX = 0;
+  let subpathStartY = 0;
   for (const s of segments) {
     if (s.type === 'M') {
+      st = movetoReflectState(s);
+      subpathStartX = s.x;
+      subpathStartY = s.y;
+      continue;
+    }
+    if (!st) continue;
+    if (s.type === 'Z') {
+      st.x = subpathStartX;
+      st.y = subpathStartY;
+      st.quadCpX = subpathStartX;
+      st.quadCpY = subpathStartY;
+      st.cubicCp2X = subpathStartX;
+      st.cubicCp2Y = subpathStartY;
+      st.canReflectCubic = false;
+      continue;
+    }
+    advancePenReflectState(st, s);
+  }
+  return st;
+}
+
+/** Reflection state after committed pen-only segments (no close commands). */
+export function penReflectStateAfterCommitted(segments: readonly PenPathSegment[]): PenSvgReflectState | null {
+  return pathSvgReflectStateAfter(segments);
+}
+
+/** `Ctrl`+curve drag: quadratic after `M`/`L`, smooth cubic after `C`/`S`, smooth quadratic after `Q`/`T`. */
+export function penDragCurveAuthoringKind(
+  ctrlKey: boolean,
+  segments: readonly PenPathSegment[]
+): 'cubic' | 'quadratic' | 'smoothCubic' | 'smoothQuadratic' {
+  if (!ctrlKey) return 'cubic';
+  const last = segments[segments.length - 1];
+  if (!last || last.type === 'M') return 'quadratic';
+  if (last.type === 'C' || last.type === 'S') return 'smoothCubic';
+  if (last.type === 'Q' || last.type === 'T') return 'smoothQuadratic';
+  return 'quadratic';
+}
+
+/** Build a single `d` string from segments (explicit `M`/`L`/`C`/`Q`/`S`/`T`, no implicit commands). */
+export function penPathSegmentsToD(segments: readonly PenPathSegment[]): string {
+  const parts: string[] = [];
+  let st: PenSvgReflectState | null = null;
+  for (const s of segments) {
+    if (s.type === 'M') {
+      st = movetoReflectState(s);
       parts.push('M', formatCoord(s.x), formatCoord(s.y));
-    } else if (s.type === 'L') {
-      parts.push('L', formatCoord(s.x), formatCoord(s.y));
-    } else {
-      parts.push(
-        'C',
-        formatCoord(s.x1),
-        formatCoord(s.y1),
-        formatCoord(s.x2),
-        formatCoord(s.y2),
-        formatCoord(s.x),
-        formatCoord(s.y)
-      );
+      continue;
+    }
+    if (!st) continue;
+    switch (s.type) {
+      case 'L':
+        parts.push('L', formatCoord(s.x), formatCoord(s.y));
+        advancePenReflectState(st, s);
+        break;
+      case 'C':
+        parts.push(
+          'C',
+          formatCoord(s.x1),
+          formatCoord(s.y1),
+          formatCoord(s.x2),
+          formatCoord(s.y2),
+          formatCoord(s.x),
+          formatCoord(s.y)
+        );
+        advancePenReflectState(st, s);
+        break;
+      case 'Q':
+        parts.push('Q', formatCoord(s.x1), formatCoord(s.y1), formatCoord(s.x), formatCoord(s.y));
+        advancePenReflectState(st, s);
+        break;
+      case 'S':
+        parts.push('S', formatCoord(s.x2), formatCoord(s.y2), formatCoord(s.x), formatCoord(s.y));
+        advancePenReflectState(st, s);
+        break;
+      case 'T':
+        parts.push('T', formatCoord(s.x), formatCoord(s.y));
+        advancePenReflectState(st, s);
+        break;
     }
   }
   return parts.join(' ');
@@ -98,6 +250,39 @@ export function dragBendCubicControlPoints(
   };
 }
 
+/**
+ * Single quadratic control from chord midpoint + perpendicular bend (same drag model as cubics).
+ */
+export function dragBendQuadraticControlPoint(
+  p0: { x: number; y: number },
+  p2: { x: number; y: number },
+  dragStart: { x: number; y: number },
+  dragCurrent: { x: number; y: number }
+): { x1: number; y1: number } {
+  const mx = (p0.x + p2.x) / 2;
+  const my = (p0.y + p2.y) / 2;
+  const dx = p2.x - p0.x;
+  const dy = p2.y - p0.y;
+  const chordLen = Math.hypot(dx, dy);
+  if (chordLen < 1e-9) return { x1: p0.x, y1: p0.y };
+  const nx = -dy / chordLen;
+  const ny = dx / chordLen;
+  const bend =
+    (dragCurrent.x - dragStart.x) * nx + (dragCurrent.y - dragStart.y) * ny;
+  return { x1: mx + nx * bend, y1: my + ny * bend };
+}
+
+/** Second control for smooth cubic `S`: reuse outgoing bend from {@link dragBendCubicControlPoints}. */
+export function dragBendSmoothCubicSecondControl(
+  p0: { x: number; y: number },
+  p3: { x: number; y: number },
+  dragStart: { x: number; y: number },
+  dragCurrent: { x: number; y: number }
+): { x2: number; y2: number } {
+  const c = dragBendCubicControlPoints(p0, p3, dragStart, dragCurrent);
+  return { x2: c.x2, y2: c.y2 };
+}
+
 /** Append a cubic `C` command to an existing `d` (no trailing space). */
 export function appendCubicToD(
   baseD: string,
@@ -131,6 +316,36 @@ export function appendLineToD(baseD: string, x: number, y: number): string {
   return baseD ? `${baseD} ${tail}` : tail;
 }
 
+/** Append `Q x1 y1 x y` for preview. */
+export function appendQuadraticToD(
+  baseD: string,
+  x1: number,
+  y1: number,
+  x: number,
+  y: number
+): string {
+  const tail = ['Q', formatCoord(x1), formatCoord(y1), formatCoord(x), formatCoord(y)].join(' ');
+  return baseD ? `${baseD} ${tail}` : tail;
+}
+
+/** Append smooth cubic `S x2 y2 x y` for preview. */
+export function appendSmoothCubicToD(
+  baseD: string,
+  x2: number,
+  y2: number,
+  x: number,
+  y: number
+): string {
+  const tail = ['S', formatCoord(x2), formatCoord(y2), formatCoord(x), formatCoord(y)].join(' ');
+  return baseD ? `${baseD} ${tail}` : tail;
+}
+
+/** Append smooth quadratic `T x y` for preview. */
+export function appendSmoothQuadraticToD(baseD: string, x: number, y: number): string {
+  const tail = `T ${formatCoord(x)} ${formatCoord(y)}`;
+  return baseD ? `${baseD} ${tail}` : tail;
+}
+
 /** Squared distance in SVG user space (cheap degenerate test). */
 export function penSvgDistanceSq(
   a: { x: number; y: number },
@@ -147,8 +362,6 @@ export function lastCommittedVertex(
 ): { x: number; y: number } | null {
   if (segments.length === 0) return null;
   const last = segments[segments.length - 1];
-  if (last.type === 'M') return { x: last.x, y: last.y };
-  if (last.type === 'L') return { x: last.x, y: last.y };
   return { x: last.x, y: last.y };
 }
 
@@ -158,7 +371,7 @@ export function penPathSegmentsAreValid(segments: readonly PenPathSegment[]): bo
   if (segments[0].type !== 'M') return false;
   for (let i = 1; i < segments.length; i++) {
     const t = segments[i].type;
-    if (t === 'L' || t === 'C') return true;
+    if (t === 'L' || t === 'C' || t === 'Q' || t === 'S' || t === 'T') return true;
   }
   return false;
 }
@@ -187,6 +400,18 @@ export class PenSession {
     this.segments.push({ type: 'C', x1, y1, x2, y2, x, y });
   }
 
+  appendQuadratic(x1: number, y1: number, x: number, y: number): void {
+    this.segments.push({ type: 'Q', x1, y1, x, y });
+  }
+
+  appendSmoothCubic(x2: number, y2: number, x: number, y: number): void {
+    this.segments.push({ type: 'S', x2, y2, x, y });
+  }
+
+  appendSmoothQuadratic(x: number, y: number): void {
+    this.segments.push({ type: 'T', x, y });
+  }
+
   /** Current `d` string (may be invalid if fewer than two points). */
   getPathD(): string {
     return penPathSegmentsToD(this.segments);
@@ -194,6 +419,32 @@ export class PenSession {
 
   reset(): void {
     this.segments = [];
+  }
+
+  /** Replace the in-progress path (e.g. continue-from-existing). */
+  restoreDrawableSegments(segments: readonly PenPathSegment[]): void {
+    this.segments = segments.map((s) => ({ ...s })) as PenPathSegment[];
+  }
+
+  /**
+   * Remove the last committed drawable segment (`L` / `C` / `Q` / `S` / `T`).
+   * If only a lone `M` remains (before or after the pop), clear the session.
+   *
+   * @returns `none` — nothing changed (empty segments); `cleared` — session ended/restarted empty;
+   *          `popped` — removed one segment and anchors remain drawable.
+   */
+  popLastCommittedSegment(): 'none' | 'cleared' | 'popped' {
+    if (this.segments.length === 0) return 'none';
+    if (penPathOnlyMoveto(this.segments)) {
+      this.reset();
+      return 'cleared';
+    }
+    this.segments.pop();
+    if (this.segments.length === 0 || penPathOnlyMoveto(this.segments)) {
+      this.reset();
+      return 'cleared';
+    }
+    return 'popped';
   }
 
   /**
