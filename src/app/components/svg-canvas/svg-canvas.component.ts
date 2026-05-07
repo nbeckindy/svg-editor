@@ -19,7 +19,6 @@ import { rootSvgUserPointToScreenPoint, screenPointToRootSvgUserPoint } from '..
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   EditorCommand,
-  CompositeCommand,
   TranslateCommand,
   AlignCommand,
   DistributeCommand,

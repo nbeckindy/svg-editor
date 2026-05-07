@@ -290,6 +290,17 @@ describe('PenSession', () => {
     ]);
   });
 
+  it('restoreDrawableSegments replaces session content', () => {
+    const s = new PenSession();
+    s.beginPath(9, 9);
+    s.addLinePoint(1, 1);
+    s.restoreDrawableSegments([
+      { type: 'M', x: 2, y: 3 },
+      { type: 'L', x: 5, y: 6 }
+    ]);
+    expect(s.finishPath()).toBe('M 2 3 L 5 6');
+  });
+
   it('finishPath returns null until at least two vertices', () => {
     const s = new PenSession();
     expect(s.finishPath()).toBe(null);
