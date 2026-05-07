@@ -3556,6 +3556,97 @@ describe('SvgCanvasComponent', () => {
       expect(editorToolService.getCurrentTool()).toBe('selector');
     });
 
+    it('picks up open path continuation near endpoint; extend is single EditPath undo', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="open-a" d="M 10 10 L 50 40" fill="none" stroke="black"/></svg>'
+      );
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 52,
+        clientY: 40,
+        detail: 1,
+        shiftKey: true,
+        preventDefault: vi.fn(),
+        target: svgRoot
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+      expect(component.isPenSessionActive).toBe(true);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 88,
+        clientY: 90,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 88,
+        clientY: 90
+      } as MouseEvent);
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const pathCount =
+        svgManipulationService.getSVGInstance()?.find('[data-editor-content-group] path').length ?? 0;
+      expect(pathCount).toBe(1);
+
+      const dAfter =
+        svgManipulationService.getSVGInstance()?.findOne('#open-a')?.attr('d')?.toString() ?? '';
+      expect(dAfter).toMatch(/88/);
+      expect(dAfter).toMatch(/90/);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+      fixture.detectChanges();
+
+      const dUndo =
+        svgManipulationService.getSVGInstance()?.findOne('#open-a')?.attr('d')?.toString() ?? '';
+      expect(dUndo).toContain('50 40');
+      expect(dUndo).not.toMatch(/88/);
+    });
+
+    it('joins finishing stroke into existing open path when end meets endpoint (tolerance)', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="join-b" d="M 0 0 L 18 22" fill="none" stroke="black"/></svg>'
+      );
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 40,
+        clientY: 40,
+        detail: 1,
+        shiftKey: true,
+        preventDefault: vi.fn(),
+        target: svgRoot
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 23,
+        detail: 1,
+        shiftKey: true,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 20,
+        clientY: 23
+      } as MouseEvent);
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const pathCount =
+        svgManipulationService.getSVGInstance()?.find('[data-editor-content-group] path').length ?? 0;
+      expect(pathCount).toBe(1);
+      const d =
+        svgManipulationService.getSVGInstance()?.findOne('#join-b')?.attr('d')?.toString() ?? '';
+      expect(d).toMatch(/18 22/);
+      expect(d).toMatch(/20 23/);
+    });
+
     it('Backspace clears moveto-only pen session', async () => {
       await loadEmptySvgAndPenMode();
       component.onCanvasMouseDown({
