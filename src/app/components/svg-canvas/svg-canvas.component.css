@@ -68,9 +68,12 @@
   height: 100%;
   flex: 1;
   min-height: 0;
+  min-width: 0;
   display: flex;
   align-items: center;
   justify-content: center;
+  /* Clip panned/zoomed stage so document SVG cannot paint over rulers (grid sibling paint order). */
+  overflow: hidden;
 }
 
 .svg-zoom-wrapper {
