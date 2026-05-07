@@ -17,6 +17,14 @@ describe('AppComponent', () => {
     expect(app).toBeTruthy();
   });
 
+  it('should start with default new document SVG (landing / refresh)', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    expect(app.svgContent).toContain('viewBox="0 0 800 600"');
+    expect(app.svgContent).toContain('width="800"');
+    expect(app.svgContent).toContain('height="600"');
+  });
+
   it('should render title', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();

@@ -26,18 +26,19 @@ import { EditorHistoryService } from './services/editor-history.service';
   styleUrl: './app.css'
 })
 export class AppComponent {
+  private static readonly DEFAULT_SVG =
+    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600"></svg>';
+
   private readonly svgManipulation = inject(SvgManipulationService);
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly editorHistory = inject(EditorHistoryService);
 
-  svgContent: string = '';
+  /** Blank 800×600 document on first paint and on full page reload. */
+  svgContent: string = AppComponent.DEFAULT_SVG;
   uploadedFileName: string = '';
   activeDockPanel: EditorDockPanel = 'properties';
   /** Session-only; resets on full page reload (expanded). */
   readonly dockCollapsed = signal(false);
-
-  private static readonly DEFAULT_SVG =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600"></svg>';
 
   onNewCanvas(): void {
     if (this.editorHistory.canUndo() &&
