@@ -1746,14 +1746,13 @@ describe('SvgManipulationService', () => {
       expect(String(viewBoxRect!.attr('stroke') ?? 'none').toLowerCase()).toBe('none');
     });
 
-    it('artboard boundary rect has drop shadow filter', () => {
+    it('artboard document rect has no filter (shadow is on zoom-independent overlay)', () => {
       const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
       const svg = service.getSVGInstance()!;
       const viewBoxRect = svg.findOne('[data-editor-viewbox-rect]');
       expect(viewBoxRect).toBeTruthy();
-      const filter = viewBoxRect!.attr('filter');
-      expect(filter).toContain('url(#artboard-shadow)');
+      expect(viewBoxRect!.attr('filter')).toBeFalsy();
     });
   });
 

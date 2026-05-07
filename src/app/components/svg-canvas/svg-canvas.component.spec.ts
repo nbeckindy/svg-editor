@@ -2510,6 +2510,7 @@ describe('SvgCanvasComponent', () => {
       expect(boundaryRect).toBeTruthy();
       expect(boundaryRect?.getAttribute('stroke')?.toLowerCase()).toBe('#cccccc');
       expect(boundaryRect?.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+      expect(boundaryRect?.getAttribute('filter')).toContain('editor-artboard-boundary-shadow');
     });
 
     it('should show elements outside viewBox in the DOM (all elements visible)', async () => {

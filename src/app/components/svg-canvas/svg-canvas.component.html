@@ -77,6 +77,20 @@
           [attr.viewBox]="'0 0 ' + overlayWidthPx + ' ' + overlayHeightPx"
           preserveAspectRatio="none"
           overflow="visible">
+          <defs>
+            <filter
+              id="editor-artboard-boundary-shadow"
+              x="-8%"
+              y="-8%"
+              width="116%"
+              height="116%">
+              <feDropShadow
+                dx="0"
+                dy="1"
+                stdDeviation="3"
+                flood-color="rgba(0,0,0,0.2)" />
+            </filter>
+          </defs>
           @if (showGridOverlay) {
             <g data-testid="canvas-grid-overlay">
               @for (line of verticalGridLines; track line.key) {
@@ -139,7 +153,8 @@
               fill="none"
               stroke="#cccccc"
               stroke-width="1"
-              vector-effect="non-scaling-stroke"/>
+              vector-effect="non-scaling-stroke"
+              filter="url(#editor-artboard-boundary-shadow)" />
           }
           @if (highlightRect; as hr) {
             @if (isRotatingSelection) {
