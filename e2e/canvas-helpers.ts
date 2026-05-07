@@ -25,8 +25,17 @@ export async function screenUnionForIds(
   }, ids);
 }
 
+const LAYER_ROW_PREFIX = 'layer-row-';
+
+/** IDs of layers whose rows have the selected styling (parses `data-testid="layer-row-{id}"`). */
 export async function getSelectedLayerIds(page: Page): Promise<string[]> {
-  return page.locator('.layers-panel .layer-row.selected .layer-id').allTextContents();
+  return page.evaluate((prefix: string) => {
+    const rows = document.querySelectorAll('.layers-panel .layer-row.selected');
+    return Array.from(rows)
+      .map((r) => r.getAttribute('data-testid'))
+      .filter((t): t is string => t.startsWith(prefix))
+      .map((t) => t.slice(prefix.length));
+  }, LAYER_ROW_PREFIX);
 }
 
 /** Blue selection stroke rect (#2196F3) in screen space. */
