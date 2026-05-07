@@ -32,7 +32,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 
 | Order | Epic | Slug | bd epic ID | Status | Notes |
 |------:|------|------|-------------|--------|-------|
-| 17 | Tool parity and pen authoring | [tool-parity-pen](./epics/tool-parity-pen.md) | `svg-editor-j24` | `OPEN` | Transform/readout gaps + six pen parity children; does not reopen closed epics |
+| 17 | Tool parity and pen authoring | [tool-parity-pen](./epics/tool-parity-pen.md) | `svg-editor-j24` | `OPEN` | Transform/readout gaps + pen parity (`j24.1`–`j24.7`, arc phased after Q/S/T); does not reopen closed epics |
 | 18 | Always-visible paint defaults | [always-visible-paint-defaults](./epics/always-visible-paint-defaults.md) | `svg-editor-6g0` | `OPEN` | Single contextual paint controls + drawing defaults across creation flows |
 
 ## Free-standing issues
@@ -52,12 +52,12 @@ These beads are not part of an epic and can be tackled independently.
 
 ## Tool parity and pen authoring (epic `svg-editor-j24`)
 
-All items below are **children of epic** [`svg-editor-j24`](./epics/tool-parity-pen.md) (`bd show svg-editor-j24`). See the epic plan for local refs **TP-1…TP-6** (transform/UI) and **PPEN-1…PPEN-6** (pen).
+All items below are **children of epic** [`svg-editor-j24`](./epics/tool-parity-pen.md) (`bd show svg-editor-j24`). See the epic plan for local refs **TP-1…TP-6** (transform/UI) and **PPEN-1…PPEN-7** (pen).
 
 | Theme | bd IDs |
 |--------|--------|
 | Transform / readouts | `svg-editor-e9a`, `svg-editor-jqe`, `svg-editor-zc7`, `svg-editor-269`, `svg-editor-0zh`, `svg-editor-hya` |
-| Pen authoring parity | `svg-editor-j24.1` … `svg-editor-j24.6` |
+| Pen authoring parity | `svg-editor-j24.1` … `svg-editor-j24.7` (phase: Q/S/T in `j24.2`, then `A` in `j24.7`) |
 
 ## Always-visible paint defaults (epic `svg-editor-6g0`)
 
@@ -143,7 +143,7 @@ flowchart LR
 8. ~~**Epic 10** (text editing)~~ -- **DONE**
 9. ~~**Epic 16** (advanced path editing)~~ -- **DONE**
 10. ~~**`svg-editor-e1x`** (gradient editor)~~ -- **DONE**
-11. **Epic 17 ([tool-parity-pen](./epics/tool-parity-pen.md), `svg-editor-j24`):** transform parity (`svg-editor-e9a` … `svg-editor-hya`) and pen parity (`svg-editor-j24.1` … `svg-editor-j24.6`); see epic plan for order and acceptance.
+11. **Epic 17 ([tool-parity-pen](./epics/tool-parity-pen.md), `svg-editor-j24`):** transform parity (`svg-editor-e9a` … `svg-editor-hya`) and pen parity (`svg-editor-j24.1` … `svg-editor-j24.7`, with `j24.7` blocked by `j24.2` phase 1); see epic plan for order and acceptance.
 12. **Epic 18 ([always-visible-paint-defaults](./epics/always-visible-paint-defaults.md), `svg-editor-6g0`):** always-visible fill/stroke/stroke-width controls, canonical defaults service, creation-flow wiring, and regression coverage.
 
 ## Beads epic references
@@ -153,7 +153,7 @@ Status/progress below is current as of 2026-05-06.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
-| tool-parity-pen | `svg-editor-j24` | Tool parity and pen authoring | `OPEN` | 0/12 |
+| tool-parity-pen | `svg-editor-j24` | Tool parity and pen authoring | `OPEN` | 0/13 |
 | always-visible-paint-defaults | `svg-editor-6g0` | Always-visible paint defaults | `OPEN` | 0/5 |
 | selection-interaction | `svg-editor-3b7` | Multi-select and keyboard shortcuts | `CLOSED` | 8/8 |
 | editing-history | `svg-editor-bbc` | Undo and redo | `CLOSED` | 5/5 |

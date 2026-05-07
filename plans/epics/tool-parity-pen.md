@@ -29,12 +29,13 @@ Pen baseline today: [`PenSession`](../../src/app/models/pen-path.ts) (`M`/`L`/`C
 
 | Local ref | Title | bd id | Type | Notes |
 |-----------|--------|-------|------|-------|
-| PPEN-1 | Pen: corner/smooth modifiers while drawing (Illustrator-style) | `svg-editor-j24.1` | feature | Alt/Shift semantics vs snap-only today |
-| PPEN-2 | Pen: quadratic, arc, and smooth shorthand (Q / A / S / T) authoring | `svg-editor-j24.2` | feature | Beyond `M`/`L`/`C` pen session |
-| PPEN-3 | Pen: single-click close path (click first anchor / start point) | `svg-editor-j24.3` | feature | Tolerance hit-test + `Z` |
-| PPEN-4 | Pen: Backspace removes last committed anchor during session | `svg-editor-j24.4` | feature | Without clearing whole path |
-| PPEN-5 | Pen: continue or join open paths (endpoint hit-target) | `svg-editor-j24.5` | feature | Resume subpath / join endpoints |
-| PPEN-6 | Pen: adjust last segment handles before next anchor | `svg-editor-j24.6` | feature | Outgoing tangent before next click |
+| PPEN-1 | Pen: corner/smooth modifiers while drawing (Illustrator-style) | `svg-editor-j24.1` | feature | v1: Shift 45° constraint; Alt/Option drag breaks symmetry; Cmd/Ctrl temp snap off; deeper parity → `svg-editor-bmy` |
+| PPEN-2 | Pen: quadratic and smooth shorthand (Q / S / T) authoring (phase 1) | `svg-editor-j24.2` | feature | Phase 1 only; `A/a` deferred to PPEN-7 |
+| PPEN-3 | Pen: single-click close path (click first anchor / start point) | `svg-editor-j24.3` | feature | Fixed screen-space hit radius (~8px) around start anchor; hover affordance; close on pointer-up if still inside (avoids drag-through accidents); adds `Z` |
+| PPEN-4 | Pen: Backspace removes last committed anchor during session | `svg-editor-j24.4` | feature | Pop last segment; M-only → exit pen session (no degenerate commit); Escape still full discard |
+| PPEN-5 | Pen: continue or join open paths (endpoint hit-target) | `svg-editor-j24.5` | feature | ~8px endpoint tolerance (shared w/ PPEN-3); join highlight; pointer-up merge → one `<path>` + one `d`; resume when session empty; no distant welds |
+| PPEN-6 | Pen: adjust last segment handles before next anchor | `svg-editor-j24.6` | feature | v1: drag visible outgoing handles from rubber-band only; no invisible anchor slab |
+| PPEN-7 | Pen: elliptical arc (A) authoring — spike + implementation | `svg-editor-j24.7` | feature | Spike-first; depends on PPEN-2 phase 1 (`svg-editor-j24.2`) |
 
 ## Exit criteria
 
@@ -46,7 +47,7 @@ Pen baseline today: [`PenSession`](../../src/app/models/pen-path.ts) (`M`/`L`/`C
 - **TP-1–TP-2:** [`svg-canvas.component.ts`](../../src/app/components/svg-canvas/svg-canvas.component.ts), [`properties-panel`](../../src/app/components/properties-panel/), [`editor-commands.ts`](../../src/app/models/editor-commands.ts), [`svg-manipulation.service.ts`](../../src/app/services/svg-manipulation.service.ts)
 - **TP-3–TP-4:** Canvas hit-testing, color pipeline, stroke/transform attributes
 - **TP-5–TP-6:** Path geometry, defs, architecture spikes
-- **PPEN-1–PPEN-6:** [`pen-path.ts`](../../src/app/models/pen-path.ts), [`path-pen-insert.ts`](../../src/app/models/path-pen-insert.ts), pen handlers and overlays in [`svg-canvas`](../../src/app/components/svg-canvas/)
+- **PPEN-1–PPEN-7:** [`pen-path.ts`](../../src/app/models/pen-path.ts), [`path-pen-insert.ts`](../../src/app/models/path-pen-insert.ts), pen handlers and overlays in [`svg-canvas`](../../src/app/components/svg-canvas/)
 
 ## Notes
 
