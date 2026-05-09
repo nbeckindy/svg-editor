@@ -1064,6 +1064,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
 
+    if (this.tryEditorToolShortcut(event)) {
+      return;
+    }
+
     if (!this.svgContent()) return;
 
     const mod = event.ctrlKey || event.metaKey;
@@ -1228,6 +1232,38 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (t.isContentEditable) return true;
     const tag = t.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
+  }
+
+  /**
+   * Single-key tool switching (no modifiers). V/A/P/R/O/L/T/H/Z match common vector editors;
+   * B and I are reserved (brush, eyedropper) and swallowed until those tools exist.
+   */
+  private tryEditorToolShortcut(event: KeyboardEvent): boolean {
+    if (event.ctrlKey || event.metaKey || event.altKey) return false;
+    if (event.key.length !== 1) return false;
+    const key = event.key.toLowerCase();
+    const toolByKey: Record<string, EditorTool | 'reserved'> = {
+      v: 'selector',
+      a: 'node-edit-selector',
+      p: 'pen',
+      b: 'reserved',
+      r: 'rect',
+      o: 'ellipse',
+      l: 'line',
+      t: 'text',
+      h: 'pan',
+      z: 'zoom',
+      i: 'reserved'
+    };
+    const dest = toolByKey[key];
+    if (!dest) return false;
+    event.preventDefault();
+    if (dest === 'reserved') {
+      return true;
+    }
+    this.editorTool.setTool(dest);
+    this.cdr.detectChanges();
+    return true;
   }
 
   private zoomInAtViewportCenter(): void {

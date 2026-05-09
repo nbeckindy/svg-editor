@@ -1,27 +1,37 @@
 .color-picker {
-  display: flex;
-  gap: 10px;
-  align-items: center;
+  position: relative;
+  display: inline-block;
 }
 
-.color-input {
+.color-picker.indeterminate {
+  opacity: 0.95;
+}
+
+.cp-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+}
+
+.cp-summary::-webkit-details-marker {
+  display: none;
+}
+
+.cp-swatch {
+  display: block;
   width: 50px;
   height: 40px;
   border: 1px solid #ddd;
   border-radius: 4px;
-  cursor: pointer;
+  box-sizing: border-box;
 }
 
-.color-text {
-  flex: 1;
-  padding: 8px;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  font-family: monospace;
+.cp-swatch-solid {
+  background-color: #000;
 }
 
-.color-picker.indeterminate .color-input {
-  opacity: 0.65;
+.cp-swatch-mixed {
   background: repeating-linear-gradient(
     45deg,
     #e8e8e8,
@@ -31,8 +41,93 @@
   );
 }
 
-.color-text.mixed-text {
-  color: #666;
-  font-style: italic;
-  cursor: default;
+.cp-swatch-empty {
+  position: relative;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.cp-slash {
+  width: 100%;
+  height: 100%;
+}
+
+.cp-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 220px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.cp-panel-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 12px;
+  align-items: flex-end;
+}
+
+.cp-label-text {
+  display: block;
+  font-size: 11px;
+  font-weight: 600;
+  color: #555;
+  margin-bottom: 4px;
+}
+
+.cp-native-label {
+  flex: 0 0 auto;
+}
+
+.cp-native {
+  display: block;
+  width: 52px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cp-hex-label {
+  flex: 1 1 120px;
+  min-width: 0;
+}
+
+.cp-hex {
+  width: 100%;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.cp-clear {
+  margin-top: 10px;
+  width: 100%;
+  padding: 8px 10px;
+  font-size: 13px;
+  border: 1px solid #c62828;
+  color: #b71c1c;
+  background: #fff;
+  border-radius: 4px;
+  cursor: pointer;
+}
+
+.cp-clear:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.cp-clear:not(:disabled):hover {
+  background: #ffebee;
 }

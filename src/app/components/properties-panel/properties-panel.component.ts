@@ -467,6 +467,18 @@ export class PropertiesPanelComponent {
     return this.drawingDefaults.strokeWidth();
   }
 
+  /** Default fill for new shapes is a solid color (not cleared / `none`). */
+  hasDefaultSolidFill(): boolean {
+    const f = this.drawingDefaults.fill();
+    return f != null && f.trim() !== '' && f.toLowerCase() !== 'none';
+  }
+
+  /** Default stroke for new shapes is a visible stroke paint. */
+  hasDefaultSolidStroke(): boolean {
+    const s = this.drawingDefaults.stroke();
+    return s != null && s.trim() !== '' && s.toLowerCase() !== 'none';
+  }
+
   shapeTypeLabel(shape: ShapeProperties): string {
     const shapes = this.selectedShapesList();
     if (shapes.length <= 1) return shape.type;
@@ -649,52 +661,42 @@ export class PropertiesPanelComponent {
     return s != null && s.trim() !== '' && s.toLowerCase() !== 'none';
   }
 
-  onAddStrokeClick(): void {
-    const color = '#000000';
-    const width = 1;
-    const commands: EditorCommand[] = this.selectedShapesList().map(
-      (s) => new AddStrokeCommand(this.svgManipulationService, s.id, color, width)
-    );
-    const defaultsBefore = this.drawingDefaults.defaults();
-    commands.push(
-      new UpdateDrawingDefaultsCommand(
-        this.drawingDefaults,
-        defaultsBefore,
-        { ...defaultsBefore, stroke: color, strokeWidth: width },
-        'all'
-      )
-    );
-    this.pushCommand(commands, 'Add stroke');
-    this.shapeSelectionService.patchAllSelected({
-      stroke: color,
-      strokeWidth: width,
-      strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
-    });
-  }
-
   onFillColorChange(color: string): void {
-    const commands: EditorCommand[] = this.selectedShapesList().map(
-      (s) => new FillColorCommand(this.svgManipulationService, s.id, s.fill ?? '', color)
+    const cleared = !color || color.toLowerCase() === 'none';
+    const nextFill = cleared ? 'none' : color;
+    const shapes = this.selectedShapesList();
+    const commands: EditorCommand[] = shapes.map(
+      (s) => new FillColorCommand(this.svgManipulationService, s.id, s.fill ?? '', nextFill)
     );
     const defaultsBefore = this.drawingDefaults.defaults();
     commands.push(
       new UpdateDrawingDefaultsCommand(
         this.drawingDefaults,
         defaultsBefore,
-        { ...defaultsBefore, fill: color },
+        { ...defaultsBefore, fill: cleared ? 'none' : color },
         'fill'
       )
     );
-    this.pushCommand(commands, `Change fill to ${color}`);
-    this.shapeSelectionService.patchAllSelected({
-      fill: color,
-      fillSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
-    });
+    this.pushCommand(commands, cleared ? 'Clear fill' : `Change fill to ${color}`);
+    if (shapes.length > 0) {
+      if (cleared) {
+        this.shapeSelectionService.patchAllSelected({
+          fill: undefined,
+          fillSource: { kind: 'default' }
+        });
+      } else {
+        this.shapeSelectionService.patchAllSelected({
+          fill: color,
+          fillSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
+        });
+      }
+    }
   }
 
   onStrokeColorChange(color: string): void {
     if (color === 'none' || color === '') {
-      const commands: EditorCommand[] = this.selectedShapesList().map(
+      const shapes = this.selectedShapesList();
+      const commands: EditorCommand[] = shapes.map(
         (s) => new RemoveStrokeCommand(this.svgManipulationService, s.id, s.stroke ?? '#000000', s.strokeWidth ?? 1)
       );
       const defaultsBefore = this.drawingDefaults.defaults();
@@ -702,30 +704,58 @@ export class PropertiesPanelComponent {
         new UpdateDrawingDefaultsCommand(
           this.drawingDefaults,
           defaultsBefore,
-          { ...defaultsBefore, stroke: color },
+          { ...defaultsBefore, stroke: 'none' },
           'stroke'
         )
       );
       this.pushCommand(commands, 'Remove stroke');
+      if (shapes.length > 0) {
+        this.shapeSelectionService.patchAllSelected({
+          stroke: undefined,
+          strokeWidth: 0,
+          strokeSource: { kind: 'default' }
+        });
+      }
+      return;
+    }
+
+    const shapes = this.selectedShapesList();
+    const needsAdd = shapes.map((s) => !this.hasStrokeColor(s) || (s.strokeWidth ?? 0) === 0);
+    const mixedStrokeApply = needsAdd.some(Boolean) && needsAdd.some((n) => !n);
+
+    const commands: EditorCommand[] = shapes.map((s, i) => {
+      if (needsAdd[i]) {
+        const w = this.defaultStrokeWidthValue() > 0 ? this.defaultStrokeWidthValue() : 1;
+        return new AddStrokeCommand(this.svgManipulationService, s.id, color, w);
+      }
+      return new StrokeColorCommand(this.svgManipulationService, s.id, s.stroke ?? '', color);
+    });
+    const defaultsBefore = this.drawingDefaults.defaults();
+    commands.push(
+      new UpdateDrawingDefaultsCommand(
+        this.drawingDefaults,
+        defaultsBefore,
+        { ...defaultsBefore, stroke: color },
+        'stroke'
+      )
+    );
+    this.pushCommand(commands, `Change stroke to ${color}`);
+
+    if (shapes.length === 0) {
+      return;
+    }
+    if (mixedStrokeApply) {
+      this.syncAllSelectedFromDom();
+      return;
+    }
+    if (needsAdd.every(Boolean)) {
+      const w = this.defaultStrokeWidthValue() > 0 ? this.defaultStrokeWidthValue() : 1;
       this.shapeSelectionService.patchAllSelected({
-        stroke: undefined,
-        strokeWidth: 0,
-        strokeSource: { kind: 'default' }
+        stroke: color,
+        strokeWidth: w,
+        strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
       });
     } else {
-      const commands: EditorCommand[] = this.selectedShapesList().map(
-        (s) => new StrokeColorCommand(this.svgManipulationService, s.id, s.stroke ?? '', color)
-      );
-      const defaultsBefore = this.drawingDefaults.defaults();
-      commands.push(
-        new UpdateDrawingDefaultsCommand(
-          this.drawingDefaults,
-          defaultsBefore,
-          { ...defaultsBefore, stroke: color },
-          'stroke'
-        )
-      );
-      this.pushCommand(commands, `Change stroke to ${color}`);
       this.shapeSelectionService.patchAllSelected({
         stroke: color,
         strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE

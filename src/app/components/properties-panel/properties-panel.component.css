@@ -51,6 +51,19 @@
   margin-bottom: 0;
 }
 
+.paint-swatches-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 12px;
+}
+
+@media (min-width: 340px) {
+  .paint-swatches-row {
+    grid-template-columns: 1fr 1fr;
+    align-items: start;
+  }
+}
+
 .properties-content {
   padding: 16px;
 }

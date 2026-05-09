@@ -398,6 +398,27 @@ describe('PropertiesPanelComponent', () => {
     expect(drawingDefaultsSignal().stroke).toBe(newColor);
   });
 
+  it('should clear fill when fill is set to none', () => {
+    const mockShape: ShapeProperties = {
+      id: 'shape-1',
+      type: 'rect',
+      fill: '#ff0000'
+    };
+
+    selectedShapesSignal.set([mockShape]);
+    fixture.detectChanges();
+
+    component.onFillColorChange('none');
+    fixture.detectChanges();
+
+    expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('shape-1', 'none');
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
+      fill: undefined,
+      fillSource: { kind: 'default' }
+    });
+    expect(drawingDefaultsSignal().fill).toBe('none');
+  });
+
   it('should remove stroke when stroke color is set to "none"', () => {
     const mockShape: ShapeProperties = {
       id: 'shape-1',
@@ -575,7 +596,7 @@ describe('PropertiesPanelComponent', () => {
     });
   });
 
-  it('shows No fill and No stroke instead of color pickers when paint is absent', () => {
+  it('shows color pickers with empty stroke/fill when paint is absent', () => {
     selectedShapesSignal.set([
       {
         id: 'shape-1',
@@ -585,9 +606,8 @@ describe('PropertiesPanelComponent', () => {
     ]);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('No fill');
-    expect(el.textContent).toContain('No stroke');
-    expect(el.querySelector('app-color-picker')).toBeNull();
+    expect(el.querySelector('[data-testid="properties-fill-color-picker"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="properties-stroke-color-picker"]')).toBeTruthy();
   });
 
   it('Set fill button applies black fill via manipulation service', () => {
@@ -624,14 +644,14 @@ describe('PropertiesPanelComponent', () => {
     expect(component.canCreateGradientFill(selectedShapesSignal()[0])).toBe(true);
   });
 
-  it('Set stroke button adds stroke with width 1', () => {
+  it('choosing stroke color on shape without stroke uses addStroke with default width', () => {
     selectedShapesSignal.set([{ id: 'shape-1', type: 'rect', strokeWidth: 0 }]);
     fixture.detectChanges();
-    component.onAddStrokeClick();
-    expect(svgManipulationService.addStroke).toHaveBeenCalledWith('shape-1', '#000000', 1);
+    component.onStrokeColorChange('#112233');
+    expect(svgManipulationService.addStroke).toHaveBeenCalledWith('shape-1', '#112233', 2);
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
-      stroke: '#000000',
-      strokeWidth: 1,
+      stroke: '#112233',
+      strokeWidth: 2,
       strokeSource: { kind: 'presentation-attr' }
     });
   });

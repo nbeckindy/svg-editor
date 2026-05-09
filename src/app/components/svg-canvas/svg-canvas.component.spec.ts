@@ -4640,6 +4640,48 @@ describe('SvgCanvasComponent', () => {
       expect(shapeSelectionService.getSelectedShapes().length).toBe(2);
     });
 
+    it('V/Z/H single keys switch tools when not modified', async () => {
+      editorToolService.setTool('pen');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'v', bubbles: true }));
+      expect(editorToolService.getCurrentTool()).toBe('selector');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', bubbles: true }));
+      expect(editorToolService.getCurrentTool()).toBe('zoom');
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'h', bubbles: true }));
+      expect(editorToolService.getCurrentTool()).toBe('pan');
+    });
+
+    it('single-key tool shortcuts are ignored when focus is in an input', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      const input = document.createElement('input');
+      document.body.appendChild(input);
+      try {
+        const ev = new KeyboardEvent('keydown', { key: 'z', bubbles: true });
+        Object.defineProperty(ev, 'target', { value: input, enumerable: true });
+        component.onKeyDown(ev);
+        expect(editorToolService.getCurrentTool()).toBe('selector');
+      } finally {
+        input.remove();
+      }
+    });
+
     it('does not select all when typing in an input', async () => {
       editorToolService.setTool('selector');
       fixture.componentRef.setInput(

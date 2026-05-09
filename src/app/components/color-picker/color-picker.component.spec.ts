@@ -1,6 +1,21 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { describe, it, expect, beforeEach } from 'vitest';
-import { ColorPickerComponent } from './color-picker.component';
+import { ColorPickerComponent, parseHexColorInput } from './color-picker.component';
+
+describe('parseHexColorInput', () => {
+  it('normalizes 3-digit and 6-digit hex', () => {
+    expect(parseHexColorInput('#abc')).toBe('#aabbcc');
+    expect(parseHexColorInput('abc')).toBe('#aabbcc');
+    expect(parseHexColorInput('#aAbBcC')).toBe('#aabbcc');
+  });
+
+  it('returns null for invalid input', () => {
+    expect(parseHexColorInput('')).toBeNull();
+    expect(parseHexColorInput('hello')).toBeNull();
+    expect(parseHexColorInput('#12')).toBeNull();
+    expect(parseHexColorInput('#gg0000')).toBeNull();
+  });
+});
 
 describe('ColorPickerComponent', () => {
   let component: ColorPickerComponent;
@@ -24,40 +39,60 @@ describe('ColorPickerComponent', () => {
     expect(component.color()).toBe('#000000');
   });
 
-  it('should emit colorChange when color input changes', () => {
+  it('should emit colorChange when native color input changes', () => {
     const emitted: string[] = [];
     component.colorChange.subscribe((c: string) => emitted.push(c));
 
     const event = { target: { value: '#ff0000' } } as unknown as Event;
-    component.onColorChange(event);
+    component.onNativeColorInput(event);
 
     expect(emitted).toEqual(['#ff0000']);
+    expect(component.hexDraft()).toBe('#FF0000');
   });
 
-  it('should emit colorChange when valid hex is entered in text input', () => {
+  it('should emit colorChange when valid hex is entered via HEX field', () => {
     const emitted: string[] = [];
     component.colorChange.subscribe((c: string) => emitted.push(c));
 
-    const event = { target: { value: '#00ff00' } } as unknown as Event;
-    component.onTextChange(event);
+    component.onHexModelChange('00ff00');
 
     expect(emitted).toEqual(['#00ff00']);
   });
 
-  it('should not emit when invalid hex is entered in text input', () => {
+  it('should not emit when invalid hex is entered in HEX field', () => {
     const emitted: string[] = [];
     component.colorChange.subscribe((c: string) => emitted.push(c));
 
-    const event = { target: { value: 'not-a-hex' } } as unknown as Event;
-    component.onTextChange(event);
+    component.onHexModelChange('not-a-hex');
 
-    expect(component.color()).toBe('#000000');
     expect(emitted).toEqual([]);
+  });
+
+  it('onClear emits none', () => {
+    const emitted: string[] = [];
+    component.colorChange.subscribe((c: string) => emitted.push(c));
+    const details = document.createElement('details');
+    details.setAttribute('open', '');
+    const btn = document.createElement('button');
+    details.appendChild(btn);
+    const ev = new MouseEvent('click', { bubbles: true });
+    Object.defineProperty(ev, 'currentTarget', { value: btn, enumerable: true });
+    component.onClear(ev as unknown as Event);
+    expect(emitted).toEqual(['none']);
+    expect(details.hasAttribute('open')).toBe(false);
   });
 
   it('should accept color as input', () => {
     fixture.componentRef.setInput('color', '#abcdef');
     fixture.detectChanges();
     expect(component.color()).toBe('#abcdef');
+  });
+
+  it('empty state shows slash marker in template', () => {
+    fixture.componentRef.setInput('empty', true);
+    fixture.detectChanges();
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('.cp-swatch-empty')).toBeTruthy();
+    expect(compiled.querySelector('.cp-slash')).toBeTruthy();
   });
 });

@@ -6,78 +6,78 @@
   <div class="paint-segment">
     <p class="paint-target-indicator">{{ paintTargetLabel() }}</p>
 
-    <div class="property-group paint-segment-group">
-      <label class="property-label" for="fill-color">Fill Color</label>
-      @if (selectedShape(); as shape) {
-        @if (supportsFill(shape)) {
+    <div class="paint-swatches-row">
+      <div class="property-group paint-segment-group">
+        <label class="property-label" for="fill-color">Fill Color</label>
+        @if (selectedShape(); as shape) {
+          @if (supportsFill(shape)) {
+            <div class="color-input-group">
+              @if (isGradientOrPatternFill(shape)) {
+                <div class="no-paint-value">
+                  <span class="paint-ref-label">{{ paintTypeLabel(shape.fillPaintType) }} fill</span>
+                </div>
+              } @else {
+                <app-color-picker
+                  data-testid="properties-fill-color-picker"
+                  [color]="fillPickerColor(shape)"
+                  [empty]="allSelectedLackFill(shape)"
+                  [indeterminate]="fillMixed()"
+                  [clearable]="true"
+                  (colorChange)="onFillColorChange($event)">
+                </app-color-picker>
+              }
+            </div>
+          } @else {
+            <div class="no-paint-value">
+              <span class="no-paint-label">Not applicable for {{ shapeTypeLabel(shape) }}</span>
+            </div>
+          }
+        } @else {
           <div class="color-input-group">
-            @if (isGradientOrPatternFill(shape)) {
+            <app-color-picker
+              data-testid="properties-fill-color-picker"
+              [color]="defaultFillPickerColor()"
+              [empty]="!hasDefaultSolidFill()"
+              [indeterminate]="false"
+              [clearable]="true"
+              (colorChange)="onFillColorChange($event)">
+            </app-color-picker>
+          </div>
+        }
+      </div>
+
+      <div class="property-group paint-segment-group">
+        <label class="property-label" for="stroke-color">Stroke Color</label>
+        @if (selectedShape(); as shape) {
+          <div class="color-input-group">
+            @if (isGradientOrPatternStroke(shape)) {
               <div class="no-paint-value">
-                <span class="paint-ref-label">{{ paintTypeLabel(shape.fillPaintType) }} fill</span>
-              </div>
-            } @else if (allSelectedLackFill(shape)) {
-              <div class="no-paint-value">
-                <span class="no-paint-label">No fill</span>
-                <button type="button" class="btn-set-paint" (click)="onFillColorChange('#000000')">
-                  Set fill
-                </button>
+                <span class="paint-ref-label">{{ paintTypeLabel(shape.strokePaintType) }} stroke</span>
               </div>
             } @else {
               <app-color-picker
-                [color]="fillPickerColor(shape)"
-                [indeterminate]="fillMixed()"
-                (colorChange)="onFillColorChange($event)">
+                data-testid="properties-stroke-color-picker"
+                [color]="strokePickerColor(shape)"
+                [empty]="allSelectedLackStroke(shape)"
+                [indeterminate]="strokeMixed()"
+                [clearable]="true"
+                (colorChange)="onStrokeColorChange($event)">
               </app-color-picker>
             }
           </div>
         } @else {
-          <div class="no-paint-value">
-            <span class="no-paint-label">Not applicable for {{ shapeTypeLabel(shape) }}</span>
-          </div>
-        }
-      } @else {
-        <div class="color-input-group">
-          <app-color-picker
-            [color]="defaultFillPickerColor()"
-            [indeterminate]="false"
-            (colorChange)="onFillColorChange($event)">
-          </app-color-picker>
-        </div>
-      }
-    </div>
-
-    <div class="property-group paint-segment-group">
-      <label class="property-label" for="stroke-color">Stroke Color</label>
-      @if (selectedShape(); as shape) {
-        <div class="color-input-group">
-          @if (isGradientOrPatternStroke(shape)) {
-            <div class="no-paint-value">
-              <span class="paint-ref-label">{{ paintTypeLabel(shape.strokePaintType) }} stroke</span>
-            </div>
-          } @else if (allSelectedLackStroke(shape)) {
-            <div class="no-paint-value">
-              <span class="no-paint-label">No stroke</span>
-              <button type="button" class="btn-set-paint" (click)="onAddStrokeClick()">
-                Set stroke
-              </button>
-            </div>
-          } @else {
+          <div class="color-input-group">
             <app-color-picker
-              [color]="strokePickerColor(shape)"
-              [indeterminate]="strokeMixed()"
+              data-testid="properties-stroke-color-picker"
+              [color]="defaultStrokePickerColor()"
+              [empty]="!hasDefaultSolidStroke()"
+              [indeterminate]="false"
+              [clearable]="true"
               (colorChange)="onStrokeColorChange($event)">
             </app-color-picker>
-          }
-        </div>
-      } @else {
-        <div class="color-input-group">
-          <app-color-picker
-            [color]="defaultStrokePickerColor()"
-            [indeterminate]="false"
-            (colorChange)="onStrokeColorChange($event)">
-          </app-color-picker>
-        </div>
-      }
+          </div>
+        }
+      </div>
     </div>
   </div>
 
