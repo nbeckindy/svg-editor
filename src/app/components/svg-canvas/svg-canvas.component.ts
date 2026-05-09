@@ -750,7 +750,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!this.pathNodeEditState) return [];
     return this.pathNodeEditState.paths.flatMap((pathState) =>
       pathState.anchors.map((anchor, anchorIndex) => {
-        const overlay = this.svgBboxToOverlayPixels({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
+        const overlay = this.pathNodeLocalPointToOverlay(pathState.pathId, anchor.x, anchor.y);
         return {
           cx: overlay.x,
           cy: overlay.y,
@@ -770,18 +770,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!this.pathNodeEditState) return [];
     return this.pathNodeEditState.paths.flatMap((pathState) =>
       pathState.controlHandles.map((handle, handleIndex) => {
-        const anchor = this.svgBboxToOverlayPixels({
-          x: handle.anchorX,
-          y: handle.anchorY,
-          width: 0,
-          height: 0
-        });
-        const control = this.svgBboxToOverlayPixels({
-          x: handle.controlX,
-          y: handle.controlY,
-          width: 0,
-          height: 0
-        });
+        const anchor = this.pathNodeLocalPointToOverlay(pathState.pathId, handle.anchorX, handle.anchorY);
+        const control = this.pathNodeLocalPointToOverlay(pathState.pathId, handle.controlX, handle.controlY);
         return {
           x1: anchor.x,
           y1: anchor.y,
@@ -3392,8 +3382,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   private updatePathNodeDrag(clientX: number, clientY: number): void {
     if (!this.pathNodeDragSession || !this.pathNodeEditState) return;
-    const point = this.clientToEditorSvgPoint(clientX, clientY);
-    if (!point) return;
+    const rootPt = this.clientToEditorSvgPoint(clientX, clientY);
+    if (!rootPt) return;
+    const pathId = this.pathNodeDragSession.pathId;
+    const localPt = this.pathNodeRootUserPointToLocal(pathId, rootPt.x, rootPt.y);
+    const point = localPt ?? rootPt;
 
     const nextSegments = this.pathNodeDragSession.segments.map((segment) => ({ ...segment }));
     if (this.pathNodeDragSession.target.kind === 'anchor') {
@@ -3519,6 +3512,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
     segment.x2 = x;
     segment.y2 = y;
+  }
+
+  /**
+   * Path `d` is stored in **element-local** space; overlay and pointer math use **root SVG user**
+   * space (same as selection bbox). Uses `getTransformToElement` so parent `<g>` transforms are
+   * included. Multi-select: each path id has its own mapping.
+   */
+  private pathNodeLocalPointToOverlay(pathId: string, lx: number, ly: number): { x: number; y: number } {
+    const mapped = this.svgManipulation.mapPathLocalToRootUser(pathId, lx, ly);
+    const o = this.svgBboxToOverlayPixels({ x: mapped.x, y: mapped.y, width: 0, height: 0 });
+    return { x: o.x, y: o.y };
+  }
+
+  private pathNodeRootUserPointToLocal(pathId: string, rx: number, ry: number): { x: number; y: number } | null {
+    return this.svgManipulation.mapRootUserToPathLocal(pathId, rx, ry);
   }
 
   private buildPathNodeEditState(pathId: string): PathNodeEditStateBuildResult {

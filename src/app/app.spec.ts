@@ -32,12 +32,13 @@ describe('AppComponent', () => {
     expect(compiled.querySelector('header h1')?.textContent).toContain('Angular SVG Editor');
   });
 
-  it('should have icon palette, canvas, layers panel, properties panel, and svg debug panel', () => {
+  it('should have left rail, canvas, dock with layers/properties, and svg debug panel', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelector('app-icon-palette')).toBeTruthy();
+    expect(compiled.querySelector('app-editor-left-rail')).toBeTruthy();
     expect(compiled.querySelector('app-svg-canvas')).toBeTruthy();
+    expect(compiled.querySelector('app-editor-right-dock')).toBeTruthy();
     expect(compiled.querySelector('app-layers-panel')).toBeTruthy();
     expect(compiled.querySelector('app-properties-panel')).toBeTruthy();
     expect(compiled.querySelector('app-svg-debug-panel')).toBeTruthy();

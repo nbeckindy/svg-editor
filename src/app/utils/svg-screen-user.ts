@@ -48,6 +48,62 @@ export function localBBoxToRootUserAabb(
 }
 
 /**
+ * Map a point in **element-local** user space (e.g. path `d` coordinates) to **root SVG user**
+ * space, using the same `getTransformToElement(rootSvg)` chain as {@link localBBoxToRootUserAabb}.
+ */
+export function localPointToRootUser(
+  node: SVGGraphicsElement,
+  rootSvg: SVGSVGElement,
+  localX: number,
+  localY: number
+): { x: number; y: number } | null {
+  const toRoot = (node as unknown as { getTransformToElement?: (el: SVGSVGElement) => DOMMatrix })
+    .getTransformToElement;
+  if (typeof toRoot !== 'function' || typeof rootSvg.createSVGPoint !== 'function') {
+    return null;
+  }
+  let m: DOMMatrix;
+  try {
+    m = toRoot.call(node, rootSvg);
+  } catch {
+    return null;
+  }
+  const p = rootSvg.createSVGPoint();
+  p.x = localX;
+  p.y = localY;
+  const tp = p.matrixTransform(m);
+  if (!Number.isFinite(tp.x) || !Number.isFinite(tp.y)) return null;
+  return { x: tp.x, y: tp.y };
+}
+
+/** Inverse of {@link localPointToRootUser}: root SVG user space → element-local. */
+export function rootUserPointToLocalPoint(
+  node: SVGGraphicsElement,
+  rootSvg: SVGSVGElement,
+  rootX: number,
+  rootY: number
+): { x: number; y: number } | null {
+  const toRoot = (node as unknown as { getTransformToElement?: (el: SVGSVGElement) => DOMMatrix })
+    .getTransformToElement;
+  if (typeof toRoot !== 'function' || typeof rootSvg.createSVGPoint !== 'function') {
+    return null;
+  }
+  let inv: DOMMatrix;
+  try {
+    const m = toRoot.call(node, rootSvg);
+    inv = m.inverse();
+  } catch {
+    return null;
+  }
+  const p = rootSvg.createSVGPoint();
+  p.x = rootX;
+  p.y = rootY;
+  const tp = p.matrixTransform(inv);
+  if (!Number.isFinite(tp.x) || !Number.isFinite(tp.y)) return null;
+  return { x: tp.x, y: tp.y };
+}
+
+/**
  * Map a screen-space axis-aligned rect to root SVG **user** coordinates (viewBox space)
  * using the root element's screen CTM. Correct for letterboxing (`xMidYMid meet`), pan/zoom
  * on ancestors, and non-uniform `preserveAspectRatio="none"` — unlike linear scaling from

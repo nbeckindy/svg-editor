@@ -1,5 +1,5 @@
 import { Injectable, signal, computed, inject } from '@angular/core';
-import { SVG, Svg, Element as SvgJsElement, Matrix, G } from '@svgdotjs/svg.js';
+import { SVG, Svg, Element as SvgJsElement, Matrix, G, Point } from '@svgdotjs/svg.js';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../models/shape-properties.interface';
 
 export type CreatableShapeType = 'rect' | 'ellipse' | 'line' | 'text';
@@ -52,7 +52,12 @@ import {
   marqueeSamplePoints,
   type AxisAlignedRect
 } from '../utils/marquee-selection';
-import { localBBoxToRootUserAabb, screenRectToRootSvgUserRect } from '../utils/svg-screen-user';
+import {
+  localBBoxToRootUserAabb,
+  localPointToRootUser,
+  rootUserPointToLocalPoint,
+  screenRectToRootSvgUserRect
+} from '../utils/svg-screen-user';
 import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
 
 /** Class name for the editor content group (shapes live here). */
@@ -1920,6 +1925,63 @@ export class SvgManipulationService {
       }
     }
     return map;
+  }
+
+  /**
+   * Map path `d` coordinates (element-local) to root SVG user space (selection / viewBox space).
+   * Uses DOM `getTransformToElement` when available; otherwise composes `matrixify()` up to the
+   * SVG.js document root (covers jsdom and matches parent-`<g>` transforms).
+   */
+  mapPathLocalToRootUser(shapeId: string, lx: number, ly: number): { x: number; y: number } {
+    if (!this.svgInstance) return { x: lx, y: ly };
+    const rootSvg = this.svgInstance.node as SVGSVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!shape?.node) return { x: lx, y: ly };
+    const domPt = localPointToRootUser(shape.node as SVGGraphicsElement, rootSvg, lx, ly);
+    if (domPt) return domPt;
+    try {
+      const M = this.composePathLocalToRootMatrix(shapeId);
+      if (!M) return { x: lx, y: ly };
+      const p = new Point(lx, ly).transform(M);
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return { x: lx, y: ly };
+      return { x: p.x, y: p.y };
+    } catch {
+      return { x: lx, y: ly };
+    }
+  }
+
+  /** Inverse of {@link mapPathLocalToRootUser} for pointer-driven node edits. */
+  mapRootUserToPathLocal(shapeId: string, rx: number, ry: number): { x: number; y: number } | null {
+    if (!this.svgInstance) return null;
+    const rootSvg = this.svgInstance.node as SVGSVGElement;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!shape?.node) return null;
+    const domPt = rootUserPointToLocalPoint(shape.node as SVGGraphicsElement, rootSvg, rx, ry);
+    if (domPt) return domPt;
+    try {
+      const M = this.composePathLocalToRootMatrix(shapeId);
+      if (!M) return null;
+      const inv = M.inverse();
+      if (!inv) return null;
+      const p = new Point(rx, ry).transform(inv);
+      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
+      return { x: p.x, y: p.y };
+    } catch {
+      return null;
+    }
+  }
+
+  private composePathLocalToRootMatrix(shapeId: string): Matrix | null {
+    if (!this.svgInstance) return null;
+    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!shape || typeof shape.matrixify !== 'function') return null;
+    let M = shape.matrixify();
+    let parent = shape.parent() as SvgJsElement | undefined;
+    while (parent && parent !== this.svgInstance && typeof parent.matrixify === 'function') {
+      M = parent.matrixify().multiply(M);
+      parent = parent.parent() as SvgJsElement | undefined;
+    }
+    return M;
   }
 
   /**

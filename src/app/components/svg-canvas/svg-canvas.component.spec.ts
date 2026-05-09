@@ -12,7 +12,7 @@ import { CanvasViewService } from '../../services/canvas-view.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { ClipboardService } from '../../services/clipboard.service';
 import { SnapService } from '../../services/snap.service';
-import { CompositeCommand } from '../../models/editor-commands';
+import { CompositeCommand, TranslateCommand } from '../../models/editor-commands';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
 
 /** Mock SVG.js shape with clone() for drag-ghost tests. clone() returns a real DOM node so SVG.js add() can adopt it. */
@@ -2558,6 +2558,53 @@ describe('SvgCanvasComponent', () => {
       await new Promise((r) => setTimeout(r, 0));
       fixture.detectChanges();
     }
+
+    it('positions node-edit anchors in root space when path has translate transform (static transform attr)', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-tx" transform="translate(20 30)" d="M 10 10 L 20 20" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-tx',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      const anchor0 = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-path-node-anchor"][data-path-node-path-id="path-tx"][data-path-node-anchor-index="0"]'
+      ) as SVGCircleElement;
+      expect(anchor0).toBeTruthy();
+      // Local M 10 10 + translate(20,30) => root (30, 40); overlay must match painted geometry.
+      expect(Number(anchor0.getAttribute('cx'))).toBeCloseTo(30, 5);
+      expect(Number(anchor0.getAttribute('cy'))).toBeCloseTo(40, 5);
+    });
+
+    /** Regression (svg-editor-0lw): selection move uses SVG matrix; `d` stays local — overlays must use root user space. */
+    it('aligns node-edit overlay after selection translate (matrix move without changing d)', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-move-then-node" d="M 10 10 L 20 20" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-move-then-node',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const snap = svgManipulationService.snapshotSelectionTransforms(['path-move-then-node']);
+      new TranslateCommand(svgManipulationService, 'path-move-then-node', 15, 25, snap).execute();
+      fixture.detectChanges();
+      await activateNodeEditSelectorTool();
+      const anchor0 = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-path-node-anchor"][data-path-node-path-id="path-move-then-node"][data-path-node-anchor-index="0"]'
+      ) as SVGCircleElement;
+      expect(anchor0).toBeTruthy();
+      expect(Number(anchor0.getAttribute('cx'))).toBeCloseTo(25, 5);
+      expect(Number(anchor0.getAttribute('cy'))).toBeCloseTo(35, 5);
+    });
 
     it('enters node-edit mode for a selected path when node-edit selector tool is active', async () => {
       await loadSvgForSelector(
