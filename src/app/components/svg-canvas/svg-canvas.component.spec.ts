@@ -2680,6 +2680,171 @@ describe('SvgCanvasComponent', () => {
       expect(component.showPathNodeEditOverlays).toBe(false);
     });
 
+    it('hides path node overlays while resizing selection', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 60 50" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-a',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      expect(component.showPathNodeEditOverlays).toBe(true);
+
+      vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({ x: 10, y: 10, width: 50, height: 40 });
+      vi.spyOn(svgManipulationService, 'snapshotSelectionTransforms').mockReturnValue(new Map());
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 50, height: 40 });
+      const zoomEl = component.zoomWrapper()?.nativeElement as HTMLElement;
+      if (zoomEl) {
+        vi.spyOn(zoomEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+      const overlayEl = component.highlightOverlayContainer()?.nativeElement as HTMLElement;
+      if (overlayEl) {
+        vi.spyOn(overlayEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+      const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      } as DOMRect);
+      stubEditorSvgScreenMapping(component);
+
+      const handle = document.createElement('div');
+      handle.setAttribute('data-resize-handle', 'se');
+      component.onCanvasMouseDown({
+        button: 0,
+        target: handle,
+        clientX: 50,
+        clientY: 50,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(component.isResizingSelection).toBe(true);
+      expect(component.showPathNodeEditOverlays).toBe(false);
+    });
+
+    it('hides path node overlays while rotating selection', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 60 50" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-a',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      expect(component.showPathNodeEditOverlays).toBe(true);
+
+      vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({ x: 10, y: 10, width: 50, height: 40 });
+      vi.spyOn(svgManipulationService, 'snapshotSelectionTransforms').mockReturnValue(new Map());
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 50, height: 40 });
+      const zoomEl = component.zoomWrapper()?.nativeElement as HTMLElement;
+      if (zoomEl) {
+        vi.spyOn(zoomEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+      const overlayEl = component.highlightOverlayContainer()?.nativeElement as HTMLElement;
+      if (overlayEl) {
+        vi.spyOn(overlayEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+      const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      } as DOMRect);
+      stubEditorSvgScreenMapping(component);
+
+      const handle = document.createElement('div');
+      handle.setAttribute('data-rotate-handle', '');
+      component.onCanvasMouseDown({
+        button: 0,
+        target: handle,
+        clientX: 50,
+        clientY: 50,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(component.isRotatingSelection).toBe(true);
+      expect(component.showPathNodeEditOverlays).toBe(false);
+    });
+
+    it('hides path node overlays while skewing selection', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 60 50" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-a',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      expect(component.showPathNodeEditOverlays).toBe(true);
+
+      vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({ x: 10, y: 10, width: 50, height: 40 });
+      vi.spyOn(svgManipulationService, 'snapshotSelectionTransforms').mockReturnValue(new Map());
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 50, height: 40 });
+      const zoomEl = component.zoomWrapper()?.nativeElement as HTMLElement;
+      if (zoomEl) {
+        vi.spyOn(zoomEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+      const overlayEl = component.highlightOverlayContainer()?.nativeElement as HTMLElement;
+      if (overlayEl) {
+        vi.spyOn(overlayEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(0, 0, 200, 200));
+      }
+      const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
+      vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+        left: 0,
+        top: 0,
+        width: 100,
+        height: 100,
+        right: 100,
+        bottom: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => {}
+      } as DOMRect);
+      stubEditorSvgScreenMapping(component);
+
+      const handle = document.createElement('div');
+      handle.setAttribute('data-skew-handle', 'n');
+      component.onCanvasMouseDown({
+        button: 0,
+        target: handle,
+        clientX: 50,
+        clientY: 50,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(component.isSkewingSelection).toBe(true);
+      expect(component.showPathNodeEditOverlays).toBe(false);
+    });
+
     it('renders node affordances for all selected editable paths in multi-select', async () => {
       await loadSvgForSelector(
         '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 20 20 L 30 10" /><path id="path-b" d="M 50 50 C 60 50 70 60 80 80" /><rect id="rect-non-path" x="5" y="60" width="10" height="10" /></svg>'
