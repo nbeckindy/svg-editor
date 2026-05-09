@@ -6,7 +6,12 @@ import { EditorToolService, type EditorTool } from '../../services/editor-tool.s
 import { CanvasViewService } from '../../services/canvas-view.service';
 import { SnapService } from '../../services/snap.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
-import { computeProportionalResizedUnion, type BBox, type ResizeCorner } from '../../utils/selection-resize';
+import {
+  computeProportionalResizedUnion,
+  type BBox,
+  type ResizeCorner,
+  type ResizeHandle
+} from '../../utils/selection-resize';
 import { type SkewEdge } from '../../utils/selection-skew';
 import {
   unionRotationPivot,
@@ -210,6 +215,12 @@ export function selectionHandleRadiusOverlayPx(scale: number): number {
   return Math.min(HANDLE_RADIUS_MAX_SCREEN_PX, Math.max(HANDLE_RADIUS_MIN_SCREEN_PX, raw));
 }
 
+/** Outward offset for midpoint resize handles so they do not overlap skew handles (overlay px). */
+export function selectionResizeEdgeOutsetOverlayPx(scale: number): number {
+  const s = clampCanvasScaleForSelectionChrome(scale);
+  return Math.max(8, Math.min(18, 14 / s));
+}
+
 /** Distance from selection top edge to rotate handle center, in overlay px. */
 export function rotateHandleOffsetOverlayPx(scale: number): number {
   const s = clampCanvasScaleForSelectionChrome(scale);
@@ -311,6 +322,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   /** Resize/skew/rotate handle circle radius in overlay px (inverse zoom, clamped 4–8 screen px). */
   get selectionHandleRadiusOverlay(): number {
     return selectionHandleRadiusOverlayPx(this.canvasView.scale);
+  }
+
+  get selectionResizeEdgeOutset(): number {
+    return selectionResizeEdgeOutsetOverlayPx(this.canvasView.scale);
   }
 
   /** Rotate stem length and handle offset from selection top (inverse zoom, clamped 20–40 screen px). */
@@ -1615,7 +1630,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (this.isResizingSelection) {
-      this.resize.move(this.gestureCtx, event.clientX, event.clientY, event.altKey);
+      this.resize.move(this.gestureCtx, event.clientX, event.clientY, event.altKey, event.shiftKey);
       return;
     }
     if (this.isSkewingSelection) {
@@ -2215,9 +2230,19 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     // Resize handle
     const resizeEl = target.closest?.('[data-resize-handle]');
     if (resizeEl) {
-      const corner = resizeEl.getAttribute('data-resize-handle') as ResizeCorner | null;
-      if (corner && (corner === 'nw' || corner === 'ne' || corner === 'sw' || corner === 'se')) {
-        if (this.resize.start(this.gestureCtx, corner, event)) {
+      const h = resizeEl.getAttribute('data-resize-handle') as ResizeHandle | null;
+      if (
+        h &&
+        (h === 'nw' ||
+          h === 'ne' ||
+          h === 'sw' ||
+          h === 'se' ||
+          h === 'n' ||
+          h === 's' ||
+          h === 'e' ||
+          h === 'w')
+      ) {
+        if (this.resize.start(this.gestureCtx, h, event)) {
           event.preventDefault();
           event.stopPropagation();
         }

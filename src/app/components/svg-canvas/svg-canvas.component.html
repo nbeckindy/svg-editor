@@ -398,6 +398,34 @@
               [attr.cx]="hr.x + hr.width"
               [attr.cy]="hr.y + hr.height"/>
             <circle
+              class="selection-resize-handle selection-resize-edge-n"
+              [attr.r]="selectionHandleRadiusOverlay"
+              data-resize-handle="n"
+              data-testid="canvas-handle-resize-n"
+              [attr.cx]="hr.x + hr.width / 2"
+              [attr.cy]="hr.y - selectionResizeEdgeOutset"/>
+            <circle
+              class="selection-resize-handle selection-resize-edge-s"
+              [attr.r]="selectionHandleRadiusOverlay"
+              data-resize-handle="s"
+              data-testid="canvas-handle-resize-s"
+              [attr.cx]="hr.x + hr.width / 2"
+              [attr.cy]="hr.y + hr.height + selectionResizeEdgeOutset"/>
+            <circle
+              class="selection-resize-handle selection-resize-edge-e"
+              [attr.r]="selectionHandleRadiusOverlay"
+              data-resize-handle="e"
+              data-testid="canvas-handle-resize-e"
+              [attr.cx]="hr.x + hr.width + selectionResizeEdgeOutset"
+              [attr.cy]="hr.y + hr.height / 2"/>
+            <circle
+              class="selection-resize-handle selection-resize-edge-w"
+              [attr.r]="selectionHandleRadiusOverlay"
+              data-resize-handle="w"
+              data-testid="canvas-handle-resize-w"
+              [attr.cx]="hr.x - selectionResizeEdgeOutset"
+              [attr.cy]="hr.y + hr.height / 2"/>
+            <circle
               class="selection-skew-handle selection-skew-n"
               [attr.r]="selectionHandleRadiusOverlay"
               data-skew-handle="n"

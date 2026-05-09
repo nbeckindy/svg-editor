@@ -2,7 +2,7 @@ import { Matrix, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { PaintGradientSnapshot } from './svg-gradient';
 import { SvgManipulationService, type CreatableShapeType, type ShapeCreationAttrs } from '../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../services/shape-selection.service';
-import { type ResizeCorner } from '../utils/selection-resize';
+import { type ResizeHandle } from '../utils/selection-resize';
 import { type SkewAxis } from '../utils/selection-skew';
 import { ArtboardModel } from './artboard.model';
 import { type ClipboardPayload } from '../services/clipboard.service';
@@ -545,7 +545,7 @@ export class UnionScaleCommand implements EditorCommand {
     private readonly unionBefore: Rect,
     private readonly unionAfter: Rect,
     private readonly snapshotBefore: Map<string, Matrix>,
-    private readonly handle: ResizeCorner,
+    private readonly handle: ResizeHandle,
     private readonly vectorEffectBefore: Map<string, (string | null)[]>
   ) {}
 

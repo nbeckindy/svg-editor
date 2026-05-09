@@ -44,7 +44,7 @@ import {
   type ClipboardPayload,
   type ClipboardShapeSnapshot
 } from './clipboard.service';
-import { type ResizeCorner, oppositeCornerForHandle } from '../utils/selection-resize';
+import { type ResizeHandle, computeScaleAnchorFromUnionResize } from '../utils/selection-resize';
 import {
   axisAlignedRectContains,
   axisAlignedRectsIntersect,
@@ -2068,13 +2068,12 @@ export class SvgManipulationService {
     unionBefore: { x: number; y: number; width: number; height: number },
     unionAfter: { x: number; y: number; width: number; height: number },
     snapshot: Map<string, Matrix>,
-    handle: ResizeCorner
+    handle: ResizeHandle
   ): void {
     if (!this.svgInstance) return;
-    const s = unionAfter.width / unionBefore.width;
-    if (!Number.isFinite(s) || s <= 0) return;
-    const anchor = oppositeCornerForHandle(unionBefore, handle);
-    const T = new Matrix().scale(s, s, anchor.x, anchor.y);
+    const { sx, sy, ax, ay } = computeScaleAnchorFromUnionResize(handle, unionBefore, unionAfter);
+    if (!Number.isFinite(sx) || !Number.isFinite(sy) || sx === 0 || sy === 0) return;
+    const T = new Matrix().scale(sx, sy, ax, ay);
     for (const id of shapeIds) {
       const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
       const prev = snapshot.get(id);
@@ -2093,7 +2092,7 @@ export class SvgManipulationService {
   ): void {
     if (!this.svgInstance) return;
     const s = unionAfter.width / unionBefore.width;
-    if (!Number.isFinite(s) || s <= 0) return;
+    if (!Number.isFinite(s) || s === 0) return;
     const cx = unionBefore.x + unionBefore.width / 2;
     const cy = unionBefore.y + unionBefore.height / 2;
     const T = new Matrix().scale(s, s, cx, cy);

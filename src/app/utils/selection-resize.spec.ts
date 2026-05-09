@@ -2,6 +2,9 @@ import { describe, it, expect } from 'vitest';
 import type { BBox } from './selection-resize';
 import {
   computeCenterAnchoredResize,
+  computeNonUniformCornerResizedUnion,
+  computeEdgeNonUniformResizedUnion,
+  computeScaleAnchorFromUnionResize,
   computeProportionalResizedUnion,
   oppositeCornerForHandle,
   MIN_UNION_SIZE
@@ -82,11 +85,46 @@ describe('computeProportionalResizedUnion', () => {
     expect(out.width).toBeGreaterThan(1000);
   });
 
-  it('pointer on opposite side of anchor (negative scale) clamps to min size', () => {
-    const p = { x: u.x - 50, y: u.y - 50 };
-    const out = computeProportionalResizedUnion(u, 'se', p, 4);
-    expect(Math.min(out.width, out.height)).toBeGreaterThanOrEqual(4 - 1e-6);
+  it('pointer on opposite side of anchor allows reflection (Shift / proportional)', () => {
+    const p = { x: u.x - 50, y: u.y - 25 };
+    const out = computeProportionalResizedUnion(u, 'se', p, 0.001);
+    expect(out.width).toBeGreaterThan(0);
+    expect(out.height).toBeGreaterThan(0);
+    expect(out.x).toBeLessThan(u.x);
     expect(out.width / out.height).toBeCloseTo(u.width / u.height);
+  });
+});
+
+describe('computeNonUniformCornerResizedUnion', () => {
+  const u = { x: 10, y: 20, width: 100, height: 50 };
+
+  it('SE: pointer far right and short height changes aspect', () => {
+    const out = computeNonUniformCornerResizedUnion(u, 'se', { x: 200, y: 40 });
+    expect(out.x).toBe(10);
+    expect(out.y).toBe(20);
+    expect(out.width).toBe(190);
+    expect(out.height).toBe(20);
+  });
+});
+
+describe('computeEdgeNonUniformResizedUnion', () => {
+  const u = { x: 10, y: 20, width: 100, height: 50 };
+
+  it('e: widens without changing height origin', () => {
+    const out = computeEdgeNonUniformResizedUnion(u, 'e', { x: 200, y: 30 });
+    expect(out.y).toBe(20);
+    expect(out.height).toBe(50);
+    expect(out.width).toBe(190);
+  });
+});
+
+describe('computeScaleAnchorFromUnionResize', () => {
+  it('derives negative sx when SE corner moves past the NW anchor (horizontal flip)', () => {
+    const before = { x: 0, y: 0, width: 100, height: 50 };
+    const after = { x: -120, y: 0, width: 100, height: 50 };
+    const { sx, sy } = computeScaleAnchorFromUnionResize('se', before, after);
+    expect(sx).toBeLessThan(0);
+    expect(sy).toBe(1);
   });
 });
 
