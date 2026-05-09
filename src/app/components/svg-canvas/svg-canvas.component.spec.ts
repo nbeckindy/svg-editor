@@ -2629,6 +2629,57 @@ describe('SvgCanvasComponent', () => {
       expect(controlHandles.length).toBe(2);
     });
 
+    it('hides path node overlays while dragging selection (translate)', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 60 50" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-a',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+
+      expect(component.isPathNodeEditModeActive).toBe(true);
+      expect(component.showPathNodeEditOverlays).toBe(true);
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBeGreaterThan(0);
+
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 50, height: 40 });
+      const pathEl =
+        (component.svgContainer()?.nativeElement?.querySelector('#path-a') as SVGPathElement | null) ??
+        document.createElementNS('http://www.w3.org/2000/svg', 'path');
+      vi.spyOn(pathEl, 'getBoundingClientRect').mockReturnValue(new DOMRect(15, 15, 50, 40));
+      const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
+      if (wrapperEl) {
+        vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
+          left: 0,
+          top: 0,
+          width: 100,
+          height: 100,
+          right: 100,
+          bottom: 100,
+          x: 0,
+          y: 0,
+          toJSON: () => {}
+        });
+      }
+      stubEditorSvgScreenMapping(component);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        target: pathEl,
+        clientX: 35,
+        clientY: 30,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+
+      expect(component.isDraggingShape).toBe(true);
+      expect(component.showPathNodeEditOverlays).toBe(false);
+    });
+
     it('renders node affordances for all selected editable paths in multi-select', async () => {
       await loadSvgForSelector(
         '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 20 20 L 30 10" /><path id="path-b" d="M 50 50 C 60 50 70 60 80 80" /><rect id="rect-non-path" x="5" y="60" width="10" height="10" /></svg>'

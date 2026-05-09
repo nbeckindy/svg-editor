@@ -746,6 +746,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return this.pathNodeEditState !== null;
   }
 
+  /** Hide path node handles during selection translate so they do not sit at stale positions mid-gesture. */
+  get showPathNodeEditOverlays(): boolean {
+    return this.isPathNodeEditModeActive && !this.isDraggingShape;
+  }
+
   get pathNodeAnchorOverlays(): { cx: number; cy: number; selected: boolean; pathId: string; anchorIndex: number }[] {
     if (!this.pathNodeEditState) return [];
     return this.pathNodeEditState.paths.flatMap((pathState) =>

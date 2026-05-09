@@ -323,7 +323,7 @@
               stroke-dasharray="4 3"
               vector-effect="non-scaling-stroke"/>
           }
-          @if (isPathNodeEditModeActive) {
+          @if (showPathNodeEditOverlays) {
             @for (handle of pathNodeControlHandleOverlays; track $index) {
               <line
                 class="path-node-control-line"
