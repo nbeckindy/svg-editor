@@ -22,7 +22,6 @@ import {
   TranslateCommand,
   AlignCommand,
   DistributeCommand,
-  UnionScaleCommand,
   UnionRotateCommand,
   RemoveShapesCommand,
   GroupCommand,

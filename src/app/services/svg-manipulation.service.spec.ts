@@ -636,6 +636,21 @@ describe('SvgManipulationService', () => {
       expect(after!.x + after!.width / 2).toBeCloseTo(centerBefore.x, 5);
       expect(after!.y + after!.height / 2).toBeCloseTo(centerBefore.y, 5);
     });
+
+    it('applyUnionScaleFromSnapshot strips non-scaling-stroke; restoreVectorEffectsForShapeSubtrees undoes it', () => {
+      const svgContent =
+        '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50" stroke="#f00" stroke-width="2" vector-effect="non-scaling-stroke"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const unionBefore = { x: 10, y: 20, width: 100, height: 50 };
+      const unionAfter = { x: 10, y: 20, width: 200, height: 100 };
+      const snap = service.snapshotSelectionTransforms(['r1']);
+      const veBefore = service.snapshotVectorEffectsForShapes(['r1']);
+      service.applyUnionScaleFromSnapshot(['r1'], unionBefore, unionAfter, snap, 'se');
+      const rect = container.querySelector('#r1');
+      expect(rect?.getAttribute('vector-effect')).toBeNull();
+      service.restoreVectorEffectsForShapeSubtrees(['r1'], veBefore);
+      expect(rect?.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+    });
   });
 
   describe('selection rotate', () => {

@@ -1,5 +1,5 @@
 import { Matrix, Svg } from '@svgdotjs/svg.js';
-import { UnionScaleCommand } from '../../../models/editor-commands';
+import { UnionScaleCommand, UnionScaleFromCenterCommand } from '../../../models/editor-commands';
 import { SmartGuideResult } from '../../../services/snap.service';
 import {
   computeCenterAnchoredResize,
@@ -21,6 +21,7 @@ export class ResizeGesture {
   private unionStart: BBox | null = null;
   private lastUnion: BBox | null = null;
   private snapshot: Map<string, Matrix> = new Map();
+  private vectorEffectSnapshot: Map<string, (string | null)[]> = new Map();
   private ghostFragments: GhostPreviewFragment[] = [];
   private ghost = new GhostSession();
   private smartGuides: SmartGuideResult['guides'] = { vertical: [], horizontal: [] };
@@ -41,6 +42,7 @@ export class ResizeGesture {
     this.unionStart = union;
     this.handle = corner;
     this.snapshot = ctx.svgManipulation.snapshotSelectionTransforms(selectedIds);
+    this.vectorEffectSnapshot = ctx.svgManipulation.snapshotVectorEffectsForShapes(selectedIds);
 
     this.lastUnion = union;
     this.overlayRect = ctx.svgBboxToOverlayPixels(union);
@@ -80,13 +82,26 @@ export class ResizeGesture {
   end(ctx: GestureContext, centerAnchored = false): void {
     if (!this.isActive || !this.handle || !this.unionStart || !this.lastUnion) return;
     const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const ve = this.vectorEffectSnapshot;
     if (centerAnchored) {
-      ctx.svgManipulation.applyUnionScaleFromCenter(ids, this.unionStart, this.lastUnion, this.snapshot);
+      const cmd = new UnionScaleFromCenterCommand(
+        ctx.svgManipulation,
+        ids,
+        this.unionStart,
+        this.lastUnion,
+        this.snapshot,
+        ve
+      );
+      ctx.editorHistory.pushAndExecute(cmd);
     } else {
       const cmd = new UnionScaleCommand(
-        ctx.svgManipulation, ids,
-        this.unionStart, this.lastUnion,
-        this.snapshot, this.handle
+        ctx.svgManipulation,
+        ids,
+        this.unionStart,
+        this.lastUnion,
+        this.snapshot,
+        this.handle,
+        ve
       );
       ctx.editorHistory.pushAndExecute(cmd);
     }
@@ -146,6 +161,7 @@ export class ResizeGesture {
     this.unionStart = null;
     this.lastUnion = null;
     this.snapshot = new Map();
+    this.vectorEffectSnapshot = new Map();
     this.ghostFragments = [];
     this.smartGuides = { vertical: [], horizontal: [] };
     this.visibilityShapeIds = [];

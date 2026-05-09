@@ -13,6 +13,7 @@ import {
   DistributeCommand,
   TranslateCommand,
   UnionScaleCommand,
+  UnionScaleFromCenterCommand,
   UnionRotateCommand,
   SkewCommand,
   ReorderCommand,
@@ -45,6 +46,8 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     updateOpacity: vi.fn(),
     translateShape: vi.fn(),
     applyUnionScaleFromSnapshot: vi.fn(),
+    applyUnionScaleFromCenter: vi.fn(),
+    restoreVectorEffectsForShapeSubtrees: vi.fn(),
     applyUnionRotationFromSnapshot: vi.fn(),
     applyUnionSkewFromSnapshot: vi.fn(),
     moveElementForward: vi.fn(),
@@ -571,11 +574,12 @@ describe('DistributeCommand', () => {
 describe('UnionScaleCommand', () => {
   const before = { x: 0, y: 0, width: 100, height: 100 };
   const after = { x: 0, y: 0, width: 200, height: 200 };
+  const emptyVe = new Map<string, (string | null)[]>();
 
   it('should call applyUnionScaleFromSnapshot on execute', () => {
     const snapshot = new Map<string, Matrix>();
     const svc = mockSvc();
-    const cmd = new UnionScaleCommand(svc, ['s1', 's2'], before, after, snapshot, 'se');
+    const cmd = new UnionScaleCommand(svc, ['s1', 's2'], before, after, snapshot, 'se', emptyVe);
     cmd.execute();
     expect(svc.applyUnionScaleFromSnapshot).toHaveBeenCalledWith(
       ['s1', 's2'], before, after, snapshot, 'se'
@@ -597,21 +601,50 @@ describe('UnionScaleCommand', () => {
     });
 
     const snapshot = new Map([['s1', m1], ['s2', m2]]);
-    const cmd = new UnionScaleCommand(svc, ['s1', 's2'], before, after, snapshot, 'se');
+    const cmd = new UnionScaleCommand(svc, ['s1', 's2'], before, after, snapshot, 'se', emptyVe);
     cmd.undo();
     expect(el1.matrix).toHaveBeenCalledWith(m1);
     expect(el2.matrix).toHaveBeenCalledWith(m2);
+    expect(svc.restoreVectorEffectsForShapeSubtrees).toHaveBeenCalledWith(['s1', 's2'], emptyVe);
   });
 
   it('should no-op undo when svgInstance is null', () => {
     const svc = mockSvc();
-    const cmd = new UnionScaleCommand(svc, ['s1'], before, after, new Map(), 'nw');
+    const cmd = new UnionScaleCommand(svc, ['s1'], before, after, new Map(), 'nw', emptyVe);
     expect(() => cmd.undo()).not.toThrow();
   });
 
   it('should have description "Resize shapes"', () => {
-    expect(new UnionScaleCommand(mockSvc(), [], before, after, new Map(), 'nw').description)
+    expect(new UnionScaleCommand(mockSvc(), [], before, after, new Map(), 'nw', emptyVe).description)
       .toBe('Resize shapes');
+  });
+});
+
+describe('UnionScaleFromCenterCommand', () => {
+  const before = { x: 0, y: 0, width: 100, height: 100 };
+  const after = { x: 0, y: 0, width: 200, height: 200 };
+  const emptyVe = new Map<string, (string | null)[]>();
+
+  it('calls applyUnionScaleFromCenter on execute', () => {
+    const snapshot = new Map<string, Matrix>();
+    const svc = mockSvc();
+    const cmd = new UnionScaleFromCenterCommand(svc, ['s1'], before, after, snapshot, emptyVe);
+    cmd.execute();
+    expect(svc.applyUnionScaleFromCenter).toHaveBeenCalledWith(['s1'], before, after, snapshot);
+  });
+
+  it('restores matrices and vector-effect snapshot on undo', () => {
+    const m1 = new Matrix();
+    const el1 = makeMockSvgElement('s1', m1);
+    const findOne = vi.fn().mockReturnValue(el1);
+    const svc = mockSvc({
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+    });
+    const ve = new Map<string, (string | null)[]>([['s1', ['non-scaling-stroke']]]);
+    const cmd = new UnionScaleFromCenterCommand(svc, ['s1'], before, after, new Map([['s1', m1]]), ve);
+    cmd.undo();
+    expect(el1.matrix).toHaveBeenCalledWith(m1);
+    expect(svc.restoreVectorEffectsForShapeSubtrees).toHaveBeenCalledWith(['s1'], ve);
   });
 });
 

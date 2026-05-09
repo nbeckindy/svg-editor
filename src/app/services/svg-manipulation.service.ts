@@ -1985,8 +1985,83 @@ export class SvgManipulationService {
   }
 
   /**
+   * Depth-first node list: root first, then `find('*')` order (matches restore walk).
+   */
+  private getOrderedSubtreeNodes(root: SvgJsElement): SvgJsElement[] {
+    const found = root.find('*') as SvgJsElement[];
+    const rest = Array.isArray(found) ? found : [];
+    return [root, ...rest];
+  }
+
+  /**
+   * Captures `vector-effect` on each node in every selected subtree (for undo after resize).
+   */
+  snapshotVectorEffectsForShapes(shapeIds: string[]): Map<string, (string | null)[]> {
+    const map = new Map<string, (string | null)[]>();
+    if (!this.svgInstance) return map;
+    for (const id of shapeIds) {
+      const el = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      if (!el) continue;
+      const nodes = this.getOrderedSubtreeNodes(el);
+      map.set(
+        id,
+        nodes.map((n) => (n.node as SVGElement).getAttribute('vector-effect'))
+      );
+    }
+    return map;
+  }
+
+  /**
+   * Restores `vector-effect` attributes from {@link snapshotVectorEffectsForShapes}.
+   */
+  restoreVectorEffectsForShapeSubtrees(
+    shapeIds: string[],
+    snapshots: Map<string, (string | null)[]>
+  ): void {
+    if (!this.svgInstance) return;
+    for (const id of shapeIds) {
+      const el = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      const values = snapshots.get(id);
+      if (!el || !values) continue;
+      const nodes = this.getOrderedSubtreeNodes(el);
+      for (let i = 0; i < Math.min(nodes.length, values.length); i++) {
+        const v = values[i];
+        const node = nodes[i];
+        if (v == null || v === '') {
+          node.attr('vector-effect', null);
+        } else {
+          node.attr('vector-effect', v);
+        }
+      }
+    }
+    this.bumpDocumentRevision();
+  }
+
+  /**
+   * Removes `vector-effect="non-scaling-stroke"` so stroke width scales with `transform`
+   * (default SVG behavior). Overlay chrome keeps non-scaling strokes separately.
+   */
+  private stripNonScalingStrokeFromShapeSubtrees(shapeIds: string[]): void {
+    if (!this.svgInstance) return;
+    for (const id of shapeIds) {
+      const el = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      if (!el) continue;
+      for (const node of this.getOrderedSubtreeNodes(el)) {
+        const dom = node.node as SVGElement;
+        if (dom.getAttribute('vector-effect') === 'non-scaling-stroke') {
+          node.attr('vector-effect', null);
+        }
+      }
+    }
+  }
+
+  /**
    * Apply uniform scale about the fixed anchor (opposite corner) for proportional resize.
    * Composes: newMatrix = scale(s,s,ax,ay) * snapshotMatrix
+   *
+   * **Stroke policy:** scaling stroke with the shape is the product default; any
+   * `vector-effect="non-scaling-stroke"` on affected subtrees is cleared so undo can
+   * restore it via {@link restoreVectorEffectsForShapeSubtrees}.
    */
   applyUnionScaleFromSnapshot(
     shapeIds: string[],
@@ -2006,6 +2081,7 @@ export class SvgManipulationService {
       if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
       shape.matrix(T.multiply(prev));
     }
+    this.stripNonScalingStrokeFromShapeSubtrees(shapeIds);
     this.bumpDocumentRevision();
   }
 
@@ -2027,6 +2103,7 @@ export class SvgManipulationService {
       if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
       shape.matrix(T.multiply(prev));
     }
+    this.stripNonScalingStrokeFromShapeSubtrees(shapeIds);
     this.bumpDocumentRevision();
   }
 

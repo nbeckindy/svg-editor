@@ -545,7 +545,8 @@ export class UnionScaleCommand implements EditorCommand {
     private readonly unionBefore: Rect,
     private readonly unionAfter: Rect,
     private readonly snapshotBefore: Map<string, Matrix>,
-    private readonly handle: ResizeCorner
+    private readonly handle: ResizeCorner,
+    private readonly vectorEffectBefore: Map<string, (string | null)[]>
   ) {}
 
   execute(): void {
@@ -568,6 +569,42 @@ export class UnionScaleCommand implements EditorCommand {
         shape.matrix(saved);
       }
     }
+    this.svc.restoreVectorEffectsForShapeSubtrees(this.shapeIds, this.vectorEffectBefore);
+  }
+}
+
+export class UnionScaleFromCenterCommand implements EditorCommand {
+  readonly description = 'Resize shapes (center)';
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly shapeIds: string[],
+    private readonly unionBefore: Rect,
+    private readonly unionAfter: Rect,
+    private readonly snapshotBefore: Map<string, Matrix>,
+    private readonly vectorEffectBefore: Map<string, (string | null)[]>
+  ) {}
+
+  execute(): void {
+    this.svc.applyUnionScaleFromCenter(
+      this.shapeIds,
+      this.unionBefore,
+      this.unionAfter,
+      this.snapshotBefore
+    );
+  }
+
+  undo(): void {
+    const svgInstance = this.svc.getSVGInstance();
+    if (!svgInstance) return;
+    for (const id of this.shapeIds) {
+      const shape = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      const saved = this.snapshotBefore.get(id);
+      if (shape && saved && typeof shape.matrix === 'function') {
+        shape.matrix(saved);
+      }
+    }
+    this.svc.restoreVectorEffectsForShapeSubtrees(this.shapeIds, this.vectorEffectBefore);
   }
 }
 
