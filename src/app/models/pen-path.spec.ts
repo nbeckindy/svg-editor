@@ -6,6 +6,8 @@ import {
   dragBendCubicControlPoints,
   dragBendQuadraticControlPoint,
   dragBendSmoothCubicSecondControl,
+  placementPointerCubicControlPoints,
+  placementPointerQuadraticControlPoint,
   lastCommittedVertex,
   movePenLastOutgoingHandleTo,
   pathSvgReflectStateAfter,
@@ -94,6 +96,38 @@ describe('pathSvgReflectStateAfter', () => {
     expect(st?.x).toBe(100);
     expect(st?.canReflectCubic).toBe(false);
     expect(st?.quadCpX).toBe(100);
+  });
+});
+
+describe('placementPointerCubicControlPoints (j24.9 pen / handle parity)', () => {
+  it('places end handle at the pointer and mirrors the start control for symmetric C', () => {
+    const c = placementPointerCubicControlPoints(
+      { x: 0, y: 0 },
+      { x: 9, y: 0 },
+      { x: 6, y: -3 },
+      false
+    );
+    expect(c).toEqual({ x1: 3, y1: 3, x2: 6, y2: -3 });
+  });
+
+  it('with Alt-style break, keeps chord thirds on the start handle and puts end handle at pointer', () => {
+    const c = placementPointerCubicControlPoints(
+      { x: 0, y: 0 },
+      { x: 9, y: 0 },
+      { x: 4, y: 5 },
+      true
+    );
+    expect(c.x1).toBe(3);
+    expect(c.y1).toBe(0);
+    expect(c.x2).toBe(4);
+    expect(c.y2).toBe(5);
+  });
+});
+
+describe('placementPointerQuadraticControlPoint', () => {
+  it('follows the pointer like a single Q handle drag', () => {
+    const q = placementPointerQuadraticControlPoint({ x: 0, y: 0 }, { x: 10, y: 0 }, { x: 5, y: -4 });
+    expect(q).toEqual({ x1: 5, y1: -4 });
   });
 });
 

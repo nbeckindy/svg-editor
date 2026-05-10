@@ -59,9 +59,8 @@ import {
   appendQuadraticToD,
   appendSmoothCubicToD,
   appendSmoothQuadraticToD,
-  dragBendCubicControlPoints,
-  dragBendQuadraticControlPoint,
-  dragBendSmoothCubicSecondControl,
+  placementPointerCubicControlPoints,
+  placementPointerQuadraticControlPoint,
   lastCommittedVertex,
   penDragCurveAuthoringKind,
   penPathOnlyMoveto,
@@ -72,6 +71,7 @@ import {
   penLastOutgoingHandleSvg,
   movePenLastOutgoingHandleTo,
   snapVectorTo45DegFrom,
+  type CubicControlPoints,
   type PenPathSegment
 } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
@@ -618,18 +618,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
-        let { x1, y1, x2, y2 } = dragBendCubicControlPoints(
+        let { x1, y1, x2, y2 } = this.snapPenPendingCubicControls(
           anchor,
           end,
-          pending.startSvg,
-          dragCurrent,
+          placementPointerCubicControlPoints(anchor, end, dragCurrent, this.penPendingCurveAltChord),
           this.penPendingCurveAltChord
         );
-        if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: x2, y: y2 });
-          x2 = s.x;
-          y2 = s.y;
-        }
         const p1 = toOverlay(x1, y1);
         const p2 = toOverlay(x2, y2);
         return [
@@ -638,7 +632,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         ];
       }
       case 'quadratic': {
-        let qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+        let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
         if (this.penPendingShiftAngleSnap) {
           const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
           qc = { x1: s.x, y1: s.y };
@@ -651,20 +645,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         if (!st) return [];
         const sx1 = st.canReflectCubic ? 2 * anchor.x - st.cubicCp2X : anchor.x;
         const sy1 = st.canReflectCubic ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-        const br = this.penPendingCurveAltChord;
-        let s2 = dragBendSmoothCubicSecondControl(
-          anchor,
-          end,
-          pending.startSvg,
-          dragCurrent,
-          br
-        );
+        let hx = dragCurrent.x;
+        let hy = dragCurrent.y;
         if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
-          s2 = { x2: s.x, y2: s.y };
+          const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+          hx = s.x;
+          hy = s.y;
         }
         const p1 = toOverlay(sx1, sy1);
-        const p2 = toOverlay(s2.x2, s2.y2);
+        const p2 = toOverlay(hx, hy);
         return [
           { cx: p1.x, cy: p1.y },
           { cx: p2.x, cy: p2.y }
@@ -674,7 +663,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         const st = penReflectStateAfterCommitted(this.penSession.getSegments());
         if (!st) return [];
         if (this.penPendingCurveAltChord) {
-          let qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+          let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
           if (this.penPendingShiftAngleSnap) {
             const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
             qc = { x1: s.x, y1: s.y };
@@ -728,6 +717,86 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!h) return null;
     const p2 = this.svgBboxToOverlayPixels({ x: h.hx, y: h.hy, width: 0, height: 0 });
     return { cx: p2.x, cy: p2.y };
+  }
+
+  /**
+   * Dashed guide from the pending segment’s end anchor to the end-side handle (j24.9), matching
+   * {@link penOutgoingHandleGuideOverlay} readability while click-dragging a new curve.
+   */
+  get penPendingCurveHandleGuideOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
+    if (!this.penCurvePreviewPathD || !this.penPendingSegment || this.editorTool.getCurrentTool() !== 'pen') {
+      return null;
+    }
+    const pending = this.penPendingSegment;
+    const end = pending.startSvg;
+    const dragCurrent = this.penPendingDragSvg ?? end;
+    const kind = penDragCurveAuthoringKind(pending.ctrlCurve, this.penSession.getSegments());
+    const segs = this.penSession.getSegments();
+    const anchor = pending.anchor;
+
+    let hx: number;
+    let hy: number;
+
+    switch (kind) {
+      case 'cubic': {
+        const c = this.snapPenPendingCubicControls(
+          anchor,
+          end,
+          placementPointerCubicControlPoints(anchor, end, dragCurrent, this.penPendingCurveAltChord),
+          this.penPendingCurveAltChord
+        );
+        hx = c.x2;
+        hy = c.y2;
+        break;
+      }
+      case 'quadratic': {
+        let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
+          qc = { x1: s.x, y1: s.y };
+        }
+        hx = qc.x1;
+        hy = qc.y1;
+        break;
+      }
+      case 'smoothCubic': {
+        hx = dragCurrent.x;
+        hy = dragCurrent.y;
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+          hx = s.x;
+          hy = s.y;
+        }
+        break;
+      }
+      default: {
+        if (this.penPendingCurveAltChord) {
+          let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
+          if (this.penPendingShiftAngleSnap) {
+            const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
+            qc = { x1: s.x, y1: s.y };
+          }
+          hx = qc.x1;
+          hy = qc.y1;
+          break;
+        }
+        const st = penReflectStateAfterCommitted(segs);
+        if (!st) return null;
+        let ix = 2 * anchor.x - st.quadCpX;
+        let iy = 2 * anchor.y - st.quadCpY;
+        if (this.penPendingShiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
+          ix = s.x;
+          iy = s.y;
+        }
+        hx = ix;
+        hy = iy;
+      }
+    }
+
+    const pEnd = this.svgBboxToOverlayPixels({ x: end.x, y: end.y, width: 0, height: 0 });
+    const pH = this.svgBboxToOverlayPixels({ x: hx, y: hy, width: 0, height: 0 });
+    return { x1: pEnd.x, y1: pEnd.y, x2: pH.x, y2: pH.y };
   }
 
   private penCommittedOutgoingHandleSvg(): {
@@ -2808,6 +2877,26 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
+  /** After Shift angle snap, symmetric cubics re-mirror `x1/y1` from the snapped end handle (j24.9). */
+  private snapPenPendingCubicControls(
+    anchor: { x: number; y: number },
+    end: { x: number; y: number },
+    controls: CubicControlPoints,
+    altBreak: boolean
+  ): CubicControlPoints {
+    if (!this.penPendingShiftAngleSnap) return controls;
+    const s = snapVectorTo45DegFrom(end, { x: controls.x2, y: controls.y2 });
+    if (altBreak) {
+      return { ...controls, x2: s.x, y2: s.y };
+    }
+    return {
+      x1: anchor.x + end.x - s.x,
+      y1: anchor.y + end.y - s.y,
+      x2: s.x,
+      y2: s.y
+    };
+  }
+
   private appendPenPendingCurveToBaseD(baseD: string): string {
     const pending = this.penPendingSegment;
     if (!pending) return baseD;
@@ -2819,21 +2908,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
-        let controls = dragBendCubicControlPoints(
+        const controls = this.snapPenPendingCubicControls(
           anchor,
           end,
-          pending.startSvg,
-          dragCurrent,
+          placementPointerCubicControlPoints(anchor, end, dragCurrent, this.penPendingCurveAltChord),
           this.penPendingCurveAltChord
         );
-        if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: controls.x2, y: controls.y2 });
-          controls = { ...controls, x2: s.x, y2: s.y };
-        }
         return appendCubicToD(baseD, controls, end);
       }
       case 'quadratic': {
-        let qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+        let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
         if (this.penPendingShiftAngleSnap) {
           const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
           qc = { x1: s.x, y1: s.y };
@@ -2844,28 +2928,38 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         if (this.penPendingCurveAltChord) {
           const st = penReflectStateAfterCommitted(segs);
           if (!st) {
-            const s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent, false);
-            return appendSmoothCubicToD(baseD, s2.x2, s2.y2, end.x, end.y);
+            let hx = dragCurrent.x;
+            let hy = dragCurrent.y;
+            if (this.penPendingShiftAngleSnap) {
+              const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+              hx = s.x;
+              hy = s.y;
+            }
+            return appendSmoothCubicToD(baseD, hx, hy, end.x, end.y);
           }
           const x1 = st.canReflectCubic ? 2 * anchor.x - st.cubicCp2X : anchor.x;
           const y1 = st.canReflectCubic ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-          let s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent, true);
+          let hx = dragCurrent.x;
+          let hy = dragCurrent.y;
           if (this.penPendingShiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
-            s2 = { x2: s.x, y2: s.y };
+            const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+            hx = s.x;
+            hy = s.y;
           }
-          return appendCubicToD(baseD, { x1, y1, x2: s2.x2, y2: s2.y2 }, end);
+          return appendCubicToD(baseD, { x1, y1, x2: hx, y2: hy }, end);
         }
-        let s2 = dragBendSmoothCubicSecondControl(anchor, end, pending.startSvg, dragCurrent, false);
+        let hx = dragCurrent.x;
+        let hy = dragCurrent.y;
         if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
-          s2 = { x2: s.x, y2: s.y };
+          const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+          hx = s.x;
+          hy = s.y;
         }
-        return appendSmoothCubicToD(baseD, s2.x2, s2.y2, end.x, end.y);
+        return appendSmoothCubicToD(baseD, hx, hy, end.x, end.y);
       }
       default: {
         if (this.penPendingCurveAltChord) {
-          let qc = dragBendQuadraticControlPoint(anchor, end, pending.startSvg, dragCurrent);
+          let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
           if (this.penPendingShiftAngleSnap) {
             const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
             qc = { x1: s.x, y1: s.y };
@@ -2921,22 +3015,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const segs = this.penSession.getSegments();
     switch (kind) {
       case 'cubic': {
-        let c = dragBendCubicControlPoints(
+        const c = this.snapPenPendingCubicControls(
           anchor,
           end,
-          startSvg,
-          dragCurrent,
+          placementPointerCubicControlPoints(anchor, end, dragCurrent, this.penPendingCurveAltChord),
           this.penPendingCurveAltChord
         );
-        if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: c.x2, y: c.y2 });
-          c = { ...c, x2: s.x, y2: s.y };
-        }
         this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
         break;
       }
       case 'quadratic': {
-        let q = dragBendQuadraticControlPoint(anchor, end, startSvg, dragCurrent);
+        let q = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
         if (this.penPendingShiftAngleSnap) {
           const s = snapVectorTo45DegFrom(end, { x: q.x1, y: q.y1 });
           q = { x1: s.x, y1: s.y };
@@ -2948,35 +3037,41 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         if (this.penPendingCurveAltChord) {
           const st = penReflectStateAfterCommitted(segs);
           if (!st) {
-            let s2 = dragBendSmoothCubicSecondControl(anchor, end, startSvg, dragCurrent, false);
+            let hx = dragCurrent.x;
+            let hy = dragCurrent.y;
             if (this.penPendingShiftAngleSnap) {
-              const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
-              s2 = { x2: s.x, y2: s.y };
+              const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+              hx = s.x;
+              hy = s.y;
             }
-            this.penSession.appendSmoothCubic(s2.x2, s2.y2, end.x, end.y);
+            this.penSession.appendSmoothCubic(hx, hy, end.x, end.y);
             break;
           }
           const x1 = st.canReflectCubic ? 2 * anchor.x - st.cubicCp2X : anchor.x;
           const y1 = st.canReflectCubic ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-          let s2 = dragBendSmoothCubicSecondControl(anchor, end, startSvg, dragCurrent, true);
+          let hx = dragCurrent.x;
+          let hy = dragCurrent.y;
           if (this.penPendingShiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
-            s2 = { x2: s.x, y2: s.y };
+            const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+            hx = s.x;
+            hy = s.y;
           }
-          this.penSession.appendCubic(x1, y1, s2.x2, s2.y2, end.x, end.y);
+          this.penSession.appendCubic(x1, y1, hx, hy, end.x, end.y);
           break;
         }
-        let s2 = dragBendSmoothCubicSecondControl(anchor, end, startSvg, dragCurrent, false);
+        let hx = dragCurrent.x;
+        let hy = dragCurrent.y;
         if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: s2.x2, y: s2.y2 });
-          s2 = { x2: s.x, y2: s.y };
+          const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+          hx = s.x;
+          hy = s.y;
         }
-        this.penSession.appendSmoothCubic(s2.x2, s2.y2, end.x, end.y);
+        this.penSession.appendSmoothCubic(hx, hy, end.x, end.y);
         break;
       }
       default: {
         if (this.penPendingCurveAltChord) {
-          let q = dragBendQuadraticControlPoint(anchor, end, startSvg, dragCurrent);
+          let q = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
           if (this.penPendingShiftAngleSnap) {
             const s = snapVectorTo45DegFrom(end, { x: q.x1, y: q.y1 });
             q = { x1: s.x, y1: s.y };

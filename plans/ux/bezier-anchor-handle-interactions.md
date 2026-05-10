@@ -14,7 +14,7 @@ Understanding today’s behavior grounds the recommendations and avoids describi
 | **Visual affordances** | **Anchors:** white fill, blue stroke (`#1E88E5`), radius ~4px in overlay space; selected anchors get a distinct class. **Handles:** green (`#43A047`), dashed connector lines, circular handle grips. |
 | **Dragging** | **Anchor drag** moves the vertex and updates linked cubic/quadratic control coordinates (see `applyAnchorDrag` — outgoing/incoming handles move with the anchor in defined cases). **Handle drag** updates a single control point on a **C** or **Q** segment (`applyControlDrag`); handles are **not** coupled for symmetric edit during drag. |
 | **Deletion** | With a selected anchor, **Delete** removes the vertex subject to minimum node count (open vs closed path). Feedback messages explain blocked deletes. |
-| **Pen tool (creation)** | **Click** adds a corner (**L**). **Click + drag** adds a cubic curve (**C**) with symmetric handles during placement (per pen epic PP-3). Pen can **insert** an anchor on an existing path when clicking near a segment (separate from node-edit mode). |
+| **Pen tool (creation)** | **Click** adds a corner (**L**). **Click + drag** (past the same screen threshold as marquee gestures) adds a curve: default **C** with end-side handle dragged **directly with the pointer** (same mental model as adjusting the committed outgoing handle / node-edit cubic handle); symmetric tangents mirror `P1 = P0 + P3 − P2` unless **Alt** breaks to independent handles. Pen can **insert** an anchor on an existing path when clicking near a segment (separate from node-edit mode). |
 
 ---
 

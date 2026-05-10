@@ -294,6 +294,49 @@ export function dragBendSmoothCubicSecondControl(
   return { x2: c.x2, y2: c.y2 };
 }
 
+/**
+ * Cubic controls for pen click-drag placement (j24.9): the endpoint-side handle `(x2,y2)` follows
+ * `pointer` like {@link movePenLastOutgoingHandleTo} / node-edit handle drag; when handles stay
+ * symmetric, `(x1,y1)` mirrors across the chord midpoint (`P1 = P0 + P3 - P2`).
+ */
+export function placementPointerCubicControlPoints(
+  p0: { x: number; y: number },
+  p3: { x: number; y: number },
+  pointer: { x: number; y: number },
+  breakHandleSymmetry = false
+): CubicControlPoints {
+  const dx = p3.x - p0.x;
+  const dy = p3.y - p0.y;
+  const chordLen = Math.hypot(dx, dy);
+  if (chordLen < 1e-9) {
+    return symmetricCubicControlPoints(p0, p3);
+  }
+  const base = symmetricCubicControlPoints(p0, p3);
+  if (breakHandleSymmetry) {
+    return {
+      x1: base.x1,
+      y1: base.y1,
+      x2: pointer.x,
+      y2: pointer.y
+    };
+  }
+  return {
+    x1: p0.x + p3.x - pointer.x,
+    y1: p0.y + p3.y - pointer.y,
+    x2: pointer.x,
+    y2: pointer.y
+  };
+}
+
+/** Quadratic control follows `pointer` (same as dragging the single Q handle in node edit). */
+export function placementPointerQuadraticControlPoint(
+  _p0: { x: number; y: number },
+  _p2: { x: number; y: number },
+  pointer: { x: number; y: number }
+): { x1: number; y1: number } {
+  return { x1: pointer.x, y1: pointer.y };
+}
+
 /** Append a cubic `C` command to an existing `d` (no trailing space). */
 export function appendCubicToD(
   baseD: string,

@@ -4683,7 +4683,38 @@ describe('SvgCanvasComponent', () => {
       expect(d).toContain('C');
       expect(d).toContain(' 20 20');
       expect(d).not.toContain('C 13.333333 13.333333 16.666667 16.666667 20 20');
-      expect(d).not.toContain(' 35 25');
+      // j24.9: end handle tracks release pointer; symmetric partner mirrors (anchor + end − handle).
+      expect(d).toContain('C -5 5 35 25 20 20');
+    });
+
+    it('renders dashed pending-curve handle guide while dragging past curve threshold (j24.9)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      const bend = MARQUEE_MIN_DRAG_PX + 8;
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 70,
+        clientY: 20,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 70, clientY: 20 + bend } as MouseEvent);
+      fixture.detectChanges();
+
+      expect(component.penCurvePreviewPathD).toContain('C');
+      expect(
+        fixture.nativeElement.querySelector('[data-testid="canvas-pen-pending-curve-handle-guide"]')
+      ).toBeTruthy();
     });
   });
 
