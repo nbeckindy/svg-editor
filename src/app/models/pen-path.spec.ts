@@ -100,7 +100,7 @@ describe('pathSvgReflectStateAfter', () => {
 });
 
 describe('placementPointerCubicControlPoints (j24.9 pen / handle parity)', () => {
-  it('places end handle at the pointer and mirrors the start control for symmetric C', () => {
+  it('with breakHandleSymmetry false (Alt): mirrors start control for symmetric C', () => {
     const c = placementPointerCubicControlPoints(
       { x: 0, y: 0 },
       { x: 9, y: 0 },
@@ -110,7 +110,7 @@ describe('placementPointerCubicControlPoints (j24.9 pen / handle parity)', () =>
     expect(c).toEqual({ x1: 3, y1: 3, x2: 6, y2: -3 });
   });
 
-  it('with Alt-style break, keeps chord thirds on the start handle and puts end handle at pointer', () => {
+  it('with breakHandleSymmetry true (default pen): chord thirds on start handle, end handle at pointer', () => {
     const c = placementPointerCubicControlPoints(
       { x: 0, y: 0 },
       { x: 9, y: 0 },

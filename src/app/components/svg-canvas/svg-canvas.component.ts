@@ -531,7 +531,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   } | null = null;
   private penPendingLastClient: { x: number; y: number } | null = null;
   private penPendingDragSvg: { x: number; y: number } | null = null;
-  /** Alt/Option during Bézier drag: break handle symmetry (corner conversion on commit where applicable). */
+  /**
+   * Alt/Option while dragging a pen curve: use symmetric mirrored cubic handles (`P1 = P0 + P3 − P2`).
+   * Default (no Alt): only the new anchor’s incoming handle `(x2,y2)` follows the pointer; `(x1,y1)`
+   * stays on chord thirds from the previous vertex.
+   */
   private penPendingCurveAltChord = false;
   /** Shift during Bézier / outgoing-handle drag: snap handle direction to 45° from anchor/end. */
   private penPendingShiftAngleSnap = false;
@@ -618,11 +622,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
+        const endOnly = this.penPendingPlacementCubicEndHandleOnly();
         let { x1, y1, x2, y2 } = this.snapPenPendingCubicControls(
           anchor,
           end,
-          placementPointerCubicControlPoints(anchor, end, dragCurrent, this.penPendingCurveAltChord),
-          this.penPendingCurveAltChord
+          placementPointerCubicControlPoints(anchor, end, dragCurrent, endOnly),
+          endOnly
         );
         const p1 = toOverlay(x1, y1);
         const p2 = toOverlay(x2, y2);
@@ -739,11 +744,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
+        const endOnly = this.penPendingPlacementCubicEndHandleOnly();
         const c = this.snapPenPendingCubicControls(
           anchor,
           end,
-          placementPointerCubicControlPoints(anchor, end, dragCurrent, this.penPendingCurveAltChord),
-          this.penPendingCurveAltChord
+          placementPointerCubicControlPoints(anchor, end, dragCurrent, endOnly),
+          endOnly
         );
         hx = c.x2;
         hy = c.y2;
@@ -2877,16 +2883,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  /** After Shift angle snap, symmetric cubics re-mirror `x1/y1` from the snapped end handle (j24.9). */
+  /**
+   * After Shift angle snap: end-handle-only placement updates only `(x2,y2)`; mirrored mode re-projects `x1,y1`.
+   */
   private snapPenPendingCubicControls(
     anchor: { x: number; y: number },
     end: { x: number; y: number },
     controls: CubicControlPoints,
-    altBreak: boolean
+    endHandleOnlyPlacement: boolean
   ): CubicControlPoints {
     if (!this.penPendingShiftAngleSnap) return controls;
     const s = snapVectorTo45DegFrom(end, { x: controls.x2, y: controls.y2 });
-    if (altBreak) {
+    if (endHandleOnlyPlacement) {
       return { ...controls, x2: s.x, y2: s.y };
     }
     return {
@@ -2895,6 +2903,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       x2: s.x,
       y2: s.y
     };
+  }
+
+  /** @see penPendingCurveAltChord — passed as `breakHandleSymmetry` to {@link placementPointerCubicControlPoints}. */
+  private penPendingPlacementCubicEndHandleOnly(): boolean {
+    return !this.penPendingCurveAltChord;
   }
 
   private appendPenPendingCurveToBaseD(baseD: string): string {
@@ -2908,11 +2921,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
+        const endOnly = this.penPendingPlacementCubicEndHandleOnly();
         const controls = this.snapPenPendingCubicControls(
           anchor,
           end,
-          placementPointerCubicControlPoints(anchor, end, dragCurrent, this.penPendingCurveAltChord),
-          this.penPendingCurveAltChord
+          placementPointerCubicControlPoints(anchor, end, dragCurrent, endOnly),
+          endOnly
         );
         return appendCubicToD(baseD, controls, end);
       }
@@ -3015,11 +3029,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const segs = this.penSession.getSegments();
     switch (kind) {
       case 'cubic': {
+        const endOnly = this.penPendingPlacementCubicEndHandleOnly();
         const c = this.snapPenPendingCubicControls(
           anchor,
           end,
-          placementPointerCubicControlPoints(anchor, end, dragCurrent, this.penPendingCurveAltChord),
-          this.penPendingCurveAltChord
+          placementPointerCubicControlPoints(anchor, end, dragCurrent, endOnly),
+          endOnly
         );
         this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
         break;

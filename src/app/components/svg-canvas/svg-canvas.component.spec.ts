@@ -4683,8 +4683,8 @@ describe('SvgCanvasComponent', () => {
       expect(d).toContain('C');
       expect(d).toContain(' 20 20');
       expect(d).not.toContain('C 13.333333 13.333333 16.666667 16.666667 20 20');
-      // j24.9: end handle tracks release pointer; symmetric partner mirrors (anchor + end − handle).
-      expect(d).toContain('C -5 5 35 25 20 20');
+      // Default placement: fixed chord-third at previous anchor; end handle at release pointer.
+      expect(d).toContain('C 13.333333 13.333333 35 25 20 20');
     });
 
     it('renders dashed pending-curve handle guide while dragging past curve threshold (j24.9)', async () => {

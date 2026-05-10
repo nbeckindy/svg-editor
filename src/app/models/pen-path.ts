@@ -295,9 +295,9 @@ export function dragBendSmoothCubicSecondControl(
 }
 
 /**
- * Cubic controls for pen click-drag placement (j24.9): the endpoint-side handle `(x2,y2)` follows
- * `pointer` like {@link movePenLastOutgoingHandleTo} / node-edit handle drag; when handles stay
- * symmetric, `(x1,y1)` mirrors across the chord midpoint (`P1 = P0 + P3 - P2`).
+ * Cubic controls for pen click-drag placement (j24.9): `(x2,y2)` always follows `pointer` (end-side
+ * handle). With `breakHandleSymmetry` true, `(x1,y1)` stays on chord thirds from `p0` (only the new
+ * vertex’s handle is edited). With false, `(x1,y1)` mirrors for smooth symmetry (`P1 = P0 + P3 - P2`).
  */
 export function placementPointerCubicControlPoints(
   p0: { x: number; y: number },
