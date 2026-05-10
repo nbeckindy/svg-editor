@@ -243,8 +243,8 @@
               data-testid="canvas-pen-path-preview"
               [attr.d]="pfull"
               fill="none"
-              stroke="#2196f3"
-              stroke-width="2"
+              [attr.stroke]="drawingDefaults.stroke()"
+              [attr.stroke-width]="drawingDefaults.strokeWidth()"
               stroke-dasharray="6 3"
               vector-effect="non-scaling-stroke"/>
           }
@@ -254,8 +254,8 @@
               data-testid="canvas-pen-curve-preview"
               [attr.d]="pcurve"
               fill="none"
-              stroke="#2196f3"
-              stroke-width="2"
+              [attr.stroke]="drawingDefaults.stroke()"
+              [attr.stroke-width]="drawingDefaults.strokeWidth()"
               stroke-dasharray="6 3"
               vector-effect="non-scaling-stroke"/>
             @for (h of penCurveHandleOverlays; track h.cx + ',' + h.cy) {
@@ -279,8 +279,8 @@
               [attr.y1]="prb.y1"
               [attr.x2]="prb.x2"
               [attr.y2]="prb.y2"
-              stroke="#2196f3"
-              stroke-width="2"
+              [attr.stroke]="drawingDefaults.stroke()"
+              [attr.stroke-width]="drawingDefaults.strokeWidth()"
               stroke-dasharray="6 3"
               vector-effect="non-scaling-stroke"/>
           }

@@ -11,6 +11,7 @@ import { EditorToolService } from '../../services/editor-tool.service';
 import { CanvasViewService } from '../../services/canvas-view.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { ClipboardService } from '../../services/clipboard.service';
+import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { SnapService } from '../../services/snap.service';
 import { CompositeCommand, TranslateCommand } from '../../models/editor-commands';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
@@ -4549,6 +4550,67 @@ describe('SvgCanvasComponent', () => {
       const fullPreview = fixture.nativeElement.querySelector('[data-testid="canvas-pen-path-preview"]');
       expect(fullPreview).toBeTruthy();
       expect(fullPreview?.getAttribute('d')).toBe('M 10 10 L 20 20 L 40 20');
+    });
+
+    it('pen preview stroke matches drawing defaults, updates mid-session, matches committed path', async () => {
+      const drawingDefaults = TestBed.inject(DrawingStyleDefaultsService);
+      drawingDefaults.resetDefaults();
+      try {
+        await loadEmptySvgAndPenMode();
+
+        component.onCanvasMouseDown({
+          button: 0,
+          clientX: 10,
+          clientY: 10,
+          detail: 1,
+          preventDefault: vi.fn()
+        } as unknown as MouseEvent);
+        component.onDocumentMouseMove({ clientX: 40, clientY: 20 } as MouseEvent);
+        fixture.detectChanges();
+
+        const previewWhileBand = fixture.nativeElement.querySelector(
+          '[data-testid="canvas-pen-path-preview"]'
+        ) as SVGPathElement | null;
+        expect(previewWhileBand?.getAttribute('stroke')).toBe(drawingDefaults.stroke());
+        expect(previewWhileBand?.getAttribute('stroke-width')).toBe(String(drawingDefaults.strokeWidth()));
+
+        const band = fixture.nativeElement.querySelector('[data-testid="canvas-pen-rubber-band"]') as SVGLineElement | null;
+        expect(band?.getAttribute('stroke')).toBe(drawingDefaults.stroke());
+
+        drawingDefaults.updateDefaults({ stroke: '#abc123', strokeWidth: 3.25 });
+        fixture.detectChanges();
+
+        expect(previewWhileBand?.getAttribute('stroke')).toBe('#abc123');
+        expect(previewWhileBand?.getAttribute('stroke-width')).toBe('3.25');
+        expect(band?.getAttribute('stroke')).toBe('#abc123');
+
+        component.onCanvasMouseDown({
+          button: 0,
+          clientX: 30,
+          clientY: 40,
+          detail: 1,
+          preventDefault: vi.fn()
+        } as unknown as MouseEvent);
+        component.onDocumentMouseMove({ clientX: 50, clientY: 50 } as MouseEvent);
+        fixture.detectChanges();
+
+        const curvePreview = fixture.nativeElement.querySelector('[data-testid="canvas-pen-curve-preview"]') as SVGPathElement | null;
+        expect(curvePreview).toBeTruthy();
+        expect(curvePreview?.getAttribute('stroke')).toBe('#abc123');
+        expect(curvePreview?.getAttribute('stroke-width')).toBe('3.25');
+
+        component.onDocumentMouseUp({ button: 0, clientX: 55, clientY: 55 } as MouseEvent);
+        component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+        fixture.detectChanges();
+
+        const committed = fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path') as SVGPathElement | null;
+        expect(committed?.getAttribute('stroke')).toBe('#abc123');
+        expect(committed?.getAttribute('stroke-width')).toBe('3.25');
+      } finally {
+        drawingDefaults.resetDefaults();
+      }
     });
 
     it('keeps pending endpoint fixed while drag updates cubic preview handles', async () => {

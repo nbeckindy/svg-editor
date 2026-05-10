@@ -77,6 +77,7 @@ import {
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
 import { insertPenNodeOnParsedPath } from '../../models/path-pen-insert';
 import { ClipboardService } from '../../services/clipboard.service';
+import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { SnapCandidateShape } from '../../services/snap.service';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
@@ -1740,7 +1741,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     private snap: SnapService,
     private cdr: ChangeDetectorRef,
     private editorHistory: EditorHistoryService,
-    private clipboard: ClipboardService
+    private clipboard: ClipboardService,
+    protected drawingDefaults: DrawingStyleDefaultsService
   ) {
     effect(() => {
       const incomingSvgContent = this.svgContent();
