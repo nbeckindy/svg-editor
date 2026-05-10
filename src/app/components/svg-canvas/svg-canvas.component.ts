@@ -215,8 +215,8 @@ export function selectionHandleRadiusOverlayPx(scale: number): number {
   return Math.min(HANDLE_RADIUS_MAX_SCREEN_PX, Math.max(HANDLE_RADIUS_MIN_SCREEN_PX, raw));
 }
 
-/** Outward offset for midpoint resize handles so they do not overlap skew handles (overlay px). */
-export function selectionResizeEdgeOutsetOverlayPx(scale: number): number {
+/** Outward offset for skew midpoint handles (past the bbox edge; overlay px). */
+export function selectionSkewEdgeOutsetOverlayPx(scale: number): number {
   const s = clampCanvasScaleForSelectionChrome(scale);
   return Math.max(8, Math.min(18, 14 / s));
 }
@@ -324,8 +324,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return selectionHandleRadiusOverlayPx(this.canvasView.scale);
   }
 
-  get selectionResizeEdgeOutset(): number {
-    return selectionResizeEdgeOutsetOverlayPx(this.canvasView.scale);
+  get selectionSkewEdgeOutset(): number {
+    return selectionSkewEdgeOutsetOverlayPx(this.canvasView.scale);
   }
 
   /** Rotate stem length and handle offset from selection top (inverse zoom, clamped 20–40 screen px). */

@@ -403,27 +403,27 @@
               data-resize-handle="n"
               data-testid="canvas-handle-resize-n"
               [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y - selectionResizeEdgeOutset"/>
+              [attr.cy]="hr.y"/>
             <circle
               class="selection-resize-handle selection-resize-edge-s"
               [attr.r]="selectionHandleRadiusOverlay"
               data-resize-handle="s"
               data-testid="canvas-handle-resize-s"
               [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y + hr.height + selectionResizeEdgeOutset"/>
+              [attr.cy]="hr.y + hr.height"/>
             <circle
               class="selection-resize-handle selection-resize-edge-e"
               [attr.r]="selectionHandleRadiusOverlay"
               data-resize-handle="e"
               data-testid="canvas-handle-resize-e"
-              [attr.cx]="hr.x + hr.width + selectionResizeEdgeOutset"
+              [attr.cx]="hr.x + hr.width"
               [attr.cy]="hr.y + hr.height / 2"/>
             <circle
               class="selection-resize-handle selection-resize-edge-w"
               [attr.r]="selectionHandleRadiusOverlay"
               data-resize-handle="w"
               data-testid="canvas-handle-resize-w"
-              [attr.cx]="hr.x - selectionResizeEdgeOutset"
+              [attr.cx]="hr.x"
               [attr.cy]="hr.y + hr.height / 2"/>
             <circle
               class="selection-skew-handle selection-skew-n"
@@ -431,27 +431,27 @@
               data-skew-handle="n"
               data-testid="canvas-handle-skew-n"
               [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y"/>
+              [attr.cy]="hr.y - selectionSkewEdgeOutset"/>
             <circle
               class="selection-skew-handle selection-skew-s"
               [attr.r]="selectionHandleRadiusOverlay"
               data-skew-handle="s"
               data-testid="canvas-handle-skew-s"
               [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y + hr.height"/>
+              [attr.cy]="hr.y + hr.height + selectionSkewEdgeOutset"/>
             <circle
               class="selection-skew-handle selection-skew-w"
               [attr.r]="selectionHandleRadiusOverlay"
               data-skew-handle="w"
               data-testid="canvas-handle-skew-w"
-              [attr.cx]="hr.x"
+              [attr.cx]="hr.x - selectionSkewEdgeOutset"
               [attr.cy]="hr.y + hr.height / 2"/>
             <circle
               class="selection-skew-handle selection-skew-e"
               [attr.r]="selectionHandleRadiusOverlay"
               data-skew-handle="e"
               data-testid="canvas-handle-skew-e"
-              [attr.cx]="hr.x + hr.width"
+              [attr.cx]="hr.x + hr.width + selectionSkewEdgeOutset"
               [attr.cy]="hr.y + hr.height / 2"/>
             <line
               class="selection-rotate-stem"

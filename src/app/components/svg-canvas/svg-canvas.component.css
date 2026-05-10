@@ -143,6 +143,16 @@
   cursor: se-resize;
 }
 
+.selection-resize-edge-n,
+.selection-resize-edge-s {
+  cursor: ns-resize;
+}
+
+.selection-resize-edge-e,
+.selection-resize-edge-w {
+  cursor: ew-resize;
+}
+
 .selection-skew-handle {
   pointer-events: all;
   fill: #ffffff;
