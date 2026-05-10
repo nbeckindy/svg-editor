@@ -219,26 +219,30 @@ export function computeEdgeNonUniformResizedUnion(
   let yMax: number;
   switch (edge) {
     case 'n':
+      // Opposite (south) edge fixed at by+h0; north edge follows pointer.
       xMin = bx;
       xMax = bx + w0;
-      yMin = Math.min(by, by + h0, p.y);
-      yMax = Math.max(by, by + h0, p.y);
+      yMin = Math.min(p.y, by + h0);
+      yMax = Math.max(p.y, by + h0);
       break;
     case 's':
+      // Opposite (north) edge fixed at by; south edge follows pointer.
       xMin = bx;
       xMax = bx + w0;
-      yMin = Math.min(by, by + h0, p.y);
-      yMax = Math.max(by, by + h0, p.y);
+      yMin = Math.min(by, p.y);
+      yMax = Math.max(by, p.y);
       break;
     case 'e':
-      xMin = Math.min(bx, bx + w0, p.x);
-      xMax = Math.max(bx, bx + w0, p.x);
+      // Opposite (west) edge fixed at bx; east edge follows pointer.
+      xMin = Math.min(bx, p.x);
+      xMax = Math.max(bx, p.x);
       yMin = by;
       yMax = by + h0;
       break;
     case 'w':
-      xMin = Math.min(bx, bx + w0, p.x);
-      xMax = Math.max(bx, bx + w0, p.x);
+      // Opposite (east) edge fixed at bx+w0; west edge follows pointer.
+      xMin = Math.min(bx + w0, p.x);
+      xMax = Math.max(bx + w0, p.x);
       yMin = by;
       yMax = by + h0;
       break;

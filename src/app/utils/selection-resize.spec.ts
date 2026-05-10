@@ -117,6 +117,32 @@ describe('computeEdgeNonUniformResizedUnion', () => {
     expect(out.height).toBe(50);
     expect(out.width).toBe(190);
   });
+
+  it('e: pointer between west and east edges shrinks width (east moves inward)', () => {
+    const out = computeEdgeNonUniformResizedUnion(u, 'e', { x: 80, y: 30 });
+    expect(out.x).toBe(10);
+    expect(out.y).toBe(20);
+    expect(out.width).toBe(70);
+    expect(out.height).toBe(50);
+  });
+
+  it('w: pointer between edges shrinks width (west moves inward)', () => {
+    const out = computeEdgeNonUniformResizedUnion(u, 'w', { x: 40, y: 30 });
+    expect(out.x).toBe(40);
+    expect(out.width).toBe(70);
+  });
+
+  it('n: pointer between top and bottom shrinks height', () => {
+    const out = computeEdgeNonUniformResizedUnion(u, 'n', { x: 50, y: 35 });
+    expect(out.y).toBe(35);
+    expect(out.height).toBe(35);
+  });
+
+  it('s: pointer between top and bottom shrinks height', () => {
+    const out = computeEdgeNonUniformResizedUnion(u, 's', { x: 50, y: 55 });
+    expect(out.y).toBe(20);
+    expect(out.height).toBe(35);
+  });
 });
 
 describe('computeScaleAnchorFromUnionResize', () => {
