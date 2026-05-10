@@ -2072,7 +2072,8 @@ export class SvgManipulationService {
   ): void {
     if (!this.svgInstance) return;
     const { sx, sy, ax, ay } = computeScaleAnchorFromUnionResize(handle, unionBefore, unionAfter);
-    if (!Number.isFinite(sx) || !Number.isFinite(sy) || sx === 0 || sy === 0) return;
+    const eps = 1e-9;
+    if (!Number.isFinite(sx) || !Number.isFinite(sy) || Math.abs(sx) < eps || Math.abs(sy) < eps) return;
     const T = new Matrix().scale(sx, sy, ax, ay);
     for (const id of shapeIds) {
       const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;

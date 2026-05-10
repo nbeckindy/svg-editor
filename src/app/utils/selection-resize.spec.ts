@@ -6,6 +6,7 @@ import {
   computeEdgeNonUniformResizedUnion,
   computeScaleAnchorFromUnionResize,
   computeProportionalResizedUnion,
+  draggedCornerOppositeAnchorOnBBox,
   oppositeCornerForHandle,
   MIN_UNION_SIZE
 } from './selection-resize';
@@ -119,12 +120,22 @@ describe('computeEdgeNonUniformResizedUnion', () => {
 });
 
 describe('computeScaleAnchorFromUnionResize', () => {
-  it('derives negative sx when SE corner moves past the NW anchor (horizontal flip)', () => {
-    const before = { x: 0, y: 0, width: 100, height: 50 };
-    const after = { x: -120, y: 0, width: 100, height: 50 };
+  it('uniform SE reflection: sx and sy match signed scale', () => {
+    const before = { x: 10, y: 20, width: 100, height: 50 };
+    const after = computeProportionalResizedUnion(before, 'se', { x: before.x - 50, y: before.y - 25 }, 0.001);
     const { sx, sy } = computeScaleAnchorFromUnionResize('se', before, after);
-    expect(sx).toBeLessThan(0);
-    expect(sy).toBe(1);
+    expect(sx).toBeCloseTo(-0.5);
+    expect(sy).toBeCloseTo(-0.5);
+  });
+});
+
+describe('draggedCornerOppositeAnchorOnBBox', () => {
+  it('returns TL opposite BR anchor after SE proportional flip', () => {
+    const anchor = { x: 10, y: 20 };
+    const after = { x: -40, y: -5, width: 50, height: 25 };
+    const p = draggedCornerOppositeAnchorOnBBox(anchor, after);
+    expect(p.x).toBeCloseTo(-40);
+    expect(p.y).toBeCloseTo(-5);
   });
 });
 

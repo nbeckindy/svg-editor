@@ -221,24 +221,24 @@ export function computeEdgeNonUniformResizedUnion(
     case 'n':
       xMin = bx;
       xMax = bx + w0;
-      yMin = Math.min(by + h0, p.y);
-      yMax = Math.max(by + h0, p.y);
+      yMin = Math.min(by, by + h0, p.y);
+      yMax = Math.max(by, by + h0, p.y);
       break;
     case 's':
       xMin = bx;
       xMax = bx + w0;
-      yMin = Math.min(by, p.y);
-      yMax = Math.max(by, p.y);
+      yMin = Math.min(by, by + h0, p.y);
+      yMax = Math.max(by, by + h0, p.y);
       break;
     case 'e':
-      xMin = Math.min(bx, p.x);
-      xMax = Math.max(bx, p.x);
+      xMin = Math.min(bx, bx + w0, p.x);
+      xMax = Math.max(bx, bx + w0, p.x);
       yMin = by;
       yMax = by + h0;
       break;
     case 'w':
-      xMin = Math.min(bx + w0, p.x);
-      xMax = Math.max(bx + w0, p.x);
+      xMin = Math.min(bx, bx + w0, p.x);
+      xMax = Math.max(bx, bx + w0, p.x);
       yMin = by;
       yMax = by + h0;
       break;
@@ -322,42 +322,35 @@ export function computeScaleAnchorFromUnionResize(
     let cy: number;
     let r0x: number;
     let r0y: number;
-    let r1x: number;
-    let r1y: number;
     switch (handle) {
       case 'se':
         cx = bx;
         cy = by;
         r0x = bx + w0;
         r0y = by + h0;
-        r1x = after.x + after.width;
-        r1y = after.y + after.height;
         break;
       case 'nw':
         cx = bx + w0;
         cy = by + h0;
         r0x = bx;
         r0y = by;
-        r1x = after.x;
-        r1y = after.y;
         break;
       case 'ne':
         cx = bx;
         cy = by + h0;
         r0x = bx + w0;
         r0y = by;
-        r1x = after.x + after.width;
-        r1y = after.y;
         break;
       case 'sw':
         cx = bx + w0;
         cy = by;
         r0x = bx;
         r0y = by + h0;
-        r1x = after.x;
-        r1y = after.y + after.height;
         break;
     }
+    const r1 = draggedCornerOppositeAnchorOnBBox({ x: cx, y: cy }, after);
+    const r1x = r1.x;
+    const r1y = r1.y;
     const dx0 = r0x - cx;
     const dy0 = r0y - cy;
     const dx1 = r1x - cx;
@@ -404,4 +397,33 @@ export function computeScaleAnchorFromUnionResize(
 export function oppositeCornerForHandle(union: BBox, handle: ResizeCorner): Point {
   const { ax, ay } = anchorAndVectorFromHandle(handle, union.width, union.height);
   return { x: union.x + ax, y: union.y + ay };
+}
+
+/**
+ * After axis-aligned resize about fixed anchor `anchor`, the dragged corner is the corner of `after`
+ * diagonally opposite the bbox vertex nearest to `anchor` (handles reflection when the anchor is
+ * still a corner of `after` but no longer at e.g. TL after flip).
+ */
+export function draggedCornerOppositeAnchorOnBBox(anchor: Point, after: BBox): Point {
+  const ax = after.x;
+  const ay = after.y;
+  const aw = after.width;
+  const ah = after.height;
+  const corners: Point[] = [
+    { x: ax, y: ay },
+    { x: ax + aw, y: ay },
+    { x: ax, y: ay + ah },
+    { x: ax + aw, y: ay + ah }
+  ];
+  let idx = 0;
+  let best = Infinity;
+  for (let i = 0; i < 4; i++) {
+    const d = Math.hypot(corners[i].x - anchor.x, corners[i].y - anchor.y);
+    if (d < best) {
+      best = d;
+      idx = i;
+    }
+  }
+  const opp = idx ^ 3;
+  return corners[opp];
 }
