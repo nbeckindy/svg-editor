@@ -28,9 +28,9 @@ describe('ToolStripComponent', () => {
     expect(selectorBtn.classList.contains('active')).toBe(true);
   });
 
-  it('should render nine tool buttons', () => {
+  it('should render ten tool buttons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelectorAll('.tool-btn').length).toBe(9);
+    expect(compiled.querySelectorAll('.tool-btn').length).toBe(10);
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {

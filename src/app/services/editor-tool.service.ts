@@ -3,6 +3,7 @@ import { Injectable, signal } from '@angular/core';
 export type EditorTool =
   | 'selector'
   | 'node-edit-selector'
+  | 'eyedropper'
   | 'zoom'
   | 'pan'
   | 'rect'

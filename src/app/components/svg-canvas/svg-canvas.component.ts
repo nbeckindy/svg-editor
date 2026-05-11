@@ -78,6 +78,8 @@ import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment
 import { insertPenNodeOnParsedPath } from '../../models/path-pen-insert';
 import { ClipboardService } from '../../services/clipboard.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
+import { SelectionPaintApplyService } from '../../services/selection-paint-apply.service';
+import { sampleSolidComputedPaint } from '../../utils/svg-computed-color-sample';
 import { SnapCandidateShape } from '../../services/snap.service';
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
@@ -1127,6 +1129,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
         event.preventDefault();
         return;
       }
+      if (this.editorTool.getCurrentTool() === 'eyedropper') {
+        this.editorTool.setTool('selector');
+        event.preventDefault();
+        this.cdr.markForCheck();
+        return;
+      }
       if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
         this.clearPenDrawingState();
         event.preventDefault();
@@ -1325,8 +1333,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   /**
-   * Single-key tool switching (no modifiers). V/A/P/R/O/L/T/H/Z match common vector editors;
-   * B and I are reserved (brush, eyedropper) and swallowed until those tools exist.
+   * Single-key tool switching (no modifiers). V/A/P/R/O/L/T/H/Z/I match common vector editors;
+   * B is reserved (brush) until implemented.
    */
   private tryEditorToolShortcut(event: KeyboardEvent): boolean {
     if (event.ctrlKey || event.metaKey || event.altKey) return false;
@@ -1343,7 +1351,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       t: 'text',
       h: 'pan',
       z: 'zoom',
-      i: 'reserved'
+      i: 'eyedropper'
     };
     const dest = toolByKey[key];
     if (!dest) return false;
@@ -1817,7 +1825,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     private cdr: ChangeDetectorRef,
     private editorHistory: EditorHistoryService,
     private clipboard: ClipboardService,
-    protected drawingDefaults: DrawingStyleDefaultsService
+    protected drawingDefaults: DrawingStyleDefaultsService,
+    private selectionPaintApply: SelectionPaintApplyService
   ) {
     effect(() => {
       const incomingSvgContent = this.svgContent();
@@ -2424,6 +2433,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
           this.cdr.detectChanges();
         }, 0);
       }
+      return;
+    }
+
+    if (this.editorTool.getCurrentTool() === 'eyedropper') {
+      this.tryEyedropperSample(event);
       return;
     }
 
@@ -3990,5 +4004,45 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (!svg) return false;
     const el = svg.findOne(`#${id}`)?.node as Element | null;
     return el?.tagName?.toLowerCase?.() === 'path';
+  }
+
+  private tryEyedropperSample(event: MouseEvent): void {
+    if (!this.svgContent() || !this.canvasView.isInitialized()) return;
+    const el = this.findEyedropperHitElement(event.clientX, event.clientY);
+    if (!el) return;
+    const kind = event.shiftKey ? 'stroke' : 'fill';
+    const color = sampleSolidComputedPaint(el, kind);
+    if (!color) return;
+    if (kind === 'fill') {
+      this.selectionPaintApply.applyFillColor(color);
+    } else {
+      this.selectionPaintApply.applyStrokeColor(color);
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** Skip selection UI so `elementsFromPoint` reaches document shapes. */
+  private isEyedropperUiChrome(el: Element): boolean {
+    if (el.hasAttribute('data-resize-handle')) return true;
+    if (el.hasAttribute('data-skew-handle')) return true;
+    if (el.hasAttribute('data-rotate-handle')) return true;
+    if (el.hasAttribute('data-pen-outgoing-handle')) return true;
+    if (el.classList.contains('path-node-anchor') || el.classList.contains('path-node-control-handle')) return true;
+    return false;
+  }
+
+  private findEyedropperHitElement(clientX: number, clientY: number): Element | null {
+    const container = this.svgContainer()?.nativeElement;
+    if (!container) return null;
+    const stack = document.elementsFromPoint(clientX, clientY);
+    for (const node of stack) {
+      if (!(node instanceof Element)) continue;
+      if (this.isEyedropperUiChrome(node)) continue;
+      if (node.closest('svg[data-testid="canvas-selection-overlay-svg"]')) continue;
+      if (!container.contains(node)) continue;
+      if (!node.closest('[data-editor-content-group]')) continue;
+      return node;
+    }
+    return null;
   }
 }

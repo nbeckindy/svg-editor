@@ -223,6 +223,10 @@
   cursor: crosshair;
 }
 
+.canvas-container.eyedropper-mode .svg-canvas {
+  cursor: crosshair;
+}
+
 .zoom-marquee {
   position: fixed;
   pointer-events: none;
