@@ -34,6 +34,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 |------:|------|------|-------------|--------|-------|
 | 17 | Tool parity and pen authoring | [tool-parity-pen](./epics/tool-parity-pen.md) | `svg-editor-j24` | `OPEN` | Transform/readout gaps + pen parity (`j24.1`–`j24.7`, arc phased after Q/S/T); does not reopen closed epics |
 | 18 | Always-visible paint defaults | [always-visible-paint-defaults](./epics/always-visible-paint-defaults.md) | `svg-editor-6g0` | `OPEN` | Single contextual paint controls + drawing defaults across creation flows |
+| 19 | Insert raster images into SVG | [raster-image-insert](./epics/raster-image-insert.md) | `svg-editor-e4s` | `OPEN` | Spec → insert API → command → toolbar + drop → parity + export + tests (`e4s.1`–`e4s.8`) |
 
 ## Free-standing issues
 
@@ -58,6 +59,17 @@ All items below are **children of epic** [`svg-editor-j24`](./epics/tool-parity-
 |--------|--------|
 | Transform / readouts | `svg-editor-e9a`, `svg-editor-jqe`, `svg-editor-zc7`, `svg-editor-269`, `svg-editor-0zh`, `svg-editor-hya` |
 | Pen authoring parity | `svg-editor-j24.1` … `svg-editor-j24.7` (phase: Q/S/T in `j24.2`, then `A` in `j24.7`) |
+
+## Insert raster images (epic `svg-editor-e4s`)
+
+All items below are **children of epic** [`svg-editor-e4s`](./epics/raster-image-insert.md) (`bd show svg-editor-e4s`).
+
+| Theme | bd IDs |
+|--------|--------|
+| Spec + export policy | `svg-editor-e4s.1`, `svg-editor-e4s.7` |
+| Insert + history | `svg-editor-e4s.2`, `svg-editor-e4s.3` |
+| UX entry points | `svg-editor-e4s.4`, `svg-editor-e4s.5` |
+| Parity + QA | `svg-editor-e4s.6`, `svg-editor-e4s.8` |
 
 ## Always-visible paint defaults (epic `svg-editor-6g0`)
 
