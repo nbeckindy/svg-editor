@@ -101,7 +101,7 @@ describe('pathSvgReflectStateAfter', () => {
 });
 
 describe('placementIllustratorStyleCubicControlPoints', () => {
-  it('puts P1 on chord thirds and P2 back along drag from the new anchor', () => {
+  it('fixes P1 on chord thirds and places P2 opposite drag at chord/3 (equal handle lengths)', () => {
     const c = placementIllustratorStyleCubicControlPoints(
       { x: 10, y: 10 },
       { x: 20, y: 20 },
@@ -110,8 +110,12 @@ describe('placementIllustratorStyleCubicControlPoints', () => {
     );
     expect(c.x1).toBeCloseTo(13.333333, 4);
     expect(c.y1).toBeCloseTo(13.333333, 4);
-    expect(c.x2).toBeCloseTo(12.218483, 3);
-    expect(c.y2).toBeCloseTo(17.406161, 3);
+    const chord = Math.hypot(10, 10);
+    const L = chord / 3;
+    expect(Math.hypot(c.x1 - 10, c.y1 - 10)).toBeCloseTo(L, 5);
+    expect(Math.hypot(20 - c.x2, 20 - c.y2)).toBeCloseTo(L, 5);
+    expect(c.x2).toBeCloseTo(15.527864, 3);
+    expect(c.y2).toBeCloseTo(18.509288, 3);
   });
 
   it('falls back to symmetric chord thirds when drag length is ~0', () => {

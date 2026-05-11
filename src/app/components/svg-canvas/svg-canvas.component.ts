@@ -540,9 +540,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   /**
    * Alt/Option while dragging a pen curve (default `C`): **end-handle-only** placement — `(x2,y2)`
    * follows the pointer, `(x1,y1)` fixed on chord-thirds from the previous anchor.
-   * Without Alt: **Illustrator-like** cubic — drag from the new anchor sets incoming tangent at the
-   * new vertex; `(x1,y1)` stays on chord-thirds from the previous anchor.
-   */
+   * Without Alt: **fixed start handle** (chord-third from previous anchor) + **incoming handle** at the
+   * new anchor along the drag, with **same length as the start handle** (chord/3 each side).
+    */
   private penPendingCurveAltChord = false;
   /** Shift during Bézier / outgoing-handle drag: snap handle direction to 45° from anchor/end. */
   private penPendingShiftAngleSnap = false;
@@ -602,7 +602,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return appendLineToD(base, this.penPointerSvg.x, this.penPointerSvg.y);
   }
 
-  /** Live Bézier preview `d` (committed segments + pending segment: default `C`, Ctrl+drag `Q` / `S` / `T`). */
+  /** Live Bézier preview `d` (committed segments + pending segment; default `C` while Ctrl-alt types are off). */
   get penCurvePreviewPathD(): string | null {
     if (
       !this.penPendingSegment ||
@@ -2899,26 +2899,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   /**
-   * After Shift angle snap: Alt end-handle-only mode updates only `(x2,y2)`; Illustrator-style keeps
-   * `(x1,y1)` on chord-thirds and snaps `(x2,y2)` toward 45° from `end`.
+   * After Shift angle snap: snap incoming handle `(x2,y2)` to 45° from `end`, preserving distance
+   * `‖end − (x2,y2)‖`. Keeps `(x1,y1)` unchanged (fixed start handle + directed end handle).
    */
   private snapPenPendingCubicControls(
-    anchor: { x: number; y: number },
+    _anchor: { x: number; y: number },
     end: { x: number; y: number },
     controls: CubicControlPoints,
-    altEndHandleOnlyPlacement: boolean
+    _altEndHandleOnlyPlacement: boolean
   ): CubicControlPoints {
     if (!this.penPendingShiftAngleSnap) return controls;
     const s = snapVectorTo45DegFrom(end, { x: controls.x2, y: controls.y2 });
-    if (altEndHandleOnlyPlacement) {
-      return { ...controls, x2: s.x, y2: s.y };
-    }
-    return {
-      x1: anchor.x + end.x - s.x,
-      y1: anchor.y + end.y - s.y,
-      x2: s.x,
-      y2: s.y
-    };
+    return { ...controls, x2: s.x, y2: s.y };
   }
 
   /** Alt: use {@link placementPointerCubicControlPoints} (pointer on end handle only). */

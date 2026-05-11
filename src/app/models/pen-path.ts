@@ -330,17 +330,13 @@ export function placementPointerCubicControlPoints(
   };
 }
 
-/** Length scale from drag distance → incoming handle length (Illustrator-like pen). */
-const ILLUSTRATOR_PEN_INCOMING_FROM_DRAG = 0.55;
-/** Cap incoming handle length as a fraction of chord (keeps handles from overshooting). */
-const ILLUSTRATOR_PEN_INCOMING_CAP_CHORD = 0.58;
-
 /**
- * Illustrator / Inkscape–style pen click-drag for a cubic `P0→P3`:
- * - `P1` stays at the **chord-third** from `p0` (corner-like outgoing from the previous anchor).
- * - Drag from the new anchor (`dragStart` ≈ `p3`) sets the **incoming tangent at `p3`**:
- *   `P2` lies on the ray from `p3` opposite the drag direction, with length derived from drag length
- *   (capped relative to chord length).
+ * Pen click-drag cubic `P0→P3` with **fixed outgoing** from `p0` and **symmetric handle lengths** at `p3`:
+ * - `P1` stays at the **chord-third** from `p0` (same as {@link symmetricCubicControlPoints}; previous
+ *   anchor’s side does not move with the drag).
+ * - Drag from the new anchor (`dragStart` ≈ `p3`) sets direction only: `P2` lies on the ray from `p3`
+ *   opposite the drag, at distance **chord/3**, so `‖P1−P0‖ = ‖P3−P2‖` (balanced “two-handle” feel at
+ *   the new node).
  * - When `‖dragCurrent − dragStart‖` is ~0, falls back to symmetric chord-thirds.
  */
 export function placementIllustratorStyleCubicControlPoints(
@@ -366,10 +362,7 @@ export function placementIllustratorStyleCubicControlPoints(
 
   const ux = ddx / dragLen;
   const uy = ddy / dragLen;
-  const k = Math.min(
-    dragLen * ILLUSTRATOR_PEN_INCOMING_FROM_DRAG,
-    chordLen * ILLUSTRATOR_PEN_INCOMING_CAP_CHORD
-  );
+  const k = chordLen / 3;
   return {
     x1: base.x1,
     y1: base.y1,
