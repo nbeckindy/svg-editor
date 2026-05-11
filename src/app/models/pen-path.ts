@@ -295,9 +295,8 @@ export function dragBendSmoothCubicSecondControl(
 }
 
 /**
- * Cubic controls for pen click-drag placement (j24.9): `(x2,y2)` always follows `pointer` (end-side
- * handle). With `breakHandleSymmetry` true, `(x1,y1)` stays on chord thirds from `p0` (only the new
- * vertex’s handle is edited). With false, `(x1,y1)` mirrors for smooth symmetry (`P1 = P0 + P3 - P2`).
+ * Pointer-locked end handle for pen Alt-mode: `(x2,y2)` is `pointer`. With `breakHandleSymmetry` true,
+ * `(x1,y1)` stays on chord thirds from `p0`. With false, `(x1,y1)` mirrors (`P1 = P0 + P3 - P2`).
  */
 export function placementPointerCubicControlPoints(
   p0: { x: number; y: number },
@@ -325,6 +324,54 @@ export function placementPointerCubicControlPoints(
     y1: p0.y + p3.y - pointer.y,
     x2: pointer.x,
     y2: pointer.y
+  };
+}
+
+/** Length scale from drag distance → incoming handle length (Illustrator-like pen). */
+const ILLUSTRATOR_PEN_INCOMING_FROM_DRAG = 0.55;
+/** Cap incoming handle length as a fraction of chord (keeps handles from overshooting). */
+const ILLUSTRATOR_PEN_INCOMING_CAP_CHORD = 0.58;
+
+/**
+ * Illustrator / Inkscape–style pen click-drag for a cubic `P0→P3`:
+ * - `P1` stays at the **chord-third** from `p0` (corner-like outgoing from the previous anchor).
+ * - Drag from the new anchor (`dragStart` ≈ `p3`) sets the **incoming tangent at `p3`**:
+ *   `P2` lies on the ray from `p3` opposite the drag direction, with length derived from drag length
+ *   (capped relative to chord length).
+ * - When `‖dragCurrent − dragStart‖` is ~0, falls back to symmetric chord-thirds.
+ */
+export function placementIllustratorStyleCubicControlPoints(
+  p0: { x: number; y: number },
+  p3: { x: number; y: number },
+  dragStart: { x: number; y: number },
+  dragCurrent: { x: number; y: number }
+): CubicControlPoints {
+  const base = symmetricCubicControlPoints(p0, p3);
+  const dx = p3.x - p0.x;
+  const dy = p3.y - p0.y;
+  const chordLen = Math.hypot(dx, dy);
+  if (chordLen < 1e-9) {
+    return base;
+  }
+
+  const ddx = dragCurrent.x - dragStart.x;
+  const ddy = dragCurrent.y - dragStart.y;
+  const dragLen = Math.hypot(ddx, ddy);
+  if (dragLen < 1e-9) {
+    return base;
+  }
+
+  const ux = ddx / dragLen;
+  const uy = ddy / dragLen;
+  const k = Math.min(
+    dragLen * ILLUSTRATOR_PEN_INCOMING_FROM_DRAG,
+    chordLen * ILLUSTRATOR_PEN_INCOMING_CAP_CHORD
+  );
+  return {
+    x1: base.x1,
+    y1: base.y1,
+    x2: p3.x - ux * k,
+    y2: p3.y - uy * k
   };
 }
 

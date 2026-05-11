@@ -59,6 +59,7 @@ import {
   appendQuadraticToD,
   appendSmoothCubicToD,
   appendSmoothQuadraticToD,
+  placementIllustratorStyleCubicControlPoints,
   placementPointerCubicControlPoints,
   placementPointerQuadraticControlPoint,
   lastCommittedVertex,
@@ -534,9 +535,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private penPendingLastClient: { x: number; y: number } | null = null;
   private penPendingDragSvg: { x: number; y: number } | null = null;
   /**
-   * Alt/Option while dragging a pen curve: use symmetric mirrored cubic handles (`P1 = P0 + P3 − P2`).
-   * Default (no Alt): only the new anchor’s incoming handle `(x2,y2)` follows the pointer; `(x1,y1)`
-   * stays on chord thirds from the previous vertex.
+   * Alt/Option while dragging a pen curve (default `C`): **end-handle-only** placement — `(x2,y2)`
+   * follows the pointer, `(x1,y1)` fixed on chord-thirds from the previous anchor.
+   * Without Alt: **Illustrator-like** cubic — drag from the new anchor sets incoming tangent at the
+   * new vertex; `(x1,y1)` stays on chord-thirds from the previous anchor.
    */
   private penPendingCurveAltChord = false;
   /** Shift during Bézier / outgoing-handle drag: snap handle direction to 45° from anchor/end. */
@@ -624,13 +626,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
-        const endOnly = this.penPendingPlacementCubicEndHandleOnly();
-        let { x1, y1, x2, y2 } = this.snapPenPendingCubicControls(
-          anchor,
-          end,
-          placementPointerCubicControlPoints(anchor, end, dragCurrent, endOnly),
-          endOnly
-        );
+        const altEndOnly = this.penPendingCubicAltEndHandleOnly();
+        const raw = altEndOnly
+          ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
+          : placementIllustratorStyleCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
+        let { x1, y1, x2, y2 } = this.snapPenPendingCubicControls(anchor, end, raw, altEndOnly);
         const p1 = toOverlay(x1, y1);
         const p2 = toOverlay(x2, y2);
         return [
@@ -746,13 +746,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
-        const endOnly = this.penPendingPlacementCubicEndHandleOnly();
-        const c = this.snapPenPendingCubicControls(
-          anchor,
-          end,
-          placementPointerCubicControlPoints(anchor, end, dragCurrent, endOnly),
-          endOnly
-        );
+        const altEndOnly = this.penPendingCubicAltEndHandleOnly();
+        const raw = altEndOnly
+          ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
+          : placementIllustratorStyleCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
+        const c = this.snapPenPendingCubicControls(anchor, end, raw, altEndOnly);
         hx = c.x2;
         hy = c.y2;
         break;
@@ -2898,17 +2896,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   }
 
   /**
-   * After Shift angle snap: end-handle-only placement updates only `(x2,y2)`; mirrored mode re-projects `x1,y1`.
+   * After Shift angle snap: Alt end-handle-only mode updates only `(x2,y2)`; Illustrator-style keeps
+   * `(x1,y1)` on chord-thirds and snaps `(x2,y2)` toward 45° from `end`.
    */
   private snapPenPendingCubicControls(
     anchor: { x: number; y: number },
     end: { x: number; y: number },
     controls: CubicControlPoints,
-    endHandleOnlyPlacement: boolean
+    altEndHandleOnlyPlacement: boolean
   ): CubicControlPoints {
     if (!this.penPendingShiftAngleSnap) return controls;
     const s = snapVectorTo45DegFrom(end, { x: controls.x2, y: controls.y2 });
-    if (endHandleOnlyPlacement) {
+    if (altEndHandleOnlyPlacement) {
       return { ...controls, x2: s.x, y2: s.y };
     }
     return {
@@ -2919,9 +2918,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     };
   }
 
-  /** @see penPendingCurveAltChord — passed as `breakHandleSymmetry` to {@link placementPointerCubicControlPoints}. */
-  private penPendingPlacementCubicEndHandleOnly(): boolean {
-    return !this.penPendingCurveAltChord;
+  /** Alt: use {@link placementPointerCubicControlPoints} (pointer on end handle only). */
+  private penPendingCubicAltEndHandleOnly(): boolean {
+    return this.penPendingCurveAltChord;
   }
 
   private appendPenPendingCurveToBaseD(baseD: string): string {
@@ -2935,13 +2934,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     switch (kind) {
       case 'cubic': {
-        const endOnly = this.penPendingPlacementCubicEndHandleOnly();
-        const controls = this.snapPenPendingCubicControls(
-          anchor,
-          end,
-          placementPointerCubicControlPoints(anchor, end, dragCurrent, endOnly),
-          endOnly
-        );
+        const altEndOnly = this.penPendingCubicAltEndHandleOnly();
+        const raw = altEndOnly
+          ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
+          : placementIllustratorStyleCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
+        const controls = this.snapPenPendingCubicControls(anchor, end, raw, altEndOnly);
         return appendCubicToD(baseD, controls, end);
       }
       case 'quadratic': {
@@ -3043,13 +3040,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const segs = this.penSession.getSegments();
     switch (kind) {
       case 'cubic': {
-        const endOnly = this.penPendingPlacementCubicEndHandleOnly();
-        const c = this.snapPenPendingCubicControls(
-          anchor,
-          end,
-          placementPointerCubicControlPoints(anchor, end, dragCurrent, endOnly),
-          endOnly
-        );
+        const altEndOnly = this.penPendingCubicAltEndHandleOnly();
+        const raw = altEndOnly
+          ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
+          : placementIllustratorStyleCubicControlPoints(anchor, end, startSvg, dragCurrent);
+        const c = this.snapPenPendingCubicControls(anchor, end, raw, altEndOnly);
         this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
         break;
       }

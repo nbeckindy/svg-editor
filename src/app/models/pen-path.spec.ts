@@ -6,6 +6,7 @@ import {
   dragBendCubicControlPoints,
   dragBendQuadraticControlPoint,
   dragBendSmoothCubicSecondControl,
+  placementIllustratorStyleCubicControlPoints,
   placementPointerCubicControlPoints,
   placementPointerQuadraticControlPoint,
   lastCommittedVertex,
@@ -99,8 +100,33 @@ describe('pathSvgReflectStateAfter', () => {
   });
 });
 
-describe('placementPointerCubicControlPoints (j24.9 pen / handle parity)', () => {
-  it('with breakHandleSymmetry false (Alt): mirrors start control for symmetric C', () => {
+describe('placementIllustratorStyleCubicControlPoints', () => {
+  it('puts P1 on chord thirds and P2 back along drag from the new anchor', () => {
+    const c = placementIllustratorStyleCubicControlPoints(
+      { x: 10, y: 10 },
+      { x: 20, y: 20 },
+      { x: 20, y: 20 },
+      { x: 35, y: 25 }
+    );
+    expect(c.x1).toBeCloseTo(13.333333, 4);
+    expect(c.y1).toBeCloseTo(13.333333, 4);
+    expect(c.x2).toBeCloseTo(12.218483, 3);
+    expect(c.y2).toBeCloseTo(17.406161, 3);
+  });
+
+  it('falls back to symmetric chord thirds when drag length is ~0', () => {
+    const c = placementIllustratorStyleCubicControlPoints(
+      { x: 0, y: 0 },
+      { x: 9, y: 0 },
+      { x: 9, y: 0 },
+      { x: 9, y: 0 }
+    );
+    expect(c).toEqual({ x1: 3, y1: 0, x2: 6, y2: 0 });
+  });
+});
+
+describe('placementPointerCubicControlPoints (Alt end-handle lock)', () => {
+  it('with breakHandleSymmetry false: mirrors start control for symmetric C', () => {
     const c = placementPointerCubicControlPoints(
       { x: 0, y: 0 },
       { x: 9, y: 0 },
@@ -110,7 +136,7 @@ describe('placementPointerCubicControlPoints (j24.9 pen / handle parity)', () =>
     expect(c).toEqual({ x1: 3, y1: 3, x2: 6, y2: -3 });
   });
 
-  it('with breakHandleSymmetry true (default pen): chord thirds on start handle, end handle at pointer', () => {
+  it('with breakHandleSymmetry true: chord thirds on start handle, end handle at pointer', () => {
     const c = placementPointerCubicControlPoints(
       { x: 0, y: 0 },
       { x: 9, y: 0 },
