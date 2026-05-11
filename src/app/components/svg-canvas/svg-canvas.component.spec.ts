@@ -4683,9 +4683,9 @@ describe('SvgCanvasComponent', () => {
       expect(d).toContain('C');
       expect(d).toContain(' 20 20');
       expect(d).not.toContain('C 13.333333 13.333333 16.666667 16.666667 20 20');
-      // Default: fixed chord-third at previous anchor; incoming handle chord/3 along -drag.
+      // Default: Illustrator-like incoming tangent from drag; P1 on chord thirds.
       expect(d).toContain('C 13.333333 13.333333');
-      expect(d).toMatch(/15\.527\d+ 18\.509\d+ 20 20/);
+      expect(d).toMatch(/12\.218\d+ 17\.406\d+ 20 20/);
     });
 
     it('renders dashed pending-curve handle guide while dragging past curve threshold (j24.9)', async () => {
