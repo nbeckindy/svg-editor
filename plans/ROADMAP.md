@@ -35,6 +35,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 17 | Tool parity and pen authoring | [tool-parity-pen](./epics/tool-parity-pen.md) | `svg-editor-j24` | `OPEN` | Transform/readout gaps + pen parity (`j24.1`–`j24.7`, arc phased after Q/S/T); does not reopen closed epics |
 | 18 | Always-visible paint defaults | [always-visible-paint-defaults](./epics/always-visible-paint-defaults.md) | `svg-editor-6g0` | `OPEN` | Single contextual paint controls + drawing defaults across creation flows |
 | 19 | Insert raster images into SVG | [raster-image-insert](./epics/raster-image-insert.md) | `svg-editor-e4s` | `OPEN` | Spec → insert API → command → toolbar + drop → parity + export + tests (`e4s.1`–`e4s.8`) |
+| 20 | Text editing refinement | [text-editing-refinement](./epics/text-editing-refinement.md) | `svg-editor-79x` | `OPEN` | Live typographic preview while placing/editing text; first-class text outline (stroke) + semantics (`79x.1`–`79x.4`); builds on closed `nkz` |
 
 ## Free-standing issues
 
@@ -59,6 +60,16 @@ All items below are **children of epic** [`svg-editor-j24`](./epics/tool-parity-
 |--------|--------|
 | Transform / readouts | `svg-editor-e9a`, `svg-editor-jqe`, `svg-editor-zc7`, `svg-editor-269`, `svg-editor-0zh`, `svg-editor-hya` |
 | Pen authoring parity | `svg-editor-j24.1` … `svg-editor-j24.7` (phase: Q/S/T in `j24.2`, then `A` in `j24.7`) |
+
+## Text editing refinement (epic `svg-editor-79x`)
+
+All items below are **children of epic** [`svg-editor-79x`](./epics/text-editing-refinement.md) (`bd show svg-editor-79x`). Follow-on to closed [text editing](./epics/text-editing.md) (`svg-editor-nkz`).
+
+| Theme | bd IDs |
+|--------|--------|
+| Live preview (place + edit) | `svg-editor-79x.1`, `svg-editor-79x.2` |
+| Text outline / stroke semantics | `svg-editor-79x.3` |
+| Tests and polish | `svg-editor-79x.4` (depends on `.1`–`.3`) |
 
 ## Insert raster images (epic `svg-editor-e4s`)
 
@@ -136,6 +147,7 @@ flowchart LR
   subgraph phase3 [Phase 3 - Backlog]
     e17[tool_parity_pen_j24]
     e18[always_visible_paint_defaults_6g0]
+    e20[text_editing_refinement_79x]
   end
 
   e15 --> e17
@@ -157,6 +169,7 @@ flowchart LR
 10. ~~**`svg-editor-e1x`** (gradient editor)~~ -- **DONE**
 11. **Epic 17 ([tool-parity-pen](./epics/tool-parity-pen.md), `svg-editor-j24`):** transform parity (`svg-editor-e9a` … `svg-editor-hya`) and pen parity (`svg-editor-j24.1` … `svg-editor-j24.7`, with `j24.7` blocked by `j24.2` phase 1); see epic plan for order and acceptance.
 12. **Epic 18 ([always-visible-paint-defaults](./epics/always-visible-paint-defaults.md), `svg-editor-6g0`):** always-visible fill/stroke/stroke-width controls, canonical defaults service, creation-flow wiring, and regression coverage.
+13. **Epic 20 ([text-editing-refinement](./epics/text-editing-refinement.md), `svg-editor-79x`):** live font/size/style preview for text tool and inline edit; text outline (stroke) UX and paint-order policy; tests (`79x.1`–`79x.4`).
 
 ## Beads epic references
 
@@ -165,6 +178,7 @@ Status/progress below is current as of 2026-05-06.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
+| text-editing-refinement | `svg-editor-79x` | Text editing refinement | `OPEN` | 0/4 |
 | tool-parity-pen | `svg-editor-j24` | Tool parity and pen authoring | `OPEN` | 0/13 |
 | always-visible-paint-defaults | `svg-editor-6g0` | Always-visible paint defaults | `OPEN` | 0/5 |
 | selection-interaction | `svg-editor-3b7` | Multi-select and keyboard shortcuts | `CLOSED` | 8/8 |
