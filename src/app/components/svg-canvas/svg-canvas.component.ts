@@ -529,7 +529,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     anchor: { x: number; y: number };
     startClient: { x: number; y: number };
     startSvg: { x: number; y: number };
-    /** When true (Ctrl while placing the point; ⌘ reserved for snap-off per j24.1), dragging authors `Q` / `S` / `T` vs default `C`. */
+    /**
+     * When true, curve drag would author `Q` / `S` / `T` vs default `C` (see {@link penDragCurveAuthoringKind}).
+     * **Currently always false** — Ctrl alternate curve types are disabled until UX makes the mode obvious (bead).
+     */
     ctrlCurve: boolean;
   } | null = null;
   private penPendingLastClient: { x: number; y: number } | null = null;
@@ -3331,7 +3334,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       anchor: { x: anchor.x, y: anchor.y },
       startClient: { x: event.clientX, y: event.clientY },
       startSvg: { x: pt.x, y: pt.y },
-      ctrlCurve: event.ctrlKey
+      // Ctrl (or ⌘) + drag once selected `Q` / `S` / `T` authoring vs `C`. Disabled: easy to trigger by
+      // accident and invisible without affordances. Revisit: `bd show svg-editor-h76`.
+      // ctrlCurve: event.ctrlKey,
+      ctrlCurve: false
     };
     this.penPendingLastClient = { x: event.clientX, y: event.clientY };
     this.penPendingDragSvg = { x: pt.x, y: pt.y };
