@@ -3957,6 +3957,34 @@ describe('SvgCanvasComponent', () => {
       expect(editorToolService.getCurrentTool()).toBe('selector');
     });
 
+    it('closing segment uses reflected P1 when last committed node has a handle', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      // node 1 at (10,10) — start anchor
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      // node 2 at (100,10) drag down to (100,20) → C with P2=(100,4.5)
+      // k = min(10*0.55, 90*0.58) = 5.5; P2 = (100, 4.5)
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+      // close: click on start node (10,10) — within close radius
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 10, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      // Closing segment: C with reflected P1=(100,15.5), P2=start=(10,10), then Z
+      expect(d).toContain('C 100 15.5 10 10 10 10 Z');
+      expect(editorToolService.getCurrentTool()).toBe('selector');
+    });
+
     it('picks up open path continuation near endpoint; extend is single EditPath undo', async () => {
       await loadSvgAndPenMode(
         '<svg viewBox="0 0 100 100"><path id="open-a" d="M 10 10 L 50 40" fill="none" stroke="black"/></svg>'

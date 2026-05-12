@@ -3291,7 +3291,23 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     this.clearPenFinishFeedback();
-    let finalClosed = closePath ? `${d} Z` : d;
+    let finalClosed: string;
+    if (closePath) {
+      const st = penReflectStateAfterCommitted(finishingSegsSnapshot);
+      const firstSeg = finishingSegsSnapshot[0];
+      if (st?.canReflectCubic && firstSeg?.type === 'M') {
+        finalClosed =
+          appendCubicToD(
+            d,
+            { x1: 2 * st.x - st.cubicCp2X, y1: 2 * st.y - st.cubicCp2Y, x2: firstSeg.x, y2: firstSeg.y },
+            { x: firstSeg.x, y: firstSeg.y }
+          ) + ' Z';
+      } else {
+        finalClosed = `${d} Z`;
+      }
+    } else {
+      finalClosed = d;
+    }
 
     const cont = this.penContinuingPathRewrite;
     if (cont) {
