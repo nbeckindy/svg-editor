@@ -630,12 +630,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     switch (kind) {
       case 'cubic': {
         const altEndOnly = this.penPendingCubicAltEndHandleOnly();
+        const isFirstSeg = !altEndOnly && penPathOnlyMoveto(this.penSession.getSegments());
         const raw = altEndOnly
           ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
           : placementIllustratorStyleCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
-        let { x1, y1, x2, y2 } = this.snapPenPendingCubicControls(anchor, end, raw, altEndOnly);
-        const p1 = toOverlay(x1, y1);
+        const adjusted = isFirstSeg ? { ...raw, x1: anchor.x, y1: anchor.y } : raw;
+        let { x1, y1, x2, y2 } = this.snapPenPendingCubicControls(anchor, end, adjusted, altEndOnly);
         const p2 = toOverlay(x2, y2);
+        if (isFirstSeg) {
+          return [{ cx: p2.x, cy: p2.y }];
+        }
+        const p1 = toOverlay(x1, y1);
         return [
           { cx: p1.x, cy: p1.y },
           { cx: p2.x, cy: p2.y }
@@ -2938,10 +2943,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     switch (kind) {
       case 'cubic': {
         const altEndOnly = this.penPendingCubicAltEndHandleOnly();
+        const isFirstSeg = !altEndOnly && penPathOnlyMoveto(segs);
         const raw = altEndOnly
           ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
           : placementIllustratorStyleCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
-        const controls = this.snapPenPendingCubicControls(anchor, end, raw, altEndOnly);
+        const adjusted = isFirstSeg ? { ...raw, x1: anchor.x, y1: anchor.y } : raw;
+        const controls = this.snapPenPendingCubicControls(anchor, end, adjusted, altEndOnly);
         return appendCubicToD(baseD, controls, end);
       }
       case 'quadratic': {
@@ -3044,10 +3051,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     switch (kind) {
       case 'cubic': {
         const altEndOnly = this.penPendingCubicAltEndHandleOnly();
+        const isFirstSeg = !altEndOnly && penPathOnlyMoveto(segs);
         const raw = altEndOnly
           ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
           : placementIllustratorStyleCubicControlPoints(anchor, end, startSvg, dragCurrent);
-        const c = this.snapPenPendingCubicControls(anchor, end, raw, altEndOnly);
+        const adjusted = isFirstSeg ? { ...raw, x1: anchor.x, y1: anchor.y } : raw;
+        const c = this.snapPenPendingCubicControls(anchor, end, adjusted, altEndOnly);
         this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
         break;
       }

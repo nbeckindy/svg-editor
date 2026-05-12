@@ -4682,10 +4682,37 @@ describe('SvgCanvasComponent', () => {
           ?.getAttribute('d') ?? '';
       expect(d).toContain('C');
       expect(d).toContain(' 20 20');
-      expect(d).not.toContain('C 13.333333 13.333333 16.666667 16.666667 20 20');
-      // Default: Illustrator-like incoming tangent from drag; P1 on chord thirds.
-      expect(d).toContain('C 13.333333 13.333333');
+      // First segment: P1 collapses to P0 (Illustrator-style — no outgoing handle on start anchor).
+      expect(d).toContain('C 10 10');
       expect(d).toMatch(/12\.218\d+ 17\.406\d+ 20 20/);
+    });
+
+    it('second segment drag uses normal chord-third P1, not P0 collapse', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      // first anchor
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      // second anchor (plain click — commits an L)
+      component.onCanvasMouseDown({ button: 0, clientX: 40, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 40, clientY: 10 } as MouseEvent);
+      // third anchor with drag — this is the second segment; P1 should be chord-thirds from (40,10) toward (70,10)
+      component.onCanvasMouseDown({ button: 0, clientX: 70, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 70, clientY: 25 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 70, clientY: 25 } as MouseEvent);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      // Second cubic segment: P1 is chord-third from (40,10) toward (70,10) = (50,10)
+      expect(d).toMatch(/C 50 10/);
     });
 
     it('renders dashed pending-curve handle guide while dragging past curve threshold (j24.9)', async () => {
