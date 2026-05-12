@@ -599,6 +599,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     if (this.penPendingSegment && this.penPendingShowsCurvePreview) {
       return this.appendPenPendingCurveToBaseD(base);
     }
+    // When the last committed node has a reflectable handle, preview the smooth-departure curve.
+    const st = penReflectStateAfterCommitted(segs);
+    if (st?.canReflectCubic) {
+      const ptr = this.penPointerSvg;
+      return appendCubicToD(
+        base,
+        { x1: 2 * anchor.x - st.cubicCp2X, y1: 2 * anchor.y - st.cubicCp2Y, x2: ptr.x, y2: ptr.y },
+        ptr
+      );
+    }
     return appendLineToD(base, this.penPointerSvg.x, this.penPointerSvg.y);
   }
 
@@ -715,6 +725,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return null;
     }
     if (this.penPendingSegment && this.penPendingShowsCurvePreview) return null;
+    // Suppress the straight rubber-band when we're already showing a smooth-departure curve preview.
+    if (!this.penPendingSegment) {
+      const segs = this.penSession.getSegments();
+      if (penReflectStateAfterCommitted(segs)?.canReflectCubic) return null;
+    }
     const anchor = this.penPendingSegment
       ? this.penPendingSegment.anchor
       : lastCommittedVertex(this.penSession.getSegments());
