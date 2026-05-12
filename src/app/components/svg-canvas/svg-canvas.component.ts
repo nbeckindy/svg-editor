@@ -3744,6 +3744,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     moveSegment.x = x;
     moveSegment.y = y;
 
+    // Move the incoming handle (P2) that lives inside the segment ending at this anchor.
     if (moveSegment.type === 'C') {
       moveSegment.x2 += dx;
       moveSegment.y2 += dy;
@@ -3753,6 +3754,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       moveSegment.y1 += dy;
     }
 
+    // Move the outgoing handle (P1) of the segment immediately following the moved anchor.
+    // (Done by direct index because moveSegment.x has already been updated, so the
+    // position-based loop below cannot match it.)
+    const nextSeg = segments[anchor.moveSegmentIndex + 1];
+    if (nextSeg?.type === 'C' || nextSeg?.type === 'Q') {
+      nextSeg.x1 += dx;
+      nextSeg.y1 += dy;
+    }
+
+    // For any other segment that happens to share the same old endpoint (rare; e.g. duplicate
+    // anchors in multi-subpath data), move its incoming handle and the outgoing handle of
+    // whatever follows it.
     for (const segment of segments) {
       if (segment.type === 'C' && segment.x === oldX && segment.y === oldY) {
         segment.x2 += dx;

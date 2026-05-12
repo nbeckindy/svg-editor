@@ -2607,6 +2607,41 @@ describe('SvgCanvasComponent', () => {
       expect(Number(anchor0.getAttribute('cy'))).toBeCloseTo(35, 5);
     });
 
+    it('dragging an anchor moves both its incoming and outgoing handles by the same delta', async () => {
+      // Path: M(0,0) → C P1=(10,0) P2=(20,0) anchor=(30,0) → C P1=(30,10) P2=(40,10) anchor=(60,0)
+      // Middle anchor is at (30,0). Incoming P2=(20,0), outgoing P1=(30,10).
+      // After dragging by (+5,+5): anchor→(35,5), P2→(25,5), P1→(35,15).
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-c" d="M 0 0 C 10 0 20 0 30 0 C 30 10 40 10 60 0" /></svg>'
+      );
+      shapeSelectionService.selectShape({ id: 'path-c', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 });
+      await activateNodeEditSelectorTool();
+
+      // Fake anchor element for middle node (anchor index 1, segment index 2 for a M+C+C path)
+      const fakeAnchor = document.createElement('circle');
+      fakeAnchor.setAttribute('data-path-node-anchor-index', '1');
+      fakeAnchor.setAttribute('data-path-node-path-id', 'path-c');
+      fakeAnchor.setAttribute('data-path-node-edit-target', 'true');
+
+      component.onCanvasMouseDown({
+        button: 0, clientX: 30, clientY: 0, detail: 1,
+        target: fakeAnchor,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 35, clientY: 5 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 35, clientY: 5 } as MouseEvent);
+      fixture.detectChanges();
+
+      const d =
+        (component.svgContainer()?.nativeElement?.querySelector('#path-c') as SVGPathElement | null)
+          ?.getAttribute('d') ?? '';
+      // Incoming P2: was (20,0) → (25,5); anchor: was (30,0) → (35,5)
+      expect(d).toContain('C 10 0 25 5 35 5');
+      // Outgoing P1: was (30,10) → (35,15)
+      expect(d).toContain('C 35 15');
+    });
+
     it('enters node-edit mode for a selected path when node-edit selector tool is active', async () => {
       await loadSvgForSelector(
         '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 C 20 10 30 20 40 40 L 60 50" /></svg>'
