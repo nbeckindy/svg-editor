@@ -3192,7 +3192,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const dragCurrent = releaseSvg ?? this.penPendingDragSvg ?? startSvg;
     const screenDist = Math.hypot(event.clientX - startClient.x, event.clientY - startClient.y);
     if (screenDist < MARQUEE_MIN_DRAG_PX) {
-      this.penSession.addLinePoint(end.x, end.y);
+      const segs = this.penSession.getSegments();
+      const st = penReflectStateAfterCommitted(segs);
+      if (st?.canReflectCubic) {
+        this.penSession.appendCubic(
+          2 * anchor.x - st.cubicCp2X, 2 * anchor.y - st.cubicCp2Y,
+          end.x, end.y,
+          end.x, end.y
+        );
+      } else {
+        this.penSession.addLinePoint(end.x, end.y);
+      }
     } else {
       this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve);
     }
@@ -3228,7 +3238,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     const lc = this.penPendingLastClient ?? startClient;
     const screenDist = Math.hypot(lc.x - startClient.x, lc.y - startClient.y);
     if (screenDist < MARQUEE_MIN_DRAG_PX) {
-      this.penSession.addLinePoint(end.x, end.y);
+      const segs = this.penSession.getSegments();
+      const st = penReflectStateAfterCommitted(segs);
+      if (st?.canReflectCubic) {
+        this.penSession.appendCubic(
+          2 * anchor.x - st.cubicCp2X, 2 * anchor.y - st.cubicCp2Y,
+          end.x, end.y,
+          end.x, end.y
+        );
+      } else {
+        this.penSession.addLinePoint(end.x, end.y);
+      }
     } else {
       const dragCurrent = this.penPendingDragSvg ?? startSvg;
       this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve);

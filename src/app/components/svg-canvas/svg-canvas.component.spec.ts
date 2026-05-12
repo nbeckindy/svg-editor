@@ -3854,14 +3854,15 @@ describe('SvgCanvasComponent', () => {
       component.onDocumentMouseUp({ button: 0, clientX: 90, clientY: 80 } as MouseEvent);
       fixture.detectChanges();
       expect(penSession.getSegments().length).toBe(3);
-      expect(penSession.getSegments()[2].type).toBe('L');
+      // Plain click after a C with a reflectable handle: emits C (reflected P1), not L
+      expect(penSession.getSegments()[2].type).toBe('C');
 
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
       fixture.detectChanges();
       const segs = penSession.getSegments();
       expect(segs.length).toBe(3);
       expect(JSON.stringify(segs.slice(0, 2))).toBe(afterCurve);
-      expect(segs[2].type).toBe('L');
+      expect(segs[2].type).toBe('C');
     });
 
     it('shows close-target ring when pointer hovers near pen path start anchor', async () => {
@@ -4712,6 +4713,35 @@ describe('SvgCanvasComponent', () => {
           ?.querySelector('path')
           ?.getAttribute('d') ?? '';
       expect(d).toMatch(/C 50 10/);
+    });
+
+    it('plain click after dragged C emits C with reflected P1 and P2=endpoint (smooth departure)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      // node 1 at (10,10)
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      // node 2 at (100,10) drag down to (100,20) → C with P2=(100,4.5)
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+      // node 3 at (190,10) — plain click, no drag
+      component.onCanvasMouseDown({ button: 0, clientX: 190, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 190, clientY: 10 } as MouseEvent);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      // Segment 2 must be a C (not L) with reflected P1=(100,15.5) and P2=endpoint=(190,10)
+      expect(d).not.toContain('L 190 10');
+      expect(d).toContain('C 100 15.5 190 10 190 10');
     });
 
     it('second segment after dragged C uses reflected P1 (smooth node)', async () => {
