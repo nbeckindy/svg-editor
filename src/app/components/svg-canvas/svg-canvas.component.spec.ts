@@ -4687,7 +4687,7 @@ describe('SvgCanvasComponent', () => {
       expect(d).toMatch(/12\.218\d+ 17\.406\d+ 20 20/);
     });
 
-    it('second segment drag uses normal chord-third P1, not P0 collapse', async () => {
+    it('second segment after L uses chord-third P1 (no reflectable handle from prior L)', async () => {
       await loadEmptySvgAndPenMode();
       editorToolService.setGridSnapEnabled(false);
       editorToolService.setShapeSnapEnabled(false);
@@ -4695,10 +4695,10 @@ describe('SvgCanvasComponent', () => {
 
       // first anchor
       component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
-      // second anchor (plain click — commits an L)
+      // second anchor (plain click — commits an L, so canReflectCubic stays false)
       component.onCanvasMouseDown({ button: 0, clientX: 40, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: 40, clientY: 10 } as MouseEvent);
-      // third anchor with drag — this is the second segment; P1 should be chord-thirds from (40,10) toward (70,10)
+      // third anchor with drag — prior segment is L, so P1 = chord-third from (40,10) toward (70,10) = (50,10)
       component.onCanvasMouseDown({ button: 0, clientX: 70, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
       component.onDocumentMouseMove({ clientX: 70, clientY: 25 } as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: 70, clientY: 25 } as MouseEvent);
@@ -4711,8 +4711,37 @@ describe('SvgCanvasComponent', () => {
           .querySelector('[data-editor-content-group]')
           ?.querySelector('path')
           ?.getAttribute('d') ?? '';
-      // Second cubic segment: P1 is chord-third from (40,10) toward (70,10) = (50,10)
       expect(d).toMatch(/C 50 10/);
+    });
+
+    it('second segment after dragged C uses reflected P1 (smooth node)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      // first anchor at (10,10)
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      // second anchor at (100,10) drag downward to (100,20) — commits C with P1=P0=(10,10), P2=(100,4.5)
+      // k = min(10*0.55, 90*0.58) = 5.5; P2 = (100-0*5.5, 10-1*5.5) = (100, 4.5)
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+      // third anchor at (190,10) drag downward — P1 should be reflection of P2=(100,4.5) across (100,10) = (100,15.5)
+      component.onCanvasMouseDown({ button: 0, clientX: 190, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 190, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 190, clientY: 20 } as MouseEvent);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      // Second segment: P1 reflected from committed P2=(100,4.5) across anchor=(100,10) → (100,15.5)
+      expect(d).toContain('C 100 15.5');
     });
 
     it('renders dashed pending-curve handle guide while dragging past curve threshold (j24.9)', async () => {
