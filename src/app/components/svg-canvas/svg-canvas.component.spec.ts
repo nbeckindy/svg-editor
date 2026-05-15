@@ -2665,6 +2665,26 @@ describe('SvgCanvasComponent', () => {
       expect(controlHandles.length).toBe(2);
     });
 
+    it('hides blue selection rect when node-edit-selector tool is active; restores on switch to selector', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 60 50" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-a',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      fixture.detectChanges();
+
+      expect(component.isPathNodeEditModeActive).toBe(true);
+      // Highlight rect element must not appear in node-edit mode
+      expect(fixture.nativeElement.querySelector('.highlight-overlay rect[stroke="#2196F3"]')).toBeFalsy();
+    });
+
     it('hides path node overlays while dragging selection (translate)', async () => {
       await loadSvgForSelector(
         '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 60 50" /></svg>'
@@ -4018,6 +4038,61 @@ describe('SvgCanvasComponent', () => {
       // Closing segment: C with reflected P1=(100,15.5), P2=start=(10,10), then Z
       expect(d).toContain('C 100 15.5 10 10 10 10 Z');
       expect(editorToolService.getCurrentTool()).toBe('selector');
+    });
+
+    it('closing via start-node click does not add a duplicate anchor at the start position', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      // node 1 at (10,10), node 2 at (100,10) dragged to (100,20) → cubic with handles
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+
+      // Click the start node to close (within close radius)
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 10, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+
+      // Path must end with C ... Z (no L or C appended after the closing segment)
+      expect(d).toContain(' Z');
+      // No explicit line-to at the start position (would be a duplicate anchor)
+      expect(d).not.toContain('L 10 10');
+      // The closing C has the start-node as its endpoint; Z follows immediately
+      expect(d).toContain('10 10 Z');
+      // The path should be M + C (node2) + C (closing) — never a 4th segment
+      const segTokens = d.replace(/Z/g, '').trim().split(/(?=[MCL])/g).filter(Boolean);
+      expect(segTokens.length).toBe(3);
+    });
+
+    it('close-target hover ring appears when last committed node has cubic handles', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      // node 1 at (10,10) — start anchor
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      // node 2 at (100,10) drag down — produces cubic with reflectable handle
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+
+      // Hover near the start anchor while a new segment is pending
+      component.onCanvasMouseDown({ button: 0, clientX: 80, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 12, clientY: 10, shiftKey: false, altKey: false } as MouseEvent);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-pen-close-hover"]')).toBeTruthy();
     });
 
     it('picks up open path continuation near endpoint; extend is single EditPath undo', async () => {

@@ -157,7 +157,7 @@
               vector-effect="non-scaling-stroke"
               filter="url(#editor-artboard-boundary-shadow)" />
           }
-          @if (highlightRect; as hr) {
+          @if (!isPathNodeEditModeActive && highlightRect; as hr) {
             @if (isRotatingSelection) {
               <g [attr.transform]="selectionRotateHighlightTransform(hr)">
                 <rect
