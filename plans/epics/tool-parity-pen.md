@@ -14,14 +14,14 @@ Cross-cutting work to narrow gaps vs common vector editors (Figma, Illustrator, 
 
 ## Completion status (beads)
 
-Run `bd show svg-editor-j24` for live counts. Last synced **2026-05-15**.
+Run `bd show svg-editor-j24` for live counts. Last synced **2026-05-16**.
 
-**Direct children of `svg-editor-j24`:** **11 / 14 closed (~79%)**.
+**Direct children of `svg-editor-j24`:** **12 / 14 closed (~86%)**.
 
 | Status | Issue |
 |--------|--------|
-| ✓ Closed | `svg-editor-e9a`, `svg-editor-269`, `svg-editor-zc7`, `svg-editor-j24.1`, `svg-editor-j24.2`, `svg-editor-j24.3`, `svg-editor-j24.4`, `svg-editor-j24.5`, `svg-editor-j24.6`, `svg-editor-j24.8`, `svg-editor-j24.9` |
-| ○ Open | `svg-editor-jqe`, `svg-editor-0zh`, `svg-editor-hya` |
+| ✓ Closed | `svg-editor-e9a`, `svg-editor-269`, `svg-editor-zc7`, `svg-editor-jqe`, `svg-editor-j24.1`, `svg-editor-j24.2`, `svg-editor-j24.3`, `svg-editor-j24.4`, `svg-editor-j24.5`, `svg-editor-j24.6`, `svg-editor-j24.8`, `svg-editor-j24.9` |
+| ○ Open | `svg-editor-0zh`, `svg-editor-hya` |
 
 **Related (not counted in epic child total):** `svg-editor-j24.7` (PPEN-7) is **open** in bd; parent epic is `svg-editor-bmy` (pen parity follow-up), with dependency satisfied by closed `svg-editor-j24.2`.
 
@@ -30,7 +30,7 @@ Run `bd show svg-editor-j24` for live counts. Last synced **2026-05-15**.
 | Local ref | Title | bd id | Type | Status | Notes |
 |-----------|--------|-------|------|--------|-------|
 | TP-1 | Non-uniform selection resize (edge handles + modifier parity) | `svg-editor-e9a` | feature | ✓ Closed | [`selection-resize.ts`](../../src/app/utils/selection-resize.ts), [`resize-gesture.ts`](../../src/app/components/svg-canvas/gestures/resize-gesture.ts) |
-| TP-2 | Editable numeric selection bbox (X/Y/W/H) in properties panel | `svg-editor-jqe` | feature | ○ Open | Read-only readouts today |
+| TP-2 | Editable numeric selection bbox (X/Y/W/H) in properties panel | `svg-editor-jqe` | feature | ✓ Closed | Numeric edits use `TranslateCommand` / `UnionScaleCommand` / `UnionRotateCommand`; rapid edits **coalesce** within `EditorHistoryService`’s time window (same keys as canvas transforms). |
 | TP-3 | Eyedropper: sample fill/stroke from canvas | `svg-editor-zc7` | feature | ✓ Closed | Canvas pick → properties |
 | TP-4 | Stroke scaling policy when transforming selection | `svg-editor-269` | feature | ✓ Closed | `vector-effect` / product toggle |
 | TP-5 | Boolean path operations (union / subtract / intersect) | `svg-editor-0zh` | feature | ○ Open | Spike-first; heavy scope |

@@ -1,11 +1,14 @@
+import { Matrix } from '@svgdotjs/svg.js';
 import { EditorHistoryService, COALESCE_WINDOW_MS } from './editor-history.service';
 import {
   CompositeCommand,
   EditorCommand,
   CoalesceableCommand,
-  UpdateDrawingDefaultsCommand
+  UpdateDrawingDefaultsCommand,
+  UnionScaleCommand
 } from '../models/editor-commands';
 import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
+import type { SvgManipulationService } from './svg-manipulation.service';
 
 function makeCommand(description = 'test'): EditorCommand & { executeCalls: number; undoCalls: number } {
   const cmd = {
@@ -352,6 +355,32 @@ describe('EditorHistoryService', () => {
       vi.advanceTimersByTime(100);
       svc.pushAndExecute(c);
       expect(svc.canRedo()).toBe(false);
+    });
+
+    it('coalesces rapid UnionScaleCommand with same coalesce key into one undo step', () => {
+      const applyUnionScaleFromSnapshot = vi.fn();
+      const mockSvg = {
+        applyUnionScaleFromSnapshot,
+        restoreVectorEffectsForShapeSubtrees: vi.fn(),
+        getSVGInstance: vi.fn().mockReturnValue(null)
+      } as unknown as SvgManipulationService;
+
+      const before = { x: 0, y: 0, width: 100, height: 100 };
+      const mid = { x: 0, y: 0, width: 120, height: 100 };
+      const end = { x: 0, y: 0, width: 140, height: 100 };
+      const snap = new Map<string, Matrix>();
+      const ve = new Map<string, (string | null)[]>();
+      const cmd1 = new UnionScaleCommand(mockSvg, ['s1'], before, mid, snap, 'e', ve);
+      const cmd2 = new UnionScaleCommand(mockSvg, ['s1'], mid, end, snap, 'e', ve);
+
+      svc.pushAndExecute(cmd1);
+      vi.advanceTimersByTime(50);
+      svc.pushAndExecute(cmd2);
+
+      expect(svc.canUndo()).toBe(true);
+      svc.undo();
+      expect(svc.canUndo()).toBe(false);
+      expect(applyUnionScaleFromSnapshot).toHaveBeenCalledTimes(2);
     });
 
     it('sliding window: continuous rapid events coalesce into one step', () => {

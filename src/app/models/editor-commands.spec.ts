@@ -32,6 +32,7 @@ import {
   PasteCommand,
   DuplicateCommand,
   UpdateDrawingDefaultsCommand,
+  isCoalesceable,
   type EditorCommand,
 } from './editor-commands';
 import { ShapeSelectionService } from '../services/shape-selection.service';
@@ -349,6 +350,18 @@ describe('TranslateCommand', () => {
   it('should have a non-empty description', () => {
     expect(new TranslateCommand(mockSvc(), 's1', 10, 20, new Map()).description).toBeTruthy();
   });
+
+  it('is coalesceable and coalesceWith sums deltas from the first snapshot', () => {
+    const snap = new Map([['s1', new Matrix()]]);
+    const svc = mockSvc();
+    const first = new TranslateCommand(svc, 's1', 5, 0, snap);
+    const second = new TranslateCommand(svc, 's1', 3, 10, snap);
+    expect(isCoalesceable(first)).toBe(true);
+    expect(first.coalesceKey).toBe('translate:s1');
+    const merged = first.coalesceWith(second) as TranslateCommand;
+    merged.execute();
+    expect(svc.translateShape).toHaveBeenCalledWith('s1', 8, 10);
+  });
 });
 
 describe('AlignCommand', () => {
@@ -618,6 +631,26 @@ describe('UnionScaleCommand', () => {
     expect(new UnionScaleCommand(mockSvc(), [], before, after, new Map(), 'nw', emptyVe).description)
       .toBe('Resize shapes');
   });
+
+  it('is coalesceable; coalesceKey ignores shape id order', () => {
+    const svc = mockSvc();
+    const a = new UnionScaleCommand(svc, ['b', 'a'], before, after, new Map(), 'e', emptyVe);
+    const b = new UnionScaleCommand(svc, ['a', 'b'], before, after, new Map(), 'e', emptyVe);
+    expect(isCoalesceable(a)).toBe(true);
+    expect(a.coalesceKey).toBe(b.coalesceKey);
+  });
+
+  it('coalesceWith keeps first unionBefore and snapshot; uses latest unionAfter', () => {
+    const mid = { x: 0, y: 0, width: 150, height: 100 };
+    const end = { x: 0, y: 0, width: 200, height: 100 };
+    const snap = new Map<string, Matrix>();
+    const svc = mockSvc();
+    const first = new UnionScaleCommand(svc, ['s1'], before, mid, snap, 'e', emptyVe);
+    const second = new UnionScaleCommand(svc, ['s1'], mid, end, snap, 'e', emptyVe);
+    const merged = first.coalesceWith(second) as UnionScaleCommand;
+    merged.execute();
+    expect(svc.applyUnionScaleFromSnapshot).toHaveBeenCalledWith(['s1'], before, end, snap, 'e');
+  });
 });
 
 describe('UnionScaleFromCenterCommand', () => {
@@ -684,6 +717,18 @@ describe('UnionRotateCommand', () => {
   it('should have a non-empty description containing the angle', () => {
     const cmd = new UnionRotateCommand(mockSvc(), ['s1'], pivot, 45, new Map());
     expect(cmd.description).toContain('45');
+  });
+
+  it('is coalesceable and coalesceWith sums rotation about the same pivot key', () => {
+    const snapshot = new Map<string, Matrix>();
+    const svc = mockSvc();
+    const first = new UnionRotateCommand(svc, ['s1'], pivot, 10, snapshot);
+    const second = new UnionRotateCommand(svc, ['s1'], pivot, 25, snapshot);
+    expect(isCoalesceable(first)).toBe(true);
+    expect(first.coalesceKey).toBe(second.coalesceKey);
+    const merged = first.coalesceWith(second) as UnionRotateCommand;
+    merged.execute();
+    expect(svc.applyUnionRotationFromSnapshot).toHaveBeenCalledWith(['s1'], pivot, 35, snapshot);
   });
 });
 

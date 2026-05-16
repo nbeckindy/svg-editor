@@ -338,8 +338,9 @@ export class UpdateDrawingDefaultsCommand implements CoalesceableCommand {
   }
 }
 
-export class TranslateCommand implements EditorCommand {
+export class TranslateCommand implements CoalesceableCommand {
   readonly description: string;
+  readonly coalesceKey: string;
 
   constructor(
     private readonly svc: SvgManipulationService,
@@ -349,6 +350,7 @@ export class TranslateCommand implements EditorCommand {
     private readonly snapshotBefore: Map<string, Matrix>
   ) {
     this.description = `Move shape by (${dx}, ${dy})`;
+    this.coalesceKey = `translate:${shapeId}`;
   }
 
   execute(): void {
@@ -363,6 +365,14 @@ export class TranslateCommand implements EditorCommand {
     if (shape && saved && typeof shape.matrix === 'function') {
       shape.matrix(saved);
     }
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as TranslateCommand;
+    if (n.shapeId !== this.shapeId) {
+      throw new Error(`TranslateCommand.coalesceWith shapeId mismatch: ${this.shapeId} vs ${n.shapeId}`);
+    }
+    return new TranslateCommand(this.svc, this.shapeId, this.dx + n.dx, this.dy + n.dy, this.snapshotBefore);
   }
 }
 
@@ -536,8 +546,18 @@ interface Rect {
   height: number;
 }
 
-export class UnionScaleCommand implements EditorCommand {
+function sortedShapeIdsKey(ids: string[]): string {
+  return [...ids].sort().join(',');
+}
+
+function pivotCoalesceKey(p: { x: number; y: number }): string {
+  const q = (n: number) => (Math.round(n * 100) / 100).toFixed(2);
+  return `${q(p.x)},${q(p.y)}`;
+}
+
+export class UnionScaleCommand implements CoalesceableCommand {
   readonly description = 'Resize shapes';
+  readonly coalesceKey: string;
 
   constructor(
     private readonly svc: SvgManipulationService,
@@ -547,7 +567,9 @@ export class UnionScaleCommand implements EditorCommand {
     private readonly snapshotBefore: Map<string, Matrix>,
     private readonly handle: ResizeHandle,
     private readonly vectorEffectBefore: Map<string, (string | null)[]>
-  ) {}
+  ) {
+    this.coalesceKey = `union-scale:${sortedShapeIdsKey(shapeIds)}:${handle}`;
+  }
 
   execute(): void {
     this.svc.applyUnionScaleFromSnapshot(
@@ -570,6 +592,22 @@ export class UnionScaleCommand implements EditorCommand {
       }
     }
     this.svc.restoreVectorEffectsForShapeSubtrees(this.shapeIds, this.vectorEffectBefore);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as UnionScaleCommand;
+    if (sortedShapeIdsKey(this.shapeIds) !== sortedShapeIdsKey(n.shapeIds) || this.handle !== n.handle) {
+      throw new Error('UnionScaleCommand.coalesceWith: shape set or handle mismatch');
+    }
+    return new UnionScaleCommand(
+      this.svc,
+      this.shapeIds,
+      this.unionBefore,
+      n.unionAfter,
+      this.snapshotBefore,
+      this.handle,
+      this.vectorEffectBefore
+    );
   }
 }
 
@@ -608,8 +646,9 @@ export class UnionScaleFromCenterCommand implements EditorCommand {
   }
 }
 
-export class UnionRotateCommand implements EditorCommand {
+export class UnionRotateCommand implements CoalesceableCommand {
   readonly description: string;
+  readonly coalesceKey: string;
 
   constructor(
     private readonly svc: SvgManipulationService,
@@ -619,6 +658,7 @@ export class UnionRotateCommand implements EditorCommand {
     private readonly snapshotBefore: Map<string, Matrix>
   ) {
     this.description = `Rotate ${angleDeg}°`;
+    this.coalesceKey = `union-rotate:${sortedShapeIdsKey(shapeIds)}:${pivotCoalesceKey(pivot)}`;
   }
 
   execute(): void {
@@ -640,6 +680,15 @@ export class UnionRotateCommand implements EditorCommand {
         shape.matrix(saved);
       }
     }
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as UnionRotateCommand;
+    if (sortedShapeIdsKey(this.shapeIds) !== sortedShapeIdsKey(n.shapeIds) || this.coalesceKey !== n.coalesceKey) {
+      throw new Error('UnionRotateCommand.coalesceWith: shape set or pivot mismatch');
+    }
+    const sum = this.angleDeg + n.angleDeg;
+    return new UnionRotateCommand(this.svc, this.shapeIds, this.pivot, sum, this.snapshotBefore);
   }
 }
 
