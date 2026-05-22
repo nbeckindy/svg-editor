@@ -488,6 +488,9 @@
           #inlineTextEditor
           class="inline-text-editor"
           data-testid="canvas-inline-text-editor"
+          aria-label="Edit canvas text"
+          aria-multiline="true"
+          [attr.title]="inlineTextEditorHint"
           [value]="inlineTextEditValue"
           [style.font]="inlineTextEditorTypographyStyle()"
           [style.left.px]="canvasView.panX + textRect.x"

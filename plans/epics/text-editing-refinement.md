@@ -14,6 +14,8 @@
 
 ## Child issues (bd-mappable)
 
+**Status (beads):** epic **`svg-editor-79x`** and children **79x.1–79x.4** are **closed** as of 2026-05-22.
+
 | Local ref | Title | bd id | Type | Acceptance criteria | Depends on (bd) | Est (min) |
 |-----------|--------|-------|------|----------------------|-----------------|----------:|
 | TER-1 | Text tool: live preview of size and style before placement | `svg-editor-79x.1` | `feature` | With the text tool active, show a WYSIWYG preview (ghost or cursor-attached) using **drawing defaults** (font family, size, weight, style, text-anchor). Preview updates when defaults change; first click still places real `<text>` and pushes history once. Works across zoom/pan. | — | 120 |

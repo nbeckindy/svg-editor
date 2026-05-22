@@ -922,6 +922,22 @@ describe('SvgCanvasComponent', () => {
     promptSpy.mockRestore();
   });
 
+  it('shows text placement preview while text tool is active and clears it when leaving text tool', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
+    fixture.detectChanges();
+    stubEditorSvgScreenMapping(component);
+    editorToolService.setTool('text');
+    component.onDocumentMouseMove({ clientX: 12, clientY: 18 } as MouseEvent);
+    const svg = svgManipulationService.getSVGInstance();
+    const preview = svg?.findOne('[data-editor-text-tool-preview]');
+    expect(preview).toBeTruthy();
+    expect(Number(preview?.attr('x'))).toBeCloseTo(12);
+    expect(Number(preview?.attr('y'))).toBeCloseTo(18);
+    editorToolService.setTool('selector');
+    fixture.detectChanges();
+    expect(svgManipulationService.getSVGInstance()?.findOne('[data-editor-text-tool-preview]')).toBeFalsy();
+  });
+
   it('uses prompt input to update just-created text content', () => {
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
     fixture.detectChanges();
@@ -2665,6 +2681,45 @@ describe('SvgCanvasComponent', () => {
       expect(controlHandles.length).toBe(2);
     });
 
+    it('omits duplicate node-edit anchor when closing segment ends at moveto before Z', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 200 200"><path id="path-elide-close" fill="none" stroke="black" d="M 10 10 C 55 5 55 25 100 25 C 100 15.5 10 10 10 10 Z"/></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-elide-close',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      fixture.detectChanges();
+      const anchors = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]');
+      expect(anchors.length).toBe(2);
+    });
+
+    it('pen-style two-cubic close: two anchors and no degenerate handles on collapsed controls (user regression)', async () => {
+      const d =
+        'M 251 188.703125 C 251 188.703125 436 118.553125 436 191.703125 C 436 264.853125 251 188.703125 251 188.703125 Z';
+      await loadSvgForSelector(
+        `<svg viewBox="0 0 500 500"><path id="path-pen-2c-close" fill="none" stroke="black" d="${d}"/></svg>`
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-pen-2c-close',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBe(2);
+      // Degenerate P1 (on M) and degenerate P2 (on closing anchor) are hidden — not confused with extra nodes.
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-control-handle"]').length).toBe(2);
+    });
+
     it('hides blue selection rect when node-edit-selector tool is active; restores on switch to selector', async () => {
       await loadSvgForSelector(
         '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 60 50" /></svg>'
@@ -3254,7 +3309,45 @@ describe('SvgCanvasComponent', () => {
       const editor = fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]') as HTMLTextAreaElement;
       expect(editor).toBeTruthy();
       expect(editor.value).toBe('Hello');
+      expect(editor.getAttribute('aria-label')).toBe('Edit canvas text');
+      expect(editor.getAttribute('aria-multiline')).toBe('true');
+      expect(editor.getAttribute('title')).toContain('Escape');
       expect(component.drilledIntoGroupId).toBeNull();
+    });
+
+    it('inline text editor font tracks SVG text typography and overlay scale', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><text id="text-typo" x="10" y="40" font-size="24" font-weight="700" font-style="italic" font-family="Georgia">Hi</text></svg>'
+      );
+      component.wrapperWidth = 100;
+      component.wrapperHeight = 100;
+      const bboxSpy = vi
+        .spyOn(svgManipulationService, 'getShapeBBox')
+        .mockReturnValue({ x: 10, y: 20, width: 40, height: 28 });
+      try {
+        shapeSelectionService.selectShape({
+          id: 'text-typo',
+          type: 'text',
+          fill: '#000',
+          stroke: undefined,
+          strokeWidth: 0,
+          opacity: 1
+        });
+        const textEl = fixture.nativeElement.querySelector('#text-typo') as SVGTextElement;
+
+        component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
+        fixture.detectChanges();
+
+        const editor = fixture.nativeElement.querySelector(
+          '[data-testid="canvas-inline-text-editor"]'
+        ) as HTMLTextAreaElement;
+        expect(editor).toBeTruthy();
+        expect(editor.style.font).toMatch(/24px/);
+        expect(editor.style.font).toMatch(/italic/i);
+        expect(editor.style.font).toMatch(/Georgia/i);
+      } finally {
+        bboxSpy.mockRestore();
+      }
     });
 
     it('commits inline text edit on Escape and supports undo/redo', async () => {
@@ -3503,6 +3596,7 @@ describe('SvgCanvasComponent', () => {
       component.wrapperWidth = 100;
       component.wrapperHeight = 100;
       editorToolService.setTool('pen');
+      editorToolService.setPenAltCurveMode(false);
       stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
       fixture.detectChanges();
     }
@@ -3806,6 +3900,68 @@ describe('SvgCanvasComponent', () => {
       expect(component.penSessionPreviewPathD).toContain('M 12 18');
     });
 
+    it('Control+drag after M authors quadratic Q segment (h76)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 10,
+        detail: 1,
+        ctrlKey: true,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      const bend = MARQUEE_MIN_DRAG_PX + 4;
+      component.onDocumentMouseMove({ clientX: 50, clientY: 10 + bend } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 50, clientY: 10 + bend } as MouseEvent);
+      fixture.detectChanges();
+
+      const penSession = (component as unknown as { penSession: { getSegments: () => { type: string }[] } }).penSession;
+      expect(penSession.getSegments().length).toBe(2);
+      expect(penSession.getSegments()[1].type).toBe('Q');
+    });
+
+    it('toolbar Alt curve mode authors quadratic Q without holding Control (h76)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setPenAltCurveMode(true);
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 10,
+        detail: 1,
+        ctrlKey: false,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      const bend = MARQUEE_MIN_DRAG_PX + 4;
+      component.onDocumentMouseMove({ clientX: 50, clientY: 10 + bend } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 50, clientY: 10 + bend } as MouseEvent);
+      fixture.detectChanges();
+
+      const penSession = (component as unknown as { penSession: { getSegments: () => { type: string }[] } }).penSession;
+      expect(penSession.getSegments()[1].type).toBe('Q');
+    });
+
     it('pen outgoing handle drag is undone with Ctrl+Z (provisional PenSegmentReplaceCommand)', async () => {
       await loadEmptySvgAndPenMode();
       const bend = MARQUEE_MIN_DRAG_PX + 8;
@@ -4037,6 +4193,34 @@ describe('SvgCanvasComponent', () => {
           ?.getAttribute('d') ?? '';
       // Closing segment: C with reflected P1=(100,15.5), P2=start=(10,10), then Z
       expect(d).toContain('C 100 15.5 10 10 10 10 Z');
+      expect(editorToolService.getCurrentTool()).toBe('selector');
+    });
+
+    it('closing pen path with drag near start commits a user-shaped closing cubic before Z', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+
+      // Pending segment from near start: drag handle away, then release on start (close radius).
+      component.onCanvasMouseDown({ button: 0, clientX: 12, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 52, clientY: 48 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 11, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      expect(d.trim().endsWith('Z')).toBe(true);
+      // Plain smooth close is always … 10 10 10 10 Z (P2 collapsed onto start). Drag-close must differ.
+      expect(d).not.toMatch(/10 10 10 10 Z$/);
       expect(editorToolService.getCurrentTool()).toBe('selector');
     });
 
