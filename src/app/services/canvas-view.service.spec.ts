@@ -1,17 +1,15 @@
 import { TestBed } from '@angular/core/testing';
 import { CANVAS_MIN_ZOOM_SCALE, CanvasViewService } from './canvas-view.service';
-import { SvgManipulationService } from './svg-manipulation.service';
+import { SvgEditorDocumentService } from './svg-editor-document.service';
 
 describe('CanvasViewService', () => {
   let service: CanvasViewService;
-  let svgManipulation: SvgManipulationService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [CanvasViewService, SvgManipulationService]
+      providers: [CanvasViewService, SvgEditorDocumentService]
     });
     service = TestBed.inject(CanvasViewService);
-    svgManipulation = TestBed.inject(SvgManipulationService);
   });
 
   it('should be created', () => {

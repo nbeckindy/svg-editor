@@ -1,1372 +1,183 @@
-import { Injectable, signal, computed, inject } from '@angular/core';
-import { SVG, Svg, Element as SvgJsElement, Matrix, G, Point } from '@svgdotjs/svg.js';
-import { PaintSourceInfo, PaintType, ShapeProperties } from '../models/shape-properties.interface';
+import { Injectable, inject } from '@angular/core';
+import { Svg, Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
+import type { EditableGradientModel, PaintGradientSnapshot } from '../models/svg-gradient';
+import { ArtboardModel, ArtboardResizeAnchor } from '../models/artboard.model';
+import { ShapeProperties } from '../models/shape-properties.interface';
+import type { ClipboardPayload } from './clipboard.service';
+import type { CreatableShapeType, ShapeCreationAttrs } from './svg-shape-content.port';
+import { SvgEditorDocumentService } from './svg-editor-document.service';
+import { SvgGradientDefsService } from './svg-gradient-defs.service';
+import { SvgLayerStructureService } from './svg-layer-structure.service';
+import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
+import type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
+import { SvgShapeContentService } from './svg-shape-content.service';
+import type { ResizeHandle } from '../utils/selection-resize';
+import type { AxisAlignedRect } from '../utils/marquee-selection';
 
-export type CreatableShapeType = 'rect' | 'ellipse' | 'line' | 'text';
-
-export interface ShapeCreationAttrs {
-  x?: number;
-  y?: number;
-  width?: number;
-  height?: number;
-  cx?: number;
-  cy?: number;
-  rx?: number;
-  ry?: number;
-  x1?: number;
-  y1?: number;
-  x2?: number;
-  y2?: number;
-  textContent?: string;
-  fontSize?: number;
-  fontFamily?: string;
-  fontWeight?: string;
-  fontStyle?: 'normal' | 'italic';
-  textAnchor?: 'start' | 'middle' | 'end';
-  fill?: string;
-  stroke?: string;
-  strokeWidth?: number;
-}
-import {
-  ArtboardModel,
-  ArtboardResizeAnchor,
-  DEFAULT_ARTBOARD,
-  DEFAULT_ARTBOARD_RESIZE_ANCHOR,
-  computeArtboardOriginForResize
-} from '../models/artboard.model';
-import {
-  applyEditableGradientModelToElement,
-  defaultLinearGradientModel,
-  defaultRadialGradientModel,
-  parsePaintReferenceId,
-  readEditableGradientModel,
-  type EditableGradientModel,
-  type PaintGradientSnapshot
-} from '../models/svg-gradient';
-import {
-  type ClipboardPayload,
-  type ClipboardShapeSnapshot
-} from './clipboard.service';
-import { type ResizeHandle, computeScaleAnchorFromUnionResize } from '../utils/selection-resize';
-import {
-  axisAlignedRectContains,
-  axisAlignedRectsIntersect,
-  marqueeEdgeSamplePoints,
-  marqueeSamplePoints,
-  type AxisAlignedRect
-} from '../utils/marquee-selection';
-import {
-  localBBoxToRootUserAabb,
-  localPointToRootUser,
-  rootUserPointToLocalPoint,
-  screenRectToRootSvgUserRect
-} from '../utils/svg-screen-user';
-import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
-
-/** Class name for the editor content group (shapes live here). */
-const EDITOR_CONTENT_GROUP_ID = 'data-editor-content-group';
-const CONTENT_SHAPE_SELECTOR = 'circle, rect, path, polygon, ellipse, line, polyline, text, image, use';
-/** Attribute to mark the viewBox rect (white fill, thin black stroke). */
-const EDITOR_VIEWBOX_RECT_ATTR = 'data-editor-viewbox-rect';
-/** Attribute to mark the light grey "outside" viewBox rect. */
-const EDITOR_OUTSIDE_RECT_ATTR = 'data-editor-outside-rect';
-/** 25% black fill for area outside document viewBox. */
-const OUTSIDE_VIEWBOX_FILL = '#bfbfbf';
-const SVG_NS = 'http://www.w3.org/2000/svg';
-const URL_REF_RE = /url\(\s*(['"]?)#([^)'"\\s]+)\1\s*\)/g;
-
-export interface LayerStackItem {
-  id: string;
-  type: string;
-  elementMarkup: string;
-  fill?: string;
-  stroke?: string;
-  strokeWidth?: number;
-  opacity?: number;
-}
-
-export interface LayerTreeNode {
-  id: string;
-  type: string;
-  name: string;
-  children?: LayerTreeNode[];
-  visible: boolean;
-  elementMarkup: string;
-  fill?: string;
-  stroke?: string;
-  strokeWidth?: number;
-  opacity?: number;
-}
-
-/** Tags skipped when building the layer tree (non-content structural elements). */
-const LAYER_TREE_SKIP_TAGS = new Set(['defs', 'clippath', 'mask', 'style', 'title', 'desc']);
-
-interface RenderedPaint {
-  fill?: string;
-  stroke?: string;
-  strokeWidth?: number;
-  opacity?: number;
-}
+export type { CreatableShapeType, ShapeCreationAttrs } from './svg-shape-content.port';
+export type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SvgManipulationService {
-  private readonly drawingStyleDefaults = inject(DrawingStyleDefaultsService);
-  private getRenderedPaint(node: Element): RenderedPaint {
-    if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') return {};
-    try {
-      const style = window.getComputedStyle(node as unknown as globalThis.Element);
-      const strokeWidth = Number.parseFloat(style.strokeWidth || '');
-      const opacity = Number.parseFloat(style.opacity || '');
-      return {
-        fill: style.fill || undefined,
-        stroke: style.stroke || undefined,
-        strokeWidth: Number.isFinite(strokeWidth) ? strokeWidth : undefined,
-        opacity: Number.isFinite(opacity) ? opacity : undefined
-      };
-    } catch {
-      return {};
-    }
-  }
+  private readonly doc = inject(SvgEditorDocumentService);
+  private readonly gradients = inject(SvgGradientDefsService);
+  private readonly layers = inject(SvgLayerStructureService);
+  private readonly geometry = inject(SvgSelectionGeometryService);
+  private readonly shapes = inject(SvgShapeContentService);
 
-  /**
-   * Whether a stroke is actually painted. Browsers often report `stroke` as `rgb(0, 0, 0)` with
-   * `stroke-width: 1` from getComputedStyle even when the used value is `none`, so nothing is drawn.
-   */
-  private isStrokeVisiblyPainted(node: Element): boolean {
-    if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
-      return false;
-    }
-    try {
-      const raw = node.getAttribute('stroke');
-      const inlineSt = (node as SVGGraphicsElement).style?.getPropertyValue('stroke')?.trim() ?? '';
-      const hasPresentationOrInline =
-        (raw != null && raw !== '' && raw.toLowerCase() !== 'none') || inlineSt !== '';
+  readonly documentRevision = this.doc.documentRevision;
+  readonly artboard = this.doc.artboard;
+  readonly artboardResizeAnchor = this.doc.artboardResizeAnchor;
 
-      if (hasPresentationOrInline) {
-        return true;
-      }
-
-      const stroke = window.getComputedStyle(node).getPropertyValue('stroke').trim();
-      const lower = stroke.toLowerCase();
-
-      if (!stroke || lower === 'none' || lower === 'transparent') {
-        return false;
-      }
-
-      const looksLikeUaBlackNoise =
-        /^rgba?\(\s*0\s*,\s*0\s*,\s*0\s*(,\s*1\s*)?\)$/i.test(lower) ||
-        lower === '#000' ||
-        lower === '#000000';
-
-      if (looksLikeUaBlackNoise) {
-        const cls = node.getAttribute('class');
-        if (cls) {
-          node.removeAttribute('class');
-          const strokeWithoutClass = window
-            .getComputedStyle(node)
-            .getPropertyValue('stroke')
-            .trim()
-            .toLowerCase();
-          node.setAttribute('class', cls);
-          const strokeWithClass = window
-            .getComputedStyle(node)
-            .getPropertyValue('stroke')
-            .trim()
-            .toLowerCase();
-          if (strokeWithoutClass !== strokeWithClass) {
-            return true;
-          }
-        }
-        return false;
-      }
-
-      return true;
-    } catch {
-      return false;
-    }
-  }
-
-  /**
-   * Normalize CSS color to `#RRGGBB` for `<input type="color">` and text fields.
-   */
-  private normalizeColorForPicker(cssColor: string | undefined, fallback: string): string {
-    if (!cssColor) return fallback;
-    const t = cssColor.trim();
-    if (t === 'none' || t === 'transparent') return fallback;
-    if (/^\s*url\s*\(/i.test(t)) return fallback;
-    const rgb = t.match(/^rgba?\(\s*(\d+)\s*,\s*(\d+)\s*,\s*(\d+)/i);
-    if (rgb) {
-      const toHex = (n: number) =>
-        Math.max(0, Math.min(255, n)).toString(16).padStart(2, '0');
-      const r = Number(rgb[1]);
-      const g = Number(rgb[2]);
-      const b = Number(rgb[3]);
-      return `#${toHex(r)}${toHex(g)}${toHex(b)}`.toUpperCase();
-    }
-    if (t.startsWith('#')) {
-      if (t.length === 4) {
-        return `#${t[1]}${t[1]}${t[2]}${t[2]}${t[3]}${t[3]}`.toUpperCase();
-      }
-      return t.length === 7 ? t.toUpperCase() : fallback;
-    }
-    return fallback;
-  }
-
-  /**
-   * True if some ancestor of `el` (walking `parentElement`) specifies this paint via a presentation
-   * attribute or inline style. Used to avoid labeling UA/default agreement as "inherited" when no
-   * author actually set fill/stroke up the tree (same computed value as the root &lt;svg&gt; defaults).
-   */
-  private ancestorChainSpecifiesAuthorPaint(el: Element, property: 'fill' | 'stroke'): boolean {
-    let current: Element | null = el.parentElement;
-    while (current && current.nodeType === 1) {
-      if (current.hasAttribute(property)) {
-        return true;
-      }
-      const svgEl = current as HTMLElement | SVGElement;
-      const inline = svgEl.style?.getPropertyValue(property)?.trim();
-      if (inline) {
-        return true;
-      }
-      current = current.parentElement;
-    }
-    return false;
-  }
-
-  /**
-   * Detect cascade source for `fill` / `stroke` using short DOM probes (inline > class/stylesheet > presentation attribute > inherited).
-   * `inherited` is only used when an ancestor specifies this property via attribute or inline style; otherwise matching parent computed values are `default` (UA defaults / “window”).
-   */
-  private getPaintSourceForProperty(dom: Element, property: 'fill' | 'stroke'): PaintSourceInfo {
-    if (typeof window === 'undefined' || typeof window.getComputedStyle !== 'function') {
-      return this.getPaintSourceFallback(dom, property);
-    }
-    try {
-      const el = dom as HTMLElement | SVGElement;
-      const inline = el.style?.getPropertyValue(property)?.trim();
-      if (inline) {
-        return { kind: 'inline-style' };
-      }
-
-      const computedBefore = window.getComputedStyle(el).getPropertyValue(property);
-
-      const cls = el.getAttribute('class');
-      if (cls) {
-        el.removeAttribute('class');
-        const computedNoClass = window.getComputedStyle(el).getPropertyValue(property);
-        el.setAttribute('class', cls);
-        if (computedNoClass !== computedBefore) {
-          return { kind: 'class-or-stylesheet', classNames: cls.split(/\s+/).filter(Boolean) };
-        }
-      }
-
-      const attrVal = el.getAttribute(property);
-      if (attrVal !== null) {
-        el.removeAttribute(property);
-        const computedNoAttr = window.getComputedStyle(el).getPropertyValue(property);
-        el.setAttribute(property, attrVal);
-        if (computedNoAttr !== computedBefore) {
-          return { kind: 'presentation-attr' };
-        }
-      }
-
-      const parent = el.parentElement;
-      if (parent && parent.nodeType === 1) {
-        const parentVal = window.getComputedStyle(parent).getPropertyValue(property);
-        if (parentVal === computedBefore && !inline && attrVal === null) {
-          if (this.ancestorChainSpecifiesAuthorPaint(el, property)) {
-            return { kind: 'inherited' };
-          }
-          return { kind: 'default' };
-        }
-      }
-
-      return { kind: 'default' };
-    } catch {
-      // jsdom / some environments throw or omit SVG computed styles; use attribute/class heuristics.
-      return this.getPaintSourceFallback(dom, property);
-    }
-  }
-
-  /** When `getComputedStyle` is unavailable (e.g. some test environments), use coarse heuristics. */
-  private getPaintSourceFallback(dom: Element, property: 'fill' | 'stroke'): PaintSourceInfo {
-    const el = dom as HTMLElement | SVGElement;
-    const inline = el.style?.getPropertyValue(property)?.trim();
-    if (inline) {
-      return { kind: 'inline-style' };
-    }
-    const cls = el.getAttribute('class');
-    const classNames = cls ? cls.split(/\s+/).filter(Boolean) : [];
-    if (el.hasAttribute(property)) {
-      if (classNames.length > 0) {
-        return { kind: 'class-or-stylesheet', classNames };
-      }
-      return { kind: 'presentation-attr' };
-    }
-    if (classNames.length > 0) {
-      return { kind: 'class-or-stylesheet', classNames };
-    }
-    return { kind: 'unknown' };
-  }
-
-  private static readonly URL_PAINT_RE = /^\s*url\(\s*(['"]?)#([^)'"]+)\1\s*\)/i;
-
-  /**
-   * Classify a raw fill/stroke value as solid, gradient, pattern, or none.
-   * Also extracts the `url(#id)` reference when present so the UI can display it.
-   */
-  private classifyPaint(rawValue: string | null | undefined): { type: PaintType; url?: string } {
-    if (!rawValue || rawValue.trim() === '' || rawValue.trim().toLowerCase() === 'none') {
-      return { type: 'none' };
-    }
-    const urlMatch = rawValue.match(SvgManipulationService.URL_PAINT_RE);
-    if (urlMatch) {
-      const refId = urlMatch[2];
-      const refEl = this.svgInstance?.findOne(`#${refId}`)?.node as Element | undefined;
-      const tag = refEl?.tagName?.toLowerCase?.() ?? '';
-      if (tag === 'lineargradient' || tag === 'radialgradient') {
-        return { type: 'gradient', url: rawValue.trim() };
-      }
-      if (tag === 'pattern') {
-        return { type: 'pattern', url: rawValue.trim() };
-      }
-      return { type: 'gradient', url: rawValue.trim() };
-    }
-    return { type: 'solid' };
-  }
-
-  /**
-   * Read effective `stroke-dasharray` from the element: presentation attribute, inline style, or
-   * computed style, in cascade priority. Returns `undefined` when no dash is set (or `none`).
-   */
-  private readStrokeDasharray(element: SvgJsElement, node: Element): string | undefined {
-    const inline = (node as SVGElement).style?.getPropertyValue('stroke-dasharray')?.trim();
-    if (inline && inline.toLowerCase() !== 'none') return inline;
-    const attr = element.attr('stroke-dasharray') as string | null;
-    if (attr && attr.trim().toLowerCase() !== 'none' && attr.trim() !== '') return attr.trim();
-    if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
-      try {
-        const computed = window.getComputedStyle(node as unknown as globalThis.Element)
-          .getPropertyValue('stroke-dasharray')?.trim();
-        if (computed && computed.toLowerCase() !== 'none') return computed;
-      } catch { /* ignore */ }
-    }
-    return undefined;
-  }
-
-  /**
-   * Read effective `stroke-dashoffset`. Returns `0` when unset.
-   */
-  private readStrokeDashoffset(element: SvgJsElement, node: Element): number {
-    const inline = (node as SVGElement).style?.getPropertyValue('stroke-dashoffset')?.trim();
-    if (inline) {
-      const n = Number.parseFloat(inline);
-      if (Number.isFinite(n)) return n;
-    }
-    const attr = element.attr('stroke-dashoffset');
-    if (attr != null) {
-      const n = Number.parseFloat(String(attr));
-      if (Number.isFinite(n)) return n;
-    }
-    if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
-      try {
-        const computed = window.getComputedStyle(node as unknown as globalThis.Element)
-          .getPropertyValue('stroke-dashoffset')?.trim();
-        if (computed) {
-          const n = Number.parseFloat(computed);
-          if (Number.isFinite(n)) return n;
-        }
-      } catch { /* ignore */ }
-    }
-    return 0;
-  }
-
-  /** Bumped when logical document content changes (for debug / reactive views); not bumped for visibility-only changes during drag. */
-  readonly documentRevision = signal(0);
-
-  private readonly _artboard = signal<ArtboardModel>({ ...DEFAULT_ARTBOARD });
-  /** Reactive artboard state (width, height, origin, background color). */
-  readonly artboard = computed(() => this._artboard());
-
-  private readonly _artboardResizeAnchor = signal<ArtboardResizeAnchor>(DEFAULT_ARTBOARD_RESIZE_ANCHOR);
-  /** Fixed point used when changing artboard dimensions (editor preference, not exported). */
-  readonly artboardResizeAnchor = computed(() => this._artboardResizeAnchor());
-
-  private svgInstance: Svg | null = null;
-  /** Stored document viewBox for export and overlay (e.g. "0 0 100 100"). */
-  private documentViewBox = '0 0 100 100';
-  private documentPreserveAspectRatio = 'xMidYMid meet';
-
-  /**
-   * Return the document viewBox (logical SVG viewBox). Used by canvas for overlay/selection math.
-   */
   getDocumentViewBox(): string {
-    return this.documentViewBox;
+    return this.doc.getDocumentViewBox();
   }
 
-  /**
-   * Update artboard dimensions. Syncs the viewBox rect, outside rect, and stage viewBox
-   * without changing the root SVG element's pixel size (that's managed by zoom/layout).
-   * Rejects zero/negative values.
-   *
-   * By default, `minX`/`minY` are chosen from {@link artboardResizeAnchor} so the chosen
-   * corner/edge/center stays fixed. Pass `explicitOrigin` (e.g. on undo) to set the origin directly.
-   */
   setArtboardSize(
     width: number,
     height: number,
     explicitOrigin?: { minX: number; minY: number }
   ): void {
-    if (width <= 0 || height <= 0 || !Number.isFinite(width) || !Number.isFinite(height)) return;
-    if (!this.svgInstance) return;
-
-    const prev = this._artboard();
-    const { minX, minY } =
-      explicitOrigin ??
-      computeArtboardOriginForResize(prev, width, height, this._artboardResizeAnchor());
-
-    this._artboard.set({ ...prev, width, height, minX, minY });
-    this.documentViewBox = `${minX} ${minY} ${width} ${height}`;
-
-    const outsideRect = this.svgInstance.findOne(`[${EDITOR_OUTSIDE_RECT_ATTR}]`) as SvgJsElement | null;
-    const viewBoxRect = this.svgInstance.findOne(`[${EDITOR_VIEWBOX_RECT_ATTR}]`) as SvgJsElement | null;
-
-    if (viewBoxRect) {
-      viewBoxRect.size(width, height);
-      viewBoxRect.move(minX, minY);
-    }
-
-    if (outsideRect) {
-      const margin = Math.max(width, height) * 0.5;
-      const outerW = width + margin * 2;
-      const outerH = height + margin * 2;
-      outsideRect.size(outerW, outerH);
-      outsideRect.move(minX - margin, minY - margin);
-    }
-
-    this.syncStageViewBox();
-    this.bumpDocumentRevision();
+    this.doc.setArtboardSize(width, height, explicitOrigin);
   }
 
-  /** Editor preference: which point stays fixed when resizing the artboard (not undoable). */
   setArtboardResizeAnchor(anchor: ArtboardResizeAnchor): void {
-    this._artboardResizeAnchor.set(anchor);
+    this.doc.setArtboardResizeAnchor(anchor);
   }
 
-  /**
-   * Recalculate the editor stage viewBox to encompass the artboard (and outside rect)
-   * while preserving the root SVG element's pixel aspect ratio so content is not distorted
-   * under `preserveAspectRatio="none"`.
-   */
-  private syncStageViewBox(): void {
-    if (!this.svgInstance) return;
-
-    const outsideRect = this.svgInstance.findOne(`[${EDITOR_OUTSIDE_RECT_ATTR}]`) as SvgJsElement | null;
-    if (!outsideRect) return;
-
-    let uMinX = Number(outsideRect.attr('x')) || 0;
-    let uMinY = Number(outsideRect.attr('y')) || 0;
-    let uW = Number(outsideRect.attr('width')) || 100;
-    let uH = Number(outsideRect.attr('height')) || 100;
-
-    const node = this.svgInstance.node as SVGSVGElement;
-    const elW = Number(node.getAttribute('width')) || node.clientWidth || uW;
-    const elH = Number(node.getAttribute('height')) || node.clientHeight || uH;
-    const desiredRatio = elW / elH;
-    const currentRatio = uW / uH;
-
-    if (
-      Number.isFinite(desiredRatio) && Number.isFinite(currentRatio) &&
-      desiredRatio > 0 && currentRatio > 0 &&
-      Math.abs(currentRatio - desiredRatio) > 1e-6
-    ) {
-      const cx = uMinX + uW / 2;
-      const cy = uMinY + uH / 2;
-      if (currentRatio > desiredRatio) {
-        const newH = uW / desiredRatio;
-        uMinY = cy - newH / 2;
-        uH = newH;
-      } else {
-        const newW = uH * desiredRatio;
-        uMinX = cx - newW / 2;
-        uW = newW;
-      }
-    }
-
-    this.svgInstance.viewbox(uMinX, uMinY, uW, uH);
-  }
-
-  /**
-   * Update artboard background color. Editor-only (not exported as content).
-   */
   setBackgroundColor(color: string): void {
-    if (!this.svgInstance) return;
-    const prev = this._artboard();
-    this._artboard.set({ ...prev, backgroundColor: color });
-
-    const viewBoxRect = this.svgInstance.findOne(`[${EDITOR_VIEWBOX_RECT_ATTR}]`) as SvgJsElement | null;
-    if (viewBoxRect) {
-      viewBoxRect.fill(color);
-    }
-    this.bumpDocumentRevision();
+    this.doc.setBackgroundColor(color);
   }
 
-  /** Return current artboard state (read-only snapshot). */
   getArtboard(): ArtboardModel {
-    return this._artboard();
+    return this.doc.getArtboard();
   }
 
-  /**
-   * Initialize SVG.js with content: build editor-stage root (grey + viewBox rect + content group)
-   * so all elements are visible; export serializes the logical document only.
-   */
   initializeSVG(container: HTMLElement, svgContent: string): void {
-    container.innerHTML = '';
-    const parser = new DOMParser();
-    const doc = parser.parseFromString(svgContent, 'image/svg+xml');
-    const hasTestMarker = svgContent.includes('svg-editor-test-icon');
-    const svgElement = doc.querySelector('svg');
-    if (!svgElement) {
-      return;
-    }
-
-    const vb = svgElement.getAttribute('viewBox');
-    const par = svgElement.getAttribute('preserveAspectRatio');
-    if (vb) this.documentViewBox = vb;
-    if (par) this.documentPreserveAspectRatio = par;
-    if (!vb) {
-      const w = svgElement.getAttribute('width') || (svgElement as unknown as { clientWidth?: number }).clientWidth || 100;
-      const h = svgElement.getAttribute('height') || (svgElement as unknown as { clientHeight?: number }).clientHeight || 100;
-      const width = typeof w === 'string' && w.endsWith('%') ? 100 : Number(w) || 100;
-      const height = typeof h === 'string' && h.endsWith('%') ? 100 : Number(h) || 100;
-      this.documentViewBox = `0 0 ${width} ${height}`;
-    }
-
-    const parts = this.documentViewBox.split(/\s+/);
-    const vbMinX = parts.length >= 4 ? Number(parts[0]) || 0 : 0;
-    const vbMinY = parts.length >= 4 ? Number(parts[1]) || 0 : 0;
-    const vbW = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
-    const vbH = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
-
-    this._artboard.set({
-      width: vbW,
-      height: vbH,
-      minX: vbMinX,
-      minY: vbMinY,
-      backgroundColor: '#ffffff'
-    });
-
-    const contentBbox = this.computeContentBbox(svgElement);
-    let uMinX = Math.min(vbMinX, contentBbox.x);
-    let uMinY = Math.min(vbMinY, contentBbox.y);
-    const uMaxX = Math.max(vbMinX + vbW, contentBbox.x + contentBbox.width);
-    const uMaxY = Math.max(vbMinY + vbH, contentBbox.y + contentBbox.height);
-    let uW = uMaxX - uMinX || vbW;
-    let uH = uMaxY - uMinY || vbH;
-
-    let initW = vbW;
-    let initH = vbH;
-    const wAttr = svgElement.getAttribute('width');
-    const hAttr = svgElement.getAttribute('height');
-    if (wAttr && !wAttr.endsWith('%')) {
-      const n = Number(wAttr);
-      if (!Number.isNaN(n)) initW = n;
-    }
-    if (hAttr && !hAttr.endsWith('%')) {
-      const n = Number(hAttr);
-      if (!Number.isNaN(n)) initH = n;
-    }
-
-    const clipPathCount = svgElement.querySelectorAll('clipPath').length;
-    const maskCount = svgElement.querySelectorAll('mask').length;
-    const hasClipPathAttr = svgElement.querySelectorAll('[clip-path]').length > 0;
-    const hasMaskAttr = svgElement.querySelectorAll('[mask]').length > 0;
-
-    // If the source SVG does not declare a `viewBox`, we synthesize one from width/height.
-    // In that case, Inkscape/defs-based clips can produce `getBBox()` values that include
-    // geometry that is clipped away (invisible). That causes fit-to-view to center
-    // invisible regions. When clips/masks exist and there is no source viewBox, clamp the
-    // editor stage bounds to the synthesized viewBox so we only fit visible space.
-    const hasClippingOrMasking = clipPathCount > 0 || maskCount > 0 || hasClipPathAttr || hasMaskAttr;
-    if (!vb && hasClippingOrMasking) {
-      uMinX = vbMinX;
-      uMinY = vbMinY;
-      uW = vbW;
-      uH = vbH;
-    }
-
-    // Avoid visible distortion: editor stage uses SVG.js `preserveAspectRatio='none'`, which
-    // stretches viewBox X/Y independently to the element's pixel width/height (initW/initH).
-    // If our computed stage viewBox uW/uH ratio differs from initW/initH, the artwork will
-    // appear squashed/unsquashed. Expand the stage viewBox to match the element aspect ratio.
-    const desiredRatio = initW / initH;
-    const currentRatio = uW / uH;
-    if (
-      Number.isFinite(desiredRatio) &&
-      Number.isFinite(currentRatio) &&
-      desiredRatio > 0 &&
-      currentRatio > 0 &&
-      Math.abs(currentRatio - desiredRatio) > 1e-6
-    ) {
-      const cx = uMinX + uW / 2;
-      const cy = uMinY + uH / 2;
-      if (currentRatio > desiredRatio) {
-        // Too wide -> increase height
-        const newUHeight = uW / desiredRatio;
-        uMinY = cy - newUHeight / 2;
-        uH = newUHeight;
-      } else {
-        // Too tall -> increase width
-        const newUWidth = uH * desiredRatio;
-        uMinX = cx - newUWidth / 2;
-        uW = newUWidth;
-      }
-    }
-
-    const editorSvg = SVG()
-      .addTo(container)
-      .size(initW, initH)
-      .viewbox(uMinX, uMinY, uW, uH)
-      .attr({ overflow: 'visible', preserveAspectRatio: 'none' });
-
-    editorSvg
-      .rect(uW, uH)
-      .move(uMinX, uMinY)
-      .fill(OUTSIDE_VIEWBOX_FILL)
-      .attr(EDITOR_OUTSIDE_RECT_ATTR, 'true');
-
-    // Drop shadow and stroke belong on the highlight overlay (sibling of the zoom wrapper):
-    // filters and strokes on this rect would scale with the CSS zoom transform.
-
-    // Artboard outline is drawn on the canvas overlay (not here): the stage SVG sits under
-    // a CSS transform scale for zoom, and vector-effect does not counteract HTML transforms.
-    editorSvg
-      .rect(vbW, vbH)
-      .move(vbMinX, vbMinY)
-      .fill('#ffffff')
-      .stroke('none')
-      .attr(EDITOR_VIEWBOX_RECT_ATTR, 'true');
-
-    const contentGroup = editorSvg.group().attr(EDITOR_CONTENT_GROUP_ID, 'true');
-    Array.from(svgElement.children).forEach((el) => {
-      contentGroup.node.appendChild(el.cloneNode(true));
-    });
-
-    this.svgInstance = SVG(container.firstElementChild as SVGSVGElement);
-    this.makeShapesClickable();
-    this.bumpDocumentRevision();
+    this.doc.initializeSVG(container, svgContent);
   }
 
-  private bumpDocumentRevision(): void {
-    this.documentRevision.update((n) => n + 1);
+  exportSVG(): string {
+    return this.doc.exportSVG();
   }
 
-  /**
-   * Compute union bbox of all shape elements in the given SVG element (document coordinates).
-   */
-  private computeContentBbox(svgElement: Element): { x: number; y: number; width: number; height: number } {
-    const shapeSelectors = CONTENT_SHAPE_SELECTOR;
-    const computeFromRoot = (root: Element): { x: number; y: number; width: number; height: number } | null => {
-      const nodes = root.querySelectorAll(shapeSelectors);
-      if (nodes.length === 0) return null;
-      let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-      nodes.forEach((node) => {
-        const el = node as SVGGraphicsElement;
-        if (typeof el.getBBox !== 'function') return;
-        const b = el.getBBox();
-        minX = Math.min(minX, b.x);
-        minY = Math.min(minY, b.y);
-        maxX = Math.max(maxX, b.x + b.width);
-        maxY = Math.max(maxY, b.y + b.height);
-      });
-      if (minX === Infinity) return null;
-      return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
-    };
-
-    const fallbackFromDocumentViewBox = (): { x: number; y: number; width: number; height: number } => {
-      const parts = this.documentViewBox.split(/\s+/);
-      const w = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
-      const h = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
-      return { x: 0, y: 0, width: w, height: h };
-    };
-
-    // First attempt: compute from the parsed (detached) DOM.
-    const first = computeFromRoot(svgElement);
-    if (first && Number.isFinite(first.width) && Number.isFinite(first.height) && first.width !== 0 && first.height !== 0) {
-      return first;
-    }
-
-    // Second attempt (fix): getBBox() often returns empty/zero boxes for detached SVG nodes.
-    // Import the parsed SVG into the real DOM (offscreen) so bbox math can succeed.
-    if (typeof document !== 'undefined' && typeof document.body !== 'undefined') {
-      const tempHost = document.createElement('div');
-      tempHost.style.position = 'absolute';
-      tempHost.style.left = '-100000px';
-      tempHost.style.top = '-100000px';
-      tempHost.style.width = '0';
-      tempHost.style.height = '0';
-      tempHost.style.overflow = 'visible';
-      try {
-        const imported = document.importNode(svgElement, true) as Element;
-        tempHost.appendChild(imported);
-        document.body.appendChild(tempHost);
-        const second = computeFromRoot(imported);
-        if (second && Number.isFinite(second.width) && Number.isFinite(second.height) && second.width !== 0 && second.height !== 0) {
-          return second;
-        }
-      } catch {
-        // ignore and fall back
-      } finally {
-        tempHost.remove();
-      }
-    }
-
-    return fallbackFromDocumentViewBox();
+  getSVGInstance(): Svg | null {
+    return this.doc.getSVGInstance();
   }
 
-  /**
-   * Make all shapes in the content group clickable (excludes editor viewBox/outside rects).
-   */
-  private makeShapesClickable(): void {
-    if (!this.svgInstance) return;
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    const scope = contentGroup ?? this.svgInstance;
-    const shapes = scope.find(CONTENT_SHAPE_SELECTOR);
-
-    const usedIds = new Set<string>();
-    scope.find('*').forEach((el: SvgJsElement) => {
-      const id = el.id();
-      if (id) usedIds.add(id);
-    });
-
-    shapes.forEach((shape: SvgJsElement) => {
-      try {
-        shape.css({ cursor: 'pointer' });
-      } catch {
-        // jsdom or detached nodes may not support style.setProperty
-      }
-      if (!shape.id()) {
-        let newId: string;
-        do {
-          newId = `shape-${Math.random().toString(36).substr(2, 9)}`;
-        } while (usedIds.has(newId));
-        usedIds.add(newId);
-        shape.id(newId);
-      }
-    });
-  }
-
-  /**
-   * Get shape properties by element
-   */
   getShapeProperties(element: SvgJsElement): ShapeProperties {
-    const node = element.node as Element;
-    const rendered = this.getRenderedPaint(node);
-    const rawFill = (element.attr('fill') as string | null) ?? null;
-    const rawStroke = (element.attr('stroke') as string | null) ?? null;
-    const rawStrokeWidth = Number.parseFloat(String(element.attr('stroke-width') ?? ''));
-    const rawOpacity = Number.parseFloat(String(element.attr('opacity') ?? ''));
-
-    const fillCss =
-      rendered.fill && rendered.fill !== 'none'
-        ? rendered.fill
-        : rawFill && rawFill !== 'none'
-          ? rawFill
-          : '';
-
-    const rawFillClassification = this.classifyPaint(rawFill);
-    const fillClassification =
-      rawFillClassification.type === 'gradient' || rawFillClassification.type === 'pattern'
-        ? rawFillClassification
-        : this.classifyPaint(fillCss || rawFill);
-    let fillForPicker: string | undefined;
-    let fillPaintType: PaintType = fillClassification.type;
-    let fillUrl: string | undefined;
-
-    if (fillPaintType === 'gradient' || fillPaintType === 'pattern') {
-      fillUrl = fillClassification.url;
-      fillForPicker = undefined;
-    } else if (fillPaintType === 'none') {
-      fillForPicker = undefined;
-    } else {
-      fillForPicker = fillCss ? this.normalizeColorForPicker(fillCss, '#000000') : undefined;
-      if (!fillForPicker) fillPaintType = 'none';
-    }
-
-    const strokePainted = this.isStrokeVisiblyPainted(node);
-    const strokeRenderedPart = rendered.stroke ?? '';
-    const rawStrokeStr = rawStroke ?? '';
-    let strokeCss = '';
-    if (strokePainted) {
-      strokeCss =
-        strokeRenderedPart && strokeRenderedPart !== 'none'
-          ? strokeRenderedPart
-          : rawStrokeStr && rawStrokeStr !== 'none'
-            ? rawStrokeStr
-            : '';
-    }
-    const sw = Number.isFinite(rendered.strokeWidth ?? Number.NaN)
-      ? (rendered.strokeWidth as number)
-      : Number.isFinite(rawStrokeWidth)
-        ? rawStrokeWidth
-        : 0;
-    const strokeWidth = strokePainted && Number.isFinite(sw) ? sw : 0;
-    const strokeIsNone = !strokePainted || !strokeCss || strokeCss === 'none' || strokeWidth === 0;
-
-    const rawStrokeClassification = this.classifyPaint(rawStroke);
-    const strokeClassification =
-      rawStrokeClassification.type === 'gradient' || rawStrokeClassification.type === 'pattern'
-        ? rawStrokeClassification
-        : this.classifyPaint(strokeCss || rawStroke);
-    let strokeForPicker: string | undefined;
-    let strokePaintType: PaintType = strokeIsNone ? 'none' : strokeClassification.type;
-    let strokeUrl: string | undefined;
-
-    if (strokePaintType === 'gradient' || strokePaintType === 'pattern') {
-      strokeUrl = strokeClassification.url;
-      strokeForPicker = undefined;
-    } else if (strokePaintType === 'none') {
-      strokeForPicker = undefined;
-    } else {
-      strokeForPicker = strokeIsNone ? undefined : this.normalizeColorForPicker(strokeCss, '#000000');
-    }
-
-    const opacity = Number.isFinite(rendered.opacity ?? Number.NaN)
-      ? (rendered.opacity as number)
-      : (Number.isFinite(rawOpacity) ? rawOpacity : 1);
-
-    const fillSource = this.getPaintSourceForProperty(node, 'fill');
-    const strokeSource = this.getPaintSourceForProperty(node, 'stroke');
-
-    const rawDasharray = this.readStrokeDasharray(element, node);
-    const rawDashoffset = this.readStrokeDashoffset(element, node);
-
-    const textNode = node.tagName.toLowerCase() === 'text' ? node : null;
-    // SVG default: fill is painted, then stroke (stroke reads as the “outline” on top). `paint-order`
-    // can reverse that (e.g. `stroke fill`) where supported — see properties panel help for `<text>`.
-    const rawPaintOrder = (element.attr('paint-order') as string | null)?.trim();
-    const paintOrder =
-      rawPaintOrder && rawPaintOrder.length > 0 && rawPaintOrder.toLowerCase() !== 'normal'
-        ? rawPaintOrder
-        : undefined;
-    const rawVectorEffect = (element.attr('vector-effect') as string | null)?.trim();
-    const vectorEffect =
-      rawVectorEffect && rawVectorEffect.length > 0 && rawVectorEffect.toLowerCase() !== 'none'
-        ? rawVectorEffect
-        : undefined;
-
-    const rawFontSize = textNode ? Number.parseFloat(textNode.getAttribute('font-size') ?? '') : Number.NaN;
-    const textAnchorAttr = textNode?.getAttribute('text-anchor');
-    const textAnchor =
-      textAnchorAttr === 'middle' || textAnchorAttr === 'end' || textAnchorAttr === 'start'
-        ? textAnchorAttr
-        : undefined;
-
-    return {
-      id: element.id() || '',
-      type: element.type,
-      textContent: textNode?.textContent ?? undefined,
-      fontFamily: textNode?.getAttribute('font-family') ?? undefined,
-      fontSize: Number.isFinite(rawFontSize) ? rawFontSize : undefined,
-      fontWeight: textNode?.getAttribute('font-weight') ?? undefined,
-      fontStyle: textNode?.getAttribute('font-style') ?? undefined,
-      textAnchor,
-      paintOrder,
-      vectorEffect,
-      fill: fillForPicker,
-      stroke: strokeForPicker,
-      strokeWidth,
-      strokeDasharray: rawDasharray,
-      strokeDashoffset: rawDashoffset,
-      opacity,
-      fillPaintType,
-      fillUrl,
-      strokePaintType,
-      strokeUrl,
-      fillSource,
-      strokeSource
-    };
+    return this.shapes.getShapeProperties(element);
   }
 
-  /**
-   * All editor content shapes under the same nearest `clip-path` or `mask` ancestor as `shape`
-   * (so the clipped group moves/resizes as one). If none, returns only this shape.
-   */
   getShapePropertiesInSameClipGroup(shape: SvgJsElement): ShapeProperties[] {
-    const node = shape.node as Element | null;
-    const single = (): ShapeProperties[] => [this.getShapeProperties(shape)];
-    if (!node || !this.svgInstance) return single();
-    if (typeof node.closest !== 'function') return single();
-    const contentRoot = node.closest(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    if (!contentRoot) return single();
-    const clipHost = node.closest('[clip-path], [mask]');
-    if (!clipHost || !contentRoot.contains(clipHost)) return single();
-    const domShapes = clipHost.querySelectorAll(CONTENT_SHAPE_SELECTOR);
-    if (domShapes.length === 0) return single();
-    const out: ShapeProperties[] = [];
-    domShapes.forEach((el) => {
-      const id = el.getAttribute('id');
-      if (!id) return;
-      const s = this.svgInstance!.findOne(`#${id}`) as SvgJsElement | undefined;
-      if (s) out.push(this.getShapeProperties(s));
-    });
-    return out.length > 0 ? out : single();
+    return this.shapes.getShapePropertiesInSameClipGroupReadingWith(shape, (el) =>
+      this.getShapeProperties(el)
+    );
   }
 
-  /**
-   * Expand each hit to its clip/mask group and dedupe (marquee order preserved).
-   */
   expandSelectionByClipGroups(shapes: ShapeProperties[]): ShapeProperties[] {
-    if (shapes.length === 0) return [];
-    const seen = new Set<string>();
-    const result: ShapeProperties[] = [];
-    for (const s of shapes) {
-      const shape = this.svgInstance?.findOne(`#${s.id}`) as SvgJsElement | undefined;
-      if (!shape) continue;
-      const group = this.getShapePropertiesInSameClipGroup(shape);
-      for (const p of group) {
-        if (!seen.has(p.id)) {
-          seen.add(p.id);
-          result.push(p);
-        }
-      }
-    }
-    return result;
+    return this.shapes.expandSelectionByClipGroupsReadingWith(shapes, (el) =>
+      this.getShapeProperties(el)
+    );
   }
 
-  /**
-   * Update fill color of a shape
-   */
   updateFillColor(shapeId: string, color: string): void {
-    if (!this.svgInstance) return;
-    
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (shape) {
-      shape.fill(color);
-      this.bumpDocumentRevision();
-    }
+    this.shapes.updateFillColor(shapeId, color);
   }
 
-  /**
-   * Add stroke to a shape
-   */
   addStroke(shapeId: string, color: string, width: number): void {
-    if (!this.svgInstance) return;
-    
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (shape) {
-      shape.stroke({ color, width });
-      this.bumpDocumentRevision();
-    }
+    this.shapes.addStroke(shapeId, color, width);
   }
 
-  /**
-   * Remove stroke from a shape
-   */
   removeStroke(shapeId: string): void {
-    if (!this.svgInstance) return;
-    
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (shape) {
-      shape.stroke('none');
-      this.bumpDocumentRevision();
-    }
+    this.shapes.removeStroke(shapeId);
   }
 
-  /**
-   * Update stroke color
-   */
   updateStrokeColor(shapeId: string, color: string): void {
-    if (!this.svgInstance) return;
-    
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (shape) {
-      shape.stroke({ color });
-      this.bumpDocumentRevision();
-    }
+    this.shapes.updateStrokeColor(shapeId, color);
   }
 
-  /**
-   * Update `stroke-dasharray` on a shape. Pass `'none'` or `''` to remove dashing.
-   */
   updateStrokeDasharray(shapeId: string, dasharray: string): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (!shape) return;
-    const normalized = dasharray.trim();
-    if (!normalized || normalized.toLowerCase() === 'none') {
-      shape.attr('stroke-dasharray', null);
-    } else {
-      shape.attr('stroke-dasharray', normalized);
-    }
-    this.bumpDocumentRevision();
+    this.shapes.updateStrokeDasharray(shapeId, dasharray);
   }
 
-  /**
-   * Update `stroke-dashoffset` on a shape. Pass `0` to reset.
-   */
   updateStrokeDashoffset(shapeId: string, dashoffset: number): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (!shape) return;
-    if (dashoffset === 0) {
-      shape.attr('stroke-dashoffset', null);
-    } else {
-      shape.attr('stroke-dashoffset', dashoffset);
-    }
-    this.bumpDocumentRevision();
+    this.shapes.updateStrokeDashoffset(shapeId, dashoffset);
   }
 
-  /**
-   * Update opacity of a shape
-   */
   updateOpacity(shapeId: string, opacity: number): void {
-    if (!this.svgInstance) return;
-    
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (shape) {
-      shape.opacity(opacity);
-      this.bumpDocumentRevision();
-    }
+    this.shapes.updateOpacity(shapeId, opacity);
   }
 
-  /**
-   * Replace path `d` for an existing `<path>` element.
-   */
   updatePathData(pathId: string, d: string): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${pathId}`) as SvgJsElement | undefined;
-    if (!shape || shape.type !== 'path') return;
-    shape.attr('d', d);
-    this.bumpDocumentRevision();
+    this.shapes.updatePathData(pathId, d);
   }
 
-  /**
-   * Return editable text for a `<text>` (or its child `<tspan>`), preserving simple inline text for MVP.
-   */
   getTextContent(textId: string): string | null {
-    const textNode = this.resolveTextNode(textId);
-    return textNode?.textContent ?? null;
+    return this.shapes.getTextContent(textId);
   }
 
-  /**
-   * Replace text content for a `<text>` node. `<tspan>` ids are resolved to their parent `<text>`.
-   */
   updateTextContent(textId: string, text: string): void {
-    const textNode = this.resolveTextNode(textId);
-    if (!textNode) return;
-    // Use plain DOM text replacement: svg.js `Text.text()` can call `getBBox()` for layout, which
-    // is unavailable in jsdom and breaks unit tests; stroke/fill still go through svg.js helpers.
-    textNode.textContent = text;
-    this.bumpDocumentRevision();
+    this.shapes.updateTextContent(textId, text);
   }
 
   updateTextFontFamily(textId: string, fontFamily: string): void {
-    this.updateTextAttr(textId, 'font-family', fontFamily);
+    this.shapes.updateTextFontFamily(textId, fontFamily);
   }
 
   updateTextFontSize(textId: string, fontSize: number): void {
-    this.updateTextAttr(textId, 'font-size', `${fontSize}`);
+    this.shapes.updateTextFontSize(textId, fontSize);
   }
 
   updateTextFontWeight(textId: string, fontWeight: string): void {
-    this.updateTextAttr(textId, 'font-weight', fontWeight);
+    this.shapes.updateTextFontWeight(textId, fontWeight);
   }
 
   updateTextFontStyle(textId: string, fontStyle: string): void {
-    this.updateTextAttr(textId, 'font-style', fontStyle);
+    this.shapes.updateTextFontStyle(textId, fontStyle);
   }
 
   updateTextAnchor(textId: string, textAnchor: 'start' | 'middle' | 'end'): void {
-    this.updateTextAttr(textId, 'text-anchor', textAnchor);
+    this.shapes.updateTextAnchor(textId, textAnchor);
   }
 
-  /**
-   * Sets SVG `paint-order` on the target `<text>`. Pass `undefined` or `'normal'` to clear the
-   * attribute (browser default: fill then stroke on top).
-   */
   updateTextPaintOrder(textId: string, paintOrder: string | undefined): void {
-    const shape = this.resolveTextSvgShape(textId);
-    if (!shape) return;
-    const trimmed = paintOrder?.trim();
-    if (!trimmed || trimmed.toLowerCase() === 'normal') {
-      shape.attr('paint-order', null);
-    } else {
-      shape.attr('paint-order', trimmed);
-    }
-    this.bumpDocumentRevision();
+    this.shapes.updateTextPaintOrder(textId, paintOrder);
   }
 
-  /**
-   * Sets SVG `vector-effect` on the target `<text>`. Use `non-scaling-stroke` so outline width stays
-   * constant in screen pixels when the SVG is scaled (e.g. editor zoom); pass `undefined` / `'none'`
-   * to clear. See SVG spec — behavior depends on the root viewport transform chain.
-   */
   updateTextVectorEffect(textId: string, effect: string | undefined): void {
-    const shape = this.resolveTextSvgShape(textId);
-    if (!shape) return;
-    const trimmed = effect?.trim();
-    if (!trimmed || trimmed.toLowerCase() === 'none') {
-      shape.attr('vector-effect', null);
-    } else {
-      shape.attr('vector-effect', trimmed);
-    }
-    this.bumpDocumentRevision();
+    this.shapes.updateTextVectorEffect(textId, effect);
   }
 
-  private updateTextAttr(textId: string, attr: string, value: string): void {
-    const shape = this.resolveTextSvgShape(textId);
-    if (!shape) return;
-    shape.attr(attr, value);
-    this.bumpDocumentRevision();
-  }
-
-  /** Resolve a `<text>` SVG.js element from an id on `<text>` or a child like `<tspan>`. */
-  private resolveTextSvgShape(textId: string): SvgJsElement | null {
-    if (!this.svgInstance) return null;
-    let current = this.svgInstance.findOne(`#${textId}`) as SvgJsElement | undefined;
-    if (!current?.node) return null;
-    for (let depth = 0; depth < 24 && current; depth++) {
-      if (current.type === 'text') {
-        return current;
-      }
-      const parent = current.parent() as SvgJsElement | undefined;
-      if (!parent || parent === current) {
-        break;
-      }
-      current = parent;
-    }
-    return null;
-  }
-
-  private resolveTextNode(textId: string): Element | null {
-    return (this.resolveTextSvgShape(textId)?.node as Element | null) ?? null;
-  }
-
-  /**
-   * Nearest ancestor `<g>` with an `id` between this shape and the editor content group (for
-   * "select parent" when fill/stroke is inherited).
-   */
   getNearestGroupAncestorId(shapeId: string): string | null {
-    if (!this.svgInstance) return null;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    const start = shape?.node as Element | null;
-    const contentRoot = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`)?.node as Element | null;
-    if (!start || !contentRoot) return null;
-    let current: Element | null = start.parentElement;
-    while (current && current !== contentRoot && contentRoot.contains(current)) {
-      if (current.tagName?.toLowerCase() === 'g' && (current as Element).id) {
-        return (current as Element).id;
-      }
-      current = current.parentElement;
-    }
-    return null;
+    return this.shapes.getNearestGroupAncestorId(shapeId);
   }
 
-  /**
-   * Bake the computed fill onto this element so it is editable as a local value: uses a
-   * presentation attribute when that is enough, or inline style when a stylesheet/class would
-   * override a presentation attribute.
-   */
   bakeEffectiveFillToLocal(shapeId: string): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (!shape?.node) return;
-    const props = this.getShapeProperties(shape);
-    if (!props.fill) return;
-    const kind = props.fillSource?.kind;
-    const node = shape.node as SVGGraphicsElement;
-    if (kind === 'inline-style') {
-      node.style.removeProperty('fill');
-      this.updateFillColor(shapeId, props.fill);
-    } else if (kind === 'class-or-stylesheet') {
-      node.style.setProperty('fill', props.fill);
-      this.bumpDocumentRevision();
-    } else {
-      this.updateFillColor(shapeId, props.fill);
-    }
+    this.shapes.bakeEffectiveFillToLocal(shapeId);
   }
 
-  /**
-   * Same as {@link bakeEffectiveFillToLocal} for stroke (and width).
-   */
   bakeEffectiveStrokeToLocal(shapeId: string): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (!shape?.node) return;
-    const props = this.getShapeProperties(shape);
-    if (!props.stroke || props.strokeWidth === undefined || props.strokeWidth <= 0) return;
-    const kind = props.strokeSource?.kind;
-    const node = shape.node as SVGGraphicsElement;
-    if (kind === 'inline-style') {
-      node.style.removeProperty('stroke');
-      node.style.removeProperty('stroke-width');
-      this.addStroke(shapeId, props.stroke, props.strokeWidth);
-    } else if (kind === 'class-or-stylesheet') {
-      node.style.setProperty('stroke', props.stroke);
-      node.style.setProperty('stroke-width', String(props.strokeWidth));
-      this.bumpDocumentRevision();
-    } else {
-      this.addStroke(shapeId, props.stroke, props.strokeWidth);
-    }
+    this.shapes.bakeEffectiveStrokeToLocal(shapeId);
   }
 
-  /**
-   * Move a shape by dx, dy in **root SVG user space** (same as selection bbox / pointer mapping).
-   *
-   * SVG.js `dmove` adjusts geometry attrs (x/y, cx/cy, path `d`, …) in **local** space. After a
-   * proportional resize we store scale in `transform`; local dmove no longer shifts the painted
-   * bbox by (dx,dy) in user space, so the drag ghost (bbox + delta) and the drop diverge.
-   * Prepending `translate(dx,dy)` to the element matrix matches user-space motion for any shape.
-   */
   translateShape(shapeId: string, dx: number, dy: number): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (!shape || typeof shape.matrix !== 'function') return;
-    let localDx = dx;
-    let localDy = dy;
-
-    // Convert root-SVG delta into the shape's parent-space delta so ancestor transforms
-    // (e.g. scaled/flipped groups) don't amplify or flip movement on mouseup commit.
-    try {
-      const node = shape.node as SVGGraphicsElement;
-      const parent = node?.parentElement as unknown as SVGGraphicsElement | null;
-      const parentCtm = parent?.getCTM?.();
-      if (parentCtm) {
-        const det = parentCtm.a * parentCtm.d - parentCtm.b * parentCtm.c;
-        if (Number.isFinite(det) && Math.abs(det) > 1e-12) {
-          localDx = (parentCtm.d * dx - parentCtm.c * dy) / det;
-          localDy = (-parentCtm.b * dx + parentCtm.a * dy) / det;
-        }
-      }
-    } catch {
-      // fall back to raw delta if CTM math is unavailable
-    }
-
-    const m = shape.matrix();
-    shape.matrix(new Matrix().translate(localDx, localDy).multiply(m));
-    this.bumpDocumentRevision();
+    this.shapes.translateShape(shapeId, dx, dy);
   }
 
-  /**
-   * Show or hide a shape (e.g. hide original during drag, show again on drop).
-   */
   setShapeVisibility(shapeId: string, visible: boolean): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (shape) {
-      if (visible) {
-        shape.attr('visibility', null);
-      } else {
-        shape.attr('visibility', 'hidden');
-      }
-    }
+    this.shapes.setShapeVisibility(shapeId, visible);
   }
 
-  /**
-   * @param preferScreenBounds When true (default), use **painted** screen bounds first (clip/mask,
-   *   stroke, letterboxing via root CTM). Falls back to local `getBBox()` ×
-   *   `getTransformToElement(root)`, then SVG.js bbox × `matrixify()` (e.g. hidden during rotate when
-   *   `getBoundingClientRect` is zero).
-   */
   getShapeBBox(
     shapeId: string,
     options?: { preferScreenBounds?: boolean }
   ): { x: number; y: number; width: number; height: number } | null {
-    const preferScreenBounds = options?.preferScreenBounds !== false;
-    if (!this.svgInstance) return null;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement;
-    if (!shape?.node) return null;
-    const node = shape.node as SVGGraphicsElement;
-    const rootSvg = this.svgInstance.node as SVGSVGElement | null;
-
-    // Painted bounds (default): `getBBox()` ignores clip-path; screen rect matches what the user sees.
-    if (
-      preferScreenBounds &&
-      rootSvg &&
-      typeof node.getBoundingClientRect === 'function' &&
-      typeof rootSvg.getBoundingClientRect === 'function'
-    ) {
-      const rr = rootSvg.getBoundingClientRect();
-      const sr = node.getBoundingClientRect();
-      if (
-        rr.width > 0 &&
-        rr.height > 0 &&
-        sr.width > 0 &&
-        sr.height > 0 &&
-        Number.isFinite(sr.left) &&
-        Number.isFinite(sr.top)
-      ) {
-        const fromCtm = screenRectToRootSvgUserRect(rootSvg, sr);
-        if (fromCtm) {
-          return fromCtm;
-        }
-        // Legacy linear map (wrong for letterboxed `meet` / non-uniform `none`); kept if CTM APIs are missing.
-        const vbAttr = rootSvg.getAttribute('viewBox') || this.documentViewBox;
-        const parts = vbAttr.split(/\s+/);
-        const vbMinX = parts.length >= 4 ? Number(parts[0]) || 0 : 0;
-        const vbMinY = parts.length >= 4 ? Number(parts[1]) || 0 : 0;
-        const vbW = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
-        const vbH = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
-        const x = vbMinX + ((sr.left - rr.left) / rr.width) * vbW;
-        const y = vbMinY + ((sr.top - rr.top) / rr.height) * vbH;
-        const width = (sr.width / rr.width) * vbW;
-        const height = (sr.height / rr.height) * vbH;
-        if (Number.isFinite(x) && Number.isFinite(y) && Number.isFinite(width) && Number.isFinite(height) && width > 0 && height > 0) {
-          return { x, y, width, height };
-        }
-      }
-    }
-
-    // Local `getBBox()` × `getTransformToElement(root)`: full chain to root SVG user space
-    // (parent `<g>` transforms, not only this node’s `transform` — unlike SVG.js `matrixify()`).
-    if (rootSvg && typeof node.getBBox === 'function') {
-      try {
-        const local = node.getBBox();
-        const fromDom = localBBoxToRootUserAabb(node, rootSvg, local);
-        if (
-          fromDom &&
-          Number.isFinite(fromDom.width) &&
-          Number.isFinite(fromDom.height) &&
-          fromDom.width >= 0 &&
-          fromDom.height >= 0
-        ) {
-          return fromDom;
-        }
-      } catch {
-        // fall through: e.g. jsdom / detached node
-      }
-    }
-
-    // svg.js bbox() × matrixify(): fallback when `getTransformToElement` is unavailable (no full
-    // ancestor chain), same as before.
-    if (typeof shape.bbox === 'function' && typeof shape.matrixify === 'function') {
-      try {
-        const local = shape.bbox();
-        const m = shape.matrixify();
-        if (local && typeof local.isNulled === 'function' && !local.isNulled() && m) {
-          const tb = local.transform(m);
-          const w = tb.width ?? tb.w;
-          const h = tb.height ?? tb.h;
-          if (Number.isFinite(w) && Number.isFinite(h) && w >= 0 && h >= 0) {
-            return { x: tb.x, y: tb.y, width: w, height: h };
-          }
-        }
-      } catch {
-        // fall through to native getBBox
-      }
-    }
-    if (typeof node.getBBox !== 'function') return null;
-    const bbox = node.getBBox();
-    return { x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height };
+    return this.geometry.getShapeBBox(shapeId, options);
   }
 
-  /**
-   * Union of bounding boxes for the given shape ids. Returns null if no valid bboxes.
-   * @see getShapeBBox for `options.preferScreenBounds`
-   */
   getUnionBBox(
     shapeIds: string[],
     options?: { preferScreenBounds?: boolean }
@@ -1383,749 +194,33 @@ export class SvgManipulationService {
     return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
   }
 
-  /**
-   * User shapes the marquee should select (`rect` in editor SVG coordinates).
-   * - If the shape bbox is **fully inside** the marquee, it is selected (no paint sampling needed),
-   *   so thin or sparse geometry still selects when fully enclosed.
-   * - Otherwise, requires marquee–bbox overlap and a paint hit on **interior** samples and/or **points
-   *   along the four marquee edges** (`isPointInFill` / `isPointInStroke`) so edges crossing the shape
-   *   select it, while a marquee lying only in a hole (no edge through paint) does not.
-   */
-  getShapePropertiesIntersectingRect(rect: AxisAlignedRect): ShapeProperties[] {
-    if (!this.svgInstance) return [];
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    const scope = contentGroup ?? this.svgInstance;
-    const shapes = scope.find(CONTENT_SHAPE_SELECTOR) as SvgJsElement[];
-    const out: ShapeProperties[] = [];
-    for (const shape of shapes) {
-      const id = shape.id();
-      if (!id) continue;
-      const bbox = this.getShapeBBox(id);
-      if (!bbox || !axisAlignedRectsIntersect(rect, bbox)) continue;
-      if (axisAlignedRectContains(rect, bbox)) {
-        out.push(this.getShapeProperties(shape));
-        continue;
-      }
-      const node = shape.node as SVGGraphicsElement | undefined;
-      if (!node || !this.shapeMarqueeIntersectsPaint(shape, rect)) continue;
-      out.push(this.getShapeProperties(shape));
-    }
-    return out;
-  }
-
-  /**
-   * Map marquee sample points from **root SVG user space** (same as `getShapeBBox`) into the
-   * element-local space expected by `isPointInFill` / `isPointInStroke`. Prefer SVG.js `matrixify`
-   * (matches bbox math and works in jsdom); fall back to `getCTM().inverse()` in the browser.
-   */
-  private marqueePointToElementLocal(
-    shape: SvgJsElement,
-    node: SVGGraphicsElement
-  ): (p: { x: number; y: number }) => DOMPointInit {
-    try {
-      if (typeof shape.matrixify === 'function') {
-        const m = shape.matrixify();
-        if (m && typeof m.inverse === 'function') {
-          const inv = m.inverse();
-          const v = inv.valueOf() as { a: number; b: number; c: number; d: number; e: number; f: number };
-          return (p) => ({
-            x: v.a * p.x + v.c * p.y + v.e,
-            y: v.b * p.x + v.d * p.y + v.f
-          });
-        }
-      }
-    } catch {
-      /* try DOM CTM */
-    }
-    try {
-      const ctm = typeof node.getCTM === 'function' ? node.getCTM() : null;
-      if (ctm) {
-        const inv = ctm.inverse();
-        return (p) => ({
-          x: inv.a * p.x + inv.c * p.y + inv.e,
-          y: inv.b * p.x + inv.d * p.y + inv.f
-        });
-      }
-    } catch {
-      /* identity */
-    }
-    return (p) => p;
-  }
-
-  /**
-   * True if some interior or **edge** sample in `marquee` hits the element's fill or stroke.
-   */
-  private shapeMarqueeIntersectsPaint(shape: SvgJsElement, marquee: AxisAlignedRect): boolean {
-    const node = shape.node as SVGGraphicsElement;
-    const points = [...marqueeSamplePoints(marquee), ...marqueeEdgeSamplePoints(marquee)];
-    if (points.length === 0) return false;
-
-    const geom = node as SVGGeometryElement;
-    const hasFill = typeof geom.isPointInFill === 'function';
-    const hasStroke = typeof geom.isPointInStroke === 'function';
-    if (!hasFill && !hasStroke) {
-      return true;
-    }
-
-    const toLocal = this.marqueePointToElementLocal(shape, node);
-
-    for (const p of points) {
-      const pt = toLocal(p);
-      if (hasFill) {
-        try {
-          if (geom.isPointInFill(pt)) return true;
-        } catch {
-          /* ignore */
-        }
-      }
-      if (hasStroke) {
-        try {
-          if (geom.isPointInStroke(pt)) return true;
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Clear shape highlight (no-op: overlay is driven by selection state).
-   */
-  clearHighlight(): void {}
-
-  /**
-   * Remove shapes from the document. Selection/marquee rules apply: ids are expanded to the same
-   * clip-path/mask groups as {@link expandSelectionByClipGroups} so a clipped set is removed together.
-   */
-  removeShapes(shapeIds: string[]): void {
-    if (!this.svgInstance || shapeIds.length === 0) return;
-    const props: ShapeProperties[] = [];
-    for (const id of shapeIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      if (shape) props.push(this.getShapeProperties(shape));
-    }
-    if (props.length === 0) return;
-    const expanded = this.expandSelectionByClipGroups(props);
-    const toRemove = [...new Set(expanded.map((p) => p.id))];
-    for (const id of toRemove) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      if (shape) shape.remove();
-    }
-    if (toRemove.length > 0) this.bumpDocumentRevision();
-  }
-
-  /**
-   * Create a new SVG shape inside the content group.
-   * Returns the new element's ID, or null if not initialized.
-   */
-  addShape(type: CreatableShapeType, attrs: ShapeCreationAttrs): string | null {
-    if (!this.svgInstance) return null;
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`) as G | null;
-    if (!contentGroup) return null;
-
-    const usedIds = new Set<string>();
-    contentGroup.find('*').forEach((el: SvgJsElement) => {
-      const id = el.id();
-      if (id) usedIds.add(id);
-    });
-    let newId: string;
-    do {
-      newId = `shape-${Math.random().toString(36).substr(2, 9)}`;
-    } while (usedIds.has(newId));
-
-    let shape: SvgJsElement;
-
-    const defaults = this.drawingStyleDefaults.defaults();
-    const fill = attrs.fill ?? defaults.fill;
-    const stroke = attrs.stroke ?? defaults.stroke;
-    const strokeWidth = attrs.strokeWidth ?? defaults.strokeWidth;
-
-    if (type === 'rect') {
-      const w = attrs.width ?? 100;
-      const h = attrs.height ?? 100;
-      const x = attrs.x ?? 0;
-      const y = attrs.y ?? 0;
-      const el = contentGroup.rect(w, h).move(x, y);
-      el.fill(fill);
-      el.stroke({ color: stroke, width: strokeWidth });
-      shape = el;
-    } else if (type === 'ellipse') {
-      const rx = attrs.rx ?? 50;
-      const ry = attrs.ry ?? 50;
-      const cx = attrs.cx ?? rx;
-      const cy = attrs.cy ?? ry;
-      const el = contentGroup.ellipse(rx * 2, ry * 2).center(cx, cy);
-      el.fill(fill);
-      el.stroke({ color: stroke, width: strokeWidth });
-      shape = el;
-    } else if (type === 'line') {
-      const x1 = attrs.x1 ?? 0;
-      const y1 = attrs.y1 ?? 0;
-      const x2 = attrs.x2 ?? 100;
-      const y2 = attrs.y2 ?? 100;
-      const el = contentGroup.line(x1, y1, x2, y2);
-      // Canonical rule: line creation ignores fill.
-      el.fill('none');
-      el.stroke({ color: stroke, width: strokeWidth });
-      shape = el;
-    } else {
-      const x = attrs.x ?? 0;
-      const y = attrs.y ?? 0;
-      const textContent = attrs.textContent ?? 'Text';
-      // `plain()` avoids svg.js tspan layout calls that rely on getBBox, which jsdom lacks.
-      const el = contentGroup.plain(textContent);
-      el.attr({
-        x,
-        y,
-        fill,
-        stroke,
-        'stroke-width': strokeWidth,
-        'font-size': attrs.fontSize ?? defaults.fontSize,
-        'font-family': attrs.fontFamily ?? defaults.fontFamily,
-        'font-weight': attrs.fontWeight ?? defaults.fontWeight,
-        'font-style': attrs.fontStyle ?? defaults.fontStyle,
-        'text-anchor': attrs.textAnchor ?? defaults.textAnchor
-      });
-      shape = el;
-    }
-
-    shape.id(newId);
-    try {
-      shape.css({ cursor: 'pointer' });
-    } catch {
-      // jsdom may not support style.setProperty on SVG elements
-    }
-    this.bumpDocumentRevision();
-    return newId;
-  }
-
-  /**
-   * Insert a `<path>` with the given `d` into the editor content group.
-   * Mirrors {@link addShape} id allocation and pointer styling.
-   */
-  insertPathIntoContentGroup(
-    d: string,
-    attrs?: { fill?: string; stroke?: string; strokeWidth?: number },
-    options?: { closedPath?: boolean }
-  ): string | null {
-    if (!this.svgInstance) return null;
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`) as G | null;
-    if (!contentGroup) return null;
-
-    const usedIds = new Set<string>();
-    contentGroup.find('*').forEach((el: SvgJsElement) => {
-      const id = el.id();
-      if (id) usedIds.add(id);
-    });
-    let newId: string;
-    do {
-      newId = `shape-${Math.random().toString(36).substr(2, 9)}`;
-    } while (usedIds.has(newId));
-
-    const defaults = this.drawingStyleDefaults.defaults();
-    const pathFactory = contentGroup as G & { path(pathD: string): SvgJsElement };
-    const shape = pathFactory.path(d);
-    shape.id(newId);
-    const fill = attrs?.fill ?? (options?.closedPath ? defaults.fill : 'none');
-    shape.fill(fill);
-    shape.stroke({
-      color: attrs?.stroke ?? defaults.stroke,
-      width: attrs?.strokeWidth ?? defaults.strokeWidth
-    });
-    try {
-      shape.css({ cursor: 'pointer' });
-    } catch {
-      /* jsdom */
-    }
-    this.bumpDocumentRevision();
-    return newId;
-  }
-
-  /**
-   * Remove a single shape by ID (no clip-group expansion). Used by undo of AddShapeCommand.
-   */
-  removeShape(shapeId: string): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (shape) {
-      shape.remove();
-      this.bumpDocumentRevision();
-    }
-  }
-
-  /**
-   * Re-insert a serialized shape element (outerHTML) into the content group at the specified
-   * DOM index. Used by redo of AddShapeCommand. Sets cursor:pointer on the inserted element.
-   */
-  insertShapeMarkup(markup: string, insertionIndex?: number): void {
-    if (!this.svgInstance) return;
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    if (!contentGroup?.node) return;
-
-    const parent = contentGroup.node as Element;
-    const temp = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-    temp.innerHTML = markup;
-    const newNode = temp.firstElementChild;
-    if (!newNode) return;
-
-    if (insertionIndex != null && insertionIndex < parent.children.length) {
-      parent.insertBefore(newNode, parent.children[insertionIndex]);
-    } else {
-      parent.appendChild(newNode);
-    }
-
-    try {
-      (newNode as SVGElement).style?.setProperty('cursor', 'pointer');
-    } catch {
-      // jsdom compatibility
-    }
-
-    this.bumpDocumentRevision();
-  }
-
-  createClipboardPayload(shapeIds: string[]): ClipboardPayload {
-    if (!this.svgInstance || shapeIds.length === 0) return { shapes: [] };
-    const orderedIds = this.getShapeIdsInDomOrder(shapeIds);
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    const contentNode = contentGroup?.node as Element | undefined;
-    const children = contentNode ? Array.from(contentNode.children) : [];
-
-    const shapes: ClipboardShapeSnapshot[] = [];
-    for (const id of orderedIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const node = shape?.node as Element | undefined;
-      if (!node) continue;
-      const insertionIndex = children.indexOf(node);
-      shapes.push({
-        id,
-        markup: node.outerHTML,
-        insertionIndex: insertionIndex >= 0 ? insertionIndex : undefined
-      });
-    }
-    return { shapes };
-  }
-
-  pasteClipboardPayload(
-    payload: ClipboardPayload,
-    offset: { dx: number; dy: number }
-  ): { insertedIds: string[]; insertedMarkup: string[] } {
-    if (!this.svgInstance || payload.shapes.length === 0) {
-      return { insertedIds: [], insertedMarkup: [] };
-    }
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    const contentNode = contentGroup?.node as Element | undefined;
-    if (!contentNode) return { insertedIds: [], insertedMarkup: [] };
-
-    const usedIds = new Set<string>();
-    contentNode.querySelectorAll('[id]').forEach((el: Element) => {
-      const id = el.id;
-      if (id) usedIds.add(id);
-    });
-
-    const insertedIds: string[] = [];
-    const insertedMarkup: string[] = [];
-
-    for (const shape of payload.shapes) {
-      const wrapper = document.createElementNS(SVG_NS, 'g');
-      wrapper.innerHTML = shape.markup;
-      const root = wrapper.firstElementChild;
-      if (!root) continue;
-
-      const idMap = new Map<string, string>();
-      root.querySelectorAll('[id]').forEach((el) => {
-        const oldId = (el as Element).id;
-        if (!oldId) return;
-        const newId = this.generateUniqueShapeId(usedIds, oldId);
-        idMap.set(oldId, newId);
-      });
-      if (root.id) {
-        const newRootId = this.generateUniqueShapeId(usedIds, root.id);
-        idMap.set(root.id, newRootId);
-      }
-
-      root.querySelectorAll('[id]').forEach((el) => {
-        const mapped = idMap.get((el as Element).id);
-        if (mapped) (el as Element).id = mapped;
-      });
-      if (root.id) {
-        const mapped = idMap.get(root.id);
-        if (mapped) root.id = mapped;
-      }
-
-      this.remapInternalReferences(root, idMap);
-
-      const inserted = root.cloneNode(true) as SVGGraphicsElement;
-      if (offset.dx !== 0 || offset.dy !== 0) {
-        const existing = inserted.getAttribute('transform');
-        const translate = `translate(${offset.dx} ${offset.dy})`;
-        inserted.setAttribute('transform', existing ? `${translate} ${existing}` : translate);
-      }
-
-      contentNode.appendChild(inserted);
-      const insertedId = inserted.id;
-      if (insertedId) insertedIds.push(insertedId);
-
-      try {
-        (inserted as SVGElement).style?.setProperty('cursor', 'pointer');
-      } catch {
-        // jsdom compatibility
-      }
-
-      insertedMarkup.push(inserted.outerHTML);
-    }
-
-    if (insertedIds.length > 0) {
-      this.bumpDocumentRevision();
-    }
-    return { insertedIds, insertedMarkup };
-  }
-
-  private generateUniqueShapeId(usedIds: Set<string>, baseId?: string): string {
-    let newId = '';
-    const normalizedBase = baseId && baseId.trim() ? baseId.trim() : 'shape';
-    do {
-      newId = `${normalizedBase}-copy-${Math.random().toString(36).slice(2, 8)}`;
-    } while (usedIds.has(newId));
-    usedIds.add(newId);
-    return newId;
-  }
-
-  private remapInternalReferences(root: Element, idMap: Map<string, string>): void {
-    const remapValue = (raw: string): string => {
-      let next = raw;
-      next = next.replace(URL_REF_RE, (_match, quote: string, refId: string) => {
-        const mapped = idMap.get(refId);
-        return mapped ? `url(${quote}#${mapped}${quote})` : _match;
-      });
-      if (next.startsWith('#')) {
-        const refId = next.slice(1);
-        const mapped = idMap.get(refId);
-        if (mapped) return `#${mapped}`;
-      }
-      return next;
-    };
-
-    const remapNode = (node: Element): void => {
-      for (const name of node.getAttributeNames()) {
-        const value = node.getAttribute(name);
-        if (!value) continue;
-        const remapped = remapValue(value);
-        if (remapped !== value) {
-          node.setAttribute(name, remapped);
-        }
-      }
-      for (const child of Array.from(node.children)) {
-        remapNode(child);
-      }
-    };
-
-    remapNode(root);
-  }
-
-  /**
-   * Export the logical document (viewBox + content), not the editor-stage SVG.
-   *
-   * Note: consumers that re-parse this as strict XML (e.g. the SVG debug panel) can fail on
-   * Inkscape-style files when prefixed elements lose root `xmlns:*` declarations; see the future-work
-   * note in `svg-debug-xml.ts` (post-processing + user warning).
-   */
-  exportSVG(): string {
-    if (!this.svgInstance) return '';
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    if (!contentGroup?.node) return this.svgInstance.svg();
-    const xmlns = this.svgInstance.node.getAttribute('xmlns') || 'http://www.w3.org/2000/svg';
-    const inner = (contentGroup.node as Element).innerHTML;
-    const ab = this._artboard();
-    return `<svg xmlns="${xmlns}" width="${ab.width}" height="${ab.height}" viewBox="${this.documentViewBox}" preserveAspectRatio="${this.documentPreserveAspectRatio}">${inner}</svg>`;
-  }
-
-  /**
-   * Get SVG instance for direct manipulation
-   */
-  getSVGInstance(): Svg | null {
-    return this.svgInstance;
-  }
-
-  /**
-   * Return all editable content shapes in DOM/painter order.
-   * First item is visually back-most, last item is front-most.
-   */
-  getLayerStackItems(): LayerStackItem[] {
-    if (!this.svgInstance) return [];
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    if (!contentGroup?.node) return [];
-    const out: LayerStackItem[] = [];
-    const contentShapeTags = new Set(CONTENT_SHAPE_SELECTOR.split(', '));
-
-    const walk = (parent: Element): void => {
-      for (const child of Array.from(parent.children)) {
-        const tagName = child.tagName?.toLowerCase?.() || '';
-        if (tagName === 'g') {
-          walk(child);
-          continue;
-        }
-        if (!contentShapeTags.has(tagName)) continue;
-        const id = (child as Element).id;
-        if (!id) continue;
-        const shape = this.svgInstance!.findOne(`#${id}`) as SvgJsElement | null;
-        const renderedPaint = this.getRenderedPaint(child as Element);
-        const rawFill = shape ? (shape.attr('fill') as string | null) : null;
-        const rawStroke = shape ? (shape.attr('stroke') as string | null) : null;
-        const rawStrokeWidth = shape ? Number.parseFloat(String(shape.attr('stroke-width') ?? '')) : Number.NaN;
-        const rawOpacity = shape ? Number.parseFloat(String(shape.attr('opacity') ?? '')) : Number.NaN;
-        const fill = renderedPaint.fill ?? (rawFill || undefined);
-        const strokeVisible = this.isStrokeVisiblyPainted(child as Element);
-        let stroke: string | undefined;
-        let strokeWidth: number | undefined;
-        if (strokeVisible) {
-          stroke =
-            renderedPaint.stroke && renderedPaint.stroke !== 'none'
-              ? renderedPaint.stroke
-              : rawStroke && rawStroke !== 'none'
-                ? rawStroke
-                : undefined;
-          const w = Number.isFinite(renderedPaint.strokeWidth ?? Number.NaN)
-            ? (renderedPaint.strokeWidth as number)
-            : Number.isFinite(rawStrokeWidth)
-              ? rawStrokeWidth
-              : 0;
-          strokeWidth = Number.isFinite(w) ? w : 0;
-        }
-        const opacity = Number.isFinite(renderedPaint.opacity ?? Number.NaN)
-          ? renderedPaint.opacity
-          : (Number.isFinite(rawOpacity) ? rawOpacity : undefined);
-        out.push({
-          id,
-          type: tagName,
-          elementMarkup: (child as Element).outerHTML,
-          fill,
-          stroke,
-          strokeWidth,
-          opacity
-        });
-      }
-    };
-    walk(contentGroup.node as Element);
-    return out;
-  }
-
-  /**
-   * Return the given shape ids in DOM order (order of children in the editor content group).
-   * Ids not found in the content group are omitted.
-   */
-  getShapeIdsInDomOrder(shapeIds: string[]): string[] {
-    if (!this.svgInstance || shapeIds.length === 0) return [];
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    if (!contentGroup?.node) return [...shapeIds];
-    const idSet = new Set(shapeIds);
-    const ordered: string[] = [];
-
-    const walk = (parent: Element): void => {
-      for (const child of Array.from(parent.children)) {
-        const tagName = child.tagName?.toLowerCase?.() || '';
-        if (tagName === 'g') {
-          walk(child);
-          continue;
-        }
-        const id = (child as Element).id;
-        if (id && idSet.has(id)) ordered.push(id);
-      }
-    };
-    walk(contentGroup.node as Element);
-    return ordered.length > 0 ? ordered : [...shapeIds];
-  }
-
-  /**
-   * Rotation pivot in root SVG user space: average of each shape's local bbox center
-   * (`shape.bbox()` → cx/cy) transformed by {@link SvgJsElement#matrixify}. Unlike the axis-aligned
-   * union bbox center, this stays aligned with the painted rotation center after prior rotations
-   * (the union AABB center drifts for non-square selections).
-   */
   getSelectionRotationPivot(shapeIds: string[]): { x: number; y: number } | null {
-    if (!this.svgInstance || shapeIds.length === 0) return null;
-    const pts: { x: number; y: number }[] = [];
-    for (const id of shapeIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      if (!shape || typeof shape.bbox !== 'function' || typeof shape.matrixify !== 'function') continue;
-      try {
-        const local = shape.bbox();
-        const m = shape.matrixify();
-        if (!local || !m) continue;
-        const w = local.w ?? local.width;
-        const h = local.h ?? local.height;
-        if (!Number.isFinite(w) || !Number.isFinite(h) || w <= 0 || h <= 0) continue;
-        const cx = Number.isFinite(local.cx) ? local.cx : local.x + w / 2;
-        const cy = Number.isFinite(local.cy) ? local.cy : local.y + h / 2;
-        const v = m.valueOf() as { a: number; b: number; c: number; d: number; e: number; f: number };
-        pts.push({
-          x: v.a * cx + v.c * cy + v.e,
-          y: v.b * cx + v.d * cy + v.f
-        });
-      } catch {
-        /* skip */
-      }
-    }
-    if (pts.length === 0) {
-      const u = this.getUnionBBox(shapeIds);
-      return u ? { x: u.x + u.width / 2, y: u.y + u.height / 2 } : null;
-    }
-    const sx = pts.reduce((s, p) => s + p.x, 0) / pts.length;
-    const sy = pts.reduce((s, p) => s + p.y, 0) / pts.length;
-    return { x: sx, y: sy };
+    return this.geometry.getSelectionRotationPivot(shapeIds);
   }
 
-  /**
-   * Clone each shape's current transform matrix for resize commit (SVG.js).
-   */
   snapshotSelectionTransforms(shapeIds: string[]): Map<string, Matrix> {
-    const map = new Map<string, Matrix>();
-    if (!this.svgInstance) return map;
-    for (const id of shapeIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      if (shape && typeof shape.matrix === 'function') {
-        map.set(id, shape.matrix().clone());
-      }
-    }
-    return map;
+    return this.geometry.snapshotSelectionTransforms(shapeIds);
   }
 
-  /**
-   * Map path `d` coordinates (element-local) to root SVG user space (selection / viewBox space).
-   * Uses DOM `getTransformToElement` when available; otherwise composes `matrixify()` up to the
-   * SVG.js document root (covers jsdom and matches parent-`<g>` transforms).
-   */
   mapPathLocalToRootUser(shapeId: string, lx: number, ly: number): { x: number; y: number } {
-    if (!this.svgInstance) return { x: lx, y: ly };
-    const rootSvg = this.svgInstance.node as SVGSVGElement;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (!shape?.node) return { x: lx, y: ly };
-    const domPt = localPointToRootUser(shape.node as SVGGraphicsElement, rootSvg, lx, ly);
-    if (domPt) return domPt;
-    try {
-      const M = this.composePathLocalToRootMatrix(shapeId);
-      if (!M) return { x: lx, y: ly };
-      const p = new Point(lx, ly).transform(M);
-      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return { x: lx, y: ly };
-      return { x: p.x, y: p.y };
-    } catch {
-      return { x: lx, y: ly };
-    }
+    return this.geometry.mapPathLocalToRootUser(shapeId, lx, ly);
   }
 
-  /** Inverse of {@link mapPathLocalToRootUser} for pointer-driven node edits. */
   mapRootUserToPathLocal(shapeId: string, rx: number, ry: number): { x: number; y: number } | null {
-    if (!this.svgInstance) return null;
-    const rootSvg = this.svgInstance.node as SVGSVGElement;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (!shape?.node) return null;
-    const domPt = rootUserPointToLocalPoint(shape.node as SVGGraphicsElement, rootSvg, rx, ry);
-    if (domPt) return domPt;
-    try {
-      const M = this.composePathLocalToRootMatrix(shapeId);
-      if (!M) return null;
-      const inv = M.inverse();
-      if (!inv) return null;
-      const p = new Point(rx, ry).transform(inv);
-      if (!Number.isFinite(p.x) || !Number.isFinite(p.y)) return null;
-      return { x: p.x, y: p.y };
-    } catch {
-      return null;
-    }
+    return this.geometry.mapRootUserToPathLocal(shapeId, rx, ry);
   }
 
-  private composePathLocalToRootMatrix(shapeId: string): Matrix | null {
-    if (!this.svgInstance) return null;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (!shape || typeof shape.matrixify !== 'function') return null;
-    let M = shape.matrixify();
-    let parent = shape.parent() as SvgJsElement | undefined;
-    while (parent && parent !== this.svgInstance && typeof parent.matrixify === 'function') {
-      M = parent.matrixify().multiply(M);
-      parent = parent.parent() as SvgJsElement | undefined;
-    }
-    return M;
-  }
-
-  /**
-   * Depth-first node list: root first, then `find('*')` order (matches restore walk).
-   */
-  private getOrderedSubtreeNodes(root: SvgJsElement): SvgJsElement[] {
-    const found = root.find('*') as SvgJsElement[];
-    const rest = Array.isArray(found) ? found : [];
-    return [root, ...rest];
-  }
-
-  /**
-   * Captures `vector-effect` on each node in every selected subtree (for undo after resize).
-   */
   snapshotVectorEffectsForShapes(shapeIds: string[]): Map<string, (string | null)[]> {
-    const map = new Map<string, (string | null)[]>();
-    if (!this.svgInstance) return map;
-    for (const id of shapeIds) {
-      const el = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      if (!el) continue;
-      const nodes = this.getOrderedSubtreeNodes(el);
-      map.set(
-        id,
-        nodes.map((n) => (n.node as SVGElement).getAttribute('vector-effect'))
-      );
-    }
-    return map;
+    return this.geometry.snapshotVectorEffectsForShapes(shapeIds);
   }
 
-  /**
-   * Restores `vector-effect` attributes from {@link snapshotVectorEffectsForShapes}.
-   */
   restoreVectorEffectsForShapeSubtrees(
     shapeIds: string[],
     snapshots: Map<string, (string | null)[]>
   ): void {
-    if (!this.svgInstance) return;
-    for (const id of shapeIds) {
-      const el = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const values = snapshots.get(id);
-      if (!el || !values) continue;
-      const nodes = this.getOrderedSubtreeNodes(el);
-      for (let i = 0; i < Math.min(nodes.length, values.length); i++) {
-        const v = values[i];
-        const node = nodes[i];
-        if (v == null || v === '') {
-          node.attr('vector-effect', null);
-        } else {
-          node.attr('vector-effect', v);
-        }
-      }
-    }
-    this.bumpDocumentRevision();
+    this.geometry.restoreVectorEffectsForShapeSubtrees(shapeIds, snapshots);
   }
 
-  /**
-   * Removes `vector-effect="non-scaling-stroke"` so stroke width scales with `transform`
-   * (default SVG behavior). Overlay chrome keeps non-scaling strokes separately.
-   */
-  private stripNonScalingStrokeFromShapeSubtrees(shapeIds: string[]): void {
-    if (!this.svgInstance) return;
-    for (const id of shapeIds) {
-      const el = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      if (!el) continue;
-      for (const node of this.getOrderedSubtreeNodes(el)) {
-        const dom = node.node as SVGElement;
-        if (dom.getAttribute('vector-effect') === 'non-scaling-stroke') {
-          node.attr('vector-effect', null);
-        }
-      }
-    }
-  }
-
-  /**
-   * Apply uniform scale about the fixed anchor (opposite corner) for proportional resize.
-   * Composes: newMatrix = scale(s,s,ax,ay) * snapshotMatrix
-   *
-   * **Stroke policy:** scaling stroke with the shape is the product default; any
-   * `vector-effect="non-scaling-stroke"` on affected subtrees is cleared so undo can
-   * restore it via {@link restoreVectorEffectsForShapeSubtrees}.
-   */
   applyUnionScaleFromSnapshot(
     shapeIds: string[],
     unionBefore: { x: number; y: number; width: number; height: number },
@@ -2133,19 +228,7 @@ export class SvgManipulationService {
     snapshot: Map<string, Matrix>,
     handle: ResizeHandle
   ): void {
-    if (!this.svgInstance) return;
-    const { sx, sy, ax, ay } = computeScaleAnchorFromUnionResize(handle, unionBefore, unionAfter);
-    const eps = 1e-9;
-    if (!Number.isFinite(sx) || !Number.isFinite(sy) || Math.abs(sx) < eps || Math.abs(sy) < eps) return;
-    const T = new Matrix().scale(sx, sy, ax, ay);
-    for (const id of shapeIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const prev = snapshot.get(id);
-      if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
-      shape.matrix(T.multiply(prev));
-    }
-    this.stripNonScalingStrokeFromShapeSubtrees(shapeIds);
-    this.bumpDocumentRevision();
+    this.geometry.applyUnionScaleFromSnapshot(shapeIds, unionBefore, unionAfter, snapshot, handle);
   }
 
   applyUnionScaleFromCenter(
@@ -2154,47 +237,18 @@ export class SvgManipulationService {
     unionAfter: { x: number; y: number; width: number; height: number },
     snapshot: Map<string, Matrix>
   ): void {
-    if (!this.svgInstance) return;
-    const s = unionAfter.width / unionBefore.width;
-    if (!Number.isFinite(s) || s === 0) return;
-    const cx = unionBefore.x + unionBefore.width / 2;
-    const cy = unionBefore.y + unionBefore.height / 2;
-    const T = new Matrix().scale(s, s, cx, cy);
-    for (const id of shapeIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const prev = snapshot.get(id);
-      if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
-      shape.matrix(T.multiply(prev));
-    }
-    this.stripNonScalingStrokeFromShapeSubtrees(shapeIds);
-    this.bumpDocumentRevision();
+    this.geometry.applyUnionScaleFromCenter(shapeIds, unionBefore, unionAfter, snapshot);
   }
 
-  /**
-   * Apply rotation about a pivot in root SVG user space (same as union bbox / pointer mapping).
-   * Composes: newMatrix = rotate(deg,cx,cy) * snapshotMatrix (`angleDeg` in degrees, SVG.js convention).
-   */
   applyUnionRotationFromSnapshot(
     shapeIds: string[],
     pivot: { x: number; y: number },
     angleDeg: number,
     snapshot: Map<string, Matrix>
   ): void {
-    if (!this.svgInstance) return;
-    if (!Number.isFinite(angleDeg)) return;
-    const T = new Matrix().rotate(angleDeg, pivot.x, pivot.y);
-    for (const id of shapeIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const prev = snapshot.get(id);
-      if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
-      shape.matrix(T.multiply(prev));
-    }
-    this.bumpDocumentRevision();
+    this.geometry.applyUnionRotationFromSnapshot(shapeIds, pivot, angleDeg, snapshot);
   }
 
-  /**
-   * Apply skew about a pivot in root SVG user space: `newMatrix = skew(axis) * snapshotMatrix`.
-   */
   applyUnionSkewFromSnapshot(
     shapeIds: string[],
     axis: 'x' | 'y',
@@ -2202,572 +256,142 @@ export class SvgManipulationService {
     pivot: { x: number; y: number },
     snapshot: Map<string, Matrix>
   ): void {
-    if (!this.svgInstance) return;
-    if (!Number.isFinite(angleDeg)) return;
-    const T =
-      axis === 'x'
-        ? new Matrix().skewX(angleDeg, pivot.x, pivot.y)
-        : new Matrix().skewY(angleDeg, pivot.x, pivot.y);
-    for (const id of shapeIds) {
-      const shape = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const prev = snapshot.get(id);
-      if (!shape || typeof shape.matrix !== 'function' || !prev) continue;
-      const next = T.multiply(prev);
-      const v = next.valueOf() as { a: number; b: number; c: number; d: number; e: number; f: number };
-      if (
-        !Number.isFinite(v.a) ||
-        !Number.isFinite(v.b) ||
-        !Number.isFinite(v.c) ||
-        !Number.isFinite(v.d) ||
-        !Number.isFinite(v.e) ||
-        !Number.isFinite(v.f)
-      ) {
-        continue;
-      }
-      shape.matrix(next);
-    }
-    this.bumpDocumentRevision();
+    this.geometry.applyUnionSkewFromSnapshot(shapeIds, axis, angleDeg, pivot, snapshot);
   }
 
-  /**
-   * Build a hierarchical tree of the content group. Groups appear as branch nodes with `children`;
-   * leaves are shapes. DOM order (first child = back-most in paint order).
-   */
+  getShapePropertiesIntersectingRect(rect: AxisAlignedRect): ShapeProperties[] {
+    return this.shapes.getShapePropertiesIntersectingRect(rect);
+  }
+
+  clearHighlight(): void {
+    this.shapes.clearHighlight();
+  }
+
+  removeShapes(shapeIds: string[]): void {
+    this.shapes.removeShapes(shapeIds);
+  }
+
+  addShape(type: CreatableShapeType, attrs: ShapeCreationAttrs): string | null {
+    return this.shapes.addShape(type, attrs);
+  }
+
+  insertPathIntoContentGroup(
+    d: string,
+    attrs?: { fill?: string; stroke?: string; strokeWidth?: number },
+    options?: { closedPath?: boolean }
+  ): string | null {
+    return this.shapes.insertPathIntoContentGroup(d, attrs, options);
+  }
+
+  removeShape(shapeId: string): void {
+    this.shapes.removeShape(shapeId);
+  }
+
+  insertShapeMarkup(markup: string, insertionIndex?: number): void {
+    this.shapes.insertShapeMarkup(markup, insertionIndex);
+  }
+
+  createClipboardPayload(shapeIds: string[]): ClipboardPayload {
+    return this.shapes.createClipboardPayload(shapeIds);
+  }
+
+  pasteClipboardPayload(
+    payload: ClipboardPayload,
+    offset: { dx: number; dy: number }
+  ): { insertedIds: string[]; insertedMarkup: string[] } {
+    return this.shapes.pasteClipboardPayload(payload, offset);
+  }
+
+  getLayerStackItems(): LayerStackItem[] {
+    return this.layers.getLayerStackItems();
+  }
+
+  getShapeIdsInDomOrder(shapeIds: string[]): string[] {
+    return this.layers.getShapeIdsInDomOrder(shapeIds);
+  }
+
   getLayerTree(): LayerTreeNode[] {
-    if (!this.svgInstance) return [];
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    if (!contentGroup?.node) return [];
-    const contentShapeTags = new Set(CONTENT_SHAPE_SELECTOR.split(', '));
-
-    const buildNode = (child: Element): LayerTreeNode | null => {
-      const tagName = child.tagName?.toLowerCase?.() || '';
-      if (LAYER_TREE_SKIP_TAGS.has(tagName)) return null;
-
-      const id = child.id || '';
-      const name = child.getAttribute('data-name') || id || tagName;
-      const visible = !this.isNodeHidden(child);
-      const elementMarkup = child.outerHTML;
-
-      if (tagName === 'g') {
-        const children: LayerTreeNode[] = [];
-        for (const grandchild of Array.from(child.children)) {
-          const node = buildNode(grandchild);
-          if (node) children.push(node);
-        }
-        const paint = this.getRenderedPaint(child);
-        return { id, type: 'g', name, children, visible, elementMarkup, ...paint };
-      }
-
-      if (!contentShapeTags.has(tagName)) return null;
-      if (!id) return null;
-
-      const shape = this.svgInstance!.findOne(`#${id}`) as SvgJsElement | null;
-      const renderedPaint = this.getRenderedPaint(child);
-      const rawFill = shape ? (shape.attr('fill') as string | null) : null;
-      const rawStroke = shape ? (shape.attr('stroke') as string | null) : null;
-      const rawStrokeWidth = shape ? Number.parseFloat(String(shape.attr('stroke-width') ?? '')) : Number.NaN;
-      const rawOpacity = shape ? Number.parseFloat(String(shape.attr('opacity') ?? '')) : Number.NaN;
-      const fill = renderedPaint.fill ?? (rawFill || undefined);
-      const strokePainted = this.isStrokeVisiblyPainted(child);
-      let stroke: string | undefined;
-      let strokeWidth: number | undefined;
-      if (strokePainted) {
-        stroke =
-          renderedPaint.stroke && renderedPaint.stroke !== 'none'
-            ? renderedPaint.stroke
-            : rawStroke && rawStroke !== 'none'
-              ? rawStroke
-              : undefined;
-        const w = Number.isFinite(renderedPaint.strokeWidth ?? Number.NaN)
-          ? (renderedPaint.strokeWidth as number)
-          : Number.isFinite(rawStrokeWidth)
-            ? rawStrokeWidth
-            : 0;
-        strokeWidth = Number.isFinite(w) ? w : 0;
-      }
-      const opacity = Number.isFinite(renderedPaint.opacity ?? Number.NaN)
-        ? renderedPaint.opacity
-        : (Number.isFinite(rawOpacity) ? rawOpacity : undefined);
-
-      return { id, type: tagName, name, visible, elementMarkup, fill, stroke, strokeWidth, opacity };
-    };
-
-    const root = contentGroup.node as Element;
-    const result: LayerTreeNode[] = [];
-    for (const child of Array.from(root.children)) {
-      const node = buildNode(child);
-      if (node) result.push(node);
-    }
-    return result;
+    return this.layers.getLayerTree();
   }
 
-  /** Whether a DOM node is hidden via `display:none` or `visibility:hidden`. */
-  private isNodeHidden(node: Element): boolean {
-    const displayAttr = node.getAttribute('display');
-    if (displayAttr === 'none') return true;
-    const display = (node as HTMLElement | SVGElement).style?.getPropertyValue('display')?.trim();
-    if (display === 'none') return true;
-    const visibility = node.getAttribute('visibility');
-    if (visibility === 'hidden') return true;
-    const visStyle = (node as HTMLElement | SVGElement).style?.getPropertyValue('visibility')?.trim();
-    if (visStyle === 'hidden') return true;
-    return false;
-  }
-
-  /**
-   * Move the element one position forward in its parent's children (swap with next sibling).
-   * Returns true if moved.
-   */
   moveElementForward(elementId: string): boolean {
-    if (!this.svgInstance) return false;
-    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (!el?.node) return false;
-    const node = el.node as Element;
-    const next = node.nextElementSibling;
-    if (!next || !node.parentNode) return false;
-    node.parentNode.insertBefore(next, node);
-    this.bumpDocumentRevision();
-    return true;
+    return this.layers.moveElementForward(elementId);
   }
 
-  /**
-   * Move the element one position backward in its parent's children (swap with previous sibling).
-   * Returns true if moved.
-   */
   moveElementBackward(elementId: string): boolean {
-    if (!this.svgInstance) return false;
-    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (!el?.node) return false;
-    const node = el.node as Element;
-    const prev = node.previousElementSibling;
-    if (!prev || !node.parentNode) return false;
-    node.parentNode.insertBefore(node, prev);
-    this.bumpDocumentRevision();
-    return true;
+    return this.layers.moveElementBackward(elementId);
   }
 
-  /** Move element to last child of its parent (front-most in paint order). */
   moveElementToFront(elementId: string): boolean {
-    if (!this.svgInstance) return false;
-    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (!el?.node) return false;
-    const node = el.node as Element;
-    const parent = node.parentNode;
-    if (!parent) return false;
-    if (node === parent.lastElementChild) return false;
-    parent.appendChild(node);
-    this.bumpDocumentRevision();
-    return true;
+    return this.layers.moveElementToFront(elementId);
   }
 
-  /** Move element to first child of its parent (back-most in paint order). */
   moveElementToBack(elementId: string): boolean {
-    if (!this.svgInstance) return false;
-    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (!el?.node) return false;
-    const node = el.node as Element;
-    const parent = node.parentNode;
-    if (!parent) return false;
-    if (node === parent.firstElementChild) return false;
-    parent.insertBefore(node, parent.firstElementChild);
-    this.bumpDocumentRevision();
-    return true;
+    return this.layers.moveElementToBack(elementId);
   }
 
-  /**
-   * Toggle visibility of an element (shape or group).
-   * If currently visible, set `display: none`. If hidden, remove `display: none`.
-   * Returns the new visibility state (true = now visible).
-   */
   toggleLayerVisibility(elementId: string): boolean {
-    if (!this.svgInstance) return true;
-    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (!el?.node) return true;
-    const hidden = this.isNodeHidden(el.node as Element);
-    if (hidden) {
-      el.attr('display', null);
-      try { (el.node as SVGElement).style?.removeProperty('display'); } catch { /* jsdom */ }
-      el.attr('visibility', null);
-    } else {
-      el.attr('display', 'none');
-    }
-    this.bumpDocumentRevision();
-    return hidden;
+    return this.layers.toggleLayerVisibility(elementId);
   }
 
-  /** Check if an element has `display:none` or `visibility:hidden`. */
   isElementVisible(elementId: string): boolean {
-    if (!this.svgInstance) return true;
-    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (!el?.node) return true;
-    return !this.isNodeHidden(el.node as Element);
+    return this.layers.isElementVisible(elementId);
   }
 
-  /**
-   * Create a new `<g>` element containing the given elements. The group is inserted at the
-   * position of the first element in DOM order; elements are moved into it preserving relative
-   * order. Returns the new group id or null on failure.
-   *
-   * After moving, any former parent `<g>` that becomes empty (no element children) is removed,
-   * walking up the chain so nested empty wrappers do not linger.
-   */
   groupSelectedElements(elementIds: string[]): string | null {
-    if (!this.svgInstance || elementIds.length === 0) return null;
-    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    if (!contentGroup?.node) return null;
-
-    const elements: { el: SvgJsElement; node: Element }[] = [];
-    for (const id of elementIds) {
-      const el = this.svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      if (el?.node) elements.push({ el, node: el.node as Element });
-    }
-    if (elements.length === 0) return null;
-
-    // Sort into DOM order by comparing document position
-    elements.sort((a, b) => {
-      const pos = a.node.compareDocumentPosition(b.node);
-      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
-      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
-      return 0;
-    });
-
-    const formerParents = new Set<Element>();
-    for (const { node } of elements) {
-      const p = node.parentElement;
-      if (p) formerParents.add(p);
-    }
-
-    const contentRoot = contentGroup.node as Element;
-    const firstNode = elements[0].node;
-    let anchor: Element = firstNode;
-    while (anchor.parentElement && anchor.parentElement !== contentRoot) {
-      anchor = anchor.parentElement;
-    }
-
-    const groupId = `group-${Math.random().toString(36).substr(2, 9)}`;
-    const svgNs = 'http://www.w3.org/2000/svg';
-    const gEl = document.createElementNS(svgNs, 'g');
-    gEl.setAttribute('id', groupId);
-
-    contentRoot.insertBefore(gEl, anchor);
-    for (const { node } of elements) {
-      gEl.appendChild(node);
-    }
-
-    this.pruneEmptyGroupsAfterReparent(formerParents);
-    this.bumpDocumentRevision();
-    return groupId;
+    return this.layers.groupSelectedElements(elementIds);
   }
 
-  /**
-   * Ungroup: move children of a `<g>` to its parent (at the group's position), then remove
-   * the empty `<g>`. Returns the ids of the ungrouped children.
-   */
   ungroupElement(groupId: string): string[] {
-    const childIds = this.ungroupOneGroupNoBump(groupId);
-    if (childIds !== null) {
-      this.bumpDocumentRevision();
-      return childIds;
-    }
-    return [];
+    return this.layers.ungroupElement(groupId);
   }
 
-  /**
-   * Ungroup several groups in one document revision. If the id list includes nested groups,
-   * only the innermost selected groups are ungrouped (when an ancestor and descendant are both
-   * selected, the ancestor is skipped). Groups are processed in document order.
-   * Returns child ids in DOM order (flattened) plus per-group snapshots for undo.
-   */
   ungroupElements(
     groupIds: string[]
   ): { allChildElementIds: string[]; undoSnapshots: string[][] } {
-    if (!this.svgInstance || groupIds.length === 0) {
-      return { allChildElementIds: [], undoSnapshots: [] };
-    }
-
-    const leafIds = this.filterLeafGroupsForUngroup(groupIds);
-    const sorted = this.sortGroupIdsByDocumentOrder(leafIds);
-    const undoSnapshots: string[][] = [];
-    let changed = false;
-
-    for (const gid of sorted) {
-      const snap = this.snapshotDirectChildIds(gid);
-      if (snap === null) continue;
-      const result = this.ungroupOneGroupNoBump(gid);
-      if (result === null) continue;
-      undoSnapshots.push(snap);
-      changed = true;
-    }
-
-    if (changed) this.bumpDocumentRevision();
-
-    const flat = undoSnapshots.flat();
-    const allChildElementIds = this.sortElementIdsByDocumentOrder(flat);
-    return { allChildElementIds, undoSnapshots };
+    return this.layers.ungroupElements(groupIds);
   }
 
-  private snapshotDirectChildIds(groupId: string): string[] | null {
-    if (!this.svgInstance) return null;
-    const el = this.svgInstance.findOne(`#${groupId}`) as SvgJsElement | undefined;
-    if (!el?.node) return null;
-    const node = el.node as Element;
-    if (node.tagName?.toLowerCase() !== 'g') return null;
-    return Array.from(node.children)
-      .filter((c): c is Element => c instanceof Element && Boolean(c.id))
-      .map((c) => c.id);
-  }
-
-  /** True if `ancestorId` is a strict DOM ancestor of `descendantId`. */
-  private isStrictAncestorElement(ancestorId: string, descendantId: string): boolean {
-    if (!this.svgInstance) return false;
-    const anc = this.svgInstance.findOne(`#${ancestorId}`)?.node as Element | undefined;
-    const desc = this.svgInstance.findOne(`#${descendantId}`)?.node as Element | undefined;
-    if (!anc || !desc) return false;
-    return anc !== desc && anc.contains(desc);
-  }
-
-  /**
-   * When multiple groups are selected, drop any group that still contains another selected group
-   * (keep inner selections only).
-   */
-  private filterLeafGroupsForUngroup(groupIds: string[]): string[] {
-    const unique = [...new Set(groupIds)];
-    return unique.filter(
-      (id) => !unique.some((other) => other !== id && this.isStrictAncestorElement(id, other))
-    );
-  }
-
-  private sortGroupIdsByDocumentOrder(ids: string[]): string[] {
-    if (!this.svgInstance) return ids;
-    const svg = this.svgInstance;
-    return [...ids].sort((a, b) => {
-      const na = svg.findOne(`#${a}`)?.node;
-      const nb = svg.findOne(`#${b}`)?.node;
-      if (!na || !nb) return 0;
-      const pos = na.compareDocumentPosition(nb);
-      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
-      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
-      return 0;
-    });
-  }
-
-  private sortElementIdsByDocumentOrder(ids: string[]): string[] {
-    if (!this.svgInstance) return ids;
-    const svg = this.svgInstance;
-    const unique = [...new Set(ids)];
-    return unique.sort((a, b) => {
-      const na = svg.findOne(`#${a}`)?.node;
-      const nb = svg.findOne(`#${b}`)?.node;
-      if (!na || !nb) return 0;
-      const pos = na.compareDocumentPosition(nb);
-      if (pos & Node.DOCUMENT_POSITION_FOLLOWING) return -1;
-      if (pos & Node.DOCUMENT_POSITION_PRECEDING) return 1;
-      return 0;
-    });
-  }
-
-  private isRemovableEmptyGroup(el: Element): boolean {
-    if (el.tagName?.toLowerCase() !== 'g') return false;
-    if (el.getAttribute(EDITOR_CONTENT_GROUP_ID) === 'true') return false;
-    return el.children.length === 0;
-  }
-
-  /**
-   * Remove empty `<g>` wrappers starting from parents that lost children, walking up while each
-   * removed node leaves another empty group.
-   */
-  private pruneEmptyGroupsAfterReparent(formerParents: ReadonlySet<Element>): void {
-    for (const start of formerParents) {
-      let el: Element | null = start;
-      while (el) {
-        if (!this.isRemovableEmptyGroup(el)) break;
-        const nextUp: Element | null = el.parentElement;
-        el.parentNode?.removeChild(el);
-        el = nextUp;
-      }
-    }
-  }
-
-  /**
-   * Hoist children and remove the group node. Returns `null` if the group did not exist or was
-   * not a `<g>`. Returns `[]` if the group was removed but had no id-bearing children.
-   */
-  private ungroupOneGroupNoBump(groupId: string): string[] | null {
-    if (!this.svgInstance) return null;
-    const el = this.svgInstance.findOne(`#${groupId}`) as SvgJsElement | undefined;
-    if (!el?.node) return null;
-    const node = el.node as Element;
-    if (node.tagName?.toLowerCase() !== 'g') return null;
-    const parent = node.parentNode;
-    if (!parent) return null;
-
-    const childIds: string[] = [];
-    const children = Array.from(node.children);
-    for (const child of children) {
-      if (child.id) childIds.push(child.id);
-      parent.insertBefore(child, node);
-    }
-    parent.removeChild(node);
-    return childIds;
-  }
-
-  /** Set a `data-name` attribute on the element for display in the layer panel. */
   renameElement(elementId: string, newName: string): void {
-    if (!this.svgInstance) return;
-    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (el) {
-      el.attr('data-name', newName);
-      this.bumpDocumentRevision();
-    }
+    this.layers.renameElement(elementId, newName);
   }
 
-  /** Return `data-name` attribute if set, else the element id. */
   getElementName(elementId: string): string {
-    if (!this.svgInstance) return elementId;
-    const el = this.svgInstance.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (!el) return elementId;
-    const name = el.attr('data-name') as string | null;
-    return name || el.id() || elementId;
+    return this.layers.getElementName(elementId);
   }
 
-  // --- Gradient editor (e1x / AS-1) ---
-
-  /** Allocate a unique id for defs (gradient, pattern, etc.). */
   allocateUniqueDefId(prefix: string): string {
-    if (!this.svgInstance) return `${prefix}-fallback`;
-    let id: string;
-    do {
-      id = `${prefix}-${Math.random().toString(36).slice(2, 11)}`;
-    } while (this.svgInstance.findOne(`#${id}`));
-    return id;
+    return this.gradients.allocateUniqueDefId(prefix);
   }
 
-  private static paintAttrReferencesDefId(value: string | null, defId: string): boolean {
-    if (!value) return false;
-    const esc = defId.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-    return new RegExp(`url\\(\\s*#${esc}\\s*\\)`, 'i').test(value);
-  }
-
-  private static cssEscapeSelector(id: string): string {
-    const g = globalThis as unknown as { CSS?: { escape?: (s: string) => string } };
-    if (typeof g.CSS?.escape === 'function') return g.CSS.escape(id);
-    return id.replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
-  }
-
-  /**
-   * Count content shapes whose `fill` or `stroke` presentation attribute references `url(#defId)`.
-   */
-  /**
-   * Count elements in the editor SVG whose `fill`, `stroke`, or inline `style` references `url(#defId)`.
-   */
   countPaintUrlReferencesToDefId(defId: string): number {
-    if (!this.svgInstance) return 0;
-    const root = this.svgInstance.node as SVGSVGElement;
-    let n = 0;
-    const walk = (el: Element) => {
-      const fill = el.getAttribute('fill');
-      const stroke = el.getAttribute('stroke');
-      const style = el.getAttribute('style');
-      if (SvgManipulationService.paintAttrReferencesDefId(fill, defId)) n++;
-      if (SvgManipulationService.paintAttrReferencesDefId(stroke, defId)) n++;
-      if (SvgManipulationService.paintAttrReferencesDefId(style, defId)) n++;
-      for (let i = 0; i < el.children.length; i++) walk(el.children[i] as Element);
-    };
-    walk(root);
-    return n;
+    return this.gradients.countPaintUrlReferencesToDefId(defId);
   }
 
-  /** Remove a `<linearGradient>` / `<radialGradient>` from root defs if present. */
   removeGradientDefById(gradientId: string): void {
-    if (!this.svgInstance) return;
-    const defs = this.svgInstance.defs().node;
-    const old = defs.querySelector(`#${SvgManipulationService.cssEscapeSelector(gradientId)}`);
-    if (old?.parentNode === defs) {
-      const tag = old.tagName.toLowerCase();
-      if (tag === 'lineargradient' || tag === 'radialgradient') {
-        defs.removeChild(old);
-        this.bumpDocumentRevision();
-      }
-    }
+    this.gradients.removeGradientDefById(gradientId);
   }
 
   countContentShapesReferencingPaintDef(defId: string): number {
-    if (!this.svgInstance) return 0;
-    const root = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`)?.node as Element | null;
-    if (!root) return 0;
-    let n = 0;
-    root.querySelectorAll(CONTENT_SHAPE_SELECTOR).forEach((node) => {
-      const el = node as Element;
-      const fill = el.getAttribute('fill');
-      const stroke = el.getAttribute('stroke');
-      if (
-        SvgManipulationService.paintAttrReferencesDefId(fill, defId) ||
-        SvgManipulationService.paintAttrReferencesDefId(stroke, defId)
-      ) {
-        n++;
-      }
-    });
-    return n;
+    return this.gradients.countContentShapesReferencingPaintDef(defId);
   }
 
   findGradientDomElement(
     gradientId: string
   ): SVGLinearGradientElement | SVGRadialGradientElement | null {
-    if (!this.svgInstance) return null;
-    const el = this.svgInstance.findOne(`#${gradientId}`)?.node as Element | null;
-    if (!el) return null;
-    const tag = el.tagName?.toLowerCase();
-    if (tag === 'lineargradient' || tag === 'radialgradient') {
-      return el as SVGLinearGradientElement | SVGRadialGradientElement;
-    }
-    return null;
+    return this.gradients.findGradientDomElement(gradientId);
   }
 
   readEditableGradientModelById(gradientId: string): EditableGradientModel | null {
-    const el = this.findGradientDomElement(gradientId);
-    return el ? readEditableGradientModel(el) : null;
+    return this.gradients.readEditableGradientModelById(gradientId);
   }
 
-  /**
-   * If multiple content shapes share this paint def, clone the gradient with a new id and
-   * repoint only `shapeId`'s `fill` or `stroke`. Returns the gradient id to edit (possibly unchanged).
-   */
   ensureDedicatedPaintGradient(shapeId: string, paintProperty: 'fill' | 'stroke'): string | null {
-    if (!this.svgInstance) return null;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (!shape?.node) return null;
-    const raw = shape.attr(paintProperty) as string | null;
-    const id = parsePaintReferenceId(raw ?? undefined);
-    if (!id) return null;
-    const gradEl = this.findGradientDomElement(id);
-    if (!gradEl) return null;
-    if (this.countContentShapesReferencingPaintDef(id) <= 1) {
-      return id;
-    }
-    const newId = this.allocateUniqueDefId('grad');
-    const clone = gradEl.cloneNode(true) as SVGLinearGradientElement | SVGRadialGradientElement;
-    clone.setAttribute('id', newId);
-    const defs = this.svgInstance.defs().node;
-    defs.appendChild(clone);
-    shape.attr(paintProperty, `url(#${newId})`);
-    this.bumpDocumentRevision();
-    return newId;
+    return this.gradients.ensureDedicatedPaintGradient(shapeId, paintProperty);
   }
 
-  /** Capture shape paint + gradient def for undo (after optional dedication). */
   capturePaintGradientSnapshot(shapeId: string, paintProperty: 'fill' | 'stroke'): PaintGradientSnapshot {
-    if (!this.svgInstance) {
-      return { gradientId: null, shapePaintAttr: null, gradientOuterHtml: null };
-    }
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    const shapePaintAttr = (shape?.attr(paintProperty) as string | null) ?? null;
-    const gradientId = parsePaintReferenceId(shapePaintAttr ?? undefined);
-    if (!gradientId) {
-      return { gradientId: null, shapePaintAttr, gradientOuterHtml: null };
-    }
-    const gel = this.findGradientDomElement(gradientId);
-    const gradientOuterHtml = gel ? gel.outerHTML : null;
-    return { gradientId, shapePaintAttr, gradientOuterHtml };
+    return this.gradients.capturePaintGradientSnapshot(shapeId, paintProperty);
   }
 
   applyPaintGradientSnapshot(
@@ -2775,140 +399,31 @@ export class SvgManipulationService {
     paintProperty: 'fill' | 'stroke',
     snapshot: PaintGradientSnapshot
   ): void {
-    if (!this.svgInstance) return;
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    if (!shape) return;
-    const defs = this.svgInstance.defs().node;
-
-    const idsToRemove = new Set<string>();
-    if (snapshot.gradientId) idsToRemove.add(snapshot.gradientId);
-    if (snapshot.gradientOuterHtml) {
-      const m = snapshot.gradientOuterHtml.match(/\bid\s*=\s*["']([^"']+)["']/i);
-      if (m) idsToRemove.add(m[1]);
-    }
-    for (const rid of idsToRemove) {
-      const old = defs.querySelector(`#${SvgManipulationService.cssEscapeSelector(rid)}`);
-      if (old?.parentNode === defs) defs.removeChild(old);
-    }
-
-    if (snapshot.gradientOuterHtml) {
-      const wrapped = `<svg xmlns="${SVG_NS}">${snapshot.gradientOuterHtml}</svg>`;
-      const doc = new DOMParser().parseFromString(wrapped, 'image/svg+xml');
-      const parsed = doc.documentElement.firstElementChild as
-        | SVGLinearGradientElement
-        | SVGRadialGradientElement
-        | null;
-      if (parsed?.getAttribute('id')) {
-        defs.appendChild(parsed);
-      }
-    }
-
-    if (snapshot.shapePaintAttr == null || snapshot.shapePaintAttr === '') {
-      shape.attr(paintProperty, null);
-    } else {
-      shape.attr(paintProperty, snapshot.shapePaintAttr);
-    }
-
-    this.bumpDocumentRevision();
+    this.gradients.applyPaintGradientSnapshot(shapeId, paintProperty, snapshot);
   }
 
-  /**
-   * Apply a full gradient model onto an existing def id (element must exist unless creating — use
-   * {@link createGradientFillForShape} for bootstrap).
-   */
   writeEditableGradientModel(model: EditableGradientModel): void {
-    if (!this.svgInstance) return;
-    let el = this.findGradientDomElement(model.id);
-    const defs = this.svgInstance.defs().node;
-    const doc = defs.ownerDocument;
-    if (!doc) return;
-
-    if (!el || el.tagName.toLowerCase() !== (model.kind === 'linear' ? 'lineargradient' : 'radialgradient')) {
-      if (el?.parentNode === defs) defs.removeChild(el);
-      const tag = model.kind === 'linear' ? 'linearGradient' : 'radialGradient';
-      const nu = doc.createElementNS(SVG_NS, tag);
-      nu.setAttribute('id', model.id);
-      defs.appendChild(nu);
-      el = nu as SVGLinearGradientElement | SVGRadialGradientElement;
-    }
-    applyEditableGradientModelToElement(el, model);
+    this.gradients.writeEditableGradientModel(model);
   }
 
-  /**
-   * Create a new linear gradient in defs and assign it as `fill` on the shape. Returns new gradient id.
-   */
   createLinearGradientFillForShape(shapeId: string, fromColor: string, toColor = '#ffffff'): string {
-    if (!this.svgInstance) return '';
-    const id = this.allocateUniqueDefId('grad');
-    const model = defaultLinearGradientModel(id, fromColor, toColor);
-    const doc = this.svgInstance.defs().node.ownerDocument;
-    if (!doc) return id;
-    const nu = doc.createElementNS(SVG_NS, 'linearGradient');
-    nu.setAttribute('id', id);
-    this.svgInstance.defs().node.appendChild(nu);
-    applyEditableGradientModelToElement(nu, model);
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    shape?.fill(`url(#${id})`);
-    this.bumpDocumentRevision();
-    return id;
+    return this.gradients.createLinearGradientFillForShape(shapeId, fromColor, toColor);
   }
 
-  /**
-   * Replace gradient geometry + stops in one transaction (caller pushes history).
-   */
   applyGradientModelToShapePaint(
     shapeId: string,
     paintProperty: 'fill' | 'stroke',
     model: EditableGradientModel
   ): void {
-    if (!this.svgInstance) return;
-    this.writeEditableGradientModel(model);
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    const url = `url(#${model.id})`;
-    if (paintProperty === 'fill') {
-      shape?.fill(url);
-    } else {
-      shape?.attr('stroke', url);
-    }
-    this.bumpDocumentRevision();
+    this.gradients.applyGradientModelToShapePaint(shapeId, paintProperty, model);
   }
 
-  /** Switch gradient kind while preserving id and repainting the shape ref. */
   setGradientKindForShape(
     shapeId: string,
     paintProperty: 'fill' | 'stroke',
     kind: 'linear' | 'radial',
     preserveStopsFrom: EditableGradientModel
   ): EditableGradientModel {
-    const id = preserveStopsFrom.id;
-    const stops = preserveStopsFrom.stops.length >= 2 ? preserveStopsFrom.stops : defaultLinearGradientModel(id, '#000000', '#ffffff').stops;
-    const units = preserveStopsFrom.gradientUnits;
-    let model: EditableGradientModel;
-    if (kind === 'linear') {
-      model = { ...defaultLinearGradientModel(id, stops[0]?.color ?? '#000000', stops[stops.length - 1]?.color ?? '#ffffff'), stops, gradientUnits: units };
-    } else {
-      model = {
-        ...defaultRadialGradientModel(id, stops[0]?.color ?? '#000000', stops[stops.length - 1]?.color ?? '#ffffff'),
-        stops,
-        gradientUnits: units
-      };
-    }
-    if (!this.svgInstance) return model;
-    const defs = this.svgInstance.defs().node;
-    const old = this.findGradientDomElement(id);
-    if (old?.parentNode === defs) defs.removeChild(old);
-    const doc = defs.ownerDocument;
-    if (!doc) return model;
-    const tag = kind === 'linear' ? 'linearGradient' : 'radialGradient';
-    const nu = doc.createElementNS(SVG_NS, tag);
-    nu.setAttribute('id', id);
-    defs.appendChild(nu);
-    applyEditableGradientModelToElement(nu as SVGLinearGradientElement | SVGRadialGradientElement, model);
-    const shape = this.svgInstance.findOne(`#${shapeId}`) as SvgJsElement | undefined;
-    const url = `url(#${id})`;
-    if (paintProperty === 'fill') shape?.fill(url);
-    else shape?.attr('stroke', url);
-    this.bumpDocumentRevision();
-    return model;
+    return this.gradients.setGradientKindForShape(shapeId, paintProperty, kind, preserveStopsFrom);
   }
 }

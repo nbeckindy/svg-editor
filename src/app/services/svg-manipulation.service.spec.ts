@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { SvgManipulationService, CreatableShapeType } from './svg-manipulation.service';
+import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { AddPathCommand, ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
 import { ShapeSelectionService } from './shape-selection.service';
 import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
@@ -45,10 +46,11 @@ describe('SvgManipulationService', () => {
   });
 
   it('should expand stage viewBox to match source aspect ratio (prevents squashing)', () => {
-    // Force a deterministic mismatch in `uW/uH`:
-    // source element is 100x50 (init ratio 2), but computed content bbox is 200x50 (current ratio 4).
-    const originalComputeContentBbox = (service as any).computeContentBbox;
-    (service as any).computeContentBbox = () => ({ x: 0, y: 0, width: 200, height: 50 });
+    const doc = TestBed.inject(SvgEditorDocumentService) as unknown as {
+      computeContentBbox(svgElement: Element): { x: number; y: number; width: number; height: number };
+    };
+    const originalComputeContentBbox = doc.computeContentBbox.bind(doc);
+    doc.computeContentBbox = () => ({ x: 0, y: 0, width: 200, height: 50 });
 
     try {
       const svgContent = '<svg width="100" height="50"><rect x="0" y="0" width="200" height="50" fill="#000"/></svg>';
@@ -69,7 +71,7 @@ describe('SvgManipulationService', () => {
       expect(vbW).toBeCloseTo(200, 0);
       expect(vbH).toBeCloseTo(100, 0);
     } finally {
-      (service as any).computeContentBbox = originalComputeContentBbox;
+      doc.computeContentBbox = originalComputeContentBbox;
     }
   });
 
