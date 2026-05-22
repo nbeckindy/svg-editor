@@ -140,10 +140,7 @@ export function penReflectStateAfterCommitted(segments: readonly PenPathSegment[
   return pathSvgReflectStateAfter(segments);
 }
 
-/**
- * Alternate pen curve mode when `ctrlKey` is true: quadratic after `M`/`L`, smooth cubic after `C`/`S`,
- * smooth quadratic after `Q`/`T`. The canvas currently always passes `false` (Ctrl path disabled pending UX).
- */
+/** Alternate pen curve mode (Control held or toolbar toggle): Q after `M`/`L`, S after `C`/`S`, T after `Q`/`T`. */
 export function penDragCurveAuthoringKind(
   ctrlKey: boolean,
   segments: readonly PenPathSegment[]

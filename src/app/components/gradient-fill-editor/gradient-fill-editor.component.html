@@ -1,5 +1,5 @@
 @if (draftModel; as d) {
-  <div class="gradient-editor">
+  <div class="gradient-editor" data-testid="gradient-fill-editor-root">
     <div class="row">
       <span class="label">Type</span>
       <label><input type="radio" name="gk" [checked]="d.kind === 'linear'" (change)="onKindChange('linear')" /> Linear</label>

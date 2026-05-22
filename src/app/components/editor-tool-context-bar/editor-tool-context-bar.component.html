@@ -32,7 +32,21 @@
       <div class="context-slot" aria-hidden="true"></div>
     }
     @case ('pen') {
-      <div class="context-slot" aria-hidden="true"></div>
+      <div class="context-slot pen-context" data-testid="pen-tool-context">
+        <button
+          type="button"
+          class="pen-alt-curve-toggle"
+          data-testid="pen-alt-curve-toggle"
+          [class.active]="editorTool.penAltCurveMode()"
+          [attr.aria-pressed]="editorTool.penAltCurveMode()"
+          title="Alternate curve (Q/S/T). Hold Control while dragging a segment, or turn on here."
+          (click)="togglePenAltCurveMode()">
+          Alt curve
+        </button>
+        <span class="pen-curve-hint" data-testid="pen-curve-mode-hint" aria-live="polite">
+          {{ penCurveModeHint() }}
+        </span>
+      </div>
     }
     @default {
       <div class="context-slot" aria-hidden="true"></div>

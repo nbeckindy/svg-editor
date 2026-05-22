@@ -3926,9 +3926,9 @@ describe('SvgCanvasComponent', () => {
       component.onDocumentMouseUp({ button: 0, clientX: 50, clientY: 10 + bend } as MouseEvent);
       fixture.detectChanges();
 
-      const penSession = (component as unknown as { penSession: { getSegments: () => { type: string }[] } }).penSession;
-      expect(penSession.getSegments().length).toBe(2);
-      expect(penSession.getSegments()[1].type).toBe('Q');
+      const penSession = component.penTool;
+      expect(penSession.getPenSessionSegments().length).toBe(2);
+      expect(penSession.getPenSessionSegments()[1].type).toBe('Q');
     });
 
     it('toolbar Alt curve mode authors quadratic Q without holding Control (h76)', async () => {
@@ -3958,8 +3958,8 @@ describe('SvgCanvasComponent', () => {
       component.onDocumentMouseUp({ button: 0, clientX: 50, clientY: 10 + bend } as MouseEvent);
       fixture.detectChanges();
 
-      const penSession = (component as unknown as { penSession: { getSegments: () => { type: string }[] } }).penSession;
-      expect(penSession.getSegments()[1].type).toBe('Q');
+      const penSession = component.penTool;
+      expect(penSession.getPenSessionSegments()[1].type).toBe('Q');
     });
 
     it('pen outgoing handle drag is undone with Ctrl+Z (provisional PenSegmentReplaceCommand)', async () => {
@@ -3983,8 +3983,8 @@ describe('SvgCanvasComponent', () => {
       component.onDocumentMouseUp({ button: 0, clientX: 70, clientY: 20 + bend } as MouseEvent);
       fixture.detectChanges();
 
-      const penSession = (component as unknown as { penSession: { getSegments: () => unknown[] } }).penSession;
-      const beforeHandle = JSON.stringify(penSession.getSegments());
+      const penSession = component.penTool;
+      const beforeHandle = JSON.stringify(penSession.getPenSessionSegments());
       const knob = fixture.nativeElement.querySelector(
         '[data-testid="canvas-pen-outgoing-handle"]'
       ) as SVGCircleElement | null;
@@ -4003,11 +4003,11 @@ describe('SvgCanvasComponent', () => {
       component.onDocumentMouseMove({ clientX: mx + 12, clientY: my + 8 } as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: mx + 12, clientY: my + 8 } as MouseEvent);
       fixture.detectChanges();
-      expect(JSON.stringify(penSession.getSegments())).not.toBe(beforeHandle);
+      expect(JSON.stringify(penSession.getPenSessionSegments())).not.toBe(beforeHandle);
 
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
       fixture.detectChanges();
-      expect(JSON.stringify(penSession.getSegments())).toBe(beforeHandle);
+      expect(JSON.stringify(penSession.getPenSessionSegments())).toBe(beforeHandle);
     });
 
     it('after outgoing handle adjust and new line point, Ctrl+Z restores cubic to pre-handle geometry but keeps the new line', async () => {
@@ -4033,8 +4033,8 @@ describe('SvgCanvasComponent', () => {
       component.onDocumentMouseUp({ button: 0, clientX: 70, clientY: 20 + bend } as MouseEvent);
       fixture.detectChanges();
 
-      const penSession = (component as unknown as { penSession: { getSegments: () => { type: string }[] } }).penSession;
-      const afterCurve = JSON.stringify(penSession.getSegments());
+      const penSession = component.penTool;
+      const afterCurve = JSON.stringify(penSession.getPenSessionSegments());
       const knob = fixture.nativeElement.querySelector(
         '[data-testid="canvas-pen-outgoing-handle"]'
       ) as SVGCircleElement | null;
@@ -4053,7 +4053,7 @@ describe('SvgCanvasComponent', () => {
       component.onDocumentMouseMove({ clientX: mx + 10, clientY: my + 6 } as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: mx + 10, clientY: my + 6 } as MouseEvent);
       fixture.detectChanges();
-      expect(JSON.stringify(penSession.getSegments())).not.toBe(afterCurve);
+      expect(JSON.stringify(penSession.getPenSessionSegments())).not.toBe(afterCurve);
 
       component.onCanvasMouseDown({
         button: 0,
@@ -4064,13 +4064,13 @@ describe('SvgCanvasComponent', () => {
       } as unknown as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: 90, clientY: 80 } as MouseEvent);
       fixture.detectChanges();
-      expect(penSession.getSegments().length).toBe(3);
+      expect(penSession.getPenSessionSegments().length).toBe(3);
       // Plain click after a C with a reflectable handle: emits C (reflected P1), not L
-      expect(penSession.getSegments()[2].type).toBe('C');
+      expect(penSession.getPenSessionSegments()[2].type).toBe('C');
 
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
       fixture.detectChanges();
-      const segs = penSession.getSegments();
+      const segs = penSession.getPenSessionSegments();
       expect(segs.length).toBe(3);
       expect(JSON.stringify(segs.slice(0, 2))).toBe(afterCurve);
       expect(segs[2].type).toBe('C');
@@ -4426,7 +4426,7 @@ describe('SvgCanvasComponent', () => {
       fixture.detectChanges();
       expect(editorToolService.getCurrentTool()).toBe('pen');
       expect(component.isPenSessionActive).toBe(true);
-      const segs = (component as unknown as { penSession: { getSegments: () => unknown[] } }).penSession.getSegments();
+      const segs = component.penTool.getPenSessionSegments();
       expect(segs.map((s: { type: string }) => s.type).join('')).toBe('ML');
       expect(component.penSessionPreviewPathD).toBeTruthy();
     });
@@ -4491,7 +4491,7 @@ describe('SvgCanvasComponent', () => {
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
       fixture.detectChanges();
       expect(component.isPenSessionActive).toBe(true);
-      const segs = (component as unknown as { penSession: { getSegments: () => unknown[] } }).penSession.getSegments();
+      const segs = component.penTool.getPenSessionSegments();
       expect(segs.map((s: { type: string }) => s.type).join('')).toBe('ML');
       expect(component.penSessionPreviewPathD).toBeTruthy();
     });

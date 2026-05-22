@@ -25,9 +25,20 @@ import {
   DistributeCommand,
   FontCommand,
   TextAlignCommand,
-  UpdateDrawingDefaultsCommand
+  TextPaintOrderCommand,
+  TextVectorEffectCommand,
+  UpdateDrawingDefaultsCommand,
+  TranslateCommand,
+  UnionScaleCommand,
+  UnionRotateCommand
 } from '../../models/editor-commands';
-import { defaultLinearGradientModel, serializeGradientElementToOuterHtml } from '../../models/svg-gradient';
+import { MIN_UNION_SIZE } from '../../utils/selection-resize';
+import { unionRotationPivot } from '../../utils/selection-rotate';
+import {
+  defaultLinearGradientModel,
+  parsePaintReferenceId,
+  serializeGradientElementToOuterHtml
+} from '../../models/svg-gradient';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { SelectionPaintApplyService } from '../../services/selection-paint-apply.service';
 
@@ -57,6 +68,8 @@ export class PropertiesPanelComponent {
   private selectionPaintApply = inject(SelectionPaintApplyService);
   readonly isSelectorMode = computed(() => this.editorTool.currentTool() === 'selector');
   readonly hasSelection = computed(() => this.selectionCount() > 0);
+  /** Text tool active: typography controls edit placement defaults when nothing is selected. */
+  readonly textToolPlacementMode = computed(() => this.editorTool.currentTool() === 'text');
   readonly paintTargetLabel = computed(() => {
     if (this.editorTool.currentTool() === 'eyedropper') {
       return 'Eyedropper: click = fill, Shift+click = stroke';
@@ -112,6 +125,19 @@ export class PropertiesPanelComponent {
 
   /** Degrees: treat rotations as equivalent modulo 360° (e.g. 0° vs 360°). */
   private static readonly ROTATION_MIXED_EPS_DEG = 0.05;
+
+  private static isFinitePositiveDim(n: number): boolean {
+    return Number.isFinite(n) && n > 0;
+  }
+
+  private static shortestSignedDeltaDeg(fromDeg: number, toDeg: number): number {
+    const a = PropertiesPanelComponent.normDeg0To360(fromDeg);
+    const b = PropertiesPanelComponent.normDeg0To360(toDeg);
+    let d = b - a;
+    if (d > 180) d -= 360;
+    if (d < -180) d += 360;
+    return d;
+  }
 
   private static rotationDiffDeg(a: number, b: number): number {
     let d = Math.abs(a - b) % 360;
@@ -194,6 +220,67 @@ export class PropertiesPanelComponent {
     return { x: xStr, y: yStr, w: wStr, h: hStr, r: rStr };
   });
 
+  /**
+   * Numeric X/Y/W/H and rotation for bbox inputs (union bbox in root SVG user space).
+   * When the union is missing or degenerate, inputs are shown disabled (`ok: false`).
+   */
+  readonly selectionBBoxFieldModel = computed(() => {
+    this.editorHistory.revision();
+    this.svgManipulationService.documentRevision();
+
+    if (this.editorTool.currentTool() !== 'selector') {
+      return null;
+    }
+
+    const shapes = this.shapeSelectionService.selectedShapes();
+    if (shapes.length === 0) {
+      return null;
+    }
+
+    const ids = shapes.map((s) => s.id);
+    const union = this.svgManipulationService.getUnionBBox(ids);
+    if (
+      !union ||
+      !PropertiesPanelComponent.isFinitePositiveDim(union.width) ||
+      !PropertiesPanelComponent.isFinitePositiveDim(union.height)
+    ) {
+      return { ok: false as const, ids };
+    }
+
+    const svg = this.svgManipulationService.getSVGInstance();
+    let rDeg: number | null = null;
+    let rMixed = false;
+    if (svg) {
+      const angles: number[] = [];
+      for (const s of shapes) {
+        const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
+        if (!el || typeof el.matrix !== 'function') continue;
+        const m = el.matrix() as Matrix;
+        const deg = PropertiesPanelComponent.rotationDeg0To360FromMatrix(m);
+        if (!Number.isFinite(deg)) continue;
+        angles.push(deg);
+      }
+      if (angles.length > 0) {
+        const r0 = angles[0];
+        const eps = PropertiesPanelComponent.ROTATION_MIXED_EPS_DEG;
+        rMixed = shapes.length > 1 && angles.some((deg) => PropertiesPanelComponent.rotationDiffDeg(deg, r0) > eps);
+        rDeg = rMixed ? null : r0;
+      }
+    }
+
+    return {
+      ok: true as const,
+      ids,
+      union,
+      x: union.x,
+      y: union.y,
+      w: union.width,
+      h: union.height,
+      rDeg,
+      rMixed
+    };
+  });
+
   readonly alignShortcutLabels = {
     left: 'Ctrl/Cmd+Shift+Left',
     center: 'Ctrl/Cmd+Shift+Down',
@@ -204,6 +291,95 @@ export class PropertiesPanelComponent {
     distributeHorizontal: 'Ctrl/Cmd+Shift+H',
     distributeVertical: 'Ctrl/Cmd+Shift+V'
   } as const;
+
+  /**
+   * Commit a numeric bbox / rotation edit. Uses union-bbox semantics: translate for X/Y,
+   * edge-anchored scale for W/H (west fixed for width, north fixed for height), rigid rotation
+   * for R when not mixed.
+   * Rapid commits on the same field coalesce into one undo step when they fall within
+   * `EditorHistoryService` push window (see `COALESCE_WINDOW_MS` on transform commands).
+   */
+  onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event): void {
+    if (this.editorTool.currentTool() !== 'selector') return;
+    const target = event.target as HTMLInputElement;
+    const raw = target.value.trim();
+    if (raw === '') return;
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed)) return;
+
+    const model = this.selectionBBoxFieldModel();
+    if (!model || !model.ok) return;
+    const { ids, union: unionBefore } = model;
+    const epsPos = 1e-6;
+
+    if (field === 'x') {
+      const dx = parsed - unionBefore.x;
+      if (Math.abs(dx) < epsPos) return;
+      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
+      const cmds = ids.map(
+        (id) => new TranslateCommand(this.svgManipulationService, id, dx, 0, snap)
+      );
+      this.pushCommand(cmds, `Set selection X to ${parsed}`);
+      this.syncAllSelectedFromDom();
+      return;
+    }
+
+    if (field === 'y') {
+      const dy = parsed - unionBefore.y;
+      if (Math.abs(dy) < epsPos) return;
+      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
+      const cmds = ids.map(
+        (id) => new TranslateCommand(this.svgManipulationService, id, 0, dy, snap)
+      );
+      this.pushCommand(cmds, `Set selection Y to ${parsed}`);
+      this.syncAllSelectedFromDom();
+      return;
+    }
+
+    if (field === 'w') {
+      if (!PropertiesPanelComponent.isFinitePositiveDim(parsed) || parsed < MIN_UNION_SIZE) return;
+      if (Math.abs(parsed - unionBefore.width) < epsPos) return;
+      const unionAfter = { ...unionBefore, width: parsed };
+      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
+      const ve = this.svgManipulationService.snapshotVectorEffectsForShapes(ids);
+      this.pushCommand(
+        [new UnionScaleCommand(this.svgManipulationService, ids, unionBefore, unionAfter, snap, 'e', ve)],
+        `Set selection width to ${parsed}`
+      );
+      this.syncAllSelectedFromDom();
+      return;
+    }
+
+    if (field === 'h') {
+      if (!PropertiesPanelComponent.isFinitePositiveDim(parsed) || parsed < MIN_UNION_SIZE) return;
+      if (Math.abs(parsed - unionBefore.height) < epsPos) return;
+      const unionAfter = { ...unionBefore, height: parsed };
+      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
+      const ve = this.svgManipulationService.snapshotVectorEffectsForShapes(ids);
+      this.pushCommand(
+        [new UnionScaleCommand(this.svgManipulationService, ids, unionBefore, unionAfter, snap, 's', ve)],
+        `Set selection height to ${parsed}`
+      );
+      this.syncAllSelectedFromDom();
+      return;
+    }
+
+    if (field === 'r') {
+      if (model.rMixed || model.rDeg == null || !Number.isFinite(model.rDeg)) return;
+      const rTarget = PropertiesPanelComponent.normDeg0To360(parsed);
+      if (!Number.isFinite(rTarget)) return;
+      const delta = PropertiesPanelComponent.shortestSignedDeltaDeg(model.rDeg, rTarget);
+      if (Math.abs(delta) < PropertiesPanelComponent.ROTATION_MIXED_EPS_DEG) return;
+      const pivot =
+        this.svgManipulationService.getSelectionRotationPivot(ids) ?? unionRotationPivot(unionBefore);
+      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
+      this.pushCommand(
+        [new UnionRotateCommand(this.svgManipulationService, ids, pivot, delta, snap)],
+        `Rotate selection toward ${rTarget}°`
+      );
+      this.syncAllSelectedFromDom();
+    }
+  }
 
   private pushCommand(commands: EditorCommand[], fallbackDescription?: string): void {
     if (commands.length === 0) return;
@@ -293,6 +469,41 @@ export class PropertiesPanelComponent {
     return this.textSelection().length > 0;
   }
 
+  /** Text typography controls: selected `<text>` or defaults while the text tool is active. */
+  hasTextTypographyPanel(): boolean {
+    return this.hasTextSelection() || this.textToolPlacementMode();
+  }
+
+  fontFamilyControlValue(): string {
+    if (this.hasTextSelection()) return this.selectedFontFamilyValue();
+    if (this.textToolPlacementMode()) return this.drawingDefaults.fontFamily();
+    return 'Arial, sans-serif';
+  }
+
+  fontSizeControlValue(): string {
+    if (this.hasTextSelection()) return this.selectedFontSizeValue();
+    if (this.textToolPlacementMode()) return String(this.drawingDefaults.fontSize());
+    return '16';
+  }
+
+  fontWeightControlValue(): string {
+    if (this.hasTextSelection()) return this.selectedFontWeightValue();
+    if (this.textToolPlacementMode()) return this.drawingDefaults.fontWeight();
+    return 'normal';
+  }
+
+  fontStyleControlValue(): string {
+    if (this.hasTextSelection()) return this.selectedFontStyleValue();
+    if (this.textToolPlacementMode()) return this.drawingDefaults.fontStyle();
+    return 'normal';
+  }
+
+  textAnchorControlValue(): 'start' | 'middle' | 'end' {
+    if (this.hasTextSelection()) return this.selectedTextAnchorValue();
+    if (this.textToolPlacementMode()) return this.drawingDefaults.textAnchor();
+    return 'start';
+  }
+
   textSelectionMixed(
     getter: (shape: ShapeProperties) => string | number | undefined
   ): boolean {
@@ -356,81 +567,230 @@ export class PropertiesPanelComponent {
 
   onFontFamilyChange(event: Event): void {
     const fontFamily = (event.target as HTMLSelectElement).value;
-    const commands = this.textSelection().map((s) =>
-      new FontCommand(
-        this.svgManipulationService,
-        s.id,
-        'fontFamily',
-        s.fontFamily ?? 'Arial, sans-serif',
-        fontFamily
-      )
-    );
-    this.pushCommand(commands, `Set font family to ${fontFamily}`);
-    this.syncAllSelectedFromDom();
+    const textShapes = this.textSelection();
+    if (textShapes.length > 0) {
+      const commands = textShapes.map((s) =>
+        new FontCommand(
+          this.svgManipulationService,
+          s.id,
+          'fontFamily',
+          s.fontFamily ?? 'Arial, sans-serif',
+          fontFamily
+        )
+      );
+      this.pushCommand(commands, `Set font family to ${fontFamily}`);
+      this.syncAllSelectedFromDom();
+      return;
+    }
+    if (this.textToolPlacementMode()) {
+      const before = this.drawingDefaults.defaults();
+      this.pushCommand(
+        [
+          new UpdateDrawingDefaultsCommand(
+            this.drawingDefaults,
+            before,
+            { ...before, fontFamily },
+            'typography'
+          )
+        ],
+        `Set default font family to ${fontFamily}`
+      );
+    }
   }
 
   onFontSizeChange(event: Event): void {
     const fontSize = Number.parseFloat((event.target as HTMLInputElement).value);
     if (!Number.isFinite(fontSize) || fontSize <= 0) return;
-    const commands = this.textSelection().map((s) =>
-      new FontCommand(
-        this.svgManipulationService,
-        s.id,
-        'fontSize',
-        s.fontSize ?? 16,
-        fontSize
-      )
-    );
-    this.pushCommand(commands, `Set font size to ${fontSize}`);
-    this.syncAllSelectedFromDom();
+    const textShapes = this.textSelection();
+    if (textShapes.length > 0) {
+      const commands = textShapes.map((s) =>
+        new FontCommand(
+          this.svgManipulationService,
+          s.id,
+          'fontSize',
+          s.fontSize ?? 16,
+          fontSize
+        )
+      );
+      this.pushCommand(commands, `Set font size to ${fontSize}`);
+      this.syncAllSelectedFromDom();
+      return;
+    }
+    if (this.textToolPlacementMode()) {
+      const before = this.drawingDefaults.defaults();
+      this.pushCommand(
+        [
+          new UpdateDrawingDefaultsCommand(
+            this.drawingDefaults,
+            before,
+            { ...before, fontSize },
+            'typography'
+          )
+        ],
+        `Set default font size to ${fontSize}`
+      );
+    }
   }
 
   onToggleBold(): void {
     const textShapes = this.textSelection();
-    if (textShapes.length === 0) return;
-    const allBold = textShapes.every((s) => (s.fontWeight ?? 'normal') === 'bold');
-    const nextWeight = allBold ? 'normal' : 'bold';
-    const commands = textShapes.map((s) =>
-      new FontCommand(
-        this.svgManipulationService,
-        s.id,
-        'fontWeight',
-        s.fontWeight ?? 'normal',
-        nextWeight
-      )
-    );
-    this.pushCommand(commands, `${nextWeight === 'bold' ? 'Enable' : 'Disable'} bold`);
-    this.syncAllSelectedFromDom();
+    if (textShapes.length > 0) {
+      const allBold = textShapes.every((s) => (s.fontWeight ?? 'normal') === 'bold');
+      const nextWeight = allBold ? 'normal' : 'bold';
+      const commands = textShapes.map((s) =>
+        new FontCommand(
+          this.svgManipulationService,
+          s.id,
+          'fontWeight',
+          s.fontWeight ?? 'normal',
+          nextWeight
+        )
+      );
+      this.pushCommand(commands, `${nextWeight === 'bold' ? 'Enable' : 'Disable'} bold`);
+      this.syncAllSelectedFromDom();
+      return;
+    }
+    if (this.textToolPlacementMode()) {
+      const before = this.drawingDefaults.defaults();
+      const nextWeight = before.fontWeight === 'bold' ? 'normal' : 'bold';
+      this.pushCommand(
+        [
+          new UpdateDrawingDefaultsCommand(
+            this.drawingDefaults,
+            before,
+            { ...before, fontWeight: nextWeight },
+            'typography'
+          )
+        ],
+        `${nextWeight === 'bold' ? 'Enable' : 'Disable'} default bold`
+      );
+    }
   }
 
   onToggleItalic(): void {
     const textShapes = this.textSelection();
-    if (textShapes.length === 0) return;
-    const allItalic = textShapes.every((s) => (s.fontStyle ?? 'normal') === 'italic');
-    const nextStyle = allItalic ? 'normal' : 'italic';
-    const commands = textShapes.map((s) =>
-      new FontCommand(
-        this.svgManipulationService,
-        s.id,
-        'fontStyle',
-        s.fontStyle ?? 'normal',
-        nextStyle
-      )
-    );
-    this.pushCommand(commands, `${nextStyle === 'italic' ? 'Enable' : 'Disable'} italic`);
-    this.syncAllSelectedFromDom();
+    if (textShapes.length > 0) {
+      const allItalic = textShapes.every((s) => (s.fontStyle ?? 'normal') === 'italic');
+      const nextStyle = allItalic ? 'normal' : 'italic';
+      const commands = textShapes.map((s) =>
+        new FontCommand(
+          this.svgManipulationService,
+          s.id,
+          'fontStyle',
+          s.fontStyle ?? 'normal',
+          nextStyle
+        )
+      );
+      this.pushCommand(commands, `${nextStyle === 'italic' ? 'Enable' : 'Disable'} italic`);
+      this.syncAllSelectedFromDom();
+      return;
+    }
+    if (this.textToolPlacementMode()) {
+      const before = this.drawingDefaults.defaults();
+      const nextStyle: 'normal' | 'italic' = before.fontStyle === 'italic' ? 'normal' : 'italic';
+      this.pushCommand(
+        [
+          new UpdateDrawingDefaultsCommand(
+            this.drawingDefaults,
+            before,
+            { ...before, fontStyle: nextStyle },
+            'typography'
+          )
+        ],
+        `${nextStyle === 'italic' ? 'Enable' : 'Disable'} default italic`
+      );
+    }
   }
 
   onTextAlignChange(textAnchor: 'start' | 'middle' | 'end'): void {
-    const commands = this.textSelection().map((s) =>
-      new TextAlignCommand(
-        this.svgManipulationService,
-        s.id,
-        s.textAnchor ?? 'start',
-        textAnchor
-      )
+    const textShapes = this.textSelection();
+    if (textShapes.length > 0) {
+      const commands = textShapes.map((s) =>
+        new TextAlignCommand(
+          this.svgManipulationService,
+          s.id,
+          s.textAnchor ?? 'start',
+          textAnchor
+        )
+      );
+      this.pushCommand(commands, 'Set text alignment');
+      this.syncAllSelectedFromDom();
+      return;
+    }
+    if (this.textToolPlacementMode()) {
+      const before = this.drawingDefaults.defaults();
+      this.pushCommand(
+        [
+          new UpdateDrawingDefaultsCommand(
+            this.drawingDefaults,
+            before,
+            { ...before, textAnchor },
+            'typography'
+          )
+        ],
+        'Set default text alignment'
+      );
+    }
+  }
+
+  /** True when every selected shape is `<text>` — use outline-oriented labels and text-only extras. */
+  textOutlineLabels(): boolean {
+    const shapes = this.selectedShapesList();
+    return shapes.length > 0 && shapes.every((s) => s.type === 'text');
+  }
+
+  private normalizeTextPaintOrderKey(raw: string | undefined): string {
+    const t = (raw ?? '').trim().toLowerCase();
+    if (!t || t === 'normal') return 'normal';
+    if (t === 'stroke fill' || t.startsWith('stroke fill')) return 'stroke fill';
+    return t;
+  }
+
+  textPaintOrdersMixed(): boolean {
+    return this.textSelectionMixed((s) => this.normalizeTextPaintOrderKey(s.paintOrder));
+  }
+
+  /** `normal` | `stroke fill` | `''` when mixed / non-canonical paint-order values disagree. */
+  selectedTextPaintOrderForSelect(): string {
+    const texts = this.textSelection();
+    if (texts.length === 0) return 'normal';
+    if (this.textPaintOrdersMixed()) return '';
+    return this.normalizeTextPaintOrderKey(texts[0].paintOrder);
+  }
+
+  onTextPaintOrderChange(event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value;
+    if (raw === '') return;
+    const next = raw === 'stroke fill' ? 'stroke fill' : undefined;
+    const commands = this.textSelection().map(
+      (s) => new TextPaintOrderCommand(this.svgManipulationService, s.id, s.paintOrder, next)
     );
-    this.pushCommand(commands, 'Set text alignment');
+    this.pushCommand(commands, next ? 'Set text paint order' : 'Reset text paint order');
+    this.syncAllSelectedFromDom();
+  }
+
+  textVectorEffectsMixed(): boolean {
+    return this.textSelectionMixed((s) => (s.vectorEffect ?? '').toLowerCase());
+  }
+
+  /** All selected text shapes use `vector-effect="non-scaling-stroke"`. */
+  textNonScalingStrokeOutline(): boolean {
+    const texts = this.textSelection();
+    if (texts.length === 0) return false;
+    return texts.every((s) => (s.vectorEffect ?? '').toLowerCase() === 'non-scaling-stroke');
+  }
+
+  onTextNonScalingStrokeChange(event: Event): void {
+    const checked = (event.target as HTMLInputElement).checked;
+    const next = checked ? 'non-scaling-stroke' : undefined;
+    const commands = this.textSelection().map(
+      (s) =>
+        new TextVectorEffectCommand(this.svgManipulationService, s.id, s.vectorEffect, next)
+    );
+    this.pushCommand(
+      commands,
+      checked ? 'Enable non-scaling text outline' : 'Disable non-scaling text outline'
+    );
     this.syncAllSelectedFromDom();
   }
 
@@ -637,6 +997,23 @@ export class PropertiesPanelComponent {
       case 'pattern': return 'Pattern';
       default: return 'Reference';
     }
+  }
+
+  /** Def id extracted from a raw `url(#id)` paint reference (for inspector labels). */
+  paintDefIdFromUrl(url: string | undefined | null): string | null {
+    return parsePaintReferenceId(url?.trim() ?? null);
+  }
+
+  fillPaintRefAriaLabel(shape: ShapeProperties): string {
+    const id = this.paintDefIdFromUrl(shape.fillUrl);
+    const kind = shape.fillPaintType === 'pattern' ? 'Pattern' : 'Gradient';
+    return id ? `${kind} fill, definition id ${id}` : `${kind} fill`;
+  }
+
+  strokePaintRefAriaLabel(shape: ShapeProperties): string {
+    const id = this.paintDefIdFromUrl(shape.strokeUrl);
+    const kind = shape.strokePaintType === 'pattern' ? 'Pattern' : 'Gradient';
+    return id ? `${kind} stroke, definition id ${id}` : `${kind} stroke`;
   }
 
   private static readonly NO_FILL_TYPES = new Set(['line', 'polyline']);

@@ -13,8 +13,31 @@
           @if (supportsFill(shape)) {
             <div class="color-input-group">
               @if (isGradientOrPatternFill(shape)) {
-                <div class="no-paint-value">
-                  <span class="paint-ref-label">{{ paintTypeLabel(shape.fillPaintType) }} fill</span>
+                <div
+                  class="no-paint-value paint-reference-block"
+                  role="group"
+                  [attr.aria-label]="fillPaintRefAriaLabel(shape)">
+                  <div class="paint-ref-row">
+                    <span class="paint-ref-label">{{ paintTypeLabel(shape.fillPaintType) }} fill</span>
+                    @if (paintDefIdFromUrl(shape.fillUrl); as fillDefId) {
+                      <code
+                        class="paint-def-id"
+                        data-testid="properties-fill-paint-def-id"
+                        [attr.title]="shape.fillUrl ?? ''"
+                        >#{{ fillDefId }}</code
+                      >
+                    }
+                  </div>
+                  @if (shape.fillPaintType === 'gradient') {
+                    <p class="paint-ref-hint" id="properties-fill-gradient-hint">
+                      Solid color picker does not apply. Expand the section below to edit stops and
+                      geometry.
+                    </p>
+                  } @else if (shape.fillPaintType === 'pattern') {
+                    <p class="paint-ref-hint" id="properties-fill-pattern-hint">
+                      Pattern fill; the editor does not edit patterns here yet.
+                    </p>
+                  }
                 </div>
               } @else {
                 <app-color-picker
@@ -47,12 +70,34 @@
       </div>
 
       <div class="property-group paint-segment-group">
-        <label class="property-label" for="stroke-color">Stroke Color</label>
+        <label class="property-label" for="stroke-color">{{ textOutlineLabels() ? 'Outline color' : 'Stroke Color' }}</label>
         @if (selectedShape(); as shape) {
           <div class="color-input-group">
             @if (isGradientOrPatternStroke(shape)) {
-              <div class="no-paint-value">
-                <span class="paint-ref-label">{{ paintTypeLabel(shape.strokePaintType) }} stroke</span>
+              <div
+                class="no-paint-value paint-reference-block"
+                role="group"
+                [attr.aria-label]="strokePaintRefAriaLabel(shape)">
+                <div class="paint-ref-row">
+                  <span class="paint-ref-label">{{ paintTypeLabel(shape.strokePaintType) }} stroke</span>
+                  @if (paintDefIdFromUrl(shape.strokeUrl); as strokeDefId) {
+                    <code
+                      class="paint-def-id"
+                      data-testid="properties-stroke-paint-def-id"
+                      [attr.title]="shape.strokeUrl ?? ''"
+                      >#{{ strokeDefId }}</code
+                    >
+                  }
+                </div>
+                @if (shape.strokePaintType === 'gradient') {
+                  <p class="paint-ref-hint" id="properties-stroke-gradient-hint">
+                    Gradient stroke is shown as a reference only; edit stroke gradient in a follow-up.
+                  </p>
+                } @else if (shape.strokePaintType === 'pattern') {
+                  <p class="paint-ref-hint" id="properties-stroke-pattern-hint">
+                    Pattern stroke; the editor does not edit patterns here yet.
+                  </p>
+                }
               </div>
             } @else {
               <app-color-picker
@@ -79,6 +124,28 @@
         }
       </div>
     </div>
+
+    @if (selectedShape(); as ps) {
+      <div class="paint-segment-extras">
+        @if (supportsFill(ps) && canCreateGradientFill(ps)) {
+          <button
+            type="button"
+            class="btn-paint-action secondary"
+            data-testid="properties-add-gradient-fill"
+            (click)="onCreateGradientFill(ps)">
+            Add gradient fill
+          </button>
+        }
+        @if (selectionCount() === 1 && supportsFill(ps) && ps.fillPaintType === 'gradient') {
+          <details class="gradient-fill-details" open data-testid="properties-gradient-fill-details">
+            <summary class="gradient-fill-summary" data-testid="properties-gradient-fill-summary">
+              Edit gradient fill
+            </summary>
+            <app-gradient-fill-editor [shapeId]="ps.id" data-testid="properties-gradient-fill-editor" />
+          </details>
+        }
+      </div>
+    }
   </div>
 
   <div class="panel-scroll">
@@ -87,6 +154,14 @@
         <p class="paint-effective-hint">
           Colors match what you see on the canvas (computed from attributes, CSS, and inheritance).
         </p>
+        @if (textOutlineLabels()) {
+          <p class="paint-ref-hint" data-testid="properties-text-outline-paint-hint">
+            On <code>&lt;text&gt;</code>, stroke is the <strong>outline</strong>. Default SVG order paints the
+            <strong>fill first</strong>, then the stroke on top. Use <strong>Outline / fill order</strong> below for
+            <code>paint-order: stroke fill</code> (stroke underneath) where the browser supports it. Changing
+            <code>paint-order</code> does nothing in very old engines — verify in your target browsers.
+          </p>
+        }
 
         @if (isSelectorMode()) {
         <div class="property-group align-distribute-group">
@@ -163,36 +238,102 @@
           </div>
         </div>
 
+        @if (selectionBBoxFieldModel(); as bb) {
+        @if (bb.ok) {
+        <div class="property-group transform-bbox-readout">
+          <label class="property-label" for="properties-bbox-x">X</label>
+          <input
+            id="properties-bbox-x"
+            type="number"
+            class="range-number transform-bbox-num"
+            step="any"
+            inputmode="decimal"
+            data-testid="properties-transform-x"
+            [value]="bb.x"
+            (change)="onSelectionBBoxFieldCommit('x', $event)"
+            aria-label="Selection bounding box X" />
+        </div>
+        <div class="property-group transform-bbox-readout">
+          <label class="property-label" for="properties-bbox-y">Y</label>
+          <input
+            id="properties-bbox-y"
+            type="number"
+            class="range-number transform-bbox-num"
+            step="any"
+            inputmode="decimal"
+            data-testid="properties-transform-y"
+            [value]="bb.y"
+            (change)="onSelectionBBoxFieldCommit('y', $event)"
+            aria-label="Selection bounding box Y" />
+        </div>
+        <div class="property-group transform-bbox-readout">
+          <label class="property-label" for="properties-bbox-w">W</label>
+          <input
+            id="properties-bbox-w"
+            type="number"
+            class="range-number transform-bbox-num"
+            step="any"
+            inputmode="decimal"
+            data-testid="properties-transform-w"
+            [value]="bb.w"
+            (change)="onSelectionBBoxFieldCommit('w', $event)"
+            aria-label="Selection bounding box width" />
+        </div>
+        <div class="property-group transform-bbox-readout">
+          <label class="property-label" for="properties-bbox-h">H</label>
+          <input
+            id="properties-bbox-h"
+            type="number"
+            class="range-number transform-bbox-num"
+            step="any"
+            inputmode="decimal"
+            data-testid="properties-transform-h"
+            [value]="bb.h"
+            (change)="onSelectionBBoxFieldCommit('h', $event)"
+            aria-label="Selection bounding box height" />
+        </div>
+        <div class="property-group transform-bbox-readout">
+          <label class="property-label" for="properties-bbox-r">R</label>
+          @if (!bb.rMixed && bb.rDeg != null) {
+            <input
+              id="properties-bbox-r"
+              type="number"
+              class="range-number transform-bbox-num"
+              step="any"
+              inputmode="decimal"
+              data-testid="properties-transform-r"
+              [value]="bb.rDeg"
+              (change)="onSelectionBBoxFieldCommit('r', $event)"
+              aria-label="Selection rotation in degrees" />
+          } @else {
+            <div class="property-value readonly" data-testid="properties-transform-r">
+              {{ selectionTransformReadout().r }}
+            </div>
+          }
+        </div>
+        } @else {
         <div class="property-group transform-bbox-readout">
           <label class="property-label">X</label>
-          <div class="property-value readonly" data-testid="properties-transform-x">
-            {{ selectionTransformReadout().x }}
-          </div>
+          <div class="property-value readonly" data-testid="properties-transform-x">{{ selectionTransformReadout().x }}</div>
         </div>
         <div class="property-group transform-bbox-readout">
           <label class="property-label">Y</label>
-          <div class="property-value readonly" data-testid="properties-transform-y">
-            {{ selectionTransformReadout().y }}
-          </div>
+          <div class="property-value readonly" data-testid="properties-transform-y">{{ selectionTransformReadout().y }}</div>
         </div>
         <div class="property-group transform-bbox-readout">
           <label class="property-label">W</label>
-          <div class="property-value readonly" data-testid="properties-transform-w">
-            {{ selectionTransformReadout().w }}
-          </div>
+          <div class="property-value readonly" data-testid="properties-transform-w">{{ selectionTransformReadout().w }}</div>
         </div>
         <div class="property-group transform-bbox-readout">
           <label class="property-label">H</label>
-          <div class="property-value readonly" data-testid="properties-transform-h">
-            {{ selectionTransformReadout().h }}
-          </div>
+          <div class="property-value readonly" data-testid="properties-transform-h">{{ selectionTransformReadout().h }}</div>
         </div>
         <div class="property-group transform-bbox-readout">
           <label class="property-label">R</label>
-          <div class="property-value readonly" data-testid="properties-transform-r">
-            {{ selectionTransformReadout().r }}
-          </div>
+          <div class="property-value readonly" data-testid="properties-transform-r">{{ selectionTransformReadout().r }}</div>
         </div>
+        }
+        }
 
         <div class="property-group transform-skew-readout">
           <label class="property-label">Skew X</label>
@@ -209,7 +350,7 @@
         }
 
       <div class="property-group">
-        <label class="property-label" for="stroke-width">Stroke Width</label>
+        <label class="property-label" for="stroke-width">{{ textOutlineLabels() ? 'Outline width' : 'Stroke Width' }}</label>
         @if (strokeWidthsMixed()) {
           <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
         }
@@ -253,7 +394,7 @@
           <div class="property-value readonly">{{ idLabel(shape) }}</div>
         </div>
 
-        @if (hasTextSelection()) {
+        @if (hasTextTypographyPanel()) {
         <div class="property-group">
           <label class="property-label" for="font-family">Font</label>
           @if (fontFamiliesMixed()) {
@@ -263,7 +404,7 @@
             id="font-family"
             class="dash-select"
             [class.mixed-control]="fontFamiliesMixed()"
-            [value]="selectedFontFamilyValue()"
+            [value]="fontFamilyControlValue()"
             (change)="onFontFamilyChange($event)">
             @for (font of fontFamilies; track font) {
               <option [value]="font">{{ font }}</option>
@@ -283,7 +424,7 @@
             min="1"
             step="1"
             [class.mixed-control]="fontSizesMixed()"
-            [value]="selectedFontSizeValue()"
+            [value]="fontSizeControlValue()"
             [attr.placeholder]="fontSizesMixed() ? '—' : ''"
             (change)="onFontSizeChange($event)">
         </div>
@@ -294,14 +435,14 @@
             <button
               type="button"
               class="align-btn"
-              [class.active]="!fontWeightsMixed() && selectedFontWeightValue() === 'bold'"
+              [class.active]="!fontWeightsMixed() && fontWeightControlValue() === 'bold'"
               (click)="onToggleBold()">
               Bold
             </button>
             <button
               type="button"
               class="align-btn"
-              [class.active]="!fontStylesMixed() && selectedFontStyleValue() === 'italic'"
+              [class.active]="!fontStylesMixed() && fontStyleControlValue() === 'italic'"
               (click)="onToggleItalic()">
               Italic
             </button>
@@ -314,24 +455,68 @@
             <button
               type="button"
               class="align-btn"
-              [class.active]="!textAnchorsMixed() && selectedTextAnchorValue() === 'start'"
+              [class.active]="!textAnchorsMixed() && textAnchorControlValue() === 'start'"
               (click)="onTextAlignChange('start')">
               Left
             </button>
             <button
               type="button"
               class="align-btn"
-              [class.active]="!textAnchorsMixed() && selectedTextAnchorValue() === 'middle'"
+              [class.active]="!textAnchorsMixed() && textAnchorControlValue() === 'middle'"
               (click)="onTextAlignChange('middle')">
               Center
             </button>
             <button
               type="button"
               class="align-btn"
-              [class.active]="!textAnchorsMixed() && selectedTextAnchorValue() === 'end'"
+              [class.active]="!textAnchorsMixed() && textAnchorControlValue() === 'end'"
               (click)="onTextAlignChange('end')">
               Right
             </button>
+          </div>
+        </div>
+        }
+
+        @if (hasTextSelection()) {
+        <div class="property-group">
+          <label class="property-label" for="text-paint-order">Outline / fill order</label>
+          @if (textPaintOrdersMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <select
+            id="text-paint-order"
+            class="dash-select"
+            data-testid="properties-text-paint-order"
+            [class.mixed-control]="textPaintOrdersMixed()"
+            [disabled]="textPaintOrdersMixed()"
+            [value]="textPaintOrdersMixed() ? '' : selectedTextPaintOrderForSelect()"
+            [attr.title]="
+              'Default: fill then stroke (outline on top). stroke fill: draw stroke beneath the fill (SVG paint-order). Browser support varies.'
+            "
+            (change)="onTextPaintOrderChange($event)">
+            @if (textPaintOrdersMixed()) {
+              <option value="" selected disabled>Mixed</option>
+            }
+            <option value="normal">Fill on top of stroke (default)</option>
+            <option value="stroke fill">Stroke behind fill</option>
+          </select>
+        </div>
+
+        <div class="property-group">
+          <label class="property-label" for="text-non-scaling-stroke">Outline vs zoom</label>
+          <div class="text-outline-checkbox-row">
+            <input
+              type="checkbox"
+              id="text-non-scaling-stroke"
+              data-testid="properties-text-vector-effect"
+              [checked]="textNonScalingStrokeOutline()"
+              [attr.title]="
+                'vector-effect=non-scaling-stroke keeps outline width in screen pixels when the SVG is scaled (e.g. editor zoom). Without it, outline scales in user space like the glyphs.'
+              "
+              (change)="onTextNonScalingStrokeChange($event)" />
+            <label for="text-non-scaling-stroke" class="checkbox-inline-label">
+              Keep outline width when zooming (<code>non-scaling-stroke</code>)
+            </label>
           </div>
         </div>
         }
@@ -440,6 +625,83 @@
           </button>
         </div>
 
+        <app-document-settings
+          class="document-settings-inline"
+          data-testid="document-settings-panel"></app-document-settings>
+      </div>
+    } @else if (textToolPlacementMode()) {
+      <div class="properties-content">
+        <p class="paint-effective-hint" data-testid="text-tool-placement-hint">
+          Adjust typography for the next text you place. Fill and stroke use the swatches above (new shape defaults).
+        </p>
+        <div class="property-group">
+          <label class="property-label" for="font-family-text-tool">Font</label>
+          <select
+            id="font-family-text-tool"
+            class="dash-select"
+            [value]="fontFamilyControlValue()"
+            (change)="onFontFamilyChange($event)">
+            @for (font of fontFamilies; track font) {
+              <option [value]="font">{{ font }}</option>
+            }
+          </select>
+        </div>
+        <div class="property-group">
+          <label class="property-label" for="font-size-text-tool">Font Size</label>
+          <input
+            id="font-size-text-tool"
+            type="number"
+            class="range-number"
+            min="1"
+            step="1"
+            [value]="fontSizeControlValue()"
+            (change)="onFontSizeChange($event)">
+        </div>
+        <div class="property-group">
+          <label class="property-label">Style</label>
+          <div class="align-toolbar">
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="fontWeightControlValue() === 'bold'"
+              (click)="onToggleBold()">
+              Bold
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="fontStyleControlValue() === 'italic'"
+              (click)="onToggleItalic()">
+              Italic
+            </button>
+          </div>
+        </div>
+        <div class="property-group">
+          <label class="property-label">Text Align</label>
+          <div class="align-toolbar">
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="textAnchorControlValue() === 'start'"
+              (click)="onTextAlignChange('start')">
+              Left
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="textAnchorControlValue() === 'middle'"
+              (click)="onTextAlignChange('middle')">
+              Center
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              [class.active]="textAnchorControlValue() === 'end'"
+              (click)="onTextAlignChange('end')">
+              Right
+            </button>
+          </div>
+        </div>
         <app-document-settings
           class="document-settings-inline"
           data-testid="document-settings-panel"></app-document-settings>

@@ -101,6 +101,12 @@
   border-radius: 6px;
 }
 
+.transform-bbox-readout .transform-bbox-num {
+  width: 100%;
+  max-width: 11rem;
+  box-sizing: border-box;
+}
+
 .paint-multi-hint {
   margin: 0 0 8px 0;
   font-size: 12px;
@@ -307,6 +313,60 @@
   font-weight: 500;
 }
 
+.paint-reference-block {
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.paint-ref-row {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 8px;
+}
+
+.paint-def-id {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, 'Courier New', monospace;
+  font-size: 12px;
+  padding: 2px 6px;
+  background: #f0f0f0;
+  border: 1px solid #ddd;
+  border-radius: 3px;
+}
+
+.paint-ref-hint {
+  margin: 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #777;
+  max-width: 100%;
+}
+
+.paint-segment-extras {
+  margin-top: 12px;
+  padding-top: 10px;
+  border-top: 1px solid #eee;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.gradient-fill-details {
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  padding: 4px 8px 8px;
+  background: #fafafa;
+}
+
+.gradient-fill-summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: #333;
+  padding: 4px 0;
+}
+
 .btn-set-paint {
   padding: 6px 12px;
   font-size: 13px;
@@ -468,4 +528,22 @@ input[type="color"]::-webkit-color-swatch-wrapper {
 input[type="color"]::-webkit-color-swatch {
   border: none;
   border-radius: 2px;
+}
+
+.text-outline-checkbox-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 8px;
+}
+
+.text-outline-checkbox-row input[type='checkbox'] {
+  margin-top: 3px;
+  flex-shrink: 0;
+}
+
+.checkbox-inline-label {
+  font-weight: 400;
+  margin: 0;
+  cursor: pointer;
+  line-height: 1.35;
 }
