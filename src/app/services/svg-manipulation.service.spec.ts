@@ -1996,6 +1996,29 @@ describe('SvgManipulationService', () => {
       expect(props.textAnchor).toBe('middle');
     });
 
+    it('getShapeProperties reads paint-order and vector-effect on text', () => {
+      const svgContent =
+        '<svg viewBox="0 0 200 200"><text id="t1" x="0" y="20" paint-order="stroke fill" vector-effect="non-scaling-stroke">Hi</text></svg>';
+      service.initializeSVG(container, svgContent);
+      const svg = service.getSVGInstance()!;
+      const text = svg.findOne('#t1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(text);
+      expect(props.paintOrder).toBe('stroke fill');
+      expect(props.vectorEffect).toBe('non-scaling-stroke');
+    });
+
+    it('exportSVG preserves text stroke dash paint-order and vector-effect', () => {
+      const svgContent =
+        '<svg viewBox="0 0 200 200"><text id="t1" x="1" y="2" fill="#ffffff" stroke="#111111" stroke-width="2" stroke-dasharray="4 2" paint-order="stroke fill" vector-effect="non-scaling-stroke">OK</text></svg>';
+      service.initializeSVG(container, svgContent);
+      const out = service.exportSVG();
+      expect(out).toContain('stroke="#111111"');
+      expect(out).toContain('stroke-width="2"');
+      expect(out).toContain('stroke-dasharray="4 2"');
+      expect(out).toContain('paint-order="stroke fill"');
+      expect(out).toContain('vector-effect="non-scaling-stroke"');
+    });
+
     it('applies fill override', () => {
       const svgContent = '<svg viewBox="0 0 200 200"></svg>';
       service.initializeSVG(container, svgContent);
@@ -2124,6 +2147,20 @@ describe('SvgManipulationService', () => {
       expect(el?.getAttribute('font-weight')).toBe('bold');
       expect(el?.getAttribute('font-style')).toBe('italic');
       expect(el?.getAttribute('text-anchor')).toBe('end');
+    });
+
+    it('updates text paint-order and vector-effect via svg.js', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"><text id="t1" x="10" y="20">Hello</text></svg>';
+      service.initializeSVG(container, svgContent);
+      service.updateTextPaintOrder('t1', 'stroke fill');
+      service.updateTextVectorEffect('t1', 'non-scaling-stroke');
+      const el = container.querySelector('#t1');
+      expect(el?.getAttribute('paint-order')).toBe('stroke fill');
+      expect(el?.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+      service.updateTextPaintOrder('t1', undefined);
+      service.updateTextVectorEffect('t1', undefined);
+      expect(el?.getAttribute('paint-order')).toBeNull();
+      expect(el?.getAttribute('vector-effect')).toBeNull();
     });
   });
 

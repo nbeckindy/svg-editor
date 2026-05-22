@@ -28,6 +28,16 @@ export interface ShapeProperties {
   fontWeight?: string;
   fontStyle?: string;
   textAnchor?: 'start' | 'middle' | 'end';
+  /**
+   * SVG `paint-order` when set (e.g. `stroke fill` draws stroke beneath fill). Mostly relevant for
+   * `<text>` outlines; browser support is good in modern engines but not guaranteed everywhere.
+   */
+  paintOrder?: string;
+  /**
+   * SVG `vector-effect` when set. `non-scaling-stroke` keeps stroke width in **screen** pixels when
+   * the root SVG is scaled (e.g. CSS zoom on the canvas); without it, stroke scales with user space.
+   */
+  vectorEffect?: string;
   fill?: string;
   stroke?: string;
   strokeWidth?: number;

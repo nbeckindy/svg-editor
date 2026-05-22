@@ -319,7 +319,12 @@ export class UpdateDrawingDefaultsCommand implements CoalesceableCommand {
     private readonly defaultsSvc: DrawingStyleDefaultsService,
     private readonly before: DrawingStyleDefaults,
     private readonly after: DrawingStyleDefaults,
-    private readonly scope: 'fill' | 'stroke' | 'strokeWidth' | 'all' = 'all'
+    private readonly scope:
+      | 'fill'
+      | 'stroke'
+      | 'strokeWidth'
+      | 'typography'
+      | 'all' = 'all'
   ) {
     this.coalesceKey = `drawing-defaults:${scope}`;
   }
@@ -1552,5 +1557,63 @@ export class TextAlignCommand implements CoalesceableCommand {
   coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
     const n = newer as TextAlignCommand;
     return new TextAlignCommand(this.svc, this.textId, this.oldAnchor, n.newAnchor);
+  }
+}
+
+/** Sets `paint-order` on `<text>` (outline vs fill stacking). */
+export class TextPaintOrderCommand implements CoalesceableCommand {
+  readonly description: string;
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly textId: string,
+    private readonly oldOrder: string | undefined,
+    private readonly newOrder: string | undefined
+  ) {
+    this.description = 'Set text paint order';
+    this.coalesceKey = `text-paint-order:${textId}`;
+  }
+
+  execute(): void {
+    this.svc.updateTextPaintOrder(this.textId, this.newOrder);
+  }
+
+  undo(): void {
+    this.svc.updateTextPaintOrder(this.textId, this.oldOrder);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as TextPaintOrderCommand;
+    return new TextPaintOrderCommand(this.svc, this.textId, this.oldOrder, n.newOrder);
+  }
+}
+
+/** Sets `vector-effect` on `<text>` (e.g. non-scaling stroke when the SVG is scaled). */
+export class TextVectorEffectCommand implements CoalesceableCommand {
+  readonly description: string;
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly svc: SvgManipulationService,
+    private readonly textId: string,
+    private readonly oldEffect: string | undefined,
+    private readonly newEffect: string | undefined
+  ) {
+    this.description = 'Set text vector-effect';
+    this.coalesceKey = `text-vector-effect:${textId}`;
+  }
+
+  execute(): void {
+    this.svc.updateTextVectorEffect(this.textId, this.newEffect);
+  }
+
+  undo(): void {
+    this.svc.updateTextVectorEffect(this.textId, this.oldEffect);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as TextVectorEffectCommand;
+    return new TextVectorEffectCommand(this.svc, this.textId, this.oldEffect, n.newEffect);
   }
 }

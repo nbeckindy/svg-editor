@@ -25,7 +25,12 @@ describe('DrawingStyleDefaultsService', () => {
     expect(service.defaults()).toEqual({
       fill: '#ff0000',
       stroke: '#000000',
-      strokeWidth: 5
+      strokeWidth: 5,
+      fontFamily: 'Arial, sans-serif',
+      fontSize: 16,
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      textAnchor: 'start'
     });
   });
 
@@ -33,13 +38,23 @@ describe('DrawingStyleDefaultsService', () => {
     service.setDefaults({
       fill: '#112233',
       stroke: '#abcdef',
-      strokeWidth: 3
+      strokeWidth: 3,
+      fontFamily: 'Georgia, serif',
+      fontSize: 20,
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+      textAnchor: 'middle'
     });
 
     expect(service.defaults()).toEqual({
       fill: '#112233',
       stroke: '#abcdef',
-      strokeWidth: 3
+      strokeWidth: 3,
+      fontFamily: 'Georgia, serif',
+      fontSize: 20,
+      fontWeight: 'bold',
+      fontStyle: 'italic',
+      textAnchor: 'middle'
     });
   });
 
@@ -54,12 +69,17 @@ describe('DrawingStyleDefaultsService', () => {
     expect(service.defaults()).toEqual({
       fill: '#123456',
       stroke: '#654321',
-      strokeWidth: 7
+      strokeWidth: 7,
+      fontFamily: 'Arial, sans-serif',
+      fontSize: 16,
+      fontWeight: 'normal',
+      fontStyle: 'normal',
+      textAnchor: 'start'
     });
   });
 
   it('resets defaults to baseline values', () => {
-    service.updateDefaults({ fill: '#00ff00', stroke: '#111111', strokeWidth: 9 });
+    service.updateDefaults({ fill: '#00ff00', stroke: '#111111', strokeWidth: 9, fontSize: 24 });
 
     service.resetDefaults();
 

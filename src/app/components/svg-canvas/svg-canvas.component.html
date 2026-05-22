@@ -489,6 +489,7 @@
           class="inline-text-editor"
           data-testid="canvas-inline-text-editor"
           [value]="inlineTextEditValue"
+          [style.font]="inlineTextEditorTypographyStyle()"
           [style.left.px]="canvasView.panX + textRect.x"
           [style.top.px]="canvasView.panY + textRect.y"
           [style.width.px]="inlineTextEditWidthPx(textRect)"

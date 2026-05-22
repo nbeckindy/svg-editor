@@ -20,6 +20,9 @@ export interface ShapeCreationAttrs {
   textContent?: string;
   fontSize?: number;
   fontFamily?: string;
+  fontWeight?: string;
+  fontStyle?: 'normal' | 'italic';
+  textAnchor?: 'start' | 'middle' | 'end';
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
@@ -841,6 +844,19 @@ export class SvgManipulationService {
     const rawDashoffset = this.readStrokeDashoffset(element, node);
 
     const textNode = node.tagName.toLowerCase() === 'text' ? node : null;
+    // SVG default: fill is painted, then stroke (stroke reads as the “outline” on top). `paint-order`
+    // can reverse that (e.g. `stroke fill`) where supported — see properties panel help for `<text>`.
+    const rawPaintOrder = (element.attr('paint-order') as string | null)?.trim();
+    const paintOrder =
+      rawPaintOrder && rawPaintOrder.length > 0 && rawPaintOrder.toLowerCase() !== 'normal'
+        ? rawPaintOrder
+        : undefined;
+    const rawVectorEffect = (element.attr('vector-effect') as string | null)?.trim();
+    const vectorEffect =
+      rawVectorEffect && rawVectorEffect.length > 0 && rawVectorEffect.toLowerCase() !== 'none'
+        ? rawVectorEffect
+        : undefined;
+
     const rawFontSize = textNode ? Number.parseFloat(textNode.getAttribute('font-size') ?? '') : Number.NaN;
     const textAnchorAttr = textNode?.getAttribute('text-anchor');
     const textAnchor =
@@ -857,6 +873,8 @@ export class SvgManipulationService {
       fontWeight: textNode?.getAttribute('font-weight') ?? undefined,
       fontStyle: textNode?.getAttribute('font-style') ?? undefined,
       textAnchor,
+      paintOrder,
+      vectorEffect,
       fill: fillForPicker,
       stroke: strokeForPicker,
       strokeWidth,
@@ -1039,6 +1057,8 @@ export class SvgManipulationService {
   updateTextContent(textId: string, text: string): void {
     const textNode = this.resolveTextNode(textId);
     if (!textNode) return;
+    // Use plain DOM text replacement: svg.js `Text.text()` can call `getBBox()` for layout, which
+    // is unavailable in jsdom and breaks unit tests; stroke/fill still go through svg.js helpers.
     textNode.textContent = text;
     this.bumpDocumentRevision();
   }
@@ -1063,23 +1083,66 @@ export class SvgManipulationService {
     this.updateTextAttr(textId, 'text-anchor', textAnchor);
   }
 
-  private updateTextAttr(textId: string, attr: string, value: string): void {
-    const textNode = this.resolveTextNode(textId);
-    if (!textNode) return;
-    textNode.setAttribute(attr, value);
+  /**
+   * Sets SVG `paint-order` on the target `<text>`. Pass `undefined` or `'normal'` to clear the
+   * attribute (browser default: fill then stroke on top).
+   */
+  updateTextPaintOrder(textId: string, paintOrder: string | undefined): void {
+    const shape = this.resolveTextSvgShape(textId);
+    if (!shape) return;
+    const trimmed = paintOrder?.trim();
+    if (!trimmed || trimmed.toLowerCase() === 'normal') {
+      shape.attr('paint-order', null);
+    } else {
+      shape.attr('paint-order', trimmed);
+    }
     this.bumpDocumentRevision();
   }
 
-  private resolveTextNode(textId: string): Element | null {
+  /**
+   * Sets SVG `vector-effect` on the target `<text>`. Use `non-scaling-stroke` so outline width stays
+   * constant in screen pixels when the SVG is scaled (e.g. editor zoom); pass `undefined` / `'none'`
+   * to clear. See SVG spec — behavior depends on the root viewport transform chain.
+   */
+  updateTextVectorEffect(textId: string, effect: string | undefined): void {
+    const shape = this.resolveTextSvgShape(textId);
+    if (!shape) return;
+    const trimmed = effect?.trim();
+    if (!trimmed || trimmed.toLowerCase() === 'none') {
+      shape.attr('vector-effect', null);
+    } else {
+      shape.attr('vector-effect', trimmed);
+    }
+    this.bumpDocumentRevision();
+  }
+
+  private updateTextAttr(textId: string, attr: string, value: string): void {
+    const shape = this.resolveTextSvgShape(textId);
+    if (!shape) return;
+    shape.attr(attr, value);
+    this.bumpDocumentRevision();
+  }
+
+  /** Resolve a `<text>` SVG.js element from an id on `<text>` or a child like `<tspan>`. */
+  private resolveTextSvgShape(textId: string): SvgJsElement | null {
     if (!this.svgInstance) return null;
-    const shape = this.svgInstance.findOne(`#${textId}`) as SvgJsElement | undefined;
-    const startNode = shape?.node as Element | null;
-    if (!startNode) return null;
-    const textNode = startNode.tagName.toLowerCase() === 'text'
-      ? startNode
-      : startNode.closest('text');
-    if (!textNode || textNode.tagName.toLowerCase() !== 'text') return null;
-    return textNode;
+    let current = this.svgInstance.findOne(`#${textId}`) as SvgJsElement | undefined;
+    if (!current?.node) return null;
+    for (let depth = 0; depth < 24 && current; depth++) {
+      if (current.type === 'text') {
+        return current;
+      }
+      const parent = current.parent() as SvgJsElement | undefined;
+      if (!parent || parent === current) {
+        break;
+      }
+      current = parent;
+    }
+    return null;
+  }
+
+  private resolveTextNode(textId: string): Element | null {
+    return (this.resolveTextSvgShape(textId)?.node as Element | null) ?? null;
   }
 
   /**
@@ -1518,11 +1581,11 @@ export class SvgManipulationService {
         fill,
         stroke,
         'stroke-width': strokeWidth,
-        'font-size': attrs.fontSize ?? 16,
-        'font-family': attrs.fontFamily ?? 'Arial, sans-serif',
-        'font-weight': 'normal',
-        'font-style': 'normal',
-        'text-anchor': 'start'
+        'font-size': attrs.fontSize ?? defaults.fontSize,
+        'font-family': attrs.fontFamily ?? defaults.fontFamily,
+        'font-weight': attrs.fontWeight ?? defaults.fontWeight,
+        'font-style': attrs.fontStyle ?? defaults.fontStyle,
+        'text-anchor': attrs.textAnchor ?? defaults.textAnchor
       });
       shape = el;
     }

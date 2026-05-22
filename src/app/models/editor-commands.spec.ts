@@ -29,6 +29,8 @@ import {
   TextContentCommand,
   FontCommand,
   TextAlignCommand,
+  TextPaintOrderCommand,
+  TextVectorEffectCommand,
   PasteCommand,
   DuplicateCommand,
   UpdateDrawingDefaultsCommand,
@@ -69,6 +71,8 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     updateTextFontWeight: vi.fn(),
     updateTextFontStyle: vi.fn(),
     updateTextAnchor: vi.fn(),
+    updateTextPaintOrder: vi.fn(),
+    updateTextVectorEffect: vi.fn(),
     getShapeBBox: vi.fn(),
     getUnionBBox: vi.fn(),
     snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
@@ -1476,6 +1480,28 @@ describe('TextAlignCommand', () => {
     expect(svc.updateTextAnchor).toHaveBeenCalledWith('text-a', 'middle');
     cmd.undo();
     expect(svc.updateTextAnchor).toHaveBeenCalledWith('text-a', 'start');
+  });
+});
+
+describe('TextPaintOrderCommand', () => {
+  it('updates paint order and restores on undo', () => {
+    const svc = mockSvc();
+    const cmd = new TextPaintOrderCommand(svc, 'text-a', undefined, 'stroke fill');
+    cmd.execute();
+    expect(svc.updateTextPaintOrder).toHaveBeenCalledWith('text-a', 'stroke fill');
+    cmd.undo();
+    expect(svc.updateTextPaintOrder).toHaveBeenCalledWith('text-a', undefined);
+  });
+});
+
+describe('TextVectorEffectCommand', () => {
+  it('updates vector-effect and restores on undo', () => {
+    const svc = mockSvc();
+    const cmd = new TextVectorEffectCommand(svc, 'text-a', undefined, 'non-scaling-stroke');
+    cmd.execute();
+    expect(svc.updateTextVectorEffect).toHaveBeenCalledWith('text-a', 'non-scaling-stroke');
+    cmd.undo();
+    expect(svc.updateTextVectorEffect).toHaveBeenCalledWith('text-a', undefined);
   });
 });
 
