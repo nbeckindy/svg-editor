@@ -103,4 +103,50 @@ describe('SelectionPaintApplyService', () => {
     expect(manip.addStroke).toHaveBeenCalledWith('s1', '#111', 4);
     expect(selectedShapesSignal()[0].strokeWidth).toBe(4);
   });
+
+  it('applyStrokeWidth does nothing when width is not finite', () => {
+    selectedShapesSignal.set([{ id: 's1', type: 'rect', fill: '#000', stroke: '#111', strokeWidth: 1 }]);
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+    service.applyStrokeWidth(Number.NaN);
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('applyOpacity does nothing when opacity is not finite', () => {
+    selectedShapesSignal.set([{ id: 's1', type: 'rect', fill: '#000', stroke: '#111', strokeWidth: 1 }]);
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+    service.applyOpacity(Number.NaN);
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('applyStrokeDashoffset does nothing when offset is not finite', () => {
+    selectedShapesSignal.set([{ id: 's1', type: 'rect', fill: '#000', stroke: '#111', strokeWidth: 1 }]);
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+    service.applyStrokeDashoffset(Number.POSITIVE_INFINITY);
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('syncSelectedShapesFromDom returns early when there is no SVG instance', () => {
+    selectedShapesSignal.set([{ id: 's1', type: 'rect', fill: '#000', stroke: '#111', strokeWidth: 1 }]);
+    const shapeSelection = TestBed.inject(ShapeSelectionService) as unknown as {
+      selectShapes: ReturnType<typeof vi.fn>;
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      getSVGInstance: ReturnType<typeof vi.fn>;
+    };
+    manip.getSVGInstance.mockReturnValue(null);
+    service.syncSelectedShapesFromDom();
+    expect(shapeSelection.selectShapes).not.toHaveBeenCalled();
+  });
+
+  it('applyFillColor still updates drawing defaults when nothing is selected', () => {
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+    service.applyFillColor('#ff00ff');
+    expect(history.pushAndExecute).toHaveBeenCalled();
+  });
+
+  it('executeEditorCommands does not push when command list is empty', () => {
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+    service.executeEditorCommands([], 'noop');
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
 });
