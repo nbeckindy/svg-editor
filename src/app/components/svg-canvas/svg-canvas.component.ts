@@ -54,6 +54,7 @@ import {
 } from './gestures';
 import { PenToolSession, type PenToolSessionPorts } from './pen-tool-session/pen-tool-session';
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
+import { createSvgCanvasPointerStack } from './svg-canvas-pointer-stack.factory';
 import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
 import { insertPenNodeOnParsedPath } from '../../models/path-pen-insert';
@@ -520,20 +521,20 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return out;
   }
 
-  // --- Gesture handlers ---
-  private readonly drag = new DragGesture();
-  private readonly resize = new ResizeGesture();
-  private readonly rotate = new RotateGesture();
-  private readonly skew = new SkewGesture();
-  private readonly creation = new CreationGesture();
-  private readonly selectionMarquee = new SelectionMarqueeGesture();
-  private readonly zoomMarquee = new ZoomMarqueeGesture();
+  // --- Gesture handlers (assembled in {@link createSvgCanvasPointerStack}) ---
+  private readonly drag: DragGesture;
+  private readonly resize: ResizeGesture;
+  private readonly rotate: RotateGesture;
+  private readonly skew: SkewGesture;
+  private readonly creation: CreationGesture;
+  private readonly selectionMarquee: SelectionMarqueeGesture;
+  private readonly zoomMarquee: ZoomMarqueeGesture;
 
-  readonly gestureRuntime!: GestureRuntimeContext;
+  readonly gestureRuntime: GestureRuntimeContext;
 
-  private pointerGestureRouter!: PointerGestureRouter;
+  private readonly pointerGestureRouter: PointerGestureRouter;
 
-  readonly penTool!: PenToolSession;
+  readonly penTool: PenToolSession;
   private readonly acceptedSvgContent = signal<string>('');
   private lastObservedTool: EditorTool = 'selector';
   private isRevertingToolChange = false;
@@ -1360,43 +1361,36 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     protected drawingDefaults: DrawingStyleDefaultsService,
     private selectionPaintApply: SelectionPaintApplyService
   ) {
-    this.gestureRuntime = {
-      pointer: {
-        cdr: this.cdr,
-        highlightOverlayContainer: this.highlightOverlayContainer,
-        clientToEditorSvgPoint: (cx, cy) => this.clientToEditorSvgPoint(cx, cy),
-        svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
-        invalidateHighlightCache: () => {
-          this._highlightRectCacheKey = '';
-        },
-        setLastBbox: (bbox) => {
-          this.lastBbox = bbox;
-        }
+    const pointerStack = createSvgCanvasPointerStack({
+      cdr: this.cdr,
+      highlightOverlayContainer: this.highlightOverlayContainer,
+      svgManipulation: this.svgManipulation,
+      shapeSelection: this.shapeSelection,
+      editorHistory: this.editorHistory,
+      snap: this.snap,
+      clientToEditorSvgPoint: (cx: number, cy: number) => this.clientToEditorSvgPoint(cx, cy),
+      svgBboxToOverlayPixels: (bbox: Rect) => this.svgBboxToOverlayPixels(bbox),
+      invalidateHighlightCache: () => {
+        this._highlightRectCacheKey = '';
       },
-      doc: {
-        svgManipulation: this.svgManipulation,
-        shapeSelection: this.shapeSelection,
-        editorHistory: this.editorHistory
+      setLastBbox: (bbox: Rect | null) => {
+        this.lastBbox = bbox;
       },
-      snap: {
-        snap: this.snap,
-        getSmartGuideCandidates: () => this.getSmartGuideCandidates(),
-        isSnapTemporarilyDisabled: () => this.altKeyPressed
-      }
-    };
-    this.pointerGestureRouter = new PointerGestureRouter(
-      {
-        creation: this.creation,
-        selectionMarquee: this.selectionMarquee,
-        zoomMarquee: this.zoomMarquee,
-        resize: this.resize,
-        skew: this.skew,
-        rotate: this.rotate,
-        drag: this.drag
-      },
-      this.cdr
-    );
-    this.penTool = new PenToolSession(this.createPenToolSessionPorts());
+      getSmartGuideCandidates: () => this.getSmartGuideCandidates(),
+      isSnapTemporarilyDisabled: () => this.altKeyPressed,
+      createPenToolSessionPorts: () => this.createPenToolSessionPorts()
+    });
+    this.drag = pointerStack.drag;
+    this.resize = pointerStack.resize;
+    this.rotate = pointerStack.rotate;
+    this.skew = pointerStack.skew;
+    this.creation = pointerStack.creation;
+    this.selectionMarquee = pointerStack.selectionMarquee;
+    this.zoomMarquee = pointerStack.zoomMarquee;
+    this.gestureRuntime = pointerStack.gestureRuntime;
+    this.pointerGestureRouter = pointerStack.pointerGestureRouter;
+    this.penTool = pointerStack.penTool;
+
     effect(() => {
       const incomingSvgContent = this.svgContent();
       const acceptedSvgContent = this.acceptedSvgContent();
