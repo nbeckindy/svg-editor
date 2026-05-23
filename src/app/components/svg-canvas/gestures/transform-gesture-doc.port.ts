@@ -1,5 +1,5 @@
 import type { Matrix, Svg } from '@svgdotjs/svg.js';
-import type { TransformGestureDocSvgPort, TransformGestureUnionRect, GhostUnionSvgPort } from '../../../history/transform-gesture-svg.port';
+import type { TransformGestureDocSvgPort, TransformGestureUnionRect, GhostUnionSvgPort, TransformGestureSvgPort } from '../../../history/transform-gesture-svg.port';
 import type { ShapeSelectionService } from '../../../services/shape-selection.service';
 import type { EditorHistoryService } from '../../../services/editor-history.service';
 import type { EditorCommand } from '../../../models/editor-commands';
@@ -11,10 +11,14 @@ type BBox = TransformGestureUnionRect;
  * {@link DefaultTransformGestureDoc.svgManipulation} is {@link TransformGestureDocSvgPort}
  * (not the full manipulation type at the type level). This port extends {@link GhostUnionSvgPort}
  * so it is assignable where union ghost preview reads the tree (`GhostSession.buildFragmentsForUnion`).
- * Transform `EditorCommand`s still take `TransformGestureSvgPort` only.
+ * Transform `EditorCommand`s should use {@link TransformGestureDocPort.commandSvg} (same backing
+ * as {@link svgManipulation}, typed as {@link TransformGestureSvgPort}).
  */
 export interface TransformGestureDocPort extends GhostUnionSvgPort {
   readonly svgManipulation: TransformGestureDocSvgPort;
+
+  /** Same object as {@link svgManipulation}; typed for transform `EditorCommand` constructors. */
+  commandSvg(): TransformGestureSvgPort;
 
   selectedShapeIds(): string[];
   getUnionBBox(ids: string[], options?: { preferScreenBounds?: boolean }): BBox | null;
@@ -32,6 +36,10 @@ export class DefaultTransformGestureDoc implements TransformGestureDocPort {
     private readonly shapeSelection: ShapeSelectionService,
     private readonly editorHistory: EditorHistoryService
   ) {}
+
+  commandSvg(): TransformGestureSvgPort {
+    return this.svgManipulation;
+  }
 
   selectedShapeIds(): string[] {
     return this.shapeSelection.getSelectedShapes().map((s) => s.id);

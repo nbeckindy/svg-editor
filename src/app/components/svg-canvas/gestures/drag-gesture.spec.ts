@@ -74,7 +74,7 @@ describe('DragGesture', () => {
   });
 
   it('start returns false when there is no SVG instance', () => {
-    (ctx.transformDoc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
     const ok = gesture.start(
       ctx,
       ['a', 'b'],
@@ -96,7 +96,7 @@ describe('DragGesture', () => {
     );
     expect(ok).toBe(true);
     expect(gesture.isActive).toBe(true);
-    expect(ctx.transformDoc.svgManipulation.setShapeVisibility).toHaveBeenCalled();
+    expect(ctx.doc.svgManipulation.setShapeVisibility).toHaveBeenCalled();
   });
 
   it('end pushes translate command and clears active state', () => {

@@ -95,7 +95,7 @@ export class ResizeGesture {
     const ve = this.vectorEffectSnapshot;
     if (centerAnchored) {
       const cmd = new UnionScaleFromCenterCommand(
-        ctx.transformDoc.svgManipulation,
+        ctx.transformDoc.commandSvg(),
         ids,
         this.unionStart,
         this.lastUnion,
@@ -105,7 +105,7 @@ export class ResizeGesture {
       ctx.transformDoc.pushAndExecute(cmd);
     } else {
       const cmd = new UnionScaleCommand(
-        ctx.transformDoc.svgManipulation,
+        ctx.transformDoc.commandSvg(),
         ids,
         this.unionStart,
         this.lastUnion,

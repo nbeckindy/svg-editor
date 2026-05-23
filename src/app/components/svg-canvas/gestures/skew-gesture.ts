@@ -89,7 +89,7 @@ export class SkewGesture {
 
     if (!isSkewCommitNoop(this.currentAngleDeg)) {
       const cmd = new SkewCommand(
-        ctx.transformDoc.svgManipulation,
+        ctx.transformDoc.commandSvg(),
         ids,
         axis,
         this.currentAngleDeg,

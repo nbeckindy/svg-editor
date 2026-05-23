@@ -139,7 +139,7 @@ export class DragGesture {
       }
     }
     const dragCmds: EditorCommand[] = this.shapeIds.map(
-      (id) => new TranslateCommand(ctx.transformDoc.svgManipulation, id, dx, dy, this.snapshot)
+      (id) => new TranslateCommand(ctx.transformDoc.commandSvg(), id, dx, dy, this.snapshot)
     );
     ctx.transformDoc.pushAndExecute(
       dragCmds.length === 1 ? dragCmds[0] : new CompositeCommand(dragCmds, 'Move shapes')

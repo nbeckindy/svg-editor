@@ -133,7 +133,7 @@ export class RotateGesture {
     if (!this.isActive || !this.unionStart || !this.pivotDoc) return;
     const ids = ctx.transformDoc.selectedShapeIds();
     const cmd = new UnionRotateCommand(
-      ctx.transformDoc.svgManipulation, ids,
+      ctx.transformDoc.commandSvg(), ids,
       this.pivotDoc, radiansToDegrees(this.accumulatedRad),
       this.snapshot
     );

@@ -77,7 +77,7 @@ describe('SkewGesture', () => {
   });
 
   it('start returns false when SVG instance is missing', () => {
-    (ctx.transformDoc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
     const ok = gesture.start(ctx, 'n', { clientX: 0, clientY: 0 } as MouseEvent);
     expect(ok).toBe(false);
   });
