@@ -1,0 +1,43 @@
+import type { Matrix, Svg } from '@svgdotjs/svg.js';
+import type { ResizeHandle } from '../utils/selection-resize';
+import type { SkewAxis } from '../utils/selection-skew';
+
+/** Union bbox in editor (user) space — matches geometry helpers used by union transforms. */
+export type TransformGestureUnionRect = { x: number; y: number; width: number; height: number };
+
+/**
+ * Slice of `SvgManipulationService` consumed by pointer **transform** commands
+ * (translate / union scale / union rotate / skew). Lets those commands depend on a
+ * small seam instead of the full manipulation façade.
+ */
+export interface TransformGestureSvgPort {
+  getSVGInstance(): Svg | null;
+  translateShape(shapeId: string, dx: number, dy: number): void;
+  applyUnionScaleFromSnapshot(
+    shapeIds: string[],
+    unionBefore: TransformGestureUnionRect,
+    unionAfter: TransformGestureUnionRect,
+    snapshot: Map<string, Matrix>,
+    handle: ResizeHandle
+  ): void;
+  restoreVectorEffectsForShapeSubtrees(shapeIds: string[], snapshots: Map<string, (string | null)[]>): void;
+  applyUnionScaleFromCenter(
+    shapeIds: string[],
+    unionBefore: TransformGestureUnionRect,
+    unionAfter: TransformGestureUnionRect,
+    snapshot: Map<string, Matrix>
+  ): void;
+  applyUnionRotationFromSnapshot(
+    shapeIds: string[],
+    pivot: { x: number; y: number },
+    angleDeg: number,
+    snapshot: Map<string, Matrix>
+  ): void;
+  applyUnionSkewFromSnapshot(
+    shapeIds: string[],
+    axis: SkewAxis,
+    angleDeg: number,
+    pivot: { x: number; y: number },
+    snapshot: Map<string, Matrix>
+  ): void;
+}

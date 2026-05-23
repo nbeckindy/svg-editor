@@ -12,6 +12,7 @@ import type { CoalesceableCommand, EditorCommand } from '../../models/editor-com
 import { CompositeCommand } from '../../models/editor-command';
 import type { HistoryPaintPort } from '../history-paint.port';
 import type { SelectionSyncPort } from '../history-selection.port';
+import type { TransformGestureSvgPort } from '../transform-gesture-svg.port';
 
 export class FillColorCommand implements CoalesceableCommand {
   readonly description: string;
@@ -300,7 +301,7 @@ export class TranslateCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: TransformGestureSvgPort,
     private readonly shapeId: string,
     private readonly dx: number,
     private readonly dy: number,
@@ -517,7 +518,7 @@ export class UnionScaleCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: TransformGestureSvgPort,
     private readonly shapeIds: string[],
     private readonly unionBefore: Rect,
     private readonly unionAfter: Rect,
@@ -572,7 +573,7 @@ export class UnionScaleFromCenterCommand implements EditorCommand {
   readonly description = 'Resize shapes (center)';
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: TransformGestureSvgPort,
     private readonly shapeIds: string[],
     private readonly unionBefore: Rect,
     private readonly unionAfter: Rect,
@@ -608,7 +609,7 @@ export class UnionRotateCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: TransformGestureSvgPort,
     private readonly shapeIds: string[],
     private readonly pivot: { x: number; y: number },
     private readonly angleDeg: number,
@@ -653,7 +654,7 @@ export class SkewCommand implements EditorCommand {
   readonly description: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: TransformGestureSvgPort,
     private readonly shapeIds: string[],
     private readonly axis: SkewAxis,
     private readonly angleDeg: number,
