@@ -9,15 +9,16 @@
   [class.text-mode]="editorTool.currentTool() === 'text'"
   [class.pen-mode]="editorTool.currentTool() === 'pen'"
   [class.eyedropper-mode]="editorTool.currentTool() === 'eyedropper'">
+  <!-- **Editor chrome** bindings: use `editorChrome` (see SvgCanvasEditorChromeFacade) so overlay work has one template seam. -->
   @if (svgContent()) {
-    <div class="zoom-level" data-testid="canvas-zoom-level" aria-label="Zoom level">{{ zoomLevelPercent }}%</div>
+    <div class="zoom-level" data-testid="canvas-zoom-level" aria-label="Zoom level">{{ editorChrome.zoomLevelPercent }}%</div>
   }
-  @if (penFinishFeedbackMessage; as message) {
+  @if (editorChrome.penFinishFeedbackMessage; as message) {
     <div class="pen-finish-feedback" data-testid="canvas-pen-finish-feedback" role="status" aria-live="polite">
       {{ message }}
     </div>
   }
-  @if (pathNodeEditFeedbackMessage; as message) {
+  @if (editorChrome.pathNodeEditFeedbackMessage; as message) {
     <div class="path-node-edit-feedback" data-testid="canvas-path-node-edit-feedback" role="status" aria-live="polite">
       {{ message }}
     </div>
@@ -26,9 +27,9 @@
     @if (svgContent()) {
       <div class="ruler-corner" aria-hidden="true"></div>
       <div class="ruler-top" aria-hidden="true">
-        <svg [attr.width]="wrapperWidth" [attr.height]="RULER_SIZE" class="ruler-svg">
-          @for (tick of horizontalRulerTicks; track tick.position + ',' + tick.value) {
-            <line [attr.x1]="tick.position" [attr.y1]="RULER_SIZE" [attr.x2]="tick.position" [attr.y2]="tick.major ? RULER_SIZE - 8 : RULER_SIZE - 4" stroke="#666"/>
+        <svg [attr.width]="editorChrome.wrapperWidth" [attr.height]="editorChrome.RULER_SIZE" class="ruler-svg">
+          @for (tick of editorChrome.horizontalRulerTicks; track tick.position + ',' + tick.value) {
+            <line [attr.x1]="tick.position" [attr.y1]="editorChrome.RULER_SIZE" [attr.x2]="tick.position" [attr.y2]="tick.major ? editorChrome.RULER_SIZE - 8 : editorChrome.RULER_SIZE - 4" stroke="#666"/>
             @if (tick.major) {
               <text [attr.x]="tick.position" [attr.y]="10" text-anchor="middle" class="ruler-text">{{ tick.value }}</text>
             }
@@ -36,9 +37,9 @@
         </svg>
       </div>
       <div class="ruler-left" #rulerLeft aria-hidden="true">
-        <svg [attr.width]="RULER_SIZE" class="ruler-svg">
-          @for (tick of verticalRulerTicks; track tick.position + ',' + tick.value) {
-            <line [attr.x1]="RULER_SIZE" [attr.y1]="tick.position" [attr.x2]="tick.major ? RULER_SIZE - 8 : RULER_SIZE - 4" [attr.y2]="tick.position" stroke="#666"/>
+        <svg [attr.width]="editorChrome.RULER_SIZE" class="ruler-svg">
+          @for (tick of editorChrome.verticalRulerTicks; track tick.position + ',' + tick.value) {
+            <line [attr.x1]="editorChrome.RULER_SIZE" [attr.y1]="tick.position" [attr.x2]="tick.major ? editorChrome.RULER_SIZE - 8 : editorChrome.RULER_SIZE - 4" [attr.y2]="tick.position" stroke="#666"/>
             @if (tick.major) {
               <text [attr.x]="12" [attr.y]="tick.position" text-anchor="middle" dominant-baseline="middle" class="ruler-text">{{ tick.value }}</text>
             }
@@ -70,12 +71,12 @@
         aria-hidden="true"
         [style.left.px]="canvasView.panX"
         [style.top.px]="canvasView.panY"
-        [style.width.px]="overlayWidthPx"
-        [style.height.px]="overlayHeightPx">
+        [style.width.px]="editorChrome.overlayWidthPx"
+        [style.height.px]="editorChrome.overlayHeightPx">
         <svg
           class="highlight-overlay"
           data-testid="canvas-selection-overlay-svg"
-          [attr.viewBox]="'0 0 ' + overlayWidthPx + ' ' + overlayHeightPx"
+          [attr.viewBox]="'0 0 ' + editorChrome.overlayWidthPx + ' ' + editorChrome.overlayHeightPx"
           preserveAspectRatio="none"
           overflow="visible">
           <defs>
@@ -92,9 +93,9 @@
                 flood-color="rgba(0,0,0,0.2)" />
             </filter>
           </defs>
-          @if (showGridOverlay) {
+          @if (editorChrome.showGridOverlay) {
             <g data-testid="canvas-grid-overlay">
-              @for (line of verticalGridLines; track line.key) {
+              @for (line of editorChrome.verticalGridLines; track line.key) {
                 <line
                   data-testid="canvas-grid-line"
                   [attr.x1]="line.x1"
@@ -105,7 +106,7 @@
                   stroke-width="1"
                   vector-effect="non-scaling-stroke"/>
               }
-              @for (line of horizontalGridLines; track line.key) {
+              @for (line of editorChrome.horizontalGridLines; track line.key) {
                 <line
                   data-testid="canvas-grid-line"
                   [attr.x1]="line.x1"
@@ -118,9 +119,9 @@
               }
             </g>
           }
-          @if (verticalSmartGuideLines.length > 0 || horizontalSmartGuideLines.length > 0) {
+          @if (editorChrome.verticalSmartGuideLines.length > 0 || editorChrome.horizontalSmartGuideLines.length > 0) {
             <g data-testid="canvas-smart-guides-overlay">
-              @for (line of verticalSmartGuideLines; track line.key) {
+              @for (line of editorChrome.verticalSmartGuideLines; track line.key) {
                 <line
                   data-testid="canvas-smart-guide-line"
                   [attr.x1]="line.x1"
@@ -131,7 +132,7 @@
                   stroke-width="1.5"
                   vector-effect="non-scaling-stroke"/>
               }
-              @for (line of horizontalSmartGuideLines; track line.key) {
+              @for (line of editorChrome.horizontalSmartGuideLines; track line.key) {
                 <line
                   data-testid="canvas-smart-guide-line"
                   [attr.x1]="line.x1"
@@ -144,22 +145,22 @@
               }
             </g>
           }
-          @if (viewBoxOverlayRect) {
+          @if (editorChrome.viewBoxOverlayRect) {
             <rect
               data-testid="canvas-viewbox-boundary-overlay"
-              [attr.x]="viewBoxOverlayRect.x"
-              [attr.y]="viewBoxOverlayRect.y"
-              [attr.width]="viewBoxOverlayRect.width"
-              [attr.height]="viewBoxOverlayRect.height"
+              [attr.x]="editorChrome.viewBoxOverlayRect.x"
+              [attr.y]="editorChrome.viewBoxOverlayRect.y"
+              [attr.width]="editorChrome.viewBoxOverlayRect.width"
+              [attr.height]="editorChrome.viewBoxOverlayRect.height"
               fill="none"
               stroke="#cccccc"
               stroke-width="1"
               vector-effect="non-scaling-stroke"
               filter="url(#editor-artboard-boundary-shadow)" />
           }
-          @if (!isPathNodeEditModeActive && highlightRect; as hr) {
-            @if (isRotatingSelection) {
-              <g [attr.transform]="selectionRotateHighlightTransform(hr)">
+          @if (!editorChrome.isPathNodeEditModeActive && editorChrome.highlightRect; as hr) {
+            @if (editorChrome.isRotatingSelection) {
+              <g [attr.transform]="editorChrome.selectionRotateHighlightTransform(hr)">
                 <rect
                   [attr.x]="hr.x"
                   [attr.y]="hr.y"
@@ -170,8 +171,8 @@
                   stroke-width="2"
                   vector-effect="non-scaling-stroke"/>
               </g>
-            } @else if (multiSelectionOutlineRects.length >= 2) {
-              @for (r of multiSelectionOutlineRects; track r.id) {
+            } @else if (editorChrome.multiSelectionOutlineRects.length >= 2) {
+              @for (r of editorChrome.multiSelectionOutlineRects; track r.id) {
                 <rect
                   [attr.x]="r.x"
                   [attr.y]="r.y"
@@ -195,8 +196,8 @@
                 vector-effect="non-scaling-stroke"/>
             }
           }
-          @if (creationGhostRect; as ghost) {
-            @if (creationShapeType === 'ellipse') {
+          @if (editorChrome.creationGhostRect; as ghost) {
+            @if (editorChrome.creationShapeType === 'ellipse') {
               <ellipse
                 class="creation-ghost-shape"
                 data-testid="canvas-creation-ghost"
@@ -209,8 +210,8 @@
                 stroke-width="2"
                 stroke-dasharray="6 3"
                 vector-effect="non-scaling-stroke"/>
-            } @else if (creationShapeType === 'line') {
-              @if (creationGhostLineOverlay; as gl) {
+            } @else if (editorChrome.creationShapeType === 'line') {
+              @if (editorChrome.creationGhostLineOverlay; as gl) {
                 <line
                   class="creation-ghost-shape"
                   data-testid="canvas-creation-ghost"
@@ -238,7 +239,7 @@
                 vector-effect="non-scaling-stroke"/>
             }
           }
-          @if (penSessionPreviewPathD; as pfull) {
+          @if (editorChrome.penSessionPreviewPathD; as pfull) {
             <path
               class="creation-ghost-shape"
               data-testid="canvas-pen-path-preview"
@@ -248,7 +249,7 @@
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
           }
-          @if (penCurvePreviewPathD; as pcurve) {
+          @if (editorChrome.penCurvePreviewPathD; as pcurve) {
             <path
               class="creation-ghost-shape"
               data-testid="canvas-pen-curve-preview"
@@ -257,7 +258,7 @@
               [attr.stroke]="drawingDefaults.stroke()"
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
-            @for (h of penCurveHandleOverlays; track h.cx + ',' + h.cy) {
+            @for (h of editorChrome.penCurveHandleOverlays; track h.cx + ',' + h.cy) {
               <circle
                 class="pen-curve-handle"
                 data-testid="canvas-pen-curve-handle"
@@ -269,7 +270,7 @@
                 stroke-width="1.5"
                 vector-effect="non-scaling-stroke"/>
             }
-            @if (penPendingCurveHandleGuideOverlay; as pcg) {
+            @if (editorChrome.penPendingCurveHandleGuideOverlay; as pcg) {
               <line
                 class="pen-outgoing-handle-guide"
                 data-testid="canvas-pen-pending-curve-handle-guide"
@@ -283,7 +284,7 @@
                 vector-effect="non-scaling-stroke"/>
             }
           }
-          @if (penRubberBandOverlay; as prb) {
+          @if (editorChrome.penRubberBandOverlay; as prb) {
             <line
               class="creation-ghost-shape"
               data-testid="canvas-pen-rubber-band"
@@ -295,7 +296,7 @@
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
           }
-          @if (penOutgoingHandleGuideOverlay; as og) {
+          @if (editorChrome.penOutgoingHandleGuideOverlay; as og) {
             <line
               class="pen-outgoing-handle-guide"
               data-testid="canvas-pen-outgoing-handle-guide"
@@ -308,7 +309,7 @@
               stroke-dasharray="4 3"
               vector-effect="non-scaling-stroke"/>
           }
-          @if (penOutgoingHandleKnobOverlay; as pk) {
+          @if (editorChrome.penOutgoingHandleKnobOverlay; as pk) {
             <circle
               class="pen-outgoing-handle"
               data-pen-outgoing-handle="true"
@@ -321,7 +322,7 @@
               stroke-width="1.5"
               vector-effect="non-scaling-stroke"/>
           }
-          @if (penCloseTargetHoverOverlay; as closeRing) {
+          @if (editorChrome.penCloseTargetHoverOverlay; as closeRing) {
             <circle
               class="creation-ghost-shape pen-close-target-ring"
               data-testid="canvas-pen-close-hover"
@@ -334,8 +335,8 @@
               stroke-dasharray="4 3"
               vector-effect="non-scaling-stroke"/>
           }
-          @if (showPathNodeEditOverlays) {
-            @for (handle of pathNodeControlHandleOverlays; track $index) {
+          @if (editorChrome.showPathNodeEditOverlays) {
+            @for (handle of editorChrome.pathNodeControlHandleOverlays; track $index) {
               <line
                 class="path-node-control-line"
                 data-path-node-edit-target="true"
@@ -362,7 +363,7 @@
                 stroke-width="1.5"
                 vector-effect="non-scaling-stroke"/>
             }
-            @for (anchor of pathNodeAnchorOverlays; track $index) {
+            @for (anchor of editorChrome.pathNodeAnchorOverlays; track $index) {
               <circle
                 class="path-node-anchor"
                 [class.path-node-anchor-selected]="anchor.selected"
@@ -379,88 +380,88 @@
                 vector-effect="non-scaling-stroke"/>
             }
           }
-          @if (showResizeHandles && highlightRect; as hr) {
+          @if (editorChrome.showResizeHandles && editorChrome.highlightRect; as hr) {
             <!-- Skew first (below): discs extend inward and must not steal hits from edge-scale / corners above. -->
             <circle
               class="selection-skew-handle selection-skew-n"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-skew-handle="n"
               data-testid="canvas-handle-skew-n"
               [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y - selectionSkewEdgeOutset"/>
+              [attr.cy]="hr.y - editorChrome.selectionSkewEdgeOutset"/>
             <circle
               class="selection-skew-handle selection-skew-s"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-skew-handle="s"
               data-testid="canvas-handle-skew-s"
               [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y + hr.height + selectionSkewEdgeOutset"/>
+              [attr.cy]="hr.y + hr.height + editorChrome.selectionSkewEdgeOutset"/>
             <circle
               class="selection-skew-handle selection-skew-w"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-skew-handle="w"
               data-testid="canvas-handle-skew-w"
-              [attr.cx]="hr.x - selectionSkewEdgeOutset"
+              [attr.cx]="hr.x - editorChrome.selectionSkewEdgeOutset"
               [attr.cy]="hr.y + hr.height / 2"/>
             <circle
               class="selection-skew-handle selection-skew-e"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-skew-handle="e"
               data-testid="canvas-handle-skew-e"
-              [attr.cx]="hr.x + hr.width + selectionSkewEdgeOutset"
+              [attr.cx]="hr.x + hr.width + editorChrome.selectionSkewEdgeOutset"
               [attr.cy]="hr.y + hr.height / 2"/>
             <circle
               class="selection-resize-handle selection-resize-edge-n"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-resize-handle="n"
               data-testid="canvas-handle-resize-n"
               [attr.cx]="hr.x + hr.width / 2"
               [attr.cy]="hr.y"/>
             <circle
               class="selection-resize-handle selection-resize-edge-s"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-resize-handle="s"
               data-testid="canvas-handle-resize-s"
               [attr.cx]="hr.x + hr.width / 2"
               [attr.cy]="hr.y + hr.height"/>
             <circle
               class="selection-resize-handle selection-resize-edge-e"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-resize-handle="e"
               data-testid="canvas-handle-resize-e"
               [attr.cx]="hr.x + hr.width"
               [attr.cy]="hr.y + hr.height / 2"/>
             <circle
               class="selection-resize-handle selection-resize-edge-w"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-resize-handle="w"
               data-testid="canvas-handle-resize-w"
               [attr.cx]="hr.x"
               [attr.cy]="hr.y + hr.height / 2"/>
             <circle
               class="selection-resize-handle selection-resize-nw"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-resize-handle="nw"
               data-testid="canvas-handle-resize-nw"
               [attr.cx]="hr.x"
               [attr.cy]="hr.y"/>
             <circle
               class="selection-resize-handle selection-resize-ne"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-resize-handle="ne"
               data-testid="canvas-handle-resize-ne"
               [attr.cx]="hr.x + hr.width"
               [attr.cy]="hr.y"/>
             <circle
               class="selection-resize-handle selection-resize-sw"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-resize-handle="sw"
               data-testid="canvas-handle-resize-sw"
               [attr.cx]="hr.x"
               [attr.cy]="hr.y + hr.height"/>
             <circle
               class="selection-resize-handle selection-resize-se"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-resize-handle="se"
               data-testid="canvas-handle-resize-se"
               [attr.cx]="hr.x + hr.width"
@@ -471,38 +472,38 @@
               [attr.x1]="hr.x + hr.width / 2"
               [attr.y1]="hr.y"
               [attr.x2]="hr.x + hr.width / 2"
-              [attr.y2]="hr.y - rotateHandleOffset"
+              [attr.y2]="hr.y - editorChrome.rotateHandleOffset"
               pointer-events="none"/>
             <circle
               class="selection-rotate-handle"
-              [attr.r]="selectionHandleRadiusOverlay"
+              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
               data-rotate-handle=""
               data-testid="canvas-handle-rotate"
               [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y - rotateHandleOffset"/>
+              [attr.cy]="hr.y - editorChrome.rotateHandleOffset"/>
           }
         </svg>
       </div>
-      @if (isInlineTextEditModeActive && inlineTextEditOverlayRect; as textRect) {
+      @if (editorChrome.isInlineTextEditModeActive && editorChrome.inlineTextEditOverlayRect; as textRect) {
         <textarea
           #inlineTextEditor
           class="inline-text-editor"
           data-testid="canvas-inline-text-editor"
           aria-label="Edit canvas text"
           aria-multiline="true"
-          [attr.title]="inlineTextEditorHint"
-          [value]="inlineTextEditValue"
-          [style.font]="inlineTextEditorTypographyStyle()"
+          [attr.title]="editorChrome.inlineTextEditorHint"
+          [value]="editorChrome.inlineTextEditValue"
+          [style.font]="editorChrome.inlineTextEditorTypographyStyle()"
           [style.left.px]="canvasView.panX + textRect.x"
           [style.top.px]="canvasView.panY + textRect.y"
-          [style.width.px]="inlineTextEditWidthPx(textRect)"
-          [style.height.px]="inlineTextEditHeightPx(textRect)"
+          [style.width.px]="editorChrome.inlineTextEditWidthPx(textRect)"
+          [style.height.px]="editorChrome.inlineTextEditHeightPx(textRect)"
           (input)="onInlineTextEditInput($event)"></textarea>
       }
     </div>
   </div>
   </div>
-  @if (zoomMarqueeRect; as rect) {
+  @if (editorChrome.zoomMarqueeRect; as rect) {
     <div
       class="zoom-marquee"
       data-testid="canvas-zoom-marquee"
@@ -512,7 +513,7 @@
       [style.width.px]="rect.width"
       [style.height.px]="rect.height"></div>
   }
-  @if (selectionMarqueeRect; as selRect) {
+  @if (editorChrome.selectionMarqueeRect; as selRect) {
     <div
       class="selection-marquee"
       data-testid="canvas-selection-marquee"

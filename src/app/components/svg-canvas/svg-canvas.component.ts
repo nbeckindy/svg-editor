@@ -54,6 +54,7 @@ import {
 } from './gestures';
 import { PenToolSession, type PenToolSessionPorts } from './pen-tool-session/pen-tool-session';
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
+import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createSvgCanvasPointerStack } from './svg-canvas-pointer-stack.factory';
 import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
@@ -72,6 +73,12 @@ import {
   resolveInlineTextEditorTypography
 } from '../../utils/svg-inline-text-typography';
 import { SnapCandidateShape } from '../../services/snap.service';
+
+/**
+ * **Canvas adapter** seams (Editor runtime): keyboard policy → `svg-canvas-keyboard.controller.ts`;
+ * pointer assembly → `svg-canvas-pointer-stack.factory.ts`; template **Editor chrome** bindings →
+ * {@link SvgCanvasEditorChromeFacade}.
+ */
 
 /** Target number of major ticks visible across the ruler at any zoom level. */
 const RULER_TICK_COUNT = 30;
@@ -535,6 +542,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
   private readonly pointerGestureRouter: PointerGestureRouter;
 
   readonly penTool: PenToolSession;
+
+  /**
+   * **Editor chrome** façade for the template — overlay/ruler/marquee bindings; logic remains on
+   * this **Canvas adapter** (see {@link SvgCanvasEditorChromeFacade}).
+   */
+  readonly editorChrome!: SvgCanvasEditorChromeFacade;
   private readonly acceptedSvgContent = signal<string>('');
   private lastObservedTool: EditorTool = 'selector';
   private isRevertingToolChange = false;
@@ -1390,6 +1403,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     this.gestureRuntime = pointerStack.gestureRuntime;
     this.pointerGestureRouter = pointerStack.pointerGestureRouter;
     this.penTool = pointerStack.penTool;
+    this.editorChrome = new SvgCanvasEditorChromeFacade(this);
 
     effect(() => {
       const incomingSvgContent = this.svgContent();
