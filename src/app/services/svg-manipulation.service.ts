@@ -3,7 +3,7 @@ import { Svg, Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
 import type { EditableGradientModel, PaintGradientSnapshot } from '../models/svg-gradient';
 import { ArtboardModel, ArtboardResizeAnchor } from '../models/artboard.model';
 import { ShapeProperties } from '../models/shape-properties.interface';
-import type { ClipboardPayload } from './clipboard.service';
+import type { ClipboardPayload } from '../models/clipboard-payload';
 import type { CreatableShapeType, ShapeCreationAttrs } from './svg-shape-content.port';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgGradientDefsService } from './svg-gradient-defs.service';
@@ -161,6 +161,33 @@ export class SvgManipulationService {
 
   bakeEffectiveStrokeToLocal(shapeId: string): void {
     this.shapes.bakeEffectiveStrokeToLocal(shapeId);
+  }
+
+  restoreBakedFillPresentation(
+    shapeId: string,
+    before: { fillAttr: string | null; fillStyleValue: string }
+  ): void {
+    this.shapes.restoreBakedFillPresentation(shapeId, before);
+  }
+
+  restoreBakedStrokePresentation(
+    shapeId: string,
+    before: {
+      strokeAttr: string | null;
+      strokeStyleValue: string;
+      strokeWidthAttr: string | null;
+      strokeWidthStyleValue: string;
+    }
+  ): void {
+    this.shapes.restoreBakedStrokePresentation(shapeId, before);
+  }
+
+  restoreRemovedShapesInContentGroup(
+    shapeIds: string[],
+    serializedMarkup: ReadonlyMap<string, string>,
+    insertionIndices: ReadonlyMap<string, number>
+  ): void {
+    this.shapes.restoreRemovedShapesInContentGroup(shapeIds, serializedMarkup, insertionIndices);
   }
 
   translateShape(shapeId: string, dx: number, dy: number): void {

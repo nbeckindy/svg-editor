@@ -1,6 +1,6 @@
 ---
 description: Follow the EditorCommand pattern for undo/redo when adding new editing operations
-globs: src/app/models/editor-commands.ts
+globs: src/app/models/editor-commands.ts,src/app/models/editor-command.ts,src/app/history/commands/editor-command-implementations.ts
 alwaysApply: false
 ---
 
@@ -9,6 +9,8 @@ alwaysApply: false
 Every user-visible mutation to the SVG must be wrapped in an `EditorCommand` and dispatched through `EditorHistoryService.pushAndExecute(cmd)` so undo/redo works.
 
 ## Structure
+
+Command classes live in [`src/app/history/commands/editor-command-implementations.ts`](src/app/history/commands/editor-command-implementations.ts). The core contract (`EditorCommand`, `CompositeCommand`, …) is in [`src/app/models/editor-command.ts`](src/app/models/editor-command.ts). Paint-only commands may depend on `HistoryPaintPort` (implemented by `SvgManipulationService`); selection side effects may use `SelectionSyncPort`.
 
 ```typescript
 export class MyCommand implements EditorCommand {

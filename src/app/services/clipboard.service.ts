@@ -1,14 +1,7 @@
 import { Injectable, signal } from '@angular/core';
+import type { ClipboardPayload, ClipboardShapeSnapshot } from '../models/clipboard-payload';
 
-export interface ClipboardShapeSnapshot {
-  id: string;
-  markup: string;
-  insertionIndex?: number;
-}
-
-export interface ClipboardPayload {
-  shapes: ClipboardShapeSnapshot[];
-}
+export type { ClipboardPayload, ClipboardShapeSnapshot } from '../models/clipboard-payload';
 
 const PASTE_OFFSET_STEP = 10;
 
@@ -19,7 +12,7 @@ export class ClipboardService {
 
   set(payload: ClipboardPayload): void {
     this.payload.set({
-      shapes: payload.shapes.map((shape) => ({ ...shape }))
+      shapes: payload.shapes.map((shape: ClipboardShapeSnapshot) => ({ ...shape }))
     });
     this.pasteCount = 0;
   }
@@ -28,7 +21,7 @@ export class ClipboardService {
     const value = this.payload();
     if (!value) return null;
     return {
-      shapes: value.shapes.map((shape) => ({ ...shape }))
+      shapes: value.shapes.map((shape: ClipboardShapeSnapshot) => ({ ...shape }))
     };
   }
 

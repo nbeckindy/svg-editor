@@ -1,7 +1,7 @@
 import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../models/shape-properties.interface';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
-import type { ClipboardPayload } from './clipboard.service';
+import type { ClipboardPayload } from '../models/clipboard-payload';
 
 export type CreatableShapeType = 'rect' | 'ellipse' | 'line' | 'text';
 
@@ -70,6 +70,27 @@ export interface SvgShapeContentPort {
   getNearestGroupAncestorId(shapeId: string): string | null;
   bakeEffectiveFillToLocal(shapeId: string): void;
   bakeEffectiveStrokeToLocal(shapeId: string): void;
+  /** Undo of {@link bakeEffectiveFillToLocal}: restore captured presentation + inline style cascade. */
+  restoreBakedFillPresentation(
+    shapeId: string,
+    before: { fillAttr: string | null; fillStyleValue: string }
+  ): void;
+  /** Undo of {@link bakeEffectiveStrokeToLocal}: restore captured presentation + inline style cascade. */
+  restoreBakedStrokePresentation(
+    shapeId: string,
+    before: {
+      strokeAttr: string | null;
+      strokeStyleValue: string;
+      strokeWidthAttr: string | null;
+      strokeWidthStyleValue: string;
+    }
+  ): void;
+  /** Re-insert shapes removed by {@link removeShapes} using captured outerHTML and content-group indices. */
+  restoreRemovedShapesInContentGroup(
+    shapeIds: string[],
+    serializedMarkup: ReadonlyMap<string, string>,
+    insertionIndices: ReadonlyMap<string, number>
+  ): void;
   translateShape(shapeId: string, dx: number, dy: number): void;
   setShapeVisibility(shapeId: string, visible: boolean): void;
 

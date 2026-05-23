@@ -7,7 +7,7 @@ import type {
   SvgShapeContentPort,
   SvgShapePaintReadout
 } from './svg-shape-content.port';
-import { type ClipboardPayload, type ClipboardShapeSnapshot } from './clipboard.service';
+import type { ClipboardPayload, ClipboardShapeSnapshot } from '../models/clipboard-payload';
 import {
   axisAlignedRectContains,
   axisAlignedRectsIntersect,
@@ -770,6 +770,109 @@ export class SvgShapeContentService implements SvgShapeContentPort {
     } else {
       this.addStroke(shapeId, props.stroke, props.strokeWidth);
     }
+  }
+
+  restoreBakedFillPresentation(
+    shapeId: string,
+    before: { fillAttr: string | null; fillStyleValue: string }
+  ): void {
+    if (!this.doc.getSVGInstance()) return;
+    const shape = this.doc.getSVGInstance()!.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!shape?.node) return;
+
+    if (before.fillAttr !== null) {
+      shape.attr('fill', before.fillAttr);
+    } else {
+      shape.attr('fill', null);
+    }
+
+    const node = shape.node as SVGGraphicsElement;
+    if (before.fillStyleValue) {
+      node.style?.setProperty('fill', before.fillStyleValue);
+    } else {
+      node.style?.removeProperty('fill');
+    }
+    this.doc.bumpDocumentRevision();
+  }
+
+  restoreBakedStrokePresentation(
+    shapeId: string,
+    before: {
+      strokeAttr: string | null;
+      strokeStyleValue: string;
+      strokeWidthAttr: string | null;
+      strokeWidthStyleValue: string;
+    }
+  ): void {
+    if (!this.doc.getSVGInstance()) return;
+    const shape = this.doc.getSVGInstance()!.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!shape?.node) return;
+
+    if (before.strokeAttr !== null) {
+      shape.attr('stroke', before.strokeAttr);
+    } else {
+      shape.attr('stroke', null);
+    }
+
+    const node = shape.node as SVGGraphicsElement;
+    if (before.strokeStyleValue) {
+      node.style?.setProperty('stroke', before.strokeStyleValue);
+    } else {
+      node.style?.removeProperty('stroke');
+    }
+
+    if (before.strokeWidthAttr !== null) {
+      shape.attr('stroke-width', before.strokeWidthAttr);
+    } else {
+      shape.attr('stroke-width', null);
+    }
+
+    if (before.strokeWidthStyleValue) {
+      node.style?.setProperty('stroke-width', before.strokeWidthStyleValue);
+    } else {
+      node.style?.removeProperty('stroke-width');
+    }
+    this.doc.bumpDocumentRevision();
+  }
+
+  restoreRemovedShapesInContentGroup(
+    shapeIds: string[],
+    serializedMarkup: ReadonlyMap<string, string>,
+    insertionIndices: ReadonlyMap<string, number>
+  ): void {
+    if (!this.doc.getSVGInstance()) return;
+    const contentGroup = this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
+    const contentNode = contentGroup?.node as Element | undefined;
+    if (!contentNode) return;
+
+    const sorted = [...shapeIds]
+      .filter((id) => serializedMarkup.has(id))
+      .sort((a, b) => (insertionIndices.get(a) ?? 0) - (insertionIndices.get(b) ?? 0));
+
+    for (const id of sorted) {
+      const markup = serializedMarkup.get(id);
+      if (!markup) continue;
+      const idx = insertionIndices.get(id);
+      const temp = document.createElementNS(SVG_NS, 'g');
+      temp.innerHTML = markup;
+      const newNode = temp.firstElementChild;
+      if (!newNode) continue;
+
+      const children = contentNode.children;
+      if (idx !== undefined && idx < children.length) {
+        contentNode.insertBefore(newNode, children[idx]);
+      } else {
+        contentNode.appendChild(newNode);
+      }
+
+      try {
+        (newNode as SVGElement).style?.setProperty('cursor', 'pointer');
+      } catch {
+        // jsdom compatibility
+      }
+    }
+
+    this.doc.bumpDocumentRevision();
   }
 
   /**
