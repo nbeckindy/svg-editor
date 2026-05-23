@@ -1,39 +1,26 @@
 import { Component, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
+import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
-import { EditorHistoryService } from '../../services/editor-history.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-properties.interface';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
 import { DocumentSettingsComponent } from '../document-settings/document-settings.component';
 import { GradientFillEditorComponent } from '../gradient-fill-editor/gradient-fill-editor.component';
 import {
-  EditorCommand,
-  CompositeCommand,
   GradientFillSnapshotCommand,
-  RemoveStrokeCommand,
-  SetStrokeCommand,
-  OpacityCommand,
   BakeFillCommand,
   BakeStrokeCommand,
-  StrokeDashArrayCommand,
-  StrokeDashOffsetCommand,
   AlignCommand,
   DistributeCommand,
   FontCommand,
   TextAlignCommand,
   TextPaintOrderCommand,
   TextVectorEffectCommand,
-  UpdateDrawingDefaultsCommand,
-  TranslateCommand,
-  UnionScaleCommand,
-  UnionRotateCommand
+  UpdateDrawingDefaultsCommand
 } from '../../models/editor-commands';
-import { MIN_UNION_SIZE } from '../../utils/selection-resize';
-import { unionRotationPivot } from '../../utils/selection-rotate';
 import {
   defaultLinearGradientModel,
   parsePaintReferenceId,
@@ -41,6 +28,8 @@ import {
 } from '../../models/svg-gradient';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { SelectionPaintApplyService } from '../../services/selection-paint-apply.service';
+import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
+import { SelectionTransformApplyService } from '../../services/selection-transform-apply.service';
 
 @Component({
   selector: 'app-properties-panel',
@@ -63,9 +52,15 @@ export class PropertiesPanelComponent {
   readonly selectionCount = this.shapeSelectionService.selectionCount;
   private svgManipulationService = inject(SvgManipulationService);
   private drawingDefaults = inject(DrawingStyleDefaultsService);
-  private editorHistory = inject(EditorHistoryService);
   private editorTool = inject(EditorToolService);
   private selectionPaintApply = inject(SelectionPaintApplyService);
+  private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
+  private readonly selectionTransformApply = inject(SelectionTransformApplyService);
+
+  readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
+  readonly selectionTransformReadout = this.transformReadoutSvc.selectionTransformReadout;
+  readonly selectionBBoxFieldModel = this.transformReadoutSvc.selectionBBoxFieldModel;
+
   readonly isSelectorMode = computed(() => this.editorTool.currentTool() === 'selector');
   readonly hasSelection = computed(() => this.selectionCount() > 0);
   /** Text tool active: typography controls edit placement defaults when nothing is selected. */
@@ -77,209 +72,9 @@ export class PropertiesPanelComponent {
     return this.hasSelection() ? 'Target: Selection + defaults' : 'Target: New shapes';
   });
 
-  /**
-   * Matrix-derived skew angles (degrees). Approximate when rotation and skew are combined.
-   * `skewX ≈ atan2(c, a)`, `skewY ≈ atan2(b, d)` in root transform space.
-   */
-  readonly selectionSkewReadout = computed(() => {
-    this.editorHistory.revision();
-    this.svgManipulationService.documentRevision();
-
-    if (this.editorTool.currentTool() !== 'selector') {
-      return { skewX: '—' as const, skewY: '—' as const };
-    }
-
-    const shapes = this.shapeSelectionService.selectedShapes();
-    if (shapes.length === 0) {
-      return { skewX: '—' as const, skewY: '—' as const };
-    }
-
-    const svg = this.svgManipulationService.getSVGInstance();
-    if (!svg) {
-      return { skewX: '—' as const, skewY: '—' as const };
-    }
-
-    const pairs: { sx: number; sy: number }[] = [];
-    for (const s of shapes) {
-      const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
-      if (!el || typeof el.matrix !== 'function') continue;
-      const m = el.matrix() as Matrix;
-      const { skewX, skewY } = PropertiesPanelComponent.skewDegFromMatrix(m);
-      if (!Number.isFinite(skewX) || !Number.isFinite(skewY)) continue;
-      pairs.push({ sx: skewX, sy: skewY });
-    }
-
-    if (pairs.length === 0) {
-      return { skewX: '—' as const, skewY: '—' as const };
-    }
-
-    const fmt = (n: number) => `${n.toFixed(1)}°`;
-    const sx0 = pairs[0].sx;
-    const sy0 = pairs[0].sy;
-    const skewX =
-      shapes.length > 1 && pairs.some((p) => Math.abs(p.sx - sx0) > 0.05) ? ('Mixed' as const) : fmt(sx0);
-    const skewY =
-      shapes.length > 1 && pairs.some((p) => Math.abs(p.sy - sy0) > 0.05) ? ('Mixed' as const) : fmt(sy0);
-    return { skewX, skewY };
-  });
-
-  /** Degrees: treat rotations as equivalent modulo 360° (e.g. 0° vs 360°). */
-  private static readonly ROTATION_MIXED_EPS_DEG = 0.05;
-
-  private static isFinitePositiveDim(n: number): boolean {
-    return Number.isFinite(n) && n > 0;
+  onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event): void {
+    this.selectionTransformApply.onBBoxFieldCommit(field, event);
   }
-
-  private static shortestSignedDeltaDeg(fromDeg: number, toDeg: number): number {
-    const a = PropertiesPanelComponent.normDeg0To360(fromDeg);
-    const b = PropertiesPanelComponent.normDeg0To360(toDeg);
-    let d = b - a;
-    if (d > 180) d -= 360;
-    if (d < -180) d += 360;
-    return d;
-  }
-
-  private static rotationDiffDeg(a: number, b: number): number {
-    let d = Math.abs(a - b) % 360;
-    if (d > 180) d = 360 - d;
-    return d;
-  }
-
-  /** Map any finite angle in degrees to `[0, 360)`. */
-  private static normDeg0To360(deg: number): number {
-    if (!Number.isFinite(deg)) return NaN;
-    return ((deg % 360) + 360) % 360;
-  }
-
-  /**
-   * Rotation (degrees, 0–360) from the element’s cumulative transform in **root SVG user space**.
-   * Uses the linear 2×2 part of the SVG `matrix(a,b,c,d,e,f)` where `x' = a·x + c·y + e`,
-   * `y' = b·x + d·y + f`. The image of the local +X axis is `(a, b)`, so
-   * **θ = atan2(b, a)** (same atan2 idea as skew readout’s `atan2` on matrix entries).
-   * With non-uniform scale or skew this is an effective “X-axis” angle, not a unique Euler triple.
-   */
-  private static rotationDeg0To360FromMatrix(m: Matrix): number {
-    const v = m.valueOf() as { a: number; b: number; c: number; d: number };
-    const rad = Math.atan2(v.b, v.a);
-    return PropertiesPanelComponent.normDeg0To360((rad * 180) / Math.PI);
-  }
-
-  /**
-   * Read-only X/Y/W/H from union bbox in root SVG user space (`getUnionBBox`), and R from
-   * per-element matrix rotation (see `rotationDeg0To360FromMatrix`). Multi-select: union bbox;
-   * R is **Mixed** when per-shape angles differ beyond `ROTATION_MIXED_EPS_DEG`.
-   */
-  readonly selectionTransformReadout = computed(() => {
-    this.editorHistory.revision();
-    this.svgManipulationService.documentRevision();
-
-    const dash = '—' as const;
-    if (this.editorTool.currentTool() !== 'selector') {
-      return { x: dash, y: dash, w: dash, h: dash, r: dash };
-    }
-
-    const shapes = this.shapeSelectionService.selectedShapes();
-    if (shapes.length === 0) {
-      return { x: dash, y: dash, w: dash, h: dash, r: dash };
-    }
-
-    const ids = shapes.map((s) => s.id);
-    const union = this.svgManipulationService.getUnionBBox(ids);
-    const fmtNum = (n: number) => n.toFixed(1);
-
-    const xStr = union ? fmtNum(union.x) : dash;
-    const yStr = union ? fmtNum(union.y) : dash;
-    const wStr = union ? fmtNum(union.width) : dash;
-    const hStr = union ? fmtNum(union.height) : dash;
-
-    const svg = this.svgManipulationService.getSVGInstance();
-    if (!svg) {
-      return { x: xStr, y: yStr, w: wStr, h: hStr, r: dash };
-    }
-
-    const angles: number[] = [];
-    for (const s of shapes) {
-      const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
-      if (!el || typeof el.matrix !== 'function') continue;
-      const m = el.matrix() as Matrix;
-      const deg = PropertiesPanelComponent.rotationDeg0To360FromMatrix(m);
-      if (!Number.isFinite(deg)) continue;
-      angles.push(deg);
-    }
-
-    let rStr: string = dash;
-    if (angles.length > 0) {
-      const r0 = angles[0];
-      const eps = PropertiesPanelComponent.ROTATION_MIXED_EPS_DEG;
-      const mixed =
-        shapes.length > 1 &&
-        angles.some((deg) => PropertiesPanelComponent.rotationDiffDeg(deg, r0) > eps);
-      rStr = mixed ? 'Mixed' : `${fmtNum(r0)}°`;
-    }
-
-    return { x: xStr, y: yStr, w: wStr, h: hStr, r: rStr };
-  });
-
-  /**
-   * Numeric X/Y/W/H and rotation for bbox inputs (union bbox in root SVG user space).
-   * When the union is missing or degenerate, inputs are shown disabled (`ok: false`).
-   */
-  readonly selectionBBoxFieldModel = computed(() => {
-    this.editorHistory.revision();
-    this.svgManipulationService.documentRevision();
-
-    if (this.editorTool.currentTool() !== 'selector') {
-      return null;
-    }
-
-    const shapes = this.shapeSelectionService.selectedShapes();
-    if (shapes.length === 0) {
-      return null;
-    }
-
-    const ids = shapes.map((s) => s.id);
-    const union = this.svgManipulationService.getUnionBBox(ids);
-    if (
-      !union ||
-      !PropertiesPanelComponent.isFinitePositiveDim(union.width) ||
-      !PropertiesPanelComponent.isFinitePositiveDim(union.height)
-    ) {
-      return { ok: false as const, ids };
-    }
-
-    const svg = this.svgManipulationService.getSVGInstance();
-    let rDeg: number | null = null;
-    let rMixed = false;
-    if (svg) {
-      const angles: number[] = [];
-      for (const s of shapes) {
-        const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
-        if (!el || typeof el.matrix !== 'function') continue;
-        const m = el.matrix() as Matrix;
-        const deg = PropertiesPanelComponent.rotationDeg0To360FromMatrix(m);
-        if (!Number.isFinite(deg)) continue;
-        angles.push(deg);
-      }
-      if (angles.length > 0) {
-        const r0 = angles[0];
-        const eps = PropertiesPanelComponent.ROTATION_MIXED_EPS_DEG;
-        rMixed = shapes.length > 1 && angles.some((deg) => PropertiesPanelComponent.rotationDiffDeg(deg, r0) > eps);
-        rDeg = rMixed ? null : r0;
-      }
-    }
-
-    return {
-      ok: true as const,
-      ids,
-      union,
-      x: union.x,
-      y: union.y,
-      w: union.width,
-      h: union.height,
-      rDeg,
-      rMixed
-    };
-  });
 
   readonly alignShortcutLabels = {
     left: 'Ctrl/Cmd+Shift+Left',
@@ -291,113 +86,6 @@ export class PropertiesPanelComponent {
     distributeHorizontal: 'Ctrl/Cmd+Shift+H',
     distributeVertical: 'Ctrl/Cmd+Shift+V'
   } as const;
-
-  /**
-   * Commit a numeric bbox / rotation edit. Uses union-bbox semantics: translate for X/Y,
-   * edge-anchored scale for W/H (west fixed for width, north fixed for height), rigid rotation
-   * for R when not mixed.
-   * Rapid commits on the same field coalesce into one undo step when they fall within
-   * `EditorHistoryService` push window (see `COALESCE_WINDOW_MS` on transform commands).
-   */
-  onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event): void {
-    if (this.editorTool.currentTool() !== 'selector') return;
-    const target = event.target as HTMLInputElement;
-    const raw = target.value.trim();
-    if (raw === '') return;
-    const parsed = Number.parseFloat(raw);
-    if (!Number.isFinite(parsed)) return;
-
-    const model = this.selectionBBoxFieldModel();
-    if (!model || !model.ok) return;
-    const { ids, union: unionBefore } = model;
-    const epsPos = 1e-6;
-
-    if (field === 'x') {
-      const dx = parsed - unionBefore.x;
-      if (Math.abs(dx) < epsPos) return;
-      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
-      const cmds = ids.map(
-        (id) => new TranslateCommand(this.svgManipulationService, id, dx, 0, snap)
-      );
-      this.pushCommand(cmds, `Set selection X to ${parsed}`);
-      this.syncAllSelectedFromDom();
-      return;
-    }
-
-    if (field === 'y') {
-      const dy = parsed - unionBefore.y;
-      if (Math.abs(dy) < epsPos) return;
-      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
-      const cmds = ids.map(
-        (id) => new TranslateCommand(this.svgManipulationService, id, 0, dy, snap)
-      );
-      this.pushCommand(cmds, `Set selection Y to ${parsed}`);
-      this.syncAllSelectedFromDom();
-      return;
-    }
-
-    if (field === 'w') {
-      if (!PropertiesPanelComponent.isFinitePositiveDim(parsed) || parsed < MIN_UNION_SIZE) return;
-      if (Math.abs(parsed - unionBefore.width) < epsPos) return;
-      const unionAfter = { ...unionBefore, width: parsed };
-      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
-      const ve = this.svgManipulationService.snapshotVectorEffectsForShapes(ids);
-      this.pushCommand(
-        [new UnionScaleCommand(this.svgManipulationService, ids, unionBefore, unionAfter, snap, 'e', ve)],
-        `Set selection width to ${parsed}`
-      );
-      this.syncAllSelectedFromDom();
-      return;
-    }
-
-    if (field === 'h') {
-      if (!PropertiesPanelComponent.isFinitePositiveDim(parsed) || parsed < MIN_UNION_SIZE) return;
-      if (Math.abs(parsed - unionBefore.height) < epsPos) return;
-      const unionAfter = { ...unionBefore, height: parsed };
-      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
-      const ve = this.svgManipulationService.snapshotVectorEffectsForShapes(ids);
-      this.pushCommand(
-        [new UnionScaleCommand(this.svgManipulationService, ids, unionBefore, unionAfter, snap, 's', ve)],
-        `Set selection height to ${parsed}`
-      );
-      this.syncAllSelectedFromDom();
-      return;
-    }
-
-    if (field === 'r') {
-      if (model.rMixed || model.rDeg == null || !Number.isFinite(model.rDeg)) return;
-      const rTarget = PropertiesPanelComponent.normDeg0To360(parsed);
-      if (!Number.isFinite(rTarget)) return;
-      const delta = PropertiesPanelComponent.shortestSignedDeltaDeg(model.rDeg, rTarget);
-      if (Math.abs(delta) < PropertiesPanelComponent.ROTATION_MIXED_EPS_DEG) return;
-      const pivot =
-        this.svgManipulationService.getSelectionRotationPivot(ids) ?? unionRotationPivot(unionBefore);
-      const snap = this.svgManipulationService.snapshotSelectionTransforms(ids);
-      this.pushCommand(
-        [new UnionRotateCommand(this.svgManipulationService, ids, pivot, delta, snap)],
-        `Rotate selection toward ${rTarget}°`
-      );
-      this.syncAllSelectedFromDom();
-    }
-  }
-
-  private pushCommand(commands: EditorCommand[], fallbackDescription?: string): void {
-    if (commands.length === 0) return;
-    this.editorHistory.pushAndExecute(
-      commands.length === 1 ? commands[0] : new CompositeCommand(commands, fallbackDescription)
-    );
-  }
-
-  /** SVG.js `fill()` / `stroke()` write presentation attributes on the element. */
-  private static skewDegFromMatrix(m: Matrix): { skewX: number; skewY: number } {
-    const v = m.valueOf() as { a: number; b: number; c: number; d: number };
-    return {
-      skewX: (Math.atan2(v.c, v.a) * 180) / Math.PI,
-      skewY: (Math.atan2(v.b, v.d) * 180) / Math.PI
-    };
-  }
-
-  private static readonly OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
 
   /** Neutral value for native `<input type="color">` when the selection is mixed (not shown as the real fill). */
   readonly mixedColorPickerFallback = '#888888';
@@ -578,13 +266,13 @@ export class PropertiesPanelComponent {
           fontFamily
         )
       );
-      this.pushCommand(commands, `Set font family to ${fontFamily}`);
-      this.syncAllSelectedFromDom();
+      this.selectionPaintApply.executeEditorCommands(commands, `Set font family to ${fontFamily}`);
+      this.selectionPaintApply.syncSelectedShapesFromDom();
       return;
     }
     if (this.textToolPlacementMode()) {
       const before = this.drawingDefaults.defaults();
-      this.pushCommand(
+      this.selectionPaintApply.executeEditorCommands(
         [
           new UpdateDrawingDefaultsCommand(
             this.drawingDefaults,
@@ -612,13 +300,13 @@ export class PropertiesPanelComponent {
           fontSize
         )
       );
-      this.pushCommand(commands, `Set font size to ${fontSize}`);
-      this.syncAllSelectedFromDom();
+      this.selectionPaintApply.executeEditorCommands(commands, `Set font size to ${fontSize}`);
+      this.selectionPaintApply.syncSelectedShapesFromDom();
       return;
     }
     if (this.textToolPlacementMode()) {
       const before = this.drawingDefaults.defaults();
-      this.pushCommand(
+      this.selectionPaintApply.executeEditorCommands(
         [
           new UpdateDrawingDefaultsCommand(
             this.drawingDefaults,
@@ -646,14 +334,14 @@ export class PropertiesPanelComponent {
           nextWeight
         )
       );
-      this.pushCommand(commands, `${nextWeight === 'bold' ? 'Enable' : 'Disable'} bold`);
-      this.syncAllSelectedFromDom();
+      this.selectionPaintApply.executeEditorCommands(commands, `${nextWeight === 'bold' ? 'Enable' : 'Disable'} bold`);
+      this.selectionPaintApply.syncSelectedShapesFromDom();
       return;
     }
     if (this.textToolPlacementMode()) {
       const before = this.drawingDefaults.defaults();
       const nextWeight = before.fontWeight === 'bold' ? 'normal' : 'bold';
-      this.pushCommand(
+      this.selectionPaintApply.executeEditorCommands(
         [
           new UpdateDrawingDefaultsCommand(
             this.drawingDefaults,
@@ -681,14 +369,14 @@ export class PropertiesPanelComponent {
           nextStyle
         )
       );
-      this.pushCommand(commands, `${nextStyle === 'italic' ? 'Enable' : 'Disable'} italic`);
-      this.syncAllSelectedFromDom();
+      this.selectionPaintApply.executeEditorCommands(commands, `${nextStyle === 'italic' ? 'Enable' : 'Disable'} italic`);
+      this.selectionPaintApply.syncSelectedShapesFromDom();
       return;
     }
     if (this.textToolPlacementMode()) {
       const before = this.drawingDefaults.defaults();
       const nextStyle: 'normal' | 'italic' = before.fontStyle === 'italic' ? 'normal' : 'italic';
-      this.pushCommand(
+      this.selectionPaintApply.executeEditorCommands(
         [
           new UpdateDrawingDefaultsCommand(
             this.drawingDefaults,
@@ -713,13 +401,13 @@ export class PropertiesPanelComponent {
           textAnchor
         )
       );
-      this.pushCommand(commands, 'Set text alignment');
-      this.syncAllSelectedFromDom();
+      this.selectionPaintApply.executeEditorCommands(commands, 'Set text alignment');
+      this.selectionPaintApply.syncSelectedShapesFromDom();
       return;
     }
     if (this.textToolPlacementMode()) {
       const before = this.drawingDefaults.defaults();
-      this.pushCommand(
+      this.selectionPaintApply.executeEditorCommands(
         [
           new UpdateDrawingDefaultsCommand(
             this.drawingDefaults,
@@ -765,8 +453,8 @@ export class PropertiesPanelComponent {
     const commands = this.textSelection().map(
       (s) => new TextPaintOrderCommand(this.svgManipulationService, s.id, s.paintOrder, next)
     );
-    this.pushCommand(commands, next ? 'Set text paint order' : 'Reset text paint order');
-    this.syncAllSelectedFromDom();
+    this.selectionPaintApply.executeEditorCommands(commands, next ? 'Set text paint order' : 'Reset text paint order');
+    this.selectionPaintApply.syncSelectedShapesFromDom();
   }
 
   textVectorEffectsMixed(): boolean {
@@ -787,11 +475,11 @@ export class PropertiesPanelComponent {
       (s) =>
         new TextVectorEffectCommand(this.svgManipulationService, s.id, s.vectorEffect, next)
     );
-    this.pushCommand(
+    this.selectionPaintApply.executeEditorCommands(
       commands,
       checked ? 'Enable non-scaling text outline' : 'Disable non-scaling text outline'
     );
-    this.syncAllSelectedFromDom();
+    this.selectionPaintApply.syncSelectedShapesFromDom();
   }
 
   /** All selected shapes have no visible fill — show “No fill” only in this case (not when mixed). */
@@ -919,16 +607,16 @@ export class PropertiesPanelComponent {
     const commands = this.selectedShapesList()
       .filter((s) => this.shouldOfferBakeFill(s))
       .map((s) => new BakeFillCommand(this.svgManipulationService, s.id));
-    this.pushCommand(commands, 'Bake fill to local');
-    this.syncAllSelectedFromDom();
+    this.selectionPaintApply.executeEditorCommands(commands, 'Bake fill to local');
+    this.selectionPaintApply.syncSelectedShapesFromDom();
   }
 
   onBakeStrokeClick(): void {
     const commands = this.selectedShapesList()
       .filter((s) => this.shouldOfferBakeStroke(s))
       .map((s) => new BakeStrokeCommand(this.svgManipulationService, s.id));
-    this.pushCommand(commands, 'Bake stroke to local');
-    this.syncAllSelectedFromDom();
+    this.selectionPaintApply.executeEditorCommands(commands, 'Bake stroke to local');
+    this.selectionPaintApply.syncSelectedShapesFromDom();
   }
 
   onSelectParentGroupClick(): void {
@@ -942,16 +630,6 @@ export class PropertiesPanelComponent {
     if (!el) return;
     const props = this.svgManipulationService.getShapeProperties(el);
     this.shapeSelectionService.selectShape(props);
-  }
-
-  private syncAllSelectedFromDom(): void {
-    const svg = this.svgManipulationService.getSVGInstance();
-    if (!svg) return;
-    const next = this.selectedShapesList().map((s) => {
-      const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
-      return el ? this.svgManipulationService.getShapeProperties(el) : s;
-    });
-    this.shapeSelectionService.selectShapes(next);
   }
 
   /** True when the fill is a url(#...) reference (gradient or pattern) that the hex picker can't edit. */
@@ -980,11 +658,11 @@ export class PropertiesPanelComponent {
       shapePaintAttr: `url(#${id})`,
       gradientOuterHtml: serializeGradientElementToOuterHtml(model)
     };
-    this.pushCommand(
+    this.selectionPaintApply.executeEditorCommands(
       [new GradientFillSnapshotCommand(this.svgManipulationService, shape.id, 'fill', before, after)],
       'Add gradient fill'
     );
-    this.syncAllSelectedFromDom();
+    this.selectionPaintApply.syncSelectedShapesFromDom();
   }
 
   isGradientOrPatternStroke(shape: ShapeProperties): boolean {
@@ -1051,50 +729,13 @@ export class PropertiesPanelComponent {
   onStrokeWidthChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const width = parseFloat(target.value);
-    const commands: EditorCommand[] = this.selectedShapesList().map((s) => {
-      if (width === 0) {
-        return new RemoveStrokeCommand(this.svgManipulationService, s.id, s.stroke ?? '#000000', s.strokeWidth ?? 1);
-      }
-      const color = this.hasStrokeColor(s) ? s.stroke! : '#000000';
-      return new SetStrokeCommand(
-        this.svgManipulationService, s.id,
-        this.hasStrokeColor(s), s.stroke ?? '#000000', s.strokeWidth ?? 0,
-        color, width
-      );
-    });
-    const defaultsBefore = this.drawingDefaults.defaults();
-    commands.push(
-      new UpdateDrawingDefaultsCommand(
-        this.drawingDefaults,
-        defaultsBefore,
-        { ...defaultsBefore, strokeWidth: width },
-        'strokeWidth'
-      )
-    );
-    this.pushCommand(commands, width === 0 ? 'Remove stroke' : `Set stroke width ${width}`);
-    if (width === 0) {
-      this.shapeSelectionService.patchAllSelected({
-        strokeWidth: 0,
-        stroke: undefined,
-        strokeSource: { kind: 'default' }
-      });
-    } else {
-      this.shapeSelectionService.patchAllSelected({
-        strokeWidth: width,
-        strokeSource: PropertiesPanelComponent.OVERRIDE_PAINT_SOURCE
-      });
-      this.syncAllSelectedFromDom();
-    }
+    this.selectionPaintApply.applyStrokeWidth(width);
   }
 
   onOpacityChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const opacity = parseFloat(target.value);
-    const commands = this.selectedShapesList().map(
-      (s) => new OpacityCommand(this.svgManipulationService, s.id, s.opacity ?? 1, opacity)
-    );
-    this.pushCommand(commands, `Change opacity to ${opacity}`);
-    this.shapeSelectionService.patchAllSelected({ opacity });
+    this.selectionPaintApply.applyOpacity(opacity);
   }
 
   readonly dashPresets: { label: string; value: string }[] = [
@@ -1157,11 +798,7 @@ export class PropertiesPanelComponent {
     const target = event.target as HTMLInputElement;
     const offset = parseFloat(target.value);
     if (!Number.isFinite(offset)) return;
-    const commands = this.selectedShapesList().map(
-      (s) => new StrokeDashOffsetCommand(this.svgManipulationService, s.id, s.strokeDashoffset ?? 0, offset)
-    );
-    this.pushCommand(commands, `Set dash offset to ${offset}`);
-    this.shapeSelectionService.patchAllSelected({ strokeDashoffset: offset });
+    this.selectionPaintApply.applyStrokeDashoffset(offset);
   }
 
   /** Validate a custom dasharray string: comma/space-separated positive numbers. */
@@ -1171,14 +808,7 @@ export class PropertiesPanelComponent {
   }
 
   private applyDashArray(dasharray: string): void {
-    const commands = this.selectedShapesList().map(
-      (s) => new StrokeDashArrayCommand(this.svgManipulationService, s.id, s.strokeDasharray ?? '', dasharray)
-    );
-    this.pushCommand(commands, dasharray ? `Set dash pattern ${dasharray}` : 'Remove dash pattern');
-    this.shapeSelectionService.patchAllSelected({
-      strokeDasharray: dasharray || undefined,
-      strokeDashoffset: dasharray ? undefined : 0
-    });
+    this.selectionPaintApply.applyStrokeDasharray(dasharray);
   }
 
   onClearSelection(): void {
@@ -1197,14 +827,14 @@ export class PropertiesPanelComponent {
   onAlign(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'): void {
     const ids = this.selectedShapesList().map((shape) => shape.id);
     if (ids.length < 2) return;
-    this.pushCommand([new AlignCommand(this.svgManipulationService, ids, direction)]);
-    this.syncAllSelectedFromDom();
+    this.selectionPaintApply.executeEditorCommands([new AlignCommand(this.svgManipulationService, ids, direction)]);
+    this.selectionPaintApply.syncSelectedShapesFromDom();
   }
 
   onDistribute(direction: 'horizontal' | 'vertical'): void {
     const ids = this.selectedShapesList().map((shape) => shape.id);
     if (ids.length < 3) return;
-    this.pushCommand([new DistributeCommand(this.svgManipulationService, ids, direction)]);
-    this.syncAllSelectedFromDom();
+    this.selectionPaintApply.executeEditorCommands([new DistributeCommand(this.svgManipulationService, ids, direction)]);
+    this.selectionPaintApply.syncSelectedShapesFromDom();
   }
 }
