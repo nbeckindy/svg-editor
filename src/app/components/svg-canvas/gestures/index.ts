@@ -8,6 +8,7 @@ export type {
   Point
 } from './gesture-context';
 export type { TransformGestureDocPort } from './transform-gesture-doc.port';
+export type { TransformGestureDocSvgPort } from '../../../history/transform-gesture-svg.port';
 export {
   DefaultTransformGestureDoc,
   createDefaultTransformGestureDoc

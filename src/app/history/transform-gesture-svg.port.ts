@@ -41,3 +41,18 @@ export interface TransformGestureSvgPort {
     snapshot: Map<string, Matrix>
   ): void;
 }
+
+/**
+ * Svg seam on the transform gesture runtime: {@link TransformGestureSvgPort} for undoable
+ * pointer transforms plus bbox / visibility / transform snapshots used by drag / resize /
+ * rotate / skew. Structurally implemented by `SvgManipulationService` at the canvas adapter.
+ */
+export interface TransformGestureDocSvgPort extends TransformGestureSvgPort {
+  getUnionBBox(shapeIds: string[], options?: { preferScreenBounds?: boolean }): TransformGestureUnionRect | null;
+  snapshotSelectionTransforms(shapeIds: string[]): Map<string, Matrix>;
+  snapshotVectorEffectsForShapes(shapeIds: string[]): Map<string, (string | null)[]>;
+  getShapeIdsInDomOrder(ids: string[]): string[];
+  setShapeVisibility(shapeId: string, visible: boolean): void;
+  getSelectionRotationPivot(shapeIds: string[]): { x: number; y: number } | null;
+  getShapeBBox(shapeId: string, options?: { preferScreenBounds?: boolean }): TransformGestureUnionRect | null;
+}

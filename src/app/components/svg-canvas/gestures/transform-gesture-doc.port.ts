@@ -1,22 +1,22 @@
 import type { Svg } from '@svgdotjs/svg.js';
 import type { Matrix } from '@svgdotjs/svg.js';
-import type { SvgManipulationService } from '../../../services/svg-manipulation.service';
+import type { TransformGestureDocSvgPort, TransformGestureUnionRect } from '../../../history/transform-gesture-svg.port';
 import type { ShapeSelectionService } from '../../../services/shape-selection.service';
 import type { EditorHistoryService } from '../../../services/editor-history.service';
 import type { EditorCommand } from '../../../models/editor-commands';
 
-type BBox = { x: number; y: number; width: number; height: number };
+type BBox = TransformGestureUnionRect;
 
 /**
  * Narrow **seam** for drag / resize / rotate / skew: common reads + **History** commits.
- * {@link DefaultTransformGestureDoc.svgManipulation} is the full `SvgManipulationService` for
- * reads on this port; transform `EditorCommand`s use `TransformGestureSvgPort` only
- * (`src/app/history/transform-gesture-svg.port.ts`).
+ * {@link DefaultTransformGestureDoc.svgManipulation} is {@link TransformGestureDocSvgPort}
+ * (not the full manipulation type at the type level). Transform `EditorCommand`s still take
+ * `TransformGestureSvgPort` only.
  * Union ghost preview uses `getSVGInstance` / `getShapeIdsInDomOrder` (see `GhostUnionSvgPort`
  * in `ghost-session.ts`).
  */
 export interface TransformGestureDocPort {
-  readonly svgManipulation: SvgManipulationService;
+  readonly svgManipulation: TransformGestureDocSvgPort;
 
   selectedShapeIds(): string[];
   getUnionBBox(ids: string[], options?: { preferScreenBounds?: boolean }): BBox | null;
@@ -32,7 +32,7 @@ export interface TransformGestureDocPort {
 
 export class DefaultTransformGestureDoc implements TransformGestureDocPort {
   constructor(
-    readonly svgManipulation: SvgManipulationService,
+    readonly svgManipulation: TransformGestureDocSvgPort,
     private readonly shapeSelection: ShapeSelectionService,
     private readonly editorHistory: EditorHistoryService
   ) {}
@@ -79,7 +79,7 @@ export class DefaultTransformGestureDoc implements TransformGestureDocPort {
 }
 
 export function createDefaultTransformGestureDoc(
-  svgManipulation: SvgManipulationService,
+  svgManipulation: TransformGestureDocSvgPort,
   shapeSelection: ShapeSelectionService,
   editorHistory: EditorHistoryService
 ): DefaultTransformGestureDoc {
