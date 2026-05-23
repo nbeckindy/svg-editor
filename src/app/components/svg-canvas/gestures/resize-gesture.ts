@@ -11,7 +11,7 @@ import {
   type BBox,
   type ResizeHandle
 } from '../../../utils/selection-resize';
-import type { GestureContext, GhostPreviewFragment, Rect } from './gesture-context';
+import type { GestureRuntimeContext, GhostPreviewFragment, Rect } from './gesture-context';
 import { computeGestureVisibilityToggleIds } from './gesture-visibility';
 import { GhostSession } from './ghost-session';
 
@@ -37,75 +37,75 @@ export class ResizeGesture {
     return this.unionStart;
   }
 
-  start(ctx: GestureContext, handle: ResizeHandle, _event: MouseEvent): boolean {
-    const selectedIds = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
+  start(ctx: GestureRuntimeContext, handle: ResizeHandle, _event: MouseEvent): boolean {
+    const selectedIds = ctx.doc.shapeSelection.getSelectedShapes().map((s) => s.id);
     if (selectedIds.length === 0) return false;
-    const union = ctx.svgManipulation.getUnionBBox(selectedIds);
+    const union = ctx.doc.svgManipulation.getUnionBBox(selectedIds);
     if (!union) return false;
 
     this.unionStart = union;
     this.handle = handle;
-    this.snapshot = ctx.svgManipulation.snapshotSelectionTransforms(selectedIds);
-    this.vectorEffectSnapshot = ctx.svgManipulation.snapshotVectorEffectsForShapes(selectedIds);
+    this.snapshot = ctx.doc.svgManipulation.snapshotSelectionTransforms(selectedIds);
+    this.vectorEffectSnapshot = ctx.doc.svgManipulation.snapshotVectorEffectsForShapes(selectedIds);
 
     this.lastUnion = union;
-    this.overlayRect = ctx.svgBboxToOverlayPixels(union);
+    this.overlayRect = ctx.pointer.svgBboxToOverlayPixels(union);
 
-    const svgInstance = ctx.svgManipulation.getSVGInstance();
+    const svgInstance = ctx.doc.svgManipulation.getSVGInstance();
     if (!svgInstance) {
       return false;
     }
-    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.svgManipulation, union, selectedIds);
+    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.doc.svgManipulation, union, selectedIds);
     if (this.ghostFragments.length === 0) {
       return false;
     }
 
-    const ordered = ctx.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const ordered = ctx.doc.svgManipulation.getShapeIdsInDomOrder(selectedIds);
     const primary = ordered[0] ?? selectedIds[0];
     this.visibilityShapeIds = computeGestureVisibilityToggleIds(svgInstance, selectedIds, primary);
     for (const id of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(id, false);
+      ctx.doc.svgManipulation.setShapeVisibility(id, false);
     }
 
     this.isActive = true;
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
     return true;
   }
 
   move(
-    ctx: GestureContext,
+    ctx: GestureRuntimeContext,
     clientX: number,
     clientY: number,
     centerAnchored: boolean,
     shiftKey: boolean
   ): void {
     if (!this.isActive || !this.handle || !this.unionStart || this.ghostFragments.length === 0) return;
-    const point = ctx.clientToEditorSvgPoint(clientX, clientY);
+    const point = ctx.pointer.clientToEditorSvgPoint(clientX, clientY);
     if (!point) return;
     const resolved = this.resolveResizedUnion(ctx, point.x, point.y, centerAnchored, shiftKey);
     this.lastUnion = resolved;
-    this.overlayRect = ctx.svgBboxToOverlayPixels(resolved);
+    this.overlayRect = ctx.pointer.svgBboxToOverlayPixels(resolved);
     this.updateGhost(resolved);
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
-  end(ctx: GestureContext, centerAnchored: boolean): void {
+  end(ctx: GestureRuntimeContext, centerAnchored: boolean): void {
     if (!this.isActive || !this.handle || !this.unionStart || !this.lastUnion) return;
-    const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const ids = ctx.doc.shapeSelection.getSelectedShapes().map((s) => s.id);
     const ve = this.vectorEffectSnapshot;
     if (centerAnchored) {
       const cmd = new UnionScaleFromCenterCommand(
-        ctx.svgManipulation,
+        ctx.doc.svgManipulation,
         ids,
         this.unionStart,
         this.lastUnion,
         this.snapshot,
         ve
       );
-      ctx.editorHistory.pushAndExecute(cmd);
+      ctx.doc.editorHistory.pushAndExecute(cmd);
     } else {
       const cmd = new UnionScaleCommand(
-        ctx.svgManipulation,
+        ctx.doc.svgManipulation,
         ids,
         this.unionStart,
         this.lastUnion,
@@ -113,33 +113,33 @@ export class ResizeGesture {
         this.handle,
         ve
       );
-      ctx.editorHistory.pushAndExecute(cmd);
+      ctx.doc.editorHistory.pushAndExecute(cmd);
     }
 
     for (const id of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(id, true);
+      ctx.doc.svgManipulation.setShapeVisibility(id, true);
     }
 
     this.ghost.removeFragments(this.ghostFragments);
     this.justEnded = true;
 
-    const unionBbox = ctx.svgManipulation.getUnionBBox(ids);
-    ctx.setLastBbox(unionBbox);
-    ctx.invalidateHighlightCache();
+    const unionBbox = ctx.doc.svgManipulation.getUnionBBox(ids);
+    ctx.pointer.setLastBbox(unionBbox);
+    ctx.pointer.invalidateHighlightCache();
 
     this.reset();
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
-  cancel(ctx: GestureContext): void {
+  cancel(ctx: GestureRuntimeContext): void {
     if (!this.isActive) return;
     for (const id of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(id, true);
+      ctx.doc.svgManipulation.setShapeVisibility(id, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
-    ctx.invalidateHighlightCache();
+    ctx.pointer.invalidateHighlightCache();
     this.reset();
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
   consumeJustEnded(): boolean {
@@ -202,7 +202,7 @@ export class ResizeGesture {
   }
 
   private resolveResizedUnion(
-    ctx: GestureContext,
+    ctx: GestureRuntimeContext,
     svgX: number,
     svgY: number,
     centerAnchored: boolean,
@@ -213,7 +213,7 @@ export class ResizeGesture {
       return { x: 0, y: 0, width: 0, height: 0 };
     }
     const resizedUnion = this.computeRawUnion(svgX, svgY, centerAnchored, shiftKey);
-    if (ctx.isSnapTemporarilyDisabled() || !ctx.snap.shapeEnabled()) {
+    if (ctx.snap.isSnapTemporarilyDisabled() || !ctx.snap.snap.shapeEnabled()) {
       this.smartGuides = { vertical: [], horizontal: [] };
       return resizedUnion;
     }
@@ -221,11 +221,11 @@ export class ResizeGesture {
       x: resizedUnion.x - this.unionStart.x,
       y: resizedUnion.y - this.unionStart.y
     };
-    const guideResult = ctx.snap.snapDeltaToSmartGuides(
+    const guideResult = ctx.snap.snap.snapDeltaToSmartGuides(
       this.unionStart,
       rawDelta,
-      ctx.getSmartGuideCandidates(),
-      { selectedShapeIds: ctx.shapeSelection.getSelectedShapes().map((shape) => shape.id) }
+      ctx.snap.getSmartGuideCandidates(),
+      { selectedShapeIds: ctx.doc.shapeSelection.getSelectedShapes().map((shape) => shape.id) }
     );
     this.smartGuides = guideResult.guides;
     return {

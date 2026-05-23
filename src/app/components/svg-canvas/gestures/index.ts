@@ -1,4 +1,13 @@
-export type { GestureContext, GhostPreviewFragment, Rect, Point } from './gesture-context';
+export type {
+  GestureRuntimeContext,
+  PointerOverlayPort,
+  DocumentSelectionPort,
+  SnapSessionPort,
+  GhostPreviewFragment,
+  Rect,
+  Point
+} from './gesture-context';
+export { PointerGestureRouter, type SvgCanvasPointerGestureHost } from './pointer-gesture-router';
 export { GhostSession } from './ghost-session';
 export { DragGesture } from './drag-gesture';
 export { ResizeGesture } from './resize-gesture';

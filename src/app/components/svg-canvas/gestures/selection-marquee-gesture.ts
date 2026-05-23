@@ -1,5 +1,5 @@
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
-import type { GestureContext, Rect } from './gesture-context';
+import type { GestureRuntimeContext, Rect } from './gesture-context';
 
 type ClientPoint = { clientX: number; clientY: number };
 
@@ -25,13 +25,13 @@ export class SelectionMarqueeGesture {
     this.endPoint = { clientX, clientY };
   }
 
-  move(clientX: number, clientY: number, ctx: GestureContext): void {
+  move(clientX: number, clientY: number, ctx: GestureRuntimeContext): void {
     if (!this.isActive || !this.start) return;
     this.endPoint = { clientX, clientY };
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
-  endAt(clientX: number, clientY: number, shiftKey: boolean, ctx: GestureContext): void {
+  endAt(clientX: number, clientY: number, shiftKey: boolean, ctx: GestureRuntimeContext): void {
     if (!this.isActive || !this.start) {
       this.reset();
       return;
@@ -45,25 +45,25 @@ export class SelectionMarqueeGesture {
 
     const isTinyDrag = rect.width < MARQUEE_MIN_DRAG_PX && rect.height < MARQUEE_MIN_DRAG_PX;
     if (!isTinyDrag) {
-      const startSvg = ctx.clientToEditorSvgPoint(this.start.clientX, this.start.clientY);
-      const endSvg = ctx.clientToEditorSvgPoint(this.endPoint!.clientX, this.endPoint!.clientY);
+      const startSvg = ctx.pointer.clientToEditorSvgPoint(this.start.clientX, this.start.clientY);
+      const endSvg = ctx.pointer.clientToEditorSvgPoint(this.endPoint!.clientX, this.endPoint!.clientY);
       if (startSvg && endSvg) {
         const x = Math.min(startSvg.x, endSvg.x);
         const y = Math.min(startSvg.y, endSvg.y);
         const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
         const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
-        const hits = ctx.svgManipulation.getShapePropertiesIntersectingRect({ x, y, width: w, height: h });
-        const expanded = ctx.svgManipulation.expandSelectionByClipGroups(hits);
+        const hits = ctx.doc.svgManipulation.getShapePropertiesIntersectingRect({ x, y, width: w, height: h });
+        const expanded = ctx.doc.svgManipulation.expandSelectionByClipGroups(hits);
         if (shiftKey) {
           if (expanded.length > 0) {
-            ctx.shapeSelection.mergeShapesIntoSelection(expanded);
+            ctx.doc.shapeSelection.mergeShapesIntoSelection(expanded);
           }
         } else if (expanded.length > 0) {
-          ctx.shapeSelection.selectShapes(expanded);
+          ctx.doc.shapeSelection.selectShapes(expanded);
         } else {
-          ctx.shapeSelection.clearSelection();
+          ctx.doc.shapeSelection.clearSelection();
         }
-        ctx.svgManipulation.clearHighlight();
+        ctx.doc.svgManipulation.clearHighlight();
         this.justEnded = true;
       }
     }
@@ -71,7 +71,7 @@ export class SelectionMarqueeGesture {
     this.isActive = false;
     this.start = null;
     this.endPoint = null;
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
   cancel(): void {

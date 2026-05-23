@@ -5,7 +5,7 @@ import {
   TranslateCommand
 } from '../../../models/editor-commands';
 import { SmartGuideResult } from '../../../services/snap.service';
-import type { GestureContext, GhostPreviewFragment, Rect, Point } from './gesture-context';
+import type { GestureRuntimeContext, GhostPreviewFragment, Rect, Point } from './gesture-context';
 import { computeGestureVisibilityToggleIds } from './gesture-visibility';
 import { GhostSession } from './ghost-session';
 
@@ -31,13 +31,13 @@ export class DragGesture {
   overlayRect: Rect | null = null;
 
   start(
-    ctx: GestureContext,
+    ctx: GestureRuntimeContext,
     selectedIds: string[],
     effectiveDragId: string,
     point: Point,
     event: MouseEvent
   ): boolean {
-    const svgInstance = ctx.svgManipulation.getSVGInstance();
+    const svgInstance = ctx.doc.svgManipulation.getSVGInstance();
     if (!svgInstance) return false;
 
     this.visibilityShapeIds = computeGestureVisibilityToggleIds(
@@ -48,7 +48,7 @@ export class DragGesture {
 
     try {
       if (selectedIds.length === 1) {
-        const bbox = ctx.svgManipulation.getShapeBBox(effectiveDragId);
+        const bbox = ctx.doc.svgManipulation.getShapeBBox(effectiveDragId);
         if (!bbox) {
           this.visibilityShapeIds = [];
           return false;
@@ -63,15 +63,15 @@ export class DragGesture {
             : target.getBoundingClientRect();
         this.createSingleGhost(ctx, effectiveDragId, bbox, shapeScreenRect);
       } else {
-        const unionBbox = ctx.svgManipulation.getUnionBBox(selectedIds);
+        const unionBbox = ctx.doc.svgManipulation.getUnionBBox(selectedIds);
         if (!unionBbox) {
           this.visibilityShapeIds = [];
           return false;
         }
         this.startBbox = unionBbox;
-        this.overlayRect = ctx.svgBboxToOverlayPixels(unionBbox);
-        this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.svgManipulation, unionBbox, selectedIds);
-        ctx.cdr.detectChanges();
+        this.overlayRect = ctx.pointer.svgBboxToOverlayPixels(unionBbox);
+        this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.doc.svgManipulation, unionBbox, selectedIds);
+        ctx.pointer.cdr.detectChanges();
       }
 
       if (this.ghostFragments.length === 0) {
@@ -84,22 +84,22 @@ export class DragGesture {
     }
 
     for (const id of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(id, false);
+      ctx.doc.svgManipulation.setShapeVisibility(id, false);
     }
 
     this.isActive = true;
     this.shapeIds = selectedIds;
     this.startSvg = { x: point.x, y: point.y };
-    this.snapshot = ctx.svgManipulation.snapshotSelectionTransforms(selectedIds);
+    this.snapshot = ctx.doc.svgManipulation.snapshotSelectionTransforms(selectedIds);
     this.snapAnchor = this.startBbox
       ? { x: this.startBbox.x, y: this.startBbox.y }
       : this.startSvg;
     return true;
   }
 
-  move(ctx: GestureContext, clientX: number, clientY: number, constrainAxis = false): void {
+  move(ctx: GestureRuntimeContext, clientX: number, clientY: number, constrainAxis = false): void {
     if (!this.isActive || this.ghostFragments.length === 0 || !this.startSvg || !this.startBbox) return;
-    const currentSvg = ctx.clientToEditorSvgPoint(clientX, clientY);
+    const currentSvg = ctx.pointer.clientToEditorSvgPoint(clientX, clientY);
     if (!currentSvg) return;
     const { dx, dy } = this.resolveSnappedDelta(ctx, currentSvg.x, currentSvg.y, constrainAxis);
     this.lastSnappedDelta = { x: dx, y: dy };
@@ -114,7 +114,7 @@ export class DragGesture {
       width: this.startBbox.width,
       height: this.startBbox.height
     };
-    this.overlayRect = ctx.svgBboxToOverlayPixels(currentBbox);
+    this.overlayRect = ctx.pointer.svgBboxToOverlayPixels(currentBbox);
     if (this.ghostFragments.length > 0 && this.startBbox) {
       const m = new Matrix().translate(dx, dy);
       for (const f of this.ghostFragments) {
@@ -123,7 +123,7 @@ export class DragGesture {
     }
   }
 
-  end(ctx: GestureContext, clientX: number, clientY: number, constrainAxis = false): void {
+  end(ctx: GestureRuntimeContext, clientX: number, clientY: number, constrainAxis = false): void {
     if (!this.isActive || this.shapeIds.length === 0 || !this.startSvg) return;
     let dx = 0;
     let dy = 0;
@@ -131,7 +131,7 @@ export class DragGesture {
       dx = this.lastSnappedDelta.x;
       dy = this.lastSnappedDelta.y;
     } else {
-      const point = ctx.clientToEditorSvgPoint(clientX, clientY);
+      const point = ctx.pointer.clientToEditorSvgPoint(clientX, clientY);
       if (point) {
         const delta = this.resolveSnappedDelta(ctx, point.x, point.y, constrainAxis);
         dx = delta.dx;
@@ -139,40 +139,40 @@ export class DragGesture {
       }
     }
     const dragCmds: EditorCommand[] = this.shapeIds.map(
-      (id) => new TranslateCommand(ctx.svgManipulation, id, dx, dy, this.snapshot)
+      (id) => new TranslateCommand(ctx.doc.svgManipulation, id, dx, dy, this.snapshot)
     );
-    ctx.editorHistory.pushAndExecute(
+    ctx.doc.editorHistory.pushAndExecute(
       dragCmds.length === 1 ? dragCmds[0] : new CompositeCommand(dragCmds, 'Move shapes')
     );
     for (const shapeId of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(shapeId, true);
+      ctx.doc.svgManipulation.setShapeVisibility(shapeId, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
     this.justEnded = true;
 
-    const selectedIds = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
-    const unionBbox = ctx.svgManipulation.getUnionBBox(selectedIds);
-    ctx.setLastBbox(unionBbox);
-    ctx.invalidateHighlightCache();
+    const selectedIds = ctx.doc.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const unionBbox = ctx.doc.svgManipulation.getUnionBBox(selectedIds);
+    ctx.pointer.setLastBbox(unionBbox);
+    ctx.pointer.invalidateHighlightCache();
 
     this.reset();
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
-  cancel(ctx: GestureContext): void {
+  cancel(ctx: GestureRuntimeContext): void {
     if (!this.isActive) return;
     for (const shapeId of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(shapeId, true);
+      ctx.doc.svgManipulation.setShapeVisibility(shapeId, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
-    ctx.invalidateHighlightCache();
+    ctx.pointer.invalidateHighlightCache();
     this.reset();
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
-  private restoreDragVisibility(ctx: GestureContext): void {
+  private restoreDragVisibility(ctx: GestureRuntimeContext): void {
     for (const id of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(id, true);
+      ctx.doc.svgManipulation.setShapeVisibility(id, true);
     }
     this.visibilityShapeIds = [];
   }
@@ -201,12 +201,12 @@ export class DragGesture {
   }
 
   private createSingleGhost(
-    ctx: GestureContext,
+    ctx: GestureRuntimeContext,
     shapeId: string,
     bbox: Rect,
     shapeScreenRect: DOMRect
   ): void {
-    const svgInstance = ctx.svgManipulation.getSVGInstance();
+    const svgInstance = ctx.doc.svgManipulation.getSVGInstance();
     if (!svgInstance) return;
     const rootSvg = svgInstance.node as SVGSVGElement;
     const built = this.ghost.buildShapeSubtree(shapeId, svgInstance, rootSvg);
@@ -223,7 +223,7 @@ export class DragGesture {
     const frag = this.ghost.mountFragment(svgInstance, contentGroupEl, shapeNode, bbox, built.subtree);
     this.ghostFragments = [frag];
 
-    const overlayContainer = ctx.highlightOverlayContainer()?.nativeElement;
+    const overlayContainer = ctx.pointer.highlightOverlayContainer()?.nativeElement;
     this.overlayRect = overlayContainer
       ? {
           x: shapeScreenRect.left - overlayContainer.getBoundingClientRect().left,
@@ -231,8 +231,8 @@ export class DragGesture {
           width: shapeScreenRect.width,
           height: shapeScreenRect.height
         }
-      : ctx.svgBboxToOverlayPixels(bbox);
-    ctx.cdr.detectChanges();
+      : ctx.pointer.svgBboxToOverlayPixels(bbox);
+    ctx.pointer.cdr.detectChanges();
   }
 
   get activeGuides(): SmartGuideResult['guides'] {
@@ -240,7 +240,7 @@ export class DragGesture {
   }
 
   private resolveSnappedDelta(
-    ctx: GestureContext,
+    ctx: GestureRuntimeContext,
     svgX: number,
     svgY: number,
     constrainAxis: boolean
@@ -254,22 +254,22 @@ export class DragGesture {
       y: svgY - this.startSvg.y
     };
     const axisConstrained = this.applyAxisConstraint(rawDelta, constrainAxis);
-    const snappingDisabled = ctx.isSnapTemporarilyDisabled();
+    const snappingDisabled = ctx.snap.isSnapTemporarilyDisabled();
     if (snappingDisabled) {
       this.smartGuides = { vertical: [], horizontal: [] };
       return { dx: axisConstrained.x, dy: axisConstrained.y };
     }
     const gridSnappedDelta = this.snapAnchor
-      ? ctx.snap.snapDelta(this.startSvg, axisConstrained, { anchor: this.snapAnchor })
+      ? ctx.snap.snap.snapDelta(this.startSvg, axisConstrained, { anchor: this.snapAnchor })
       : axisConstrained;
-    if (!ctx.snap.shapeEnabled()) {
+    if (!ctx.snap.snap.shapeEnabled()) {
       this.smartGuides = { vertical: [], horizontal: [] };
       return { dx: gridSnappedDelta.x, dy: gridSnappedDelta.y };
     }
-    const guideResult = ctx.snap.snapDeltaToSmartGuides(
+    const guideResult = ctx.snap.snap.snapDeltaToSmartGuides(
       this.startBbox,
       gridSnappedDelta,
-      ctx.getSmartGuideCandidates(),
+      ctx.snap.getSmartGuideCandidates(),
       { selectedShapeIds: this.shapeIds }
     );
     this.smartGuides = guideResult.guides;

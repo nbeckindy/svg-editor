@@ -1,5 +1,5 @@
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
-import type { GestureContext, Rect, Point } from './gesture-context';
+import type { GestureRuntimeContext, Rect, Point } from './gesture-context';
 import type { CreatableShapeType, ShapeCreationAttrs } from '../../../services/svg-manipulation.service';
 import type { EditorTool } from '../../../services/editor-tool.service';
 import { AddShapeCommand } from '../../../models/editor-commands';
@@ -47,15 +47,15 @@ export class CreationGesture {
   ghostLineEnd: Point | null = null;
 
   start(
-    ctx: GestureContext,
+    ctx: GestureRuntimeContext,
     tool: EditorTool,
     event: MouseEvent
   ): boolean {
     const type = TOOL_TO_SHAPE[tool];
     if (!type) return false;
-    if (!ctx.svgManipulation.getSVGInstance()) return false;
+    if (!ctx.doc.svgManipulation.getSVGInstance()) return false;
 
-    const svgPoint = ctx.clientToEditorSvgPoint(event.clientX, event.clientY);
+    const svgPoint = ctx.pointer.clientToEditorSvgPoint(event.clientX, event.clientY);
     if (!svgPoint) return false;
 
     this.isActive = true;
@@ -67,10 +67,10 @@ export class CreationGesture {
     return true;
   }
 
-  move(ctx: GestureContext, clientX: number, clientY: number, shiftKey: boolean): void {
+  move(ctx: GestureRuntimeContext, clientX: number, clientY: number, shiftKey: boolean): void {
     if (!this.isActive || !this.startClient || !this.startSvg) return;
 
-    const raw = ctx.clientToEditorSvgPoint(clientX, clientY);
+    const raw = ctx.pointer.clientToEditorSvgPoint(clientX, clientY);
     if (!raw) return;
 
     const screenDx = Math.abs(clientX - this.startClient.x);
@@ -78,14 +78,14 @@ export class CreationGesture {
     if (screenDx < MARQUEE_MIN_DRAG_PX && screenDy < MARQUEE_MIN_DRAG_PX) {
       this.ghostRect = null;
       this.currentSvg = raw;
-      ctx.cdr.detectChanges();
+      ctx.pointer.cdr.detectChanges();
       return;
     }
 
     const constrained = this.applyConstraint(raw, shiftKey);
     this.currentSvg = this.applySnap(ctx, this.startSvg, constrained, shiftKey);
     const bbox = this.computeGhostBbox(this.startSvg, this.currentSvg);
-    this.ghostRect = ctx.svgBboxToOverlayPixels(bbox);
+    this.ghostRect = ctx.pointer.svgBboxToOverlayPixels(bbox);
     if (this.shapeType === 'line') {
       this.ghostLineStart = this.startSvg;
       this.ghostLineEnd = this.currentSvg;
@@ -93,11 +93,11 @@ export class CreationGesture {
       this.ghostLineStart = null;
       this.ghostLineEnd = null;
     }
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
   end(
-    ctx: GestureContext,
+    ctx: GestureRuntimeContext,
     clientX: number,
     clientY: number,
     shiftKey: boolean
@@ -112,15 +112,15 @@ export class CreationGesture {
     if (screenDx < MARQUEE_MIN_DRAG_PX && screenDy < MARQUEE_MIN_DRAG_PX) {
       this.justEnded = true;
       this.reset();
-      ctx.cdr.detectChanges();
+      ctx.pointer.cdr.detectChanges();
       return null;
     }
 
-    const raw = ctx.clientToEditorSvgPoint(clientX, clientY);
+    const raw = ctx.pointer.clientToEditorSvgPoint(clientX, clientY);
     if (!raw) {
       this.justEnded = true;
       this.reset();
-      ctx.cdr.detectChanges();
+      ctx.pointer.cdr.detectChanges();
       return null;
     }
 
@@ -128,27 +128,27 @@ export class CreationGesture {
     const endPt = this.applySnap(ctx, this.startSvg, constrained, shiftKey);
     const attrs = this.computeAttrs(this.startSvg, endPt);
 
-    const newId = ctx.svgManipulation.addShape(this.shapeType, attrs);
+    const newId = ctx.doc.svgManipulation.addShape(this.shapeType, attrs);
 
     if (newId) {
-      const svgInstance = ctx.svgManipulation.getSVGInstance();
+      const svgInstance = ctx.doc.svgManipulation.getSVGInstance();
       const el = svgInstance?.findOne(`#${newId}`) as SvgJsElement | undefined;
       if (el) {
-        const props = ctx.svgManipulation.getShapeProperties(el);
-        ctx.shapeSelection.selectShapes([props]);
+        const props = ctx.doc.svgManipulation.getShapeProperties(el);
+        ctx.doc.shapeSelection.selectShapes([props]);
       }
 
-      const cmd = new AddShapeCommand(ctx.svgManipulation, newId, ctx.shapeSelection);
-      ctx.editorHistory.pushAndExecute(cmd);
+      const cmd = new AddShapeCommand(ctx.doc.svgManipulation, newId, ctx.doc.shapeSelection);
+      ctx.doc.editorHistory.pushAndExecute(cmd);
 
-      const shapeBbox = ctx.svgManipulation.getShapeBBox(newId);
-      ctx.setLastBbox(shapeBbox);
-      ctx.invalidateHighlightCache();
+      const shapeBbox = ctx.doc.svgManipulation.getShapeBBox(newId);
+      ctx.pointer.setLastBbox(shapeBbox);
+      ctx.pointer.invalidateHighlightCache();
     }
 
     this.justEnded = true;
     this.reset();
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
     return newId;
   }
 
@@ -189,18 +189,18 @@ export class CreationGesture {
     };
   }
 
-  private applySnap(ctx: GestureContext, start: Point, end: Point, shiftKey: boolean): Point {
+  private applySnap(ctx: GestureRuntimeContext, start: Point, end: Point, shiftKey: boolean): Point {
     // Shift constraints intentionally win over snapping.
-    if (shiftKey || ctx.isSnapTemporarilyDisabled()) return end;
+    if (shiftKey || ctx.snap.isSnapTemporarilyDisabled()) return end;
 
-    const gridSnapped = ctx.snap.snapToGrid(end);
-    if (!ctx.snap.shapeEnabled()) return gridSnapped;
+    const gridSnapped = ctx.snap.snap.snapToGrid(end);
+    if (!ctx.snap.snap.shapeEnabled()) return gridSnapped;
 
     const startBBox = this.computeGhostBbox(start, gridSnapped);
-    const guideResult: SmartGuideResult = ctx.snap.snapDeltaToSmartGuides(
+    const guideResult: SmartGuideResult = ctx.snap.snap.snapDeltaToSmartGuides(
       startBBox,
       { x: 0, y: 0 },
-      ctx.getSmartGuideCandidates()
+      ctx.snap.getSmartGuideCandidates()
     );
     return {
       x: gridSnapped.x + guideResult.delta.x,

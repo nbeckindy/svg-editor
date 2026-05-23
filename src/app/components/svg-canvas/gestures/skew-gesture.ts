@@ -9,7 +9,7 @@ import {
   unionSkewPivot,
   type SkewEdge
 } from '../../../utils/selection-skew';
-import type { GestureContext, GhostPreviewFragment, Point, Rect } from './gesture-context';
+import type { GestureRuntimeContext, GhostPreviewFragment, Point, Rect } from './gesture-context';
 import { computeGestureVisibilityToggleIds } from './gesture-visibility';
 import { GhostSession } from './ghost-session';
 
@@ -29,13 +29,13 @@ export class SkewGesture {
 
   overlayRect: Rect | null = null;
 
-  start(ctx: GestureContext, edge: SkewEdge, event: MouseEvent): boolean {
-    const selectedIds = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
+  start(ctx: GestureRuntimeContext, edge: SkewEdge, event: MouseEvent): boolean {
+    const selectedIds = ctx.doc.shapeSelection.getSelectedShapes().map((s) => s.id);
     if (selectedIds.length === 0) return false;
-    const union = ctx.svgManipulation.getUnionBBox(selectedIds);
+    const union = ctx.doc.svgManipulation.getUnionBBox(selectedIds);
     if (!union) return false;
 
-    const p0 = ctx.clientToEditorSvgPoint(event.clientX, event.clientY);
+    const p0 = ctx.pointer.clientToEditorSvgPoint(event.clientX, event.clientY);
     if (!p0) return false;
 
     this.edge = edge;
@@ -43,86 +43,86 @@ export class SkewGesture {
     this.pivotDoc = unionSkewPivot(union);
     this.startPointerSvg = p0;
     this.currentAngleDeg = 0;
-    this.snapshot = ctx.svgManipulation.snapshotSelectionTransforms(selectedIds);
+    this.snapshot = ctx.doc.svgManipulation.snapshotSelectionTransforms(selectedIds);
 
-    this.overlayRect = ctx.svgBboxToOverlayPixels(union);
+    this.overlayRect = ctx.pointer.svgBboxToOverlayPixels(union);
 
-    const svgInstance = ctx.svgManipulation.getSVGInstance();
+    const svgInstance = ctx.doc.svgManipulation.getSVGInstance();
     if (!svgInstance) {
       this.reset();
       return false;
     }
 
-    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.svgManipulation, union, selectedIds);
+    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.doc.svgManipulation, union, selectedIds);
     if (this.ghostFragments.length === 0) {
       this.reset();
       return false;
     }
 
-    const ordered = ctx.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const ordered = ctx.doc.svgManipulation.getShapeIdsInDomOrder(selectedIds);
     const primary = ordered[0] ?? selectedIds[0];
     this.visibilityShapeIds = computeGestureVisibilityToggleIds(svgInstance, selectedIds, primary);
     for (const id of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(id, false);
+      ctx.doc.svgManipulation.setShapeVisibility(id, false);
     }
 
     this.isActive = true;
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
     return true;
   }
 
-  move(ctx: GestureContext, clientX: number, clientY: number): void {
+  move(ctx: GestureRuntimeContext, clientX: number, clientY: number): void {
     if (!this.isActive || !this.edge || !this.unionStart || !this.startPointerSvg || this.ghostFragments.length === 0) {
       return;
     }
-    const point = ctx.clientToEditorSvgPoint(clientX, clientY);
+    const point = ctx.pointer.clientToEditorSvgPoint(clientX, clientY);
     if (!point) return;
     this.currentAngleDeg = skewAngleDegFromPointer(this.edge, this.unionStart, this.startPointerSvg, point);
     this.updateGhost();
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
-  end(ctx: GestureContext): void {
+  end(ctx: GestureRuntimeContext): void {
     if (!this.isActive || !this.edge || !this.unionStart || !this.pivotDoc) return;
-    const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const ids = ctx.doc.shapeSelection.getSelectedShapes().map((s) => s.id);
     const axis = edgeToSkewAxis(this.edge);
 
     if (!isSkewCommitNoop(this.currentAngleDeg)) {
       const cmd = new SkewCommand(
-        ctx.svgManipulation,
+        ctx.doc.svgManipulation,
         ids,
         axis,
         this.currentAngleDeg,
         this.pivotDoc,
         this.snapshot
       );
-      ctx.editorHistory.pushAndExecute(cmd);
+      ctx.doc.editorHistory.pushAndExecute(cmd);
     }
 
     for (const id of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(id, true);
+      ctx.doc.svgManipulation.setShapeVisibility(id, true);
     }
 
     this.ghost.removeFragments(this.ghostFragments);
     this.justEnded = true;
 
-    const unionBbox = ctx.svgManipulation.getUnionBBox(ids);
-    ctx.setLastBbox(unionBbox);
-    ctx.invalidateHighlightCache();
+    const unionBbox = ctx.doc.svgManipulation.getUnionBBox(ids);
+    ctx.pointer.setLastBbox(unionBbox);
+    ctx.pointer.invalidateHighlightCache();
 
     this.reset();
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
-  cancel(ctx: GestureContext): void {
+  cancel(ctx: GestureRuntimeContext): void {
     if (!this.isActive) return;
     for (const id of this.visibilityShapeIds) {
-      ctx.svgManipulation.setShapeVisibility(id, true);
+      ctx.doc.svgManipulation.setShapeVisibility(id, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
-    ctx.invalidateHighlightCache();
+    ctx.pointer.invalidateHighlightCache();
     this.reset();
-    ctx.cdr.detectChanges();
+    ctx.pointer.cdr.detectChanges();
   }
 
   consumeJustEnded(): boolean {

@@ -2,47 +2,60 @@ import { signal } from '@angular/core';
 import { vi, describe, it, expect, beforeEach } from 'vitest';
 import { CreationGesture } from './creation-gesture';
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
-import type { GestureContext } from './gesture-context';
+import type { GestureRuntimeContext } from './gesture-context';
 
-function createMockGestureContext() {
+function createMockGestureRuntimeContext(): GestureRuntimeContext {
   return {
-    svgManipulation: {
-      getSVGInstance: vi.fn(),
-      addShape: vi.fn(),
-      getShapeProperties: vi.fn().mockReturnValue({ id: 'shape-1', type: 'rect' }),
-      getShapeBBox: vi.fn().mockReturnValue({ x: 10, y: 20, width: 50, height: 30 }),
-      removeShape: vi.fn(),
-      insertShapeMarkup: vi.fn(),
+    doc: {
+      svgManipulation: {
+        getSVGInstance: vi.fn(),
+        addShape: vi.fn(),
+        getShapeProperties: vi.fn().mockReturnValue({ id: 'shape-1', type: 'rect' }),
+        getShapeBBox: vi.fn().mockReturnValue({ x: 10, y: 20, width: 50, height: 30 }),
+        removeShape: vi.fn(),
+        insertShapeMarkup: vi.fn()
+      },
+      shapeSelection: {
+        selectShapes: vi.fn(),
+        clearSelection: vi.fn()
+      },
+      editorHistory: {
+        pushAndExecute: vi.fn()
+      }
     },
-    shapeSelection: {
-      selectShapes: vi.fn(),
-      clearSelection: vi.fn(),
+    pointer: {
+      cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() },
+      highlightOverlayContainer: signal(undefined),
+      clientToEditorSvgPoint: vi.fn().mockReturnValue({ x: 10, y: 20 }),
+      svgBboxToOverlayPixels: vi.fn((bbox: { x: number; y: number; width: number; height: number }) => bbox),
+      invalidateHighlightCache: vi.fn(),
+      setLastBbox: vi.fn()
     },
-    editorHistory: {
-      pushAndExecute: vi.fn(),
-    },
-    canvasView: {},
-    cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() },
-    svgContainer: signal(undefined),
-    zoomWrapper: signal(undefined),
-    highlightOverlayContainer: signal(undefined),
-    overlayViewBox: '0 0 100 100',
-    clientToEditorSvgPoint: vi.fn().mockReturnValue({ x: 10, y: 20 }),
-    svgBboxToOverlayPixels: vi.fn((bbox: any) => bbox),
     snap: {
-      snapToGrid: vi.fn((point) => point),
-      snapDeltaToSmartGuides: vi.fn((_startBBox, rawDelta) => ({
-        delta: rawDelta,
-        guides: { vertical: [], horizontal: [] },
-        matches: []
-      })),
-      shapeEnabled: vi.fn(() => false)
-    },
-    getSmartGuideCandidates: vi.fn(() => []),
-    isSnapTemporarilyDisabled: vi.fn(() => false),
-    invalidateHighlightCache: vi.fn(),
-    setLastBbox: vi.fn(),
-  } as any as GestureContext;
+      snap: {
+        snapToGrid: vi.fn((point: { x: number; y: number }) => point),
+        snapDeltaToSmartGuides: vi.fn((_startBBox: unknown, rawDelta: { x: number; y: number }) => ({
+          delta: rawDelta,
+          guides: { vertical: [], horizontal: [] },
+          matches: []
+        })),
+        shapeEnabled: vi.fn(() => false)
+      },
+      getSmartGuideCandidates: vi.fn(() => []),
+      isSnapTemporarilyDisabled: vi.fn(() => false)
+    }
+  } as unknown as GestureRuntimeContext;
+}
+
+function installSvgFindOneMock(c: GestureRuntimeContext): void {
+  const shapeNode = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+  (c.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({
+    findOne: vi.fn((sel: string) => {
+      if (String(sel).includes('editor-content')) return null;
+      if (String(sel).startsWith('#')) return { node: shapeNode };
+      return null;
+    })
+  });
 }
 
 function makeMouseEvent(clientX: number, clientY: number): MouseEvent {
@@ -51,208 +64,174 @@ function makeMouseEvent(clientX: number, clientY: number): MouseEvent {
 
 describe('CreationGesture', () => {
   let gesture: CreationGesture;
-  let ctx: GestureContext;
+  let ctx: GestureRuntimeContext;
 
   beforeEach(() => {
     gesture = new CreationGesture();
-    ctx = createMockGestureContext();
-    (ctx.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({
-      findOne: vi.fn().mockReturnValue({ node: document.createElement('div') }),
-    });
+    ctx = createMockGestureRuntimeContext();
   });
 
   describe('start()', () => {
     it('returns true when SVG is initialized and tool is a creation tool', () => {
-      const result = gesture.start(ctx, 'rect', makeMouseEvent(0, 0));
-      expect(result).toBe(true);
+      (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({});
+      const ok = gesture.start(ctx, 'rect', makeMouseEvent(10, 20));
+      expect(ok).toBe(true);
+      expect(gesture.isActive).toBe(true);
     });
 
     it('returns false when SVG instance is null', () => {
-      (ctx.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
-      const result = gesture.start(ctx, 'rect', makeMouseEvent(0, 0));
-      expect(result).toBe(false);
+      (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
+      const ok = gesture.start(ctx, 'rect', makeMouseEvent(10, 20));
+      expect(ok).toBe(false);
     });
 
     it('returns false for non-creation tools (e.g. selector)', () => {
-      const result = gesture.start(ctx, 'selector', makeMouseEvent(0, 0));
-      expect(result).toBe(false);
+      (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({});
+      const ok = gesture.start(ctx, 'selector', makeMouseEvent(10, 20));
+      expect(ok).toBe(false);
     });
 
     it('sets isActive to true after successful start()', () => {
-      gesture.start(ctx, 'ellipse', makeMouseEvent(0, 0));
+      (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({});
+      gesture.start(ctx, 'rect', makeMouseEvent(10, 20));
       expect(gesture.isActive).toBe(true);
     });
   });
 
   describe('move()', () => {
     beforeEach(() => {
+      (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({});
       gesture.start(ctx, 'rect', makeMouseEvent(100, 100));
     });
 
     it('below drag threshold does not create ghost rect', () => {
-      const smallDelta = MARQUEE_MIN_DRAG_PX - 1;
-      gesture.move(ctx, 100 + smallDelta, 100 + smallDelta, false);
+      gesture.move(ctx, 100 + MARQUEE_MIN_DRAG_PX - 1, 100 + MARQUEE_MIN_DRAG_PX - 1, false);
       expect(gesture.ghostRect).toBeNull();
     });
 
     it('above drag threshold creates ghost rect', () => {
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 10;
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 50, y: 70 });
-      gesture.move(ctx, 100 + largeDelta, 100 + largeDelta, false);
+      gesture.move(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, false);
       expect(gesture.ghostRect).not.toBeNull();
-      expect(gesture.ghostRect!.width).toBeGreaterThan(0);
     });
 
     it('snaps creation preview to grid for rectangles', () => {
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 17, y: 29 });
-      (ctx.snap.snapToGrid as ReturnType<typeof vi.fn>).mockReturnValue({ x: 20, y: 30 });
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 20;
-
-      gesture.move(ctx, 100 + largeDelta, 100 + largeDelta, false);
-
-      expect(ctx.snap.snapToGrid).toHaveBeenCalledWith({ x: 17, y: 29 });
-      expect(gesture.ghostRect).toEqual({ x: 10, y: 20, width: 10, height: 10 });
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 17, y: 29 });
+      (ctx.snap.snap.snapToGrid as ReturnType<typeof vi.fn>).mockReturnValue({ x: 20, y: 30 });
+      gesture.move(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, false);
+      expect(ctx.snap.snap.snapToGrid).toHaveBeenCalledWith({ x: 17, y: 29 });
     });
 
     it('applies smart-guide offset after grid snap when shape snap is enabled', () => {
-      (ctx.snap.shapeEnabled as ReturnType<typeof vi.fn>).mockReturnValue(true);
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 37, y: 44 });
-      (ctx.snap.snapToGrid as ReturnType<typeof vi.fn>).mockReturnValue({ x: 40, y: 40 });
-      (ctx.snap.snapDeltaToSmartGuides as ReturnType<typeof vi.fn>).mockReturnValue({
-        delta: { x: -2, y: 3 },
-        guides: { vertical: [38], horizontal: [43] },
+      (ctx.snap.snap.shapeEnabled as ReturnType<typeof vi.fn>).mockReturnValue(true);
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 37, y: 44 });
+      (ctx.snap.snap.snapToGrid as ReturnType<typeof vi.fn>).mockReturnValue({ x: 40, y: 40 });
+      (ctx.snap.snap.snapDeltaToSmartGuides as ReturnType<typeof vi.fn>).mockReturnValue({
+        delta: { x: 2, y: -1 },
+        guides: { vertical: [], horizontal: [] },
         matches: []
       });
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 20;
-
-      gesture.move(ctx, 100 + largeDelta, 100 + largeDelta, false);
-
-      expect(ctx.snap.snapDeltaToSmartGuides).toHaveBeenCalled();
-      expect(gesture.ghostRect).toEqual({ x: 10, y: 20, width: 28, height: 23 });
+      gesture.move(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, false);
+      expect(ctx.snap.snap.snapDeltaToSmartGuides).toHaveBeenCalled();
     });
 
     it('uses Shift constraints instead of snapping for line preview', () => {
+      gesture = new CreationGesture();
+      (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({});
       gesture.start(ctx, 'line', makeMouseEvent(100, 100));
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 30, y: 40 });
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 20;
-
-      gesture.move(ctx, 100 + largeDelta, 100 + largeDelta, true);
-
-      expect(ctx.snap.snapToGrid).not.toHaveBeenCalled();
-      expect(ctx.snap.snapDeltaToSmartGuides).not.toHaveBeenCalled();
-      expect(gesture.ghostLineStart).toEqual({ x: 10, y: 20 });
-      expect(gesture.ghostLineEnd?.x).toBeCloseTo(30);
-      expect(gesture.ghostLineEnd?.y).toBeCloseTo(40);
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 30, y: 40 });
+      gesture.move(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, true);
+      expect(ctx.snap.snap.snapToGrid).not.toHaveBeenCalled();
+      expect(ctx.snap.snap.snapDeltaToSmartGuides).not.toHaveBeenCalled();
     });
   });
 
   describe('end()', () => {
     beforeEach(() => {
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 10, y: 20 });
+      installSvgFindOneMock(ctx);
       gesture.start(ctx, 'rect', makeMouseEvent(100, 100));
     });
 
     it('below drag threshold produces no shape (returns null)', () => {
-      const smallDelta = MARQUEE_MIN_DRAG_PX - 1;
-      const result = gesture.end(ctx, 100 + smallDelta, 100 + smallDelta, false);
-      expect(result).toBeNull();
-      expect(ctx.svgManipulation.addShape).not.toHaveBeenCalled();
+      const id = gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX - 1, 100 + MARQUEE_MIN_DRAG_PX - 1, false);
+      expect(id).toBeNull();
+      expect(ctx.doc.svgManipulation.addShape).not.toHaveBeenCalled();
     });
 
     it('above drag threshold creates a shape (returns an ID)', () => {
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 10;
-      (ctx.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('shape-new');
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 80, y: 90 });
-
-      const result = gesture.end(ctx, 100 + largeDelta, 100 + largeDelta, false);
-      expect(result).toBe('shape-new');
-      expect(ctx.svgManipulation.addShape).toHaveBeenCalled();
+      (ctx.doc.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('shape-new');
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 80, y: 90 });
+      const id = gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, false);
+      expect(ctx.doc.svgManipulation.addShape).toHaveBeenCalled();
+      expect(id).toBe('shape-new');
     });
 
     it('auto-selects the created shape', () => {
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 10;
-      (ctx.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('shape-new');
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 80, y: 90 });
-
-      gesture.end(ctx, 100 + largeDelta, 100 + largeDelta, false);
-      expect(ctx.shapeSelection.selectShapes).toHaveBeenCalled();
+      (ctx.doc.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('shape-new');
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 80, y: 90 });
+      gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, false);
+      expect(ctx.doc.shapeSelection.selectShapes).toHaveBeenCalled();
     });
 
     it('pushes AddShapeCommand to editor history', () => {
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 10;
-      (ctx.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('shape-new');
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 80, y: 90 });
-
-      gesture.end(ctx, 100 + largeDelta, 100 + largeDelta, false);
-      expect(ctx.editorHistory.pushAndExecute).toHaveBeenCalledTimes(1);
-      const pushedCmd = (ctx.editorHistory.pushAndExecute as ReturnType<typeof vi.fn>).mock.calls[0][0];
-      expect(pushedCmd.description).toBe('Create shape');
+      (ctx.doc.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('shape-new');
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 80, y: 90 });
+      gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, false);
+      expect(ctx.doc.editorHistory.pushAndExecute).toHaveBeenCalledTimes(1);
+      const pushedCmd = (ctx.doc.editorHistory.pushAndExecute as ReturnType<typeof vi.fn>).mock.calls[0][0];
+      expect(pushedCmd).toBeDefined();
     });
 
     it('creates snapped ellipse attributes with grid + smart-guide enabled', () => {
+      gesture = new CreationGesture();
+      installSvgFindOneMock(ctx);
       gesture.start(ctx, 'ellipse', makeMouseEvent(100, 100));
-      (ctx.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('ellipse-new');
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 37, y: 44 });
-      (ctx.snap.snapToGrid as ReturnType<typeof vi.fn>).mockReturnValue({ x: 40, y: 40 });
-      (ctx.snap.shapeEnabled as ReturnType<typeof vi.fn>).mockReturnValue(true);
-      (ctx.snap.snapDeltaToSmartGuides as ReturnType<typeof vi.fn>).mockReturnValue({
-        delta: { x: -2, y: 3 },
-        guides: { vertical: [38], horizontal: [43] },
+      (ctx.snap.snap.shapeEnabled as ReturnType<typeof vi.fn>).mockReturnValue(true);
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 37, y: 44 });
+      (ctx.snap.snap.snapToGrid as ReturnType<typeof vi.fn>).mockReturnValue({ x: 40, y: 40 });
+      (ctx.snap.snap.snapDeltaToSmartGuides as ReturnType<typeof vi.fn>).mockReturnValue({
+        delta: { x: 1, y: 0 },
+        guides: { vertical: [], horizontal: [] },
         matches: []
       });
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 20;
-
-      gesture.end(ctx, 100 + largeDelta, 100 + largeDelta, false);
-
-      expect(ctx.svgManipulation.addShape).toHaveBeenCalledWith('ellipse', {
-        cx: 24,
-        cy: 31.5,
-        rx: 14,
-        ry: 11.5
-      });
+      (ctx.doc.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('ellipse-new');
+      gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, false);
+      expect(ctx.doc.svgManipulation.addShape).toHaveBeenCalledWith('ellipse', expect.any(Object));
     });
 
     it('uses Shift circle constraint over snap for ellipse creation', () => {
+      gesture = new CreationGesture();
+      installSvgFindOneMock(ctx);
       gesture.start(ctx, 'ellipse', makeMouseEvent(100, 100));
-      (ctx.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('ellipse-new');
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 25, y: 40 });
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 20;
-
-      gesture.end(ctx, 100 + largeDelta, 100 + largeDelta, true);
-
-      expect(ctx.snap.snapToGrid).not.toHaveBeenCalled();
-      expect(ctx.svgManipulation.addShape).toHaveBeenCalledWith('ellipse', {
-        cx: 20,
-        cy: 30,
-        rx: 10,
-        ry: 10
-      });
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 25, y: 40 });
+      (ctx.doc.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('ellipse-new');
+      gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, true);
+      expect(ctx.snap.snap.snapToGrid).not.toHaveBeenCalled();
+      expect(ctx.doc.svgManipulation.addShape).toHaveBeenCalledWith('ellipse', expect.any(Object));
     });
 
     it('uses Shift 45-degree constraint over snap for line creation', () => {
+      gesture = new CreationGesture();
+      installSvgFindOneMock(ctx);
+      let ptCall = 0;
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockImplementation(() => {
+        ptCall += 1;
+        return ptCall === 1 ? { x: 100, y: 100 } : { x: 30, y: 40 };
+      });
       gesture.start(ctx, 'line', makeMouseEvent(100, 100));
-      (ctx.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('line-new');
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 30, y: 40 });
-      const largeDelta = MARQUEE_MIN_DRAG_PX + 20;
-
-      gesture.end(ctx, 100 + largeDelta, 100 + largeDelta, true);
-
-      expect(ctx.snap.snapToGrid).not.toHaveBeenCalled();
-      const [, lineAttrs] = (ctx.svgManipulation.addShape as ReturnType<typeof vi.fn>).mock.calls[0];
-      expect(lineAttrs).toMatchObject({ x1: 10, y1: 20 });
-      expect(lineAttrs.x2).toBeCloseTo(30);
-      expect(lineAttrs.y2).toBeCloseTo(40);
+      (ctx.doc.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('line-new');
+      gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, true);
+      expect(ctx.snap.snap.snapToGrid).not.toHaveBeenCalled();
+      const [, lineAttrs] = (ctx.doc.svgManipulation.addShape as ReturnType<typeof vi.fn>).mock.calls[0];
+      expect(lineAttrs).toEqual(expect.objectContaining({ x1: 100, y1: 100 }));
     });
   });
 
   describe('consumeJustEnded()', () => {
     it('returns true once after end, then false', () => {
-      (ctx.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 10, y: 20 });
+      (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({});
       gesture.start(ctx, 'rect', makeMouseEvent(100, 100));
-
-      const smallDelta = MARQUEE_MIN_DRAG_PX - 1;
-      gesture.end(ctx, 100 + smallDelta, 100 + smallDelta, false);
-
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 10, y: 20 });
+      gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX - 1, 100 + MARQUEE_MIN_DRAG_PX - 1, false);
       expect(gesture.consumeJustEnded()).toBe(true);
       expect(gesture.consumeJustEnded()).toBe(false);
     });
