@@ -37,7 +37,7 @@ export class DragGesture {
     point: Point,
     event: MouseEvent
   ): boolean {
-    const svgInstance = ctx.transformDoc.svgManipulation.getSVGInstance();
+    const svgInstance = ctx.transformDoc.getSVGInstance();
     if (!svgInstance) return false;
 
     this.visibilityShapeIds = computeGestureVisibilityToggleIds(
@@ -48,7 +48,7 @@ export class DragGesture {
 
     try {
       if (selectedIds.length === 1) {
-        const bbox = ctx.transformDoc.svgManipulation.getShapeBBox(effectiveDragId);
+        const bbox = ctx.transformDoc.getShapeBBox(effectiveDragId);
         if (!bbox) {
           this.visibilityShapeIds = [];
           return false;
@@ -63,7 +63,7 @@ export class DragGesture {
             : target.getBoundingClientRect();
         this.createSingleGhost(ctx, effectiveDragId, bbox, shapeScreenRect);
       } else {
-        const unionBbox = ctx.transformDoc.svgManipulation.getUnionBBox(selectedIds);
+        const unionBbox = ctx.transformDoc.getUnionBBox(selectedIds);
         if (!unionBbox) {
           this.visibilityShapeIds = [];
           return false;
@@ -84,13 +84,13 @@ export class DragGesture {
     }
 
     for (const id of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(id, false);
+      ctx.transformDoc.setShapeVisibility(id, false);
     }
 
     this.isActive = true;
     this.shapeIds = selectedIds;
     this.startSvg = { x: point.x, y: point.y };
-    this.snapshot = ctx.transformDoc.svgManipulation.snapshotSelectionTransforms(selectedIds);
+    this.snapshot = ctx.transformDoc.snapshotSelectionTransforms(selectedIds);
     this.snapAnchor = this.startBbox
       ? { x: this.startBbox.x, y: this.startBbox.y }
       : this.startSvg;
@@ -141,17 +141,17 @@ export class DragGesture {
     const dragCmds: EditorCommand[] = this.shapeIds.map(
       (id) => new TranslateCommand(ctx.transformDoc.svgManipulation, id, dx, dy, this.snapshot)
     );
-    ctx.transformDoc.editorHistory.pushAndExecute(
+    ctx.transformDoc.pushAndExecute(
       dragCmds.length === 1 ? dragCmds[0] : new CompositeCommand(dragCmds, 'Move shapes')
     );
     for (const shapeId of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(shapeId, true);
+      ctx.transformDoc.setShapeVisibility(shapeId, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
     this.justEnded = true;
 
-    const selectedIds = ctx.transformDoc.shapeSelection.getSelectedShapes().map((s) => s.id);
-    const unionBbox = ctx.transformDoc.svgManipulation.getUnionBBox(selectedIds);
+    const selectedIds = ctx.transformDoc.selectedShapeIds();
+    const unionBbox = ctx.transformDoc.getUnionBBox(selectedIds);
     ctx.pointer.setLastBbox(unionBbox);
     ctx.pointer.invalidateHighlightCache();
 
@@ -162,7 +162,7 @@ export class DragGesture {
   cancel(ctx: GestureRuntimeContext): void {
     if (!this.isActive) return;
     for (const shapeId of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(shapeId, true);
+      ctx.transformDoc.setShapeVisibility(shapeId, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
     ctx.pointer.invalidateHighlightCache();
@@ -172,7 +172,7 @@ export class DragGesture {
 
   private restoreDragVisibility(ctx: GestureRuntimeContext): void {
     for (const id of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(id, true);
+      ctx.transformDoc.setShapeVisibility(id, true);
     }
     this.visibilityShapeIds = [];
   }
@@ -206,7 +206,7 @@ export class DragGesture {
     bbox: Rect,
     shapeScreenRect: DOMRect
   ): void {
-    const svgInstance = ctx.transformDoc.svgManipulation.getSVGInstance();
+    const svgInstance = ctx.transformDoc.getSVGInstance();
     if (!svgInstance) return;
     const rootSvg = svgInstance.node as SVGSVGElement;
     const built = this.ghost.buildShapeSubtree(shapeId, svgInstance, rootSvg);

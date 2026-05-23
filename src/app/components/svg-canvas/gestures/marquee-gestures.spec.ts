@@ -3,6 +3,10 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { SelectionMarqueeGesture } from './selection-marquee-gesture';
 import { ZoomMarqueeGesture } from './zoom-marquee-gesture';
 import type { GestureRuntimeContext } from './gesture-context';
+import type { SvgManipulationService } from '../../../services/svg-manipulation.service';
+import type { ShapeSelectionService } from '../../../services/shape-selection.service';
+import type { EditorHistoryService } from '../../../services/editor-history.service';
+import { createDefaultTransformGestureDoc } from './transform-gesture-doc.port';
 
 function createContext(): GestureRuntimeContext {
   const doc = {
@@ -20,9 +24,14 @@ function createContext(): GestureRuntimeContext {
       pushAndExecute: vi.fn()
     }
   };
+  const transformDoc = createDefaultTransformGestureDoc(
+    doc.svgManipulation as unknown as SvgManipulationService,
+    doc.shapeSelection as unknown as ShapeSelectionService,
+    doc.editorHistory as unknown as EditorHistoryService
+  );
   return {
     doc,
-    transformDoc: doc,
+    transformDoc,
     pointer: {
       cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() } as never,
       highlightOverlayContainer: signal(undefined),

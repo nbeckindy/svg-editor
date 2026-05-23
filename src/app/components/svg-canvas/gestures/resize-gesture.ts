@@ -38,20 +38,20 @@ export class ResizeGesture {
   }
 
   start(ctx: GestureRuntimeContext, handle: ResizeHandle, _event: MouseEvent): boolean {
-    const selectedIds = ctx.transformDoc.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const selectedIds = ctx.transformDoc.selectedShapeIds();
     if (selectedIds.length === 0) return false;
-    const union = ctx.transformDoc.svgManipulation.getUnionBBox(selectedIds);
+    const union = ctx.transformDoc.getUnionBBox(selectedIds);
     if (!union) return false;
 
     this.unionStart = union;
     this.handle = handle;
-    this.snapshot = ctx.transformDoc.svgManipulation.snapshotSelectionTransforms(selectedIds);
-    this.vectorEffectSnapshot = ctx.transformDoc.svgManipulation.snapshotVectorEffectsForShapes(selectedIds);
+    this.snapshot = ctx.transformDoc.snapshotSelectionTransforms(selectedIds);
+    this.vectorEffectSnapshot = ctx.transformDoc.snapshotVectorEffectsForShapes(selectedIds);
 
     this.lastUnion = union;
     this.overlayRect = ctx.pointer.svgBboxToOverlayPixels(union);
 
-    const svgInstance = ctx.transformDoc.svgManipulation.getSVGInstance();
+    const svgInstance = ctx.transformDoc.getSVGInstance();
     if (!svgInstance) {
       return false;
     }
@@ -60,11 +60,11 @@ export class ResizeGesture {
       return false;
     }
 
-    const ordered = ctx.transformDoc.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const ordered = ctx.transformDoc.getShapeIdsInDomOrder(selectedIds);
     const primary = ordered[0] ?? selectedIds[0];
     this.visibilityShapeIds = computeGestureVisibilityToggleIds(svgInstance, selectedIds, primary);
     for (const id of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(id, false);
+      ctx.transformDoc.setShapeVisibility(id, false);
     }
 
     this.isActive = true;
@@ -91,7 +91,7 @@ export class ResizeGesture {
 
   end(ctx: GestureRuntimeContext, centerAnchored: boolean): void {
     if (!this.isActive || !this.handle || !this.unionStart || !this.lastUnion) return;
-    const ids = ctx.transformDoc.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const ids = ctx.transformDoc.selectedShapeIds();
     const ve = this.vectorEffectSnapshot;
     if (centerAnchored) {
       const cmd = new UnionScaleFromCenterCommand(
@@ -102,7 +102,7 @@ export class ResizeGesture {
         this.snapshot,
         ve
       );
-      ctx.transformDoc.editorHistory.pushAndExecute(cmd);
+      ctx.transformDoc.pushAndExecute(cmd);
     } else {
       const cmd = new UnionScaleCommand(
         ctx.transformDoc.svgManipulation,
@@ -113,17 +113,17 @@ export class ResizeGesture {
         this.handle,
         ve
       );
-      ctx.transformDoc.editorHistory.pushAndExecute(cmd);
+      ctx.transformDoc.pushAndExecute(cmd);
     }
 
     for (const id of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(id, true);
+      ctx.transformDoc.setShapeVisibility(id, true);
     }
 
     this.ghost.removeFragments(this.ghostFragments);
     this.justEnded = true;
 
-    const unionBbox = ctx.transformDoc.svgManipulation.getUnionBBox(ids);
+    const unionBbox = ctx.transformDoc.getUnionBBox(ids);
     ctx.pointer.setLastBbox(unionBbox);
     ctx.pointer.invalidateHighlightCache();
 
@@ -134,7 +134,7 @@ export class ResizeGesture {
   cancel(ctx: GestureRuntimeContext): void {
     if (!this.isActive) return;
     for (const id of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(id, true);
+      ctx.transformDoc.setShapeVisibility(id, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
     ctx.pointer.invalidateHighlightCache();
@@ -225,7 +225,7 @@ export class ResizeGesture {
       this.unionStart,
       rawDelta,
       ctx.snap.getSmartGuideCandidates(),
-      { selectedShapeIds: ctx.transformDoc.shapeSelection.getSelectedShapes().map((shape) => shape.id) }
+      { selectedShapeIds: ctx.transformDoc.selectedShapeIds() }
     );
     this.smartGuides = guideResult.guides;
     return {

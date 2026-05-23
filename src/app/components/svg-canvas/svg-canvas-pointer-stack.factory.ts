@@ -11,6 +11,7 @@ import type { EditorHistoryService } from '../../services/editor-history.service
 import type { SnapCandidateShape, SnapService } from '../../services/snap.service';
 import type { GestureRuntimeContext } from './gestures/gesture-context';
 import type { Rect } from './gestures/gesture-context';
+import { createDefaultTransformGestureDoc } from './gestures/transform-gesture-doc.port';
 import {
   DragGesture,
   ResizeGesture,
@@ -66,6 +67,11 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     shapeSelection: args.shapeSelection,
     editorHistory: args.editorHistory
   };
+  const transformDoc = createDefaultTransformGestureDoc(
+    args.svgManipulation,
+    args.shapeSelection,
+    args.editorHistory
+  );
 
   const gestureRuntime: GestureRuntimeContext = {
     pointer: {
@@ -77,7 +83,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
       setLastBbox: (bbox) => args.setLastBbox(bbox)
     },
     doc,
-    transformDoc: doc,
+    transformDoc,
     snap: {
       snap: args.snap,
       getSmartGuideCandidates: () => args.getSmartGuideCandidates(),

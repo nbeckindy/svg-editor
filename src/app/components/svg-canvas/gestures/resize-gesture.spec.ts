@@ -3,6 +3,10 @@ import { vi, describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ResizeGesture } from './resize-gesture';
 import { GhostSession } from './ghost-session';
 import type { GestureRuntimeContext } from './gesture-context';
+import type { SvgManipulationService } from '../../../services/svg-manipulation.service';
+import type { ShapeSelectionService } from '../../../services/shape-selection.service';
+import type { EditorHistoryService } from '../../../services/editor-history.service';
+import { createDefaultTransformGestureDoc } from './transform-gesture-doc.port';
 
 function createResizeContext(): GestureRuntimeContext {
   const doc = {
@@ -21,9 +25,14 @@ function createResizeContext(): GestureRuntimeContext {
       pushAndExecute: vi.fn()
     }
   };
+  const transformDoc = createDefaultTransformGestureDoc(
+    doc.svgManipulation as unknown as SvgManipulationService,
+    doc.shapeSelection as unknown as ShapeSelectionService,
+    doc.editorHistory as unknown as EditorHistoryService
+  );
   return {
     doc,
-    transformDoc: doc,
+    transformDoc,
     pointer: {
       cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() },
       highlightOverlayContainer: signal(undefined),
@@ -61,7 +70,7 @@ describe('ResizeGesture', () => {
   });
 
   it('start returns false when nothing is selected', () => {
-    (ctx.transformDoc.shapeSelection.getSelectedShapes as ReturnType<typeof vi.fn>).mockReturnValue([]);
+    (ctx.doc.shapeSelection.getSelectedShapes as ReturnType<typeof vi.fn>).mockReturnValue([]);
     const ok = gesture.start(ctx, 'se', { clientX: 0, clientY: 0 } as MouseEvent);
     expect(ok).toBe(false);
     expect(gesture.isActive).toBe(false);

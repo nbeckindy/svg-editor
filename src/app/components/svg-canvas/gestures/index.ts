@@ -2,12 +2,16 @@ export type {
   GestureRuntimeContext,
   PointerOverlayPort,
   DocumentSelectionPort,
-  TransformGestureDocPort,
   SnapSessionPort,
   GhostPreviewFragment,
   Rect,
   Point
 } from './gesture-context';
+export type { TransformGestureDocPort } from './transform-gesture-doc.port';
+export {
+  DefaultTransformGestureDoc,
+  createDefaultTransformGestureDoc
+} from './transform-gesture-doc.port';
 export { PointerGestureRouter, type SvgCanvasPointerGestureHost } from './pointer-gesture-router';
 export { GhostSession } from './ghost-session';
 export { DragGesture } from './drag-gesture';

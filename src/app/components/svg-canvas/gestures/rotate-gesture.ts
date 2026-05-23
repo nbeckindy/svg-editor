@@ -47,19 +47,19 @@ export class RotateGesture {
   private visibilityShapeIds: string[] = [];
 
   start(ctx: GestureRuntimeContext, event: MouseEvent): boolean {
-    const selectedIds = ctx.transformDoc.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const selectedIds = ctx.transformDoc.selectedShapeIds();
     if (selectedIds.length === 0) return false;
-    const union = ctx.transformDoc.svgManipulation.getUnionBBox(selectedIds);
+    const union = ctx.transformDoc.getUnionBBox(selectedIds);
     if (!union) return false;
 
     const unionCenterPivot = unionRotationPivot(union);
-    const geomPivot = ctx.transformDoc.svgManipulation.getSelectionRotationPivot(selectedIds);
+    const geomPivot = ctx.transformDoc.getSelectionRotationPivot(selectedIds);
     const pivot = geomPivot ?? unionCenterPivot;
 
     this.unionStart = union;
     this.pivotDoc = pivot;
     this.accumulatedRad = 0;
-    this.snapshot = ctx.transformDoc.svgManipulation.snapshotSelectionTransforms(selectedIds);
+    this.snapshot = ctx.transformDoc.snapshotSelectionTransforms(selectedIds);
 
     const p0 = ctx.pointer.clientToEditorSvgPoint(event.clientX, event.clientY);
     if (!p0) {
@@ -69,7 +69,7 @@ export class RotateGesture {
     this.lastPointerSvg = p0;
     this.startPointerRad = this.pointerAngleRad(p0);
 
-    const svgInstance = ctx.transformDoc.svgManipulation.getSVGInstance();
+    const svgInstance = ctx.transformDoc.getSVGInstance();
     if (!svgInstance) {
       this.reset();
       return false;
@@ -81,11 +81,11 @@ export class RotateGesture {
       return false;
     }
 
-    const ordered = ctx.transformDoc.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const ordered = ctx.transformDoc.getShapeIdsInDomOrder(selectedIds);
     const primary = ordered[0] ?? selectedIds[0];
     this.visibilityShapeIds = computeGestureVisibilityToggleIds(svgInstance, selectedIds, primary);
     for (const id of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(id, false);
+      ctx.transformDoc.setShapeVisibility(id, false);
     }
 
     this.pushRotateCursor();
@@ -121,7 +121,7 @@ export class RotateGesture {
   cancel(ctx: GestureRuntimeContext): void {
     if (!this.isActive) return;
     for (const id of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(id, true);
+      ctx.transformDoc.setShapeVisibility(id, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
     ctx.pointer.invalidateHighlightCache();
@@ -131,22 +131,22 @@ export class RotateGesture {
 
   end(ctx: GestureRuntimeContext): void {
     if (!this.isActive || !this.unionStart || !this.pivotDoc) return;
-    const ids = ctx.transformDoc.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const ids = ctx.transformDoc.selectedShapeIds();
     const cmd = new UnionRotateCommand(
       ctx.transformDoc.svgManipulation, ids,
       this.pivotDoc, radiansToDegrees(this.accumulatedRad),
       this.snapshot
     );
-    ctx.transformDoc.editorHistory.pushAndExecute(cmd);
+    ctx.transformDoc.pushAndExecute(cmd);
 
     for (const id of this.visibilityShapeIds) {
-      ctx.transformDoc.svgManipulation.setShapeVisibility(id, true);
+      ctx.transformDoc.setShapeVisibility(id, true);
     }
 
     this.ghost.removeFragments(this.ghostFragments);
     this.justEnded = true;
 
-    const unionBbox = ctx.transformDoc.svgManipulation.getUnionBBox(ids);
+    const unionBbox = ctx.transformDoc.getUnionBBox(ids);
     ctx.pointer.setLastBbox(unionBbox);
     ctx.pointer.invalidateHighlightCache();
 
