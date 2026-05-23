@@ -48,8 +48,10 @@ import {
   CreationGesture,
   SelectionMarqueeGesture,
   ZoomMarqueeGesture,
-  type GestureContext,
-  type Rect
+  PointerGestureRouter,
+  type GestureRuntimeContext,
+  type Rect,
+  type SvgCanvasPointerGestureHost
 } from './gestures';
 import { PenToolSession, type PenToolSessionPorts } from './pen-tool-session/pen-tool-session';
 import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
@@ -230,7 +232,7 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
     '(document:mouseup)': 'onDocumentMouseUp($event)'
   }
 })
-export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
+export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, SvgCanvasPointerGestureHost {
   readonly RULER_SIZE = 24;
   readonly svgContent = input<string>('');
   readonly svgContainer = viewChild<ElementRef<HTMLElement>>('svgContainer');
@@ -526,6 +528,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   private readonly creation = new CreationGesture();
   private readonly selectionMarquee = new SelectionMarqueeGesture();
   private readonly zoomMarquee = new ZoomMarqueeGesture();
+
+  readonly gestureRuntime!: GestureRuntimeContext;
+
+  private pointerGestureRouter!: PointerGestureRouter;
+
   readonly penTool!: PenToolSession;
   private readonly acceptedSvgContent = signal<string>('');
   private lastObservedTool: EditorTool = 'selector';
@@ -841,26 +848,80 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
   /** Last pointer position in root SVG user space while the text tool is active (placement preview). */
   private textToolPreviewLastPoint: { x: number; y: number } | null = null;
 
-  // --- GestureContext implementation ---
-  private get gestureCtx(): GestureContext {
-    return {
-      svgManipulation: this.svgManipulation,
-      shapeSelection: this.shapeSelection,
-      editorHistory: this.editorHistory,
-      canvasView: this.canvasView,
-      snap: this.snap,
-      cdr: this.cdr,
-      svgContainer: this.svgContainer,
-      zoomWrapper: this.zoomWrapper,
-      highlightOverlayContainer: this.highlightOverlayContainer,
-      overlayViewBox: this.overlayViewBox,
-      clientToEditorSvgPoint: (cx: number, cy: number) => this.clientToEditorSvgPoint(cx, cy),
-      svgBboxToOverlayPixels: (bbox: Rect) => this.svgBboxToOverlayPixels(bbox),
-      getSmartGuideCandidates: () => this.getSmartGuideCandidates(),
-      isSnapTemporarilyDisabled: () => this.altKeyPressed,
-      invalidateHighlightCache: () => { this._highlightRectCacheKey = ''; },
-      setLastBbox: (bbox: Rect | null) => { this.lastBbox = bbox; }
-    };
+  // --- SvgCanvasPointerGestureHost (pointer router seam) ---
+  getPathNodeDragSession(): PathNodeDragSession | null {
+    return this.pathNodeDragSession;
+  }
+
+  isPenToolWithActiveSession(): boolean {
+    return this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive;
+  }
+
+  onPenDocumentMouseMove(event: MouseEvent): void {
+    this.penTool.onDocumentMouseMovePen(event, (cx, cy, s) => this.getSnappedPenPoint(cx, cy, s));
+  }
+
+  onPenDocumentMouseUp(event: MouseEvent): void {
+    this.penTool.onDocumentMouseUpPen(event);
+  }
+
+  applyPanDragFromEvent(event: MouseEvent): void {
+    this.canvasView.setPan(
+      this.panStartX + (event.clientX - this.panStartClientX),
+      this.panStartY + (event.clientY - this.panStartClientY)
+    );
+  }
+
+  clearPanningFlag(): void {
+    this.isPanning = false;
+  }
+
+  get svgContentValue(): string | null | undefined {
+    return this.svgContent();
+  }
+
+  get canvasViewInitialized(): boolean {
+    return this.canvasView.isInitialized();
+  }
+
+  beginPanSession(event: MouseEvent): void {
+    this.isPanning = true;
+    this.panStartClientX = event.clientX;
+    this.panStartClientY = event.clientY;
+    this.panStartX = this.canvasView.panX;
+    this.panStartY = this.canvasView.panY;
+  }
+
+  onCanvasPenPrimaryMouseDown(event: MouseEvent): boolean {
+    return this.penTool.onCanvasPenPrimaryMouseDown(event, (cx, cy, s) => this.getSnappedPenPoint(cx, cy, s));
+  }
+
+  isCreationToolActive(): boolean {
+    return this.editorTool.isCreationTool();
+  }
+
+  getCurrentTool(): EditorTool {
+    return this.editorTool.getCurrentTool();
+  }
+
+  hasPathNodeEditState(): boolean {
+    return this.pathNodeEditState !== null;
+  }
+
+  clientToEditorSvgPointForDrag(clientX: number, clientY: number): { x: number; y: number } | null {
+    return this.clientToEditorSvgPoint(clientX, clientY);
+  }
+
+  isShapeSelected(id: string): boolean {
+    return this.shapeSelection.isShapeSelected(id);
+  }
+
+  getNearestGroupAncestorId(id: string): string | null {
+    return this.svgManipulation.getNearestGroupAncestorId(id);
+  }
+
+  getSelectedShapeIds(): string[] {
+    return this.shapeSelection.getSelectedShapes().map((s) => s.id);
   }
 
   // --- Keyboard shortcuts ---
@@ -876,22 +937,22 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
     if (event.key === 'Escape') {
       if (this.isDraggingShape) {
-        this.drag.cancel(this.gestureCtx);
+        this.drag.cancel(this.gestureRuntime);
         event.preventDefault();
         return;
       }
       if (this.isResizingSelection) {
-        this.resize.cancel(this.gestureCtx);
+        this.resize.cancel(this.gestureRuntime);
         event.preventDefault();
         return;
       }
       if (this.isSkewingSelection) {
-        this.skew.cancel(this.gestureCtx);
+        this.skew.cancel(this.gestureRuntime);
         event.preventDefault();
         return;
       }
       if (this.isRotatingSelection) {
-        this.rotate.cancel(this.gestureCtx);
+        this.rotate.cancel(this.gestureRuntime);
         event.preventDefault();
         return;
       }
@@ -1427,96 +1488,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
 
   // --- Mouse event orchestration ---
   onDocumentMouseMove(event: MouseEvent): void {
-    if (this.isCreatingShape) {
-      this.creation.move(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
-      return;
-    }
-    if (this.pathNodeDragSession) {
-      this.updatePathNodeDrag(event.clientX, event.clientY);
-      return;
-    }
-    if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
-      this.penTool.onDocumentMouseMovePen(event, (cx, cy, s) => this.getSnappedPenPoint(cx, cy, s));
-      return;
-    }
-    if (this.isSelectionMarquee) {
-      this.selectionMarquee.move(event.clientX, event.clientY, this.gestureCtx);
-      return;
-    }
-    if (this.isZoomMarquee) {
-      this.zoomMarquee.move(event.clientX, event.clientY);
-      this.cdr.detectChanges();
-      return;
-    }
-    if (this.isResizingSelection) {
-      this.resize.move(this.gestureCtx, event.clientX, event.clientY, event.altKey, event.shiftKey);
-      return;
-    }
-    if (this.isSkewingSelection) {
-      this.skew.move(this.gestureCtx, event.clientX, event.clientY);
-      return;
-    }
-    if (this.isRotatingSelection) {
-      this.rotate.move(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
-      return;
-    }
-    if (this.isPanning) {
-      this.canvasView.setPan(
-        this.panStartX + (event.clientX - this.panStartClientX),
-        this.panStartY + (event.clientY - this.panStartClientY)
-      );
-    } else if (this.isDraggingShape) {
-      this.drag.move(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
-    }
-    this.updateTextToolPreviewFromClient(event.clientX, event.clientY);
+    this.pointerGestureRouter.onDocumentMouseMove(this, event);
   }
 
   onDocumentMouseUp(event: MouseEvent): void {
-    if (event.button !== 0) return;
-    if (this.pathNodeDragSession) {
-      this.finishPathNodeDrag();
-      return;
-    }
-
-    if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
-      this.penTool.onDocumentMouseUpPen(event);
-      return;
-    }
-
-    if (this.isCreatingShape) {
-      this.creation.end(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
-      return;
-    }
-
-    if (this.isSelectionMarquee) {
-      this.selectionMarquee.endAt(event.clientX, event.clientY, event.shiftKey, this.gestureCtx);
-      return;
-    }
-    if (this.isZoomMarquee) {
-      this.commitZoomMarquee();
-      return;
-    }
-
-    this.isPanning = false;
-
-    if (this.isResizingSelection) {
-      this.resize.end(this.gestureCtx, event.altKey);
-      return;
-    }
-    if (this.isSkewingSelection) {
-      this.skew.end(this.gestureCtx);
-      return;
-    }
-    if (this.isRotatingSelection) {
-      this.rotate.end(this.gestureCtx);
-      return;
-    }
-    if (this.isDraggingShape) {
-      this.drag.end(this.gestureCtx, event.clientX, event.clientY, event.shiftKey);
-    }
+    this.pointerGestureRouter.onDocumentMouseUp(this, event);
   }
 
-  private commitZoomMarquee(): void {
+  commitZoomMarquee(): void {
     const viewportEl = this.zoomWrapper()?.nativeElement?.closest('.canvas-container') as HTMLElement | undefined;
     if (viewportEl && viewportEl.clientWidth > 0 && viewportEl.clientHeight > 0) {
       this.wrapperWidth = viewportEl.clientWidth;
@@ -1559,6 +1538,42 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     protected drawingDefaults: DrawingStyleDefaultsService,
     private selectionPaintApply: SelectionPaintApplyService
   ) {
+    this.gestureRuntime = {
+      pointer: {
+        cdr: this.cdr,
+        highlightOverlayContainer: this.highlightOverlayContainer,
+        clientToEditorSvgPoint: (cx, cy) => this.clientToEditorSvgPoint(cx, cy),
+        svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
+        invalidateHighlightCache: () => {
+          this._highlightRectCacheKey = '';
+        },
+        setLastBbox: (bbox) => {
+          this.lastBbox = bbox;
+        }
+      },
+      doc: {
+        svgManipulation: this.svgManipulation,
+        shapeSelection: this.shapeSelection,
+        editorHistory: this.editorHistory
+      },
+      snap: {
+        snap: this.snap,
+        getSmartGuideCandidates: () => this.getSmartGuideCandidates(),
+        isSnapTemporarilyDisabled: () => this.altKeyPressed
+      }
+    };
+    this.pointerGestureRouter = new PointerGestureRouter(
+      {
+        creation: this.creation,
+        selectionMarquee: this.selectionMarquee,
+        zoomMarquee: this.zoomMarquee,
+        resize: this.resize,
+        skew: this.skew,
+        rotate: this.rotate,
+        drag: this.drag
+      },
+      this.cdr
+    );
     this.penTool = new PenToolSession(this.createPenToolSessionPorts());
     effect(() => {
       const incomingSvgContent = this.svgContent();
@@ -2019,112 +2034,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
       return;
     }
     if (event.button !== 0) return;
-    if (this.editorTool.getCurrentTool() === 'zoom') {
-      this.zoomMarquee.startAt(event.clientX, event.clientY);
-      event.preventDefault();
-      return;
-    }
-    if (this.editorTool.getCurrentTool() === 'pan') {
-      this.isPanning = true;
-      this.panStartClientX = event.clientX;
-      this.panStartClientY = event.clientY;
-      this.panStartX = this.canvasView.panX;
-      this.panStartY = this.canvasView.panY;
-      event.preventDefault();
-      return;
-    }
-    if (this.editorTool.getCurrentTool() === 'pen') {
-      if (this.penTool.onCanvasPenPrimaryMouseDown(event, (cx, cy, s) => this.getSnappedPenPoint(cx, cy, s))) {
-        event.preventDefault();
-      }
-      return;
-    }
-    if (this.editorTool.isCreationTool()) {
-      if (!this.svgContent() || !this.canvasView.isInitialized()) return;
-      if (this.creation.start(this.gestureCtx, this.editorTool.getCurrentTool(), event)) {
-        event.preventDefault();
-      }
-      return;
-    }
-    if (!this.isSelectorInteractionTool(this.editorTool.getCurrentTool()) || !this.svgContent() || !this.canvasView.isInitialized()) return;
-    const target = event.target as Element;
-
-    if (this.pathNodeEditState && this.tryStartPathNodeDrag(target, event)) {
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
-
-    // Resize handle
-    const resizeEl = target.closest?.('[data-resize-handle]');
-    if (resizeEl) {
-      const h = resizeEl.getAttribute('data-resize-handle') as ResizeHandle | null;
-      if (
-        h &&
-        (h === 'nw' ||
-          h === 'ne' ||
-          h === 'sw' ||
-          h === 'se' ||
-          h === 'n' ||
-          h === 's' ||
-          h === 'e' ||
-          h === 'w')
-      ) {
-        if (this.resize.start(this.gestureCtx, h, event)) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        return;
-      }
-    }
-
-    const skewEl = target.closest?.('[data-skew-handle]');
-    if (skewEl) {
-      const edge = skewEl.getAttribute('data-skew-handle') as SkewEdge | null;
-      if (edge === 'n' || edge === 's' || edge === 'e' || edge === 'w') {
-        if (this.skew.start(this.gestureCtx, edge, event)) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        return;
-      }
-    }
-
-    // Rotate handle
-    const rotateEl = target.closest?.('[data-rotate-handle]');
-    if (rotateEl) {
-      if (this.rotate.start(this.gestureCtx, event)) {
-        event.preventDefault();
-        event.stopPropagation();
-      }
-      return;
-    }
-
-    // Selection marquee (click on empty space)
-    if (!this.isEditorContentShapeTarget(target)) {
-      this.selectionMarquee.startAt(event.clientX, event.clientY);
-      event.preventDefault();
-      return;
-    }
-
-    // Shape drag
-    if (target.tagName === 'svg' || !target.id) return;
-    let effectiveDragId = target.id;
-    if (!this.shapeSelection.isShapeSelected(target.id)) {
-      const nearestGroupId = this.svgManipulation.getNearestGroupAncestorId(target.id);
-      if (nearestGroupId && this.shapeSelection.isShapeSelected(nearestGroupId)) {
-        effectiveDragId = nearestGroupId;
-      } else {
-        return;
-      }
-    }
-    if (event.shiftKey || event.ctrlKey || event.metaKey) return;
-    const point = this.clientToEditorSvgPoint(event.clientX, event.clientY);
-    if (!point) return;
-    const selectedIds = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-    if (this.drag.start(this.gestureCtx, selectedIds, effectiveDragId, point, event)) {
-      event.preventDefault();
-    }
+    this.pointerGestureRouter.onCanvasMouseDownPrimary(this, event);
   }
 
   onCanvasClick(event: MouseEvent): void {
@@ -2451,7 +2361,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return !!target.closest('[data-path-node-edit-target]');
   }
 
-  private tryStartPathNodeDrag(target: Element, event: MouseEvent): boolean {
+  tryStartPathNodeDrag(target: Element, event: MouseEvent): boolean {
     if (!this.pathNodeEditState) return false;
     if (typeof target.closest !== 'function') return false;
     const anchorEl = target.closest('[data-path-node-anchor-index]') as Element | null;
@@ -2601,7 +2511,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return nextSegments;
   }
 
-  private updatePathNodeDrag(clientX: number, clientY: number): void {
+  updatePathNodeDrag(clientX: number, clientY: number): void {
     if (!this.pathNodeDragSession || !this.pathNodeEditState) return;
     const rootPt = this.clientToEditorSvgPoint(clientX, clientY);
     if (!rootPt) return;
@@ -2640,7 +2550,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     this.cdr.markForCheck();
   }
 
-  private finishPathNodeDrag(): void {
+  finishPathNodeDrag(): void {
     const drag = this.pathNodeDragSession;
     this.pathNodeDragSession = null;
     this.pathNodeDragJustEnded = true;
@@ -3056,7 +2966,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return el.hasAttribute('clip-path') || el.hasAttribute('mask');
   }
 
-  private isEditorContentShapeTarget(target: Element): boolean {
+  isEditorContentShapeTarget(target: Element): boolean {
     if (isTextToolPreviewNode(target)) return false;
     const tag = target.tagName?.toLowerCase?.() ?? '';
     if (!CONTENT_SHAPE_TAGS.has(tag)) return false;
@@ -3072,7 +2982,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     return !!node.closest('[data-editor-content-group]');
   }
 
-  private isSelectorInteractionTool(tool: EditorTool): boolean {
+  isSelectorInteractionTool(tool: EditorTool): boolean {
     return tool === 'selector' || tool === 'node-edit-selector';
   }
 
@@ -3163,7 +3073,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy {
     }
   }
 
-  private updateTextToolPreviewFromClient(clientX: number, clientY: number): void {
+  updateTextToolPreviewFromClient(clientX: number, clientY: number): void {
     if (this.editorTool.getCurrentTool() !== 'text' || !this.svgContent()) return;
     const raw = this.clientToEditorSvgPoint(clientX, clientY);
     if (!raw) return;
