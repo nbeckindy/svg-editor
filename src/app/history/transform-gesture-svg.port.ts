@@ -57,3 +57,9 @@ export interface TransformGestureDocSvgPort extends TransformGestureSvgPort {
   getSelectionRotationPivot(shapeIds: string[]): { x: number; y: number } | null;
   getShapeBBox(shapeId: string, options?: { preferScreenBounds?: boolean }): TransformGestureUnionRect | null;
 }
+
+/**
+ * Two-method read seam for union ghost subtree cloning (`GhostSession.buildFragmentsForUnion`).
+ * Matches a slice of {@link TransformGestureDocSvgPort}.
+ */
+export type GhostUnionSvgPort = Pick<TransformGestureDocSvgPort, 'getSVGInstance' | 'getShapeIdsInDomOrder'>;

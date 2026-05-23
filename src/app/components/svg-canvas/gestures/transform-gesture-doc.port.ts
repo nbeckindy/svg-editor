@@ -13,7 +13,7 @@ type BBox = TransformGestureUnionRect;
  * (not the full manipulation type at the type level). Transform `EditorCommand`s still take
  * `TransformGestureSvgPort` only.
  * Union ghost preview uses `getSVGInstance` / `getShapeIdsInDomOrder` (see `GhostUnionSvgPort`
- * in `ghost-session.ts`).
+ * in `src/app/history/transform-gesture-svg.port.ts`).
  */
 export interface TransformGestureDocPort {
   readonly svgManipulation: TransformGestureDocSvgPort;

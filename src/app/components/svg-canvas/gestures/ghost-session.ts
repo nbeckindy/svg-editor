@@ -1,11 +1,6 @@
 import { SVG, Svg, Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
 import type { GhostPreviewFragment, Rect } from './gesture-context';
-
-/** Narrow read model for {@link GhostSession.buildFragmentsForUnion} (no full manipulation façade). */
-export interface GhostUnionSvgPort {
-  getSVGInstance(): Svg | null;
-  getShapeIdsInDomOrder(ids: string[]): string[];
-}
+import type { GhostUnionSvgPort } from '../../../history/transform-gesture-svg.port';
 
 const GHOST_SVG_MIN_PX = 1e-6;
 const EDITOR_GHOST_ATTR = 'data-editor-ghost';

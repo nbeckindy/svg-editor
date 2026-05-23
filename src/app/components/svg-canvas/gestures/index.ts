@@ -14,7 +14,8 @@ export {
   createDefaultTransformGestureDoc
 } from './transform-gesture-doc.port';
 export { PointerGestureRouter, type SvgCanvasPointerGestureHost } from './pointer-gesture-router';
-export { GhostSession, type GhostUnionSvgPort } from './ghost-session';
+export { GhostSession } from './ghost-session';
+export type { GhostUnionSvgPort } from '../../../history/transform-gesture-svg.port';
 export { DragGesture } from './drag-gesture';
 export { ResizeGesture } from './resize-gesture';
 export { RotateGesture } from './rotate-gesture';
