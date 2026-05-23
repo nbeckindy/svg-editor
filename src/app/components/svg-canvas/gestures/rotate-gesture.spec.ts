@@ -5,23 +5,25 @@ import { GhostSession } from './ghost-session';
 import type { GestureRuntimeContext } from './gesture-context';
 
 function createMockGestureRuntimeContext(): GestureRuntimeContext {
-  return {
-    doc: {
-      svgManipulation: {
-        getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
-        getSelectionRotationPivot: vi.fn().mockReturnValue(null),
-        snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
-        setShapeVisibility: vi.fn(),
-        getSVGInstance: vi.fn().mockReturnValue({}),
-        getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids)
-      },
-      shapeSelection: {
-        getSelectedShapes: vi.fn().mockReturnValue([{ id: 'shape-a' }])
-      },
-      editorHistory: {
-        pushAndExecute: vi.fn()
-      }
+  const doc = {
+    svgManipulation: {
+      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
+      getSelectionRotationPivot: vi.fn().mockReturnValue(null),
+      snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
+      setShapeVisibility: vi.fn(),
+      getSVGInstance: vi.fn().mockReturnValue({}),
+      getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids)
     },
+    shapeSelection: {
+      getSelectedShapes: vi.fn().mockReturnValue([{ id: 'shape-a' }])
+    },
+    editorHistory: {
+      pushAndExecute: vi.fn()
+    }
+  };
+  return {
+    doc,
+    transformDoc: doc,
     pointer: {
       cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() },
       highlightOverlayContainer: signal(undefined),

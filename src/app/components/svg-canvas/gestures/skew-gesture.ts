@@ -30,9 +30,9 @@ export class SkewGesture {
   overlayRect: Rect | null = null;
 
   start(ctx: GestureRuntimeContext, edge: SkewEdge, event: MouseEvent): boolean {
-    const selectedIds = ctx.doc.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const selectedIds = ctx.transformDoc.shapeSelection.getSelectedShapes().map((s) => s.id);
     if (selectedIds.length === 0) return false;
-    const union = ctx.doc.svgManipulation.getUnionBBox(selectedIds);
+    const union = ctx.transformDoc.svgManipulation.getUnionBBox(selectedIds);
     if (!union) return false;
 
     const p0 = ctx.pointer.clientToEditorSvgPoint(event.clientX, event.clientY);
@@ -43,27 +43,27 @@ export class SkewGesture {
     this.pivotDoc = unionSkewPivot(union);
     this.startPointerSvg = p0;
     this.currentAngleDeg = 0;
-    this.snapshot = ctx.doc.svgManipulation.snapshotSelectionTransforms(selectedIds);
+    this.snapshot = ctx.transformDoc.svgManipulation.snapshotSelectionTransforms(selectedIds);
 
     this.overlayRect = ctx.pointer.svgBboxToOverlayPixels(union);
 
-    const svgInstance = ctx.doc.svgManipulation.getSVGInstance();
+    const svgInstance = ctx.transformDoc.svgManipulation.getSVGInstance();
     if (!svgInstance) {
       this.reset();
       return false;
     }
 
-    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.doc.svgManipulation, union, selectedIds);
+    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.transformDoc.svgManipulation, union, selectedIds);
     if (this.ghostFragments.length === 0) {
       this.reset();
       return false;
     }
 
-    const ordered = ctx.doc.svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const ordered = ctx.transformDoc.svgManipulation.getShapeIdsInDomOrder(selectedIds);
     const primary = ordered[0] ?? selectedIds[0];
     this.visibilityShapeIds = computeGestureVisibilityToggleIds(svgInstance, selectedIds, primary);
     for (const id of this.visibilityShapeIds) {
-      ctx.doc.svgManipulation.setShapeVisibility(id, false);
+      ctx.transformDoc.svgManipulation.setShapeVisibility(id, false);
     }
 
     this.isActive = true;
@@ -84,29 +84,29 @@ export class SkewGesture {
 
   end(ctx: GestureRuntimeContext): void {
     if (!this.isActive || !this.edge || !this.unionStart || !this.pivotDoc) return;
-    const ids = ctx.doc.shapeSelection.getSelectedShapes().map((s) => s.id);
+    const ids = ctx.transformDoc.shapeSelection.getSelectedShapes().map((s) => s.id);
     const axis = edgeToSkewAxis(this.edge);
 
     if (!isSkewCommitNoop(this.currentAngleDeg)) {
       const cmd = new SkewCommand(
-        ctx.doc.svgManipulation,
+        ctx.transformDoc.svgManipulation,
         ids,
         axis,
         this.currentAngleDeg,
         this.pivotDoc,
         this.snapshot
       );
-      ctx.doc.editorHistory.pushAndExecute(cmd);
+      ctx.transformDoc.editorHistory.pushAndExecute(cmd);
     }
 
     for (const id of this.visibilityShapeIds) {
-      ctx.doc.svgManipulation.setShapeVisibility(id, true);
+      ctx.transformDoc.svgManipulation.setShapeVisibility(id, true);
     }
 
     this.ghost.removeFragments(this.ghostFragments);
     this.justEnded = true;
 
-    const unionBbox = ctx.doc.svgManipulation.getUnionBBox(ids);
+    const unionBbox = ctx.transformDoc.svgManipulation.getUnionBBox(ids);
     ctx.pointer.setLastBbox(unionBbox);
     ctx.pointer.invalidateHighlightCache();
 
@@ -117,7 +117,7 @@ export class SkewGesture {
   cancel(ctx: GestureRuntimeContext): void {
     if (!this.isActive) return;
     for (const id of this.visibilityShapeIds) {
-      ctx.doc.svgManipulation.setShapeVisibility(id, true);
+      ctx.transformDoc.svgManipulation.setShapeVisibility(id, true);
     }
     this.ghost.removeFragments(this.ghostFragments);
     ctx.pointer.invalidateHighlightCache();

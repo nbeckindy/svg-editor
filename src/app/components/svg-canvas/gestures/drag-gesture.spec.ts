@@ -5,22 +5,24 @@ import { GhostSession } from './ghost-session';
 import type { GestureRuntimeContext } from './gesture-context';
 
 function createMultiSelectDragContext(): GestureRuntimeContext {
-  return {
-    doc: {
-      svgManipulation: {
-        getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 10, height: 10 }),
-        snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
-        setShapeVisibility: vi.fn(),
-        getSVGInstance: vi.fn().mockReturnValue({}),
-        getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids)
-      },
-      shapeSelection: {
-        getSelectedShapes: vi.fn().mockReturnValue([{ id: 'a' }, { id: 'b' }])
-      },
-      editorHistory: {
-        pushAndExecute: vi.fn()
-      }
+  const doc = {
+    svgManipulation: {
+      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 10, height: 10 }),
+      snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
+      setShapeVisibility: vi.fn(),
+      getSVGInstance: vi.fn().mockReturnValue({}),
+      getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids)
     },
+    shapeSelection: {
+      getSelectedShapes: vi.fn().mockReturnValue([{ id: 'a' }, { id: 'b' }])
+    },
+    editorHistory: {
+      pushAndExecute: vi.fn()
+    }
+  };
+  return {
+    doc,
+    transformDoc: doc,
     pointer: {
       cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() },
       highlightOverlayContainer: signal(undefined),
@@ -63,7 +65,7 @@ describe('DragGesture', () => {
   });
 
   it('start returns false when there is no SVG instance', () => {
-    (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    (ctx.transformDoc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
     const ok = gesture.start(
       ctx,
       ['a', 'b'],
@@ -85,7 +87,7 @@ describe('DragGesture', () => {
     );
     expect(ok).toBe(true);
     expect(gesture.isActive).toBe(true);
-    expect(ctx.doc.svgManipulation.setShapeVisibility).toHaveBeenCalled();
+    expect(ctx.transformDoc.svgManipulation.setShapeVisibility).toHaveBeenCalled();
   });
 
   it('end pushes translate command and clears active state', () => {
@@ -100,7 +102,7 @@ describe('DragGesture', () => {
     ).toBe(true);
     gesture.move(ctx, 10, 10, false);
     gesture.end(ctx, 10, 10, false);
-    expect(ctx.doc.editorHistory.pushAndExecute).toHaveBeenCalled();
+    expect(ctx.transformDoc.editorHistory.pushAndExecute).toHaveBeenCalled();
     expect(gesture.isActive).toBe(false);
   });
 
@@ -115,7 +117,7 @@ describe('DragGesture', () => {
       )
     ).toBe(true);
     gesture.cancel(ctx);
-    expect(ctx.doc.editorHistory.pushAndExecute).not.toHaveBeenCalled();
+    expect(ctx.transformDoc.editorHistory.pushAndExecute).not.toHaveBeenCalled();
     expect(gesture.isActive).toBe(false);
   });
 });

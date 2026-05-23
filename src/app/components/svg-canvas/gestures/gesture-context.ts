@@ -22,6 +22,17 @@ export interface DocumentSelectionPort {
   editorHistory: EditorHistoryService;
 }
 
+/**
+ * **Document** + **Selection** + **History** for translate / resize / rotate / skew gestures only.
+ * Today mirrors {@link DocumentSelectionPort}; later refactors narrow this **interface** while
+ * creation and marquee keep using `doc`.
+ */
+export interface TransformGestureDocPort {
+  svgManipulation: SvgManipulationService;
+  shapeSelection: ShapeSelectionService;
+  editorHistory: EditorHistoryService;
+}
+
 /** Snap policy for pointer gestures. */
 export interface SnapSessionPort {
   snap: SnapService;
@@ -33,6 +44,8 @@ export interface SnapSessionPort {
 export interface GestureRuntimeContext {
   pointer: PointerOverlayPort;
   doc: DocumentSelectionPort;
+  /** Drag / resize / rotate / skew: use this instead of {@link DocumentSelectionPort} on `doc`. */
+  transformDoc: TransformGestureDocPort;
   snap: SnapSessionPort;
 }
 

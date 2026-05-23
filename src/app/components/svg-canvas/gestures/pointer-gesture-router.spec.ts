@@ -13,6 +13,7 @@ import { DragGesture } from './drag-gesture';
 const emptyRt = {
   pointer: {} as GestureRuntimeContext['pointer'],
   doc: {} as GestureRuntimeContext['doc'],
+  transformDoc: {} as GestureRuntimeContext['transformDoc'],
   snap: {} as GestureRuntimeContext['snap']
 };
 

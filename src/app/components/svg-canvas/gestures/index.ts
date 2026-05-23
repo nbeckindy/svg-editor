@@ -2,6 +2,7 @@ export type {
   GestureRuntimeContext,
   PointerOverlayPort,
   DocumentSelectionPort,
+  TransformGestureDocPort,
   SnapSessionPort,
   GhostPreviewFragment,
   Rect,

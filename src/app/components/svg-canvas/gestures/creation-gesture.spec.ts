@@ -5,24 +5,26 @@ import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import type { GestureRuntimeContext } from './gesture-context';
 
 function createMockGestureRuntimeContext(): GestureRuntimeContext {
-  return {
-    doc: {
-      svgManipulation: {
-        getSVGInstance: vi.fn(),
-        addShape: vi.fn(),
-        getShapeProperties: vi.fn().mockReturnValue({ id: 'shape-1', type: 'rect' }),
-        getShapeBBox: vi.fn().mockReturnValue({ x: 10, y: 20, width: 50, height: 30 }),
-        removeShape: vi.fn(),
-        insertShapeMarkup: vi.fn()
-      },
-      shapeSelection: {
-        selectShapes: vi.fn(),
-        clearSelection: vi.fn()
-      },
-      editorHistory: {
-        pushAndExecute: vi.fn()
-      }
+  const doc = {
+    svgManipulation: {
+      getSVGInstance: vi.fn(),
+      addShape: vi.fn(),
+      getShapeProperties: vi.fn().mockReturnValue({ id: 'shape-1', type: 'rect' }),
+      getShapeBBox: vi.fn().mockReturnValue({ x: 10, y: 20, width: 50, height: 30 }),
+      removeShape: vi.fn(),
+      insertShapeMarkup: vi.fn()
     },
+    shapeSelection: {
+      selectShapes: vi.fn(),
+      clearSelection: vi.fn()
+    },
+    editorHistory: {
+      pushAndExecute: vi.fn()
+    }
+  };
+  return {
+    doc,
+    transformDoc: doc,
     pointer: {
       cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() },
       highlightOverlayContainer: signal(undefined),

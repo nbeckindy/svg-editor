@@ -61,6 +61,12 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
   const selectionMarquee = new SelectionMarqueeGesture();
   const zoomMarquee = new ZoomMarqueeGesture();
 
+  const doc = {
+    svgManipulation: args.svgManipulation,
+    shapeSelection: args.shapeSelection,
+    editorHistory: args.editorHistory
+  };
+
   const gestureRuntime: GestureRuntimeContext = {
     pointer: {
       cdr: args.cdr,
@@ -70,11 +76,8 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
       invalidateHighlightCache: () => args.invalidateHighlightCache(),
       setLastBbox: (bbox) => args.setLastBbox(bbox)
     },
-    doc: {
-      svgManipulation: args.svgManipulation,
-      shapeSelection: args.shapeSelection,
-      editorHistory: args.editorHistory
-    },
+    doc,
+    transformDoc: doc,
     snap: {
       snap: args.snap,
       getSmartGuideCandidates: () => args.getSmartGuideCandidates(),

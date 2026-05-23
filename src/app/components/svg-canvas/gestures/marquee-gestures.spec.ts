@@ -5,22 +5,24 @@ import { ZoomMarqueeGesture } from './zoom-marquee-gesture';
 import type { GestureRuntimeContext } from './gesture-context';
 
 function createContext(): GestureRuntimeContext {
-  return {
-    doc: {
-      svgManipulation: {
-        getShapePropertiesIntersectingRect: vi.fn(),
-        expandSelectionByClipGroups: vi.fn((hits) => hits),
-        clearHighlight: vi.fn()
-      },
-      shapeSelection: {
-        mergeShapesIntoSelection: vi.fn(),
-        selectShapes: vi.fn(),
-        clearSelection: vi.fn()
-      },
-      editorHistory: {
-        pushAndExecute: vi.fn()
-      }
+  const doc = {
+    svgManipulation: {
+      getShapePropertiesIntersectingRect: vi.fn(),
+      expandSelectionByClipGroups: vi.fn((hits) => hits),
+      clearHighlight: vi.fn()
     },
+    shapeSelection: {
+      mergeShapesIntoSelection: vi.fn(),
+      selectShapes: vi.fn(),
+      clearSelection: vi.fn()
+    },
+    editorHistory: {
+      pushAndExecute: vi.fn()
+    }
+  };
+  return {
+    doc,
+    transformDoc: doc,
     pointer: {
       cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() } as never,
       highlightOverlayContainer: signal(undefined),

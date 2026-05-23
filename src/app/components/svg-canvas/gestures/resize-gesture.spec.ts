@@ -5,23 +5,25 @@ import { GhostSession } from './ghost-session';
 import type { GestureRuntimeContext } from './gesture-context';
 
 function createResizeContext(): GestureRuntimeContext {
-  return {
-    doc: {
-      svgManipulation: {
-        getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
-        snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
-        snapshotVectorEffectsForShapes: vi.fn().mockReturnValue(new Map()),
-        setShapeVisibility: vi.fn(),
-        getSVGInstance: vi.fn().mockReturnValue({}),
-        getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids)
-      },
-      shapeSelection: {
-        getSelectedShapes: vi.fn().mockReturnValue([{ id: 'shape-a' }])
-      },
-      editorHistory: {
-        pushAndExecute: vi.fn()
-      }
+  const doc = {
+    svgManipulation: {
+      getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
+      snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
+      snapshotVectorEffectsForShapes: vi.fn().mockReturnValue(new Map()),
+      setShapeVisibility: vi.fn(),
+      getSVGInstance: vi.fn().mockReturnValue({}),
+      getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids)
     },
+    shapeSelection: {
+      getSelectedShapes: vi.fn().mockReturnValue([{ id: 'shape-a' }])
+    },
+    editorHistory: {
+      pushAndExecute: vi.fn()
+    }
+  };
+  return {
+    doc,
+    transformDoc: doc,
     pointer: {
       cdr: { detectChanges: vi.fn(), markForCheck: vi.fn() },
       highlightOverlayContainer: signal(undefined),
@@ -59,20 +61,20 @@ describe('ResizeGesture', () => {
   });
 
   it('start returns false when nothing is selected', () => {
-    (ctx.doc.shapeSelection.getSelectedShapes as ReturnType<typeof vi.fn>).mockReturnValue([]);
+    (ctx.transformDoc.shapeSelection.getSelectedShapes as ReturnType<typeof vi.fn>).mockReturnValue([]);
     const ok = gesture.start(ctx, 'se', { clientX: 0, clientY: 0 } as MouseEvent);
     expect(ok).toBe(false);
     expect(gesture.isActive).toBe(false);
   });
 
   it('start returns false when union bbox is unavailable', () => {
-    (ctx.doc.svgManipulation.getUnionBBox as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    (ctx.transformDoc.svgManipulation.getUnionBBox as ReturnType<typeof vi.fn>).mockReturnValue(null);
     const ok = gesture.start(ctx, 'se', { clientX: 0, clientY: 0 } as MouseEvent);
     expect(ok).toBe(false);
   });
 
   it('start returns false when SVG instance is missing', () => {
-    (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
+    (ctx.transformDoc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue(null);
     const ok = gesture.start(ctx, 'se', { clientX: 0, clientY: 0 } as MouseEvent);
     expect(ok).toBe(false);
   });
@@ -87,6 +89,6 @@ describe('ResizeGesture', () => {
     const ok = gesture.start(ctx, 'se', { clientX: 0, clientY: 0 } as MouseEvent);
     expect(ok).toBe(true);
     expect(gesture.isActive).toBe(true);
-    expect(ctx.doc.svgManipulation.setShapeVisibility).toHaveBeenCalled();
+    expect(ctx.transformDoc.svgManipulation.setShapeVisibility).toHaveBeenCalled();
   });
 });
