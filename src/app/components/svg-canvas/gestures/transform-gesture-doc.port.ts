@@ -10,7 +10,8 @@ type BBox = { x: number; y: number; width: number; height: number };
 /**
  * Narrow **seam** for drag / resize / rotate / skew: common reads + **History** commits.
  * {@link DefaultTransformGestureDoc.svgManipulation} remains for **EditorCommand** constructors
- * and {@link GhostSession} until those accept a smaller type.
+ * until those accept a smaller type. Union ghost preview uses only `getSVGInstance` and
+ * `getShapeIdsInDomOrder` (see `GhostUnionSvgPort` in `ghost-session.ts`).
  */
 export interface TransformGestureDocPort {
   readonly svgManipulation: SvgManipulationService;

@@ -55,7 +55,7 @@ export class ResizeGesture {
     if (!svgInstance) {
       return false;
     }
-    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.transformDoc.svgManipulation, union, selectedIds);
+    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.transformDoc, union, selectedIds);
     if (this.ghostFragments.length === 0) {
       return false;
     }

@@ -53,7 +53,7 @@ export class SkewGesture {
       return false;
     }
 
-    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.transformDoc.svgManipulation, union, selectedIds);
+    this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.transformDoc, union, selectedIds);
     if (this.ghostFragments.length === 0) {
       this.reset();
       return false;

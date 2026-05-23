@@ -1,6 +1,12 @@
 import { SVG, Svg, Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
 import type { GhostPreviewFragment, Rect } from './gesture-context';
 
+/** Narrow read model for {@link GhostSession.buildFragmentsForUnion} (no full manipulation façade). */
+export interface GhostUnionSvgPort {
+  getSVGInstance(): Svg | null;
+  getShapeIdsInDomOrder(ids: string[]): string[];
+}
+
 const GHOST_SVG_MIN_PX = 1e-6;
 const EDITOR_GHOST_ATTR = 'data-editor-ghost';
 
@@ -162,17 +168,17 @@ export class GhostSession {
   }
 
   buildFragmentsForUnion(
-    svgManipulation: { getSVGInstance(): Svg | null; getShapeIdsInDomOrder(ids: string[]): string[] },
+    svg: GhostUnionSvgPort,
     unionBbox: Rect,
     selectedIds: string[]
   ): GhostPreviewFragment[] {
-    const svgInstance = svgManipulation.getSVGInstance();
+    const svgInstance = svg.getSVGInstance();
     if (!svgInstance) return [];
     const rootSvg = svgInstance.node as SVGSVGElement;
     const contentGroupEl = this.getContentGroupEl(svgInstance);
     if (!contentGroupEl) return [];
 
-    const orderedIds = svgManipulation.getShapeIdsInDomOrder(selectedIds);
+    const orderedIds = svg.getShapeIdsInDomOrder(selectedIds);
     const unionUrlRefs = new Set<string>();
     const builtList: { id: string; subtree: Element; urlRefs: Set<string> }[] = [];
 

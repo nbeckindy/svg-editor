@@ -13,7 +13,7 @@ export {
   createDefaultTransformGestureDoc
 } from './transform-gesture-doc.port';
 export { PointerGestureRouter, type SvgCanvasPointerGestureHost } from './pointer-gesture-router';
-export { GhostSession } from './ghost-session';
+export { GhostSession, type GhostUnionSvgPort } from './ghost-session';
 export { DragGesture } from './drag-gesture';
 export { ResizeGesture } from './resize-gesture';
 export { RotateGesture } from './rotate-gesture';

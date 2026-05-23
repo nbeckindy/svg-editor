@@ -70,7 +70,7 @@ export class DragGesture {
         }
         this.startBbox = unionBbox;
         this.overlayRect = ctx.pointer.svgBboxToOverlayPixels(unionBbox);
-        this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.transformDoc.svgManipulation, unionBbox, selectedIds);
+        this.ghostFragments = this.ghost.buildFragmentsForUnion(ctx.transformDoc, unionBbox, selectedIds);
         ctx.pointer.cdr.detectChanges();
       }
 
