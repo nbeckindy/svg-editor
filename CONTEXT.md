@@ -84,6 +84,24 @@ _Avoid_: Using **Canvas adapter** when you mean the **Canvas** viewport alone; n
 - **History** records applied edits and their inverses; undo/redo walks those stacks and mutates the **Live tree** (and may change **Selection** or **Layer** order as a side effect).
 - The pen **Tool** routes through a **Canvas adapter** into **PenToolSession**, which owns **Pen authoring session** policy while mutating or reading a **PenSession** model; **PenToolSession** uses **Ports** to touch **History**, **Selection**, and svg.js—not the full widget tree.
 
+## Shell UI (thin **Chrome**)
+
+The workspace **Chrome** around the **Canvas** includes intentionally shallow components: the tool strip, the tool context bar (per-**Tool** options above the workspace), the right inspector dock (properties vs layers tabs), and the shared `EditorDockPanel` tab type. They are not **Editor chrome** (handles, guides, marquee on the drawing surface) but they are **Chrome** in this glossary.
+
+**Single-layout wiring today**
+
+- **`EditorRightDockComponent`** follows a parent-owned seam: `activeDockPanel` and `dockCollapsed` are passed in with `input()` / `output()` from the app shell; the dock only forwards tab clicks and collapse/expand. That pattern is the reference if a second layout (alternate shell, embedded editor) needs the same inspector contract without duplicating state.
+- **`ToolStripComponent`** and **`EditorToolContextBarComponent`** call **`EditorToolService`** directly (constructor injection or `inject()`). That is appropriate while there is only one shell: there is no duplicated forwarding to deduplicate, and extracting `input()` / `output()` boundaries would add noise without a second consumer.
+- **`editor-dock-panel.ts`** holds the `'properties' | 'layers'` union only; extend it when new dock tabs are real product requirements, not preemptively.
+
+**When to deepen**
+
+Revisit tool strip / context bar seams (e.g. mirror the right-dock `input`/`output` style, or a tiny chrome-facing slice next to **`EditorToolService`**) only when a **second adapter** needs the same tool or pen-option contract—reuse in another route, compact layout, or tests that must mock **Tool** state at the template boundary without providing the full service graph.
+
+**Stable anchors**
+
+Shell templates expose `data-testid` on major regions (e.g. tool strip, right dock, tool context bar). Renaming or removing those nodes is a deliberate breaking change for automated regional layout checks; update snapshot baselines when the shell’s pixels are meant to change.
+
 ## Example dialogue
 
 > **Dev:** "Should we document our Playwright page objects in CONTEXT?"
