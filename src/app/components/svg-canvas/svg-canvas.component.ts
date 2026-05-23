@@ -38,7 +38,6 @@ import {
   PasteCommand,
   DuplicateCommand,
   TextContentCommand,
-  buildReorderToExtremeCommand
 } from '../../models/editor-commands';
 import {
   DragGesture,
@@ -54,6 +53,7 @@ import {
   type SvgCanvasPointerGestureHost
 } from './gestures';
 import { PenToolSession, type PenToolSessionPorts } from './pen-tool-session/pen-tool-session';
+import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
 import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
 import { insertPenNodeOnParsedPath } from '../../models/path-pen-insert';
@@ -924,217 +924,71 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return this.shapeSelection.getSelectedShapes().map((s) => s.id);
   }
 
-  // --- Keyboard shortcuts ---
+  // --- Keyboard shortcuts (policy in `svg-canvas-keyboard.controller.ts`) ---
   onKeyDown(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
-    if (event.key === 'Escape' && this.commitInlineTextEditIfActive()) {
-      event.preventDefault();
-      return;
-    }
-    if (this.shouldIgnoreKeyboardShortcuts(event)) return;
+    handleSvgCanvasKeyDown(this.buildSvgCanvasKeyboardContext(), event, this.editorTool);
+  }
 
-    const selectorActive = this.editorTool.getCurrentTool() === 'selector';
-
-    if (event.key === 'Escape') {
-      if (this.isDraggingShape) {
-        this.drag.cancel(this.gestureRuntime);
-        event.preventDefault();
-        return;
-      }
-      if (this.isResizingSelection) {
-        this.resize.cancel(this.gestureRuntime);
-        event.preventDefault();
-        return;
-      }
-      if (this.isSkewingSelection) {
-        this.skew.cancel(this.gestureRuntime);
-        event.preventDefault();
-        return;
-      }
-      if (this.isRotatingSelection) {
-        this.rotate.cancel(this.gestureRuntime);
-        event.preventDefault();
-        return;
-      }
-      if (this.isSelectionMarquee || this.isZoomMarquee) {
-        this.cancelActiveMarquees();
-        event.preventDefault();
-        return;
-      }
-      if (this.exitPathNodeEditMode()) {
-        event.preventDefault();
-        return;
-      }
-      if (this.editorTool.getCurrentTool() === 'eyedropper') {
-        this.editorTool.setTool('selector');
-        event.preventDefault();
-        this.cdr.markForCheck();
-        return;
-      }
-      if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
-        this.penTool.clearDrawingState();
-        event.preventDefault();
-        return;
-      }
-      if (this.shapeSelection.getSelectedShapes().length > 0) {
+  /** Builds the keyboard **seam** for {@link handleSvgCanvasKeyDown} — keeps the **Canvas adapter** thin. */
+  private buildSvgCanvasKeyboardContext(): SvgCanvasKeyboardContext {
+    return {
+      gestureRuntime: this.gestureRuntime,
+      svgManipulation: this.svgManipulation,
+      shapeSelection: this.shapeSelection,
+      editorHistory: this.editorHistory,
+      cdr: this.cdr,
+      drag: this.drag,
+      resize: this.resize,
+      skew: this.skew,
+      rotate: this.rotate,
+      selectionMarquee: this.selectionMarquee,
+      zoomMarquee: this.zoomMarquee,
+      penTool: this.penTool,
+      getSvgContent: () => this.svgContent(),
+      getCurrentTool: () => this.editorTool.getCurrentTool(),
+      isSelectorActive: () => this.editorTool.getCurrentTool() === 'selector',
+      commitInlineTextEditIfActive: () => this.commitInlineTextEditIfActive(),
+      shouldIgnoreKeyboardShortcuts: (e: KeyboardEvent) => this.shouldIgnoreKeyboardShortcuts(e),
+      isDraggingShape: () => this.isDraggingShape,
+      isResizingSelection: () => this.isResizingSelection,
+      isSkewingSelection: () => this.isSkewingSelection,
+      isRotatingSelection: () => this.isRotatingSelection,
+      isSelectionMarquee: () => this.isSelectionMarquee,
+      isZoomMarquee: () => this.isZoomMarquee,
+      isPenSessionActive: () => this.isPenSessionActive,
+      cancelActiveMarquees: () => this.cancelActiveMarquees(),
+      exitPathNodeEditMode: () => this.exitPathNodeEditMode(),
+      clearSelectionAndHighlight: () => {
         this.shapeSelection.clearSelection();
         this.svgManipulation.clearHighlight();
-        this.drilledIntoGroupId = null;
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (event.key === 'Enter') {
-      if (this.editorTool.getCurrentTool() === 'pen' && this.isPenSessionActive) {
-        this.penTool.tryFinishPenPath(false);
-        event.preventDefault();
-        return;
-      }
-    }
-
-    if (event.key === 'Backspace' && this.penTool.tryPenBackspaceShortcut()) {
-      event.preventDefault();
-      return;
-    }
-
-    if (this.tryEditorToolShortcut(event)) {
-      return;
-    }
-
-    if (!this.svgContent()) return;
-
-    const mod = event.ctrlKey || event.metaKey;
-
-    if (mod && (event.key === 'z' || event.key === 'Z') && !event.shiftKey) {
-      this.editorHistory.undo();
-      event.preventDefault();
-      return;
-    }
-    if (mod && ((event.key === 'z' || event.key === 'Z') && event.shiftKey || event.key === 'y' || event.key === 'Y')) {
-      this.editorHistory.redo();
-      event.preventDefault();
-      return;
-    }
-
-    if (selectorActive && mod && (event.key === 'a' || event.key === 'A')) {
-      this.selectAllShapesFromDocument();
-      event.preventDefault();
-      return;
-    }
-
-    if (selectorActive && mod && (event.key === 'c' || event.key === 'C')) {
-      this.copySelectionToClipboard();
-      event.preventDefault();
-      return;
-    }
-
-    if (selectorActive && mod && (event.key === 'x' || event.key === 'X')) {
-      if (this.cutSelectionToClipboard()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (selectorActive && mod && (event.key === 'v' || event.key === 'V')) {
-      if (this.pasteFromClipboard()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (selectorActive && mod && (event.key === 'd' || event.key === 'D')) {
-      if (this.duplicateSelection()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (selectorActive && mod && event.shiftKey && this.handleAlignmentShortcut(event.key)) {
-      event.preventDefault();
-      return;
-    }
-
-    if (selectorActive && mod && (event.key === 'g' || event.key === 'G') && !event.shiftKey) {
-      this.groupSelectedShapes();
-      event.preventDefault();
-      return;
-    }
-
-    if (selectorActive && mod && (event.key === 'g' || event.key === 'G') && event.shiftKey) {
-      this.ungroupSelectedShape();
-      event.preventDefault();
-      return;
-    }
-
-    // Z-order: `]` bring to front, `[` send to back (selector only, plain keys — no Cmd/Ctrl so we
-    // do not clash with Ctrl/Cmd+Shift+Arrow alignment shortcuts). Cmd/Ctrl+Shift+Up/Down would be
-    // an alternative; brackets match common design-tool muscle memory. Multi-select order is
-    // handled in `buildReorderToExtremeCommand`.
-    if (selectorActive && !mod && (event.key === ']' || event.key === '[')) {
-      const direction = event.key === ']' ? 'front' : 'back';
-      const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-      const cmd = buildReorderToExtremeCommand(this.svgManipulation, ids, direction);
-      if (cmd) {
-        this.editorHistory.pushAndExecute(cmd);
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (mod && (event.key === '+' || event.key === '=' || event.code === 'NumpadAdd')) {
-      this.zoomInAtViewportCenter();
-      event.preventDefault();
-      return;
-    }
-
-    if (mod && (event.key === '-' || event.code === 'NumpadSubtract')) {
-      this.zoomOutAtViewportCenter();
-      event.preventDefault();
-      return;
-    }
-
-    if (mod && event.key === '0') {
-      this.canvasView.resetZoom();
-      this.updateViewBoxOverlayRect();
-      this.cdr.detectChanges();
-      event.preventDefault();
-      return;
-    }
-
-    if (mod && event.key === '1') {
-      this.fitArtboardToViewport();
-      event.preventDefault();
-      return;
-    }
-
-    if (mod && event.key === '2') {
-      this.fitContentToViewport();
-      event.preventDefault();
-      return;
-    }
-
-    if (
-      this.pathNodeEditState &&
-      (event.key === 'Delete' || event.key === 'Backspace')
-    ) {
-      if (this.tryDeleteSelectedPathNode()) {
-        event.preventDefault();
-      }
-      return;
-    }
-
-    if (
-      selectorActive &&
-      (event.key === 'Delete' || event.key === 'Backspace') &&
-      this.shapeSelection.getSelectedShapes().length > 0
-    ) {
-      const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-      const cmd = new RemoveShapesCommand(this.svgManipulation, ids, this.shapeSelection);
-      this.editorHistory.pushAndExecute(cmd);
-      this.svgManipulation.clearHighlight();
-      event.preventDefault();
-    }
+      },
+      setDrilledIntoGroupId: (id: string | null) => {
+        this.drilledIntoGroupId = id;
+      },
+      setTool: (tool: EditorTool) => this.editorTool.setTool(tool),
+      markForCheck: () => this.cdr.markForCheck(),
+      selectAllShapesFromDocument: () => this.selectAllShapesFromDocument(),
+      copySelectionToClipboard: () => this.copySelectionToClipboard(),
+      cutSelectionToClipboard: () => this.cutSelectionToClipboard(),
+      pasteFromClipboard: () => this.pasteFromClipboard(),
+      duplicateSelection: () => this.duplicateSelection(),
+      groupSelectedShapes: () => this.groupSelectedShapes(),
+      ungroupSelectedShape: () => this.ungroupSelectedShape(),
+      zoomInAtViewportCenter: () => this.zoomInAtViewportCenter(),
+      zoomOutAtViewportCenter: () => this.zoomOutAtViewportCenter(),
+      resetZoomAndRefreshOverlay: () => {
+        this.canvasView.resetZoom();
+        this.updateViewBoxOverlayRect();
+        this.cdr.detectChanges();
+      },
+      fitArtboardToViewport: () => this.fitArtboardToViewport(),
+      fitContentToViewport: () => this.fitContentToViewport(),
+      updateViewBoxOverlayRect: () => this.updateViewBoxOverlayRect(),
+      getPathNodeEditState: () => this.pathNodeEditState,
+      tryDeleteSelectedPathNode: () => this.tryDeleteSelectedPathNode(),
+      handleAlignmentShortcut: (key: string) => this.handleAlignmentShortcut(key)
+    };
   }
 
   onKeyUp(event: KeyboardEvent): void {
@@ -1166,38 +1020,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     if (t.isContentEditable) return true;
     const tag = t.tagName;
     return tag === 'INPUT' || tag === 'TEXTAREA' || tag === 'SELECT';
-  }
-
-  /**
-   * Single-key tool switching (no modifiers). V/A/P/R/O/L/T/H/Z/I match common vector editors;
-   * B is reserved (brush) until implemented.
-   */
-  private tryEditorToolShortcut(event: KeyboardEvent): boolean {
-    if (event.ctrlKey || event.metaKey || event.altKey) return false;
-    if (event.key.length !== 1) return false;
-    const key = event.key.toLowerCase();
-    const toolByKey: Record<string, EditorTool | 'reserved'> = {
-      v: 'selector',
-      a: 'node-edit-selector',
-      p: 'pen',
-      b: 'reserved',
-      r: 'rect',
-      o: 'ellipse',
-      l: 'line',
-      t: 'text',
-      h: 'pan',
-      z: 'zoom',
-      i: 'eyedropper'
-    };
-    const dest = toolByKey[key];
-    if (!dest) return false;
-    event.preventDefault();
-    if (dest === 'reserved') {
-      return true;
-    }
-    this.editorTool.setTool(dest);
-    this.cdr.detectChanges();
-    return true;
   }
 
   private zoomInAtViewportCenter(): void {
