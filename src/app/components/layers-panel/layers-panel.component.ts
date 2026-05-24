@@ -2,7 +2,9 @@ import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
-import { LayerTreeNode, SvgManipulationService } from '../../services/svg-manipulation.service';
+import { LayerTreeNode } from '../../services/svg-layer-structure.port';
+import type { LayersPanelSvgPort } from '../../history/layers-panel-svg.port';
+import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import {
   ReorderCommand,
@@ -41,7 +43,7 @@ interface PreviewPaintData {
   styleUrl: './layers-panel.component.css'
 })
 export class LayersPanelComponent {
-  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly svg: LayersPanelSvgPort = inject(SvgManipulationService);
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly editorHistory = inject(EditorHistoryService);
 
@@ -55,8 +57,8 @@ export class LayersPanelComponent {
   });
 
   readonly flattenedLayers = computed<LayerTreeViewModel[]>(() => {
-    this.svgManipulation.documentRevision();
-    const tree = this.svgManipulation.getLayerTree();
+    this.svg.documentRevision();
+    const tree = this.svg.getLayerTree();
     const selectedIds = new Set(this.shapeSelection.selectedShapes().map((s) => s.id));
     const collapsed = this.collapsedGroups();
     return this.flattenTree(tree, 0, collapsed, selectedIds, false);
@@ -76,29 +78,29 @@ export class LayersPanelComponent {
 
   onVisibilityToggle(layerId: string): void {
     this.editorHistory.pushAndExecute(
-      new ToggleVisibilityCommand(this.svgManipulation, layerId)
+      new ToggleVisibilityCommand(this.svg, layerId)
     );
   }
 
   onMoveForward(layerId: string): void {
     this.editorHistory.pushAndExecute(
-      new ReorderCommand(this.svgManipulation, layerId, 'forward')
+      new ReorderCommand(this.svg, layerId, 'forward')
     );
   }
 
   onMoveBackward(layerId: string): void {
     this.editorHistory.pushAndExecute(
-      new ReorderCommand(this.svgManipulation, layerId, 'backward')
+      new ReorderCommand(this.svg, layerId, 'backward')
     );
   }
 
   onMoveToFront(layerId: string): void {
-    const cmd = buildReorderToExtremeCommand(this.svgManipulation, [layerId], 'front');
+    const cmd = buildReorderToExtremeCommand(this.svg, [layerId], 'front');
     if (cmd) this.editorHistory.pushAndExecute(cmd);
   }
 
   onMoveToBack(layerId: string): void {
-    const cmd = buildReorderToExtremeCommand(this.svgManipulation, [layerId], 'back');
+    const cmd = buildReorderToExtremeCommand(this.svg, [layerId], 'back');
     if (cmd) this.editorHistory.pushAndExecute(cmd);
   }
 
@@ -106,14 +108,14 @@ export class LayersPanelComponent {
     const selected = this.shapeSelection.selectedShapes();
     if (selected.length < 2) return;
     const ids = selected.map((s) => s.id);
-    const cmd = new GroupCommand(this.svgManipulation, ids);
+    const cmd = new GroupCommand(this.svg, ids);
     this.editorHistory.pushAndExecute(cmd);
     const newGroupId = cmd.createdGroupId;
     if (newGroupId) {
-      const svg = this.svgManipulation.getSVGInstance();
+      const svg = this.svg.getSVGInstance();
       const groupEl = svg?.findOne(`#${newGroupId}`) as SvgJsElement | undefined;
       if (groupEl) {
-        const groupProps = this.svgManipulation.getShapeProperties(groupEl);
+        const groupProps = this.svg.getShapeProperties(groupEl);
         this.shapeSelection.selectShapes([groupProps]);
       }
     }
@@ -124,14 +126,14 @@ export class LayersPanelComponent {
     const groupIds = selected.filter((s) => s.type === 'g').map((s) => s.id);
     if (groupIds.length === 0) return;
 
-    const svg = this.svgManipulation.getSVGInstance();
+    const svg = this.svg.getSVGInstance();
     if (!svg) return;
 
     const selectFreedChildren = (childIds: string[]): void => {
       const shapes = childIds
         .map((id) => svg.findOne(`#${id}`) as SvgJsElement | null)
         .filter((el): el is SvgJsElement => el != null)
-        .map((el) => this.svgManipulation.getShapeProperties(el));
+        .map((el) => this.svg.getShapeProperties(el));
       if (shapes.length > 0) {
         this.shapeSelection.selectShapes(shapes);
       } else {
@@ -148,23 +150,23 @@ export class LayersPanelComponent {
           if (child.id) childIds.push(child.id);
         }
       }
-      this.editorHistory.pushAndExecute(new UngroupCommand(this.svgManipulation, groupId));
+      this.editorHistory.pushAndExecute(new UngroupCommand(this.svg, groupId));
       selectFreedChildren(childIds);
     } else {
-      const multi = new UngroupElementsCommand(this.svgManipulation, groupIds);
+      const multi = new UngroupElementsCommand(this.svg, groupIds);
       this.editorHistory.pushAndExecute(multi);
       selectFreedChildren(multi.ungroupedChildIds);
     }
   }
 
   onLayerClick(layerId: string, event?: MouseEvent): void {
-    const svgInstance = this.svgManipulation.getSVGInstance();
+    const svgInstance = this.svg.getSVGInstance();
     if (!svgInstance) return;
     const shape = svgInstance.findOne(`#${layerId}`) as SvgJsElement | null;
     if (!shape) return;
 
     const additive = Boolean(event?.shiftKey || event?.ctrlKey || event?.metaKey);
-    const tree = this.svgManipulation.getLayerTree();
+    const tree = this.svg.getLayerTree();
     const node = this.findNodeInTree(tree, layerId);
     const isGroup = node?.type === 'g' && Array.isArray(node.children);
 
@@ -173,7 +175,7 @@ export class LayersPanelComponent {
       const leafShapes = leafIds
         .map((id) => svgInstance.findOne(`#${id}`) as SvgJsElement | null)
         .filter((el): el is SvgJsElement => el != null)
-        .map((el) => this.svgManipulation.getShapeProperties(el));
+        .map((el) => this.svg.getShapeProperties(el));
 
       if (additive) {
         this.shapeSelection.toggleShapeGroupInSelection(leafShapes);
@@ -181,7 +183,7 @@ export class LayersPanelComponent {
         this.shapeSelection.selectShapes(leafShapes);
       }
     } else {
-      const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(shape);
+      const expanded = this.svg.getShapePropertiesInSameClipGroup(shape);
       if (expanded.length === 0) return;
       if (additive) {
         this.shapeSelection.toggleShapeGroupInSelection(expanded);

@@ -13,4 +13,13 @@ export type { SelectionTransformReadoutSvgPort } from '../history/selection-tran
 export type { DocumentArtboardCommandSvgPort, DocumentSettingsSvgPort } from '../history/document-settings-svg.port';
 export type { SvgDebugPanelSvgPort, AppRootSvgManipulationPort } from '../history/editor-chrome-svg.port';
 export type { GradientFillSnapshotSvgPort, GradientFillEditorSvgPort } from '../history/gradient-fill-editor-svg.port';
+export type { LayerReorderGroupSvgPort, LayersPanelSvgPort } from '../history/layers-panel-svg.port';
+export type { AlignDistributeSvgPort } from '../history/align-distribute-svg.port';
+export type {
+  PropertiesPanelTextSvgPort,
+  BakePresentationSvgPort,
+  BakedFillBefore,
+  BakedStrokeBefore,
+  PropertiesPanelSvgPort
+} from '../history/properties-panel-svg.port';
 export * from '../history/commands/editor-command-implementations';

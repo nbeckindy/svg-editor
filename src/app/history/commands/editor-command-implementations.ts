@@ -16,6 +16,9 @@ import type { TransformGestureSvgPort } from '../transform-gesture-svg.port';
 import type { SelectionPaintStrokeDashSvgPort } from '../selection-paint-apply-svg.port';
 import type { DocumentArtboardCommandSvgPort } from '../document-settings-svg.port';
 import type { GradientFillSnapshotSvgPort } from '../gradient-fill-editor-svg.port';
+import type { LayerReorderGroupSvgPort } from '../layers-panel-svg.port';
+import type { AlignDistributeSvgPort } from '../align-distribute-svg.port';
+import type { PropertiesPanelTextSvgPort, BakePresentationSvgPort } from '../properties-panel-svg.port';
 
 export class FillColorCommand implements CoalesceableCommand {
   readonly description: string;
@@ -354,7 +357,7 @@ export class AlignCommand implements EditorCommand {
   private readonly composite: CompositeCommand;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: AlignDistributeSvgPort,
     shapeIds: string[],
     private readonly direction: AlignmentDirection,
     private readonly preferScreenBounds = true
@@ -437,7 +440,7 @@ export class DistributeCommand implements EditorCommand {
   private readonly composite: CompositeCommand;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: AlignDistributeSvgPort,
     shapeIds: string[],
     private readonly direction: DistributeDirection,
     private readonly preferScreenBounds = true
@@ -697,7 +700,7 @@ export class ReorderCommand implements EditorCommand {
   private oldIndex: number = -1;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: LayerReorderGroupSvgPort,
     private readonly elementId: string,
     private readonly direction: ReorderDirection
   ) {
@@ -759,7 +762,7 @@ export class ReorderCommand implements EditorCommand {
  * - `back`: descending index (move front-most selected nodes first toward back).
  */
 export function buildReorderToExtremeCommand(
-  svc: SvgManipulationService,
+  svc: LayerReorderGroupSvgPort,
   elementIds: string[],
   direction: 'front' | 'back'
 ): EditorCommand | null {
@@ -807,7 +810,7 @@ export class ToggleVisibilityCommand implements EditorCommand {
   readonly description = 'Toggle visibility';
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: LayerReorderGroupSvgPort,
     private readonly elementId: string
   ) {}
 
@@ -825,7 +828,7 @@ export class GroupCommand implements EditorCommand {
   private groupId: string | null = null;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: LayerReorderGroupSvgPort,
     private readonly elementIds: string[]
   ) {}
 
@@ -851,7 +854,7 @@ export class UngroupCommand implements EditorCommand {
   private childIds: string[] = [];
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: LayerReorderGroupSvgPort,
     private readonly groupId: string
   ) {}
 
@@ -872,7 +875,7 @@ export class UngroupElementsCommand implements EditorCommand {
   private allChildElementIds: string[] = [];
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: LayerReorderGroupSvgPort,
     private readonly groupIds: string[]
   ) {}
 
@@ -911,7 +914,7 @@ export class BakeFillCommand implements EditorCommand {
   private readonly before: FillSnapshot;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: BakePresentationSvgPort,
     private readonly shapeId: string
   ) {
     const svgInstance = this.svc.getSVGInstance();
@@ -947,7 +950,7 @@ export class BakeStrokeCommand implements EditorCommand {
   private readonly before: StrokeSnapshot;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: BakePresentationSvgPort,
     private readonly shapeId: string
   ) {
     const svgInstance = this.svc.getSVGInstance();
@@ -1384,7 +1387,7 @@ export class FontCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: PropertiesPanelTextSvgPort,
     private readonly textId: string,
     private readonly property: FontProperty,
     private readonly oldValue: FontValue,
@@ -1430,7 +1433,7 @@ export class TextAlignCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: PropertiesPanelTextSvgPort,
     private readonly textId: string,
     private readonly oldAnchor: 'start' | 'middle' | 'end',
     private readonly newAnchor: 'start' | 'middle' | 'end'
@@ -1458,7 +1461,7 @@ export class TextPaintOrderCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: PropertiesPanelTextSvgPort,
     private readonly textId: string,
     private readonly oldOrder: string | undefined,
     private readonly newOrder: string | undefined
@@ -1487,7 +1490,7 @@ export class TextVectorEffectCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: PropertiesPanelTextSvgPort,
     private readonly textId: string,
     private readonly oldEffect: string | undefined,
     private readonly newEffect: string | undefined

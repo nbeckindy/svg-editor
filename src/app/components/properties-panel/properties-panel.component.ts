@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
+import type { PropertiesPanelSvgPort } from '../../history/properties-panel-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-properties.interface';
@@ -50,7 +51,7 @@ export class PropertiesPanelComponent {
   private shapeSelectionService = inject(ShapeSelectionService);
   readonly selectedShape = this.shapeSelectionService.selectedShape;
   readonly selectionCount = this.shapeSelectionService.selectionCount;
-  private svgManipulationService = inject(SvgManipulationService);
+  private svg: PropertiesPanelSvgPort = inject(SvgManipulationService);
   private drawingDefaults = inject(DrawingStyleDefaultsService);
   private editorTool = inject(EditorToolService);
   private selectionPaintApply = inject(SelectionPaintApplyService);
@@ -259,7 +260,7 @@ export class PropertiesPanelComponent {
     if (textShapes.length > 0) {
       const commands = textShapes.map((s) =>
         new FontCommand(
-          this.svgManipulationService,
+          this.svg,
           s.id,
           'fontFamily',
           s.fontFamily ?? 'Arial, sans-serif',
@@ -293,7 +294,7 @@ export class PropertiesPanelComponent {
     if (textShapes.length > 0) {
       const commands = textShapes.map((s) =>
         new FontCommand(
-          this.svgManipulationService,
+          this.svg,
           s.id,
           'fontSize',
           s.fontSize ?? 16,
@@ -327,7 +328,7 @@ export class PropertiesPanelComponent {
       const nextWeight = allBold ? 'normal' : 'bold';
       const commands = textShapes.map((s) =>
         new FontCommand(
-          this.svgManipulationService,
+          this.svg,
           s.id,
           'fontWeight',
           s.fontWeight ?? 'normal',
@@ -362,7 +363,7 @@ export class PropertiesPanelComponent {
       const nextStyle = allItalic ? 'normal' : 'italic';
       const commands = textShapes.map((s) =>
         new FontCommand(
-          this.svgManipulationService,
+          this.svg,
           s.id,
           'fontStyle',
           s.fontStyle ?? 'normal',
@@ -395,7 +396,7 @@ export class PropertiesPanelComponent {
     if (textShapes.length > 0) {
       const commands = textShapes.map((s) =>
         new TextAlignCommand(
-          this.svgManipulationService,
+          this.svg,
           s.id,
           s.textAnchor ?? 'start',
           textAnchor
@@ -451,7 +452,7 @@ export class PropertiesPanelComponent {
     if (raw === '') return;
     const next = raw === 'stroke fill' ? 'stroke fill' : undefined;
     const commands = this.textSelection().map(
-      (s) => new TextPaintOrderCommand(this.svgManipulationService, s.id, s.paintOrder, next)
+      (s) => new TextPaintOrderCommand(this.svg, s.id, s.paintOrder, next)
     );
     this.selectionPaintApply.executeEditorCommands(commands, next ? 'Set text paint order' : 'Reset text paint order');
     this.selectionPaintApply.syncSelectedShapesFromDom();
@@ -473,7 +474,7 @@ export class PropertiesPanelComponent {
     const next = checked ? 'non-scaling-stroke' : undefined;
     const commands = this.textSelection().map(
       (s) =>
-        new TextVectorEffectCommand(this.svgManipulationService, s.id, s.vectorEffect, next)
+        new TextVectorEffectCommand(this.svg, s.id, s.vectorEffect, next)
     );
     this.selectionPaintApply.executeEditorCommands(
       commands,
@@ -596,17 +597,17 @@ export class PropertiesPanelComponent {
     const inheritedFill = shape.fillSource?.kind === 'inherited';
     const inheritedStroke = shape.strokeSource?.kind === 'inherited';
     if (!inheritedFill && !inheritedStroke) return false;
-    return !!this.svgManipulationService.getNearestGroupAncestorId(shape.id);
+    return !!this.svg.getNearestGroupAncestorId(shape.id);
   }
 
   parentGroupId(shape: ShapeProperties): string | null {
-    return this.svgManipulationService.getNearestGroupAncestorId(shape.id);
+    return this.svg.getNearestGroupAncestorId(shape.id);
   }
 
   onBakeFillClick(): void {
     const commands = this.selectedShapesList()
       .filter((s) => this.shouldOfferBakeFill(s))
-      .map((s) => new BakeFillCommand(this.svgManipulationService, s.id));
+      .map((s) => new BakeFillCommand(this.svg, s.id));
     this.selectionPaintApply.executeEditorCommands(commands, 'Bake fill to local');
     this.selectionPaintApply.syncSelectedShapesFromDom();
   }
@@ -614,7 +615,7 @@ export class PropertiesPanelComponent {
   onBakeStrokeClick(): void {
     const commands = this.selectedShapesList()
       .filter((s) => this.shouldOfferBakeStroke(s))
-      .map((s) => new BakeStrokeCommand(this.svgManipulationService, s.id));
+      .map((s) => new BakeStrokeCommand(this.svg, s.id));
     this.selectionPaintApply.executeEditorCommands(commands, 'Bake stroke to local');
     this.selectionPaintApply.syncSelectedShapesFromDom();
   }
@@ -623,12 +624,12 @@ export class PropertiesPanelComponent {
     if (this.selectionCount() !== 1) return;
     const shape = this.selectedShape();
     if (!shape) return;
-    const parentId = this.svgManipulationService.getNearestGroupAncestorId(shape.id);
+    const parentId = this.svg.getNearestGroupAncestorId(shape.id);
     if (!parentId) return;
-    const svg = this.svgManipulationService.getSVGInstance();
+    const svg = this.svg.getSVGInstance();
     const el = svg?.findOne(`#${parentId}`) as SvgJsElement | undefined;
     if (!el) return;
-    const props = this.svgManipulationService.getShapeProperties(el);
+    const props = this.svg.getShapeProperties(el);
     this.shapeSelectionService.selectShape(props);
   }
 
@@ -650,16 +651,16 @@ export class PropertiesPanelComponent {
       shape.fill && shape.fill.trim() !== '' && shape.fill.toLowerCase() !== 'none'
         ? shape.fill
         : '#000000';
-    const id = this.svgManipulationService.allocateUniqueDefId('grad');
+    const id = this.svg.allocateUniqueDefId('grad');
     const model = defaultLinearGradientModel(id, from, '#ffffff');
-    const before = this.svgManipulationService.capturePaintGradientSnapshot(shape.id, 'fill');
+    const before = this.svg.capturePaintGradientSnapshot(shape.id, 'fill');
     const after = {
       gradientId: id,
       shapePaintAttr: `url(#${id})`,
       gradientOuterHtml: serializeGradientElementToOuterHtml(model)
     };
     this.selectionPaintApply.executeEditorCommands(
-      [new GradientFillSnapshotCommand(this.svgManipulationService, shape.id, 'fill', before, after)],
+      [new GradientFillSnapshotCommand(this.svg, shape.id, 'fill', before, after)],
       'Add gradient fill'
     );
     this.selectionPaintApply.syncSelectedShapesFromDom();
@@ -813,7 +814,7 @@ export class PropertiesPanelComponent {
 
   onClearSelection(): void {
     this.shapeSelectionService.clearSelection();
-    this.svgManipulationService.clearHighlight();
+    this.svg.clearHighlight();
   }
 
   canAlignSelection(): boolean {
@@ -827,14 +828,14 @@ export class PropertiesPanelComponent {
   onAlign(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'): void {
     const ids = this.selectedShapesList().map((shape) => shape.id);
     if (ids.length < 2) return;
-    this.selectionPaintApply.executeEditorCommands([new AlignCommand(this.svgManipulationService, ids, direction)]);
+    this.selectionPaintApply.executeEditorCommands([new AlignCommand(this.svg, ids, direction)]);
     this.selectionPaintApply.syncSelectedShapesFromDom();
   }
 
   onDistribute(direction: 'horizontal' | 'vertical'): void {
     const ids = this.selectedShapesList().map((shape) => shape.id);
     if (ids.length < 3) return;
-    this.selectionPaintApply.executeEditorCommands([new DistributeCommand(this.svgManipulationService, ids, direction)]);
+    this.selectionPaintApply.executeEditorCommands([new DistributeCommand(this.svg, ids, direction)]);
     this.selectionPaintApply.syncSelectedShapesFromDom();
   }
 }
