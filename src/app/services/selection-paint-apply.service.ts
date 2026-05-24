@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
+import type { SelectionPaintApplySvgPort } from '../history/selection-paint-apply-svg.port';
 import { ShapeSelectionService } from './shape-selection.service';
 import { SvgManipulationService } from './svg-manipulation.service';
 import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
@@ -30,7 +31,7 @@ const OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
 })
 export class SelectionPaintApplyService {
   private readonly shapeSelection = inject(ShapeSelectionService);
-  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly svg: SelectionPaintApplySvgPort = inject(SvgManipulationService);
   private readonly drawingDefaults = inject(DrawingStyleDefaultsService);
   private readonly editorHistory = inject(EditorHistoryService);
 
@@ -39,7 +40,7 @@ export class SelectionPaintApplyService {
     const nextFill = cleared ? 'none' : color;
     const shapes = this.selectedShapesList();
     const commands: EditorCommand[] = shapes.map(
-      (s) => new FillColorCommand(this.svgManipulation, s.id, s.fill ?? '', nextFill)
+      (s) => new FillColorCommand(this.svg, s.id, s.fill ?? '', nextFill)
     );
     const defaultsBefore = this.drawingDefaults.defaults();
     commands.push(
@@ -70,7 +71,7 @@ export class SelectionPaintApplyService {
     if (color === 'none' || color === '') {
       const shapes = this.selectedShapesList();
       const commands: EditorCommand[] = shapes.map(
-        (s) => new RemoveStrokeCommand(this.svgManipulation, s.id, s.stroke ?? '#000000', s.strokeWidth ?? 1)
+        (s) => new RemoveStrokeCommand(this.svg, s.id, s.stroke ?? '#000000', s.strokeWidth ?? 1)
       );
       const defaultsBefore = this.drawingDefaults.defaults();
       commands.push(
@@ -99,9 +100,9 @@ export class SelectionPaintApplyService {
     const commands: EditorCommand[] = shapes.map((s, i) => {
       if (needsAdd[i]) {
         const w = this.defaultStrokeWidthValue() > 0 ? this.defaultStrokeWidthValue() : 1;
-        return new AddStrokeCommand(this.svgManipulation, s.id, color, w);
+        return new AddStrokeCommand(this.svg, s.id, color, w);
       }
-      return new StrokeColorCommand(this.svgManipulation, s.id, s.stroke ?? '', color);
+      return new StrokeColorCommand(this.svg, s.id, s.stroke ?? '', color);
     });
     const defaultsBefore = this.drawingDefaults.defaults();
     commands.push(
@@ -151,11 +152,11 @@ export class SelectionPaintApplyService {
 
   /** Re-read selected nodes from the live tree into the selection model (after transform commands). */
   syncSelectedShapesFromDom(): void {
-    const svg = this.svgManipulation.getSVGInstance();
+    const svg = this.svg.getSVGInstance();
     if (!svg) return;
     const next = this.selectedShapesList().map((s) => {
       const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
-      return el ? this.svgManipulation.getShapeProperties(el) : s;
+      return el ? this.svg.getShapeProperties(el) : s;
     });
     this.shapeSelection.selectShapes(next);
   }
@@ -170,11 +171,11 @@ export class SelectionPaintApplyService {
     const shapes = this.selectedShapesList();
     const commands: EditorCommand[] = shapes.map((s) => {
       if (width === 0) {
-        return new RemoveStrokeCommand(this.svgManipulation, s.id, s.stroke ?? '#000000', s.strokeWidth ?? 1);
+        return new RemoveStrokeCommand(this.svg, s.id, s.stroke ?? '#000000', s.strokeWidth ?? 1);
       }
       const color = this.hasStrokeColor(s) ? s.stroke! : '#000000';
       return new SetStrokeCommand(
-        this.svgManipulation,
+        this.svg,
         s.id,
         this.hasStrokeColor(s),
         s.stroke ?? '#000000',
@@ -211,7 +212,7 @@ export class SelectionPaintApplyService {
   applyOpacity(opacity: number): void {
     if (!Number.isFinite(opacity)) return;
     const commands = this.selectedShapesList().map(
-      (s) => new OpacityCommand(this.svgManipulation, s.id, s.opacity ?? 1, opacity)
+      (s) => new OpacityCommand(this.svg, s.id, s.opacity ?? 1, opacity)
     );
     this.pushCommand(commands, `Change opacity to ${opacity}`);
     this.shapeSelection.patchAllSelected({ opacity });
@@ -219,7 +220,7 @@ export class SelectionPaintApplyService {
 
   applyStrokeDasharray(dasharray: string): void {
     const commands = this.selectedShapesList().map(
-      (s) => new StrokeDashArrayCommand(this.svgManipulation, s.id, s.strokeDasharray ?? '', dasharray)
+      (s) => new StrokeDashArrayCommand(this.svg, s.id, s.strokeDasharray ?? '', dasharray)
     );
     this.pushCommand(commands, dasharray ? `Set dash pattern ${dasharray}` : 'Remove dash pattern');
     this.shapeSelection.patchAllSelected({
@@ -231,7 +232,7 @@ export class SelectionPaintApplyService {
   applyStrokeDashoffset(offset: number): void {
     if (!Number.isFinite(offset)) return;
     const commands = this.selectedShapesList().map(
-      (s) => new StrokeDashOffsetCommand(this.svgManipulation, s.id, s.strokeDashoffset ?? 0, offset)
+      (s) => new StrokeDashOffsetCommand(this.svg, s.id, s.strokeDashoffset ?? 0, offset)
     );
     this.pushCommand(commands, `Set dash offset to ${offset}`);
     this.shapeSelection.patchAllSelected({ strokeDashoffset: offset });

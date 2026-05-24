@@ -11,7 +11,12 @@ import { SvgLayerStructureService } from './svg-layer-structure.service';
 import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
 import type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
 import { SvgShapeContentService } from './svg-shape-content.service';
-import type { TransformGestureDocSvgPort, SelectionTransformApplySvgPort } from '../history/transform-gesture-svg.port';
+import type {
+  TransformGestureDocSvgPort,
+  SelectionTransformApplySvgPort
+} from '../history/transform-gesture-svg.port';
+import type { SelectionPaintApplySvgPort } from '../history/selection-paint-apply-svg.port';
+import type { SelectionTransformReadoutSvgPort } from '../history/selection-transform-readout-svg.port';
 import type { ResizeHandle } from '../utils/selection-resize';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 
@@ -21,7 +26,13 @@ export type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
 @Injectable({
   providedIn: 'root'
 })
-export class SvgManipulationService implements TransformGestureDocSvgPort, SelectionTransformApplySvgPort {
+export class SvgManipulationService
+  implements
+    TransformGestureDocSvgPort,
+    SelectionTransformApplySvgPort,
+    SelectionPaintApplySvgPort,
+    SelectionTransformReadoutSvgPort
+{
   private readonly doc = inject(SvgEditorDocumentService);
   private readonly gradients = inject(SvgGradientDefsService);
   private readonly layers = inject(SvgLayerStructureService);

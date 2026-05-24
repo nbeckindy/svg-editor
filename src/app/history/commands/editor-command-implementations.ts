@@ -13,6 +13,7 @@ import { CompositeCommand } from '../../models/editor-command';
 import type { HistoryPaintPort } from '../history-paint.port';
 import type { SelectionSyncPort } from '../history-selection.port';
 import type { TransformGestureSvgPort } from '../transform-gesture-svg.port';
+import type { SelectionPaintStrokeDashSvgPort } from '../selection-paint-apply-svg.port';
 
 export class FillColorCommand implements CoalesceableCommand {
   readonly description: string;
@@ -107,7 +108,7 @@ export class AddStrokeCommand implements EditorCommand {
   readonly description = 'Add stroke';
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: SelectionPaintStrokeDashSvgPort,
     private readonly shapeId: string,
     private readonly color: string,
     private readonly width: number
@@ -126,7 +127,7 @@ export class RemoveStrokeCommand implements EditorCommand {
   readonly description = 'Remove stroke';
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: SelectionPaintStrokeDashSvgPort,
     private readonly shapeId: string,
     private readonly oldColor: string,
     private readonly oldWidth: number
@@ -146,7 +147,7 @@ export class SetStrokeCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: SelectionPaintStrokeDashSvgPort,
     private readonly shapeId: string,
     private readonly hadStrokeBefore: boolean,
     private readonly oldColor: string,
@@ -213,7 +214,7 @@ export class StrokeDashArrayCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: SelectionPaintStrokeDashSvgPort,
     private readonly shapeId: string,
     private readonly oldDasharray: string,
     private readonly newDasharray: string
@@ -241,7 +242,7 @@ export class StrokeDashOffsetCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: SelectionPaintStrokeDashSvgPort,
     private readonly shapeId: string,
     private readonly oldOffset: number,
     private readonly newOffset: number

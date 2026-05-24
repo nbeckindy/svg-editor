@@ -1,5 +1,6 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
+import type { SelectionTransformReadoutSvgPort } from '../history/selection-transform-readout-svg.port';
 import { ShapeSelectionService } from './shape-selection.service';
 import { SvgManipulationService } from './svg-manipulation.service';
 import { EditorHistoryService } from './editor-history.service';
@@ -19,7 +20,7 @@ import {
 })
 export class SelectionTransformReadoutService {
   private readonly shapeSelection = inject(ShapeSelectionService);
-  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly svg: SelectionTransformReadoutSvgPort = inject(SvgManipulationService);
   private readonly editorHistory = inject(EditorHistoryService);
   private readonly editorTool = inject(EditorToolService);
 
@@ -29,7 +30,7 @@ export class SelectionTransformReadoutService {
    */
   readonly selectionSkewReadout = computed(() => {
     this.editorHistory.revision();
-    this.svgManipulation.documentRevision();
+    this.svg.documentRevision();
 
     if (this.editorTool.currentTool() !== 'selector') {
       return { skewX: '—' as const, skewY: '—' as const };
@@ -40,7 +41,7 @@ export class SelectionTransformReadoutService {
       return { skewX: '—' as const, skewY: '—' as const };
     }
 
-    const svg = this.svgManipulation.getSVGInstance();
+    const svg = this.svg.getSVGInstance();
     if (!svg) {
       return { skewX: '—' as const, skewY: '—' as const };
     }
@@ -79,7 +80,7 @@ export class SelectionTransformReadoutService {
    */
   readonly selectionTransformReadout = computed(() => {
     this.editorHistory.revision();
-    this.svgManipulation.documentRevision();
+    this.svg.documentRevision();
 
     const dash = '—' as const;
     if (this.editorTool.currentTool() !== 'selector') {
@@ -92,7 +93,7 @@ export class SelectionTransformReadoutService {
     }
 
     const ids = shapes.map((s) => s.id);
-    const union = this.svgManipulation.getUnionBBox(ids);
+    const union = this.svg.getUnionBBox(ids);
     const fmtNum = (n: number) => n.toFixed(1);
 
     const xStr = union ? fmtNum(union.x) : dash;
@@ -100,7 +101,7 @@ export class SelectionTransformReadoutService {
     const wStr = union ? fmtNum(union.width) : dash;
     const hStr = union ? fmtNum(union.height) : dash;
 
-    const svg = this.svgManipulation.getSVGInstance();
+    const svg = this.svg.getSVGInstance();
     if (!svg) {
       return { x: xStr, y: yStr, w: wStr, h: hStr, r: dash };
     }
@@ -133,7 +134,7 @@ export class SelectionTransformReadoutService {
    */
   readonly selectionBBoxFieldModel = computed(() => {
     this.editorHistory.revision();
-    this.svgManipulation.documentRevision();
+    this.svg.documentRevision();
 
     if (this.editorTool.currentTool() !== 'selector') {
       return null;
@@ -145,12 +146,12 @@ export class SelectionTransformReadoutService {
     }
 
     const ids = shapes.map((s) => s.id);
-    const union = this.svgManipulation.getUnionBBox(ids);
+    const union = this.svg.getUnionBBox(ids);
     if (!union || !isFinitePositiveDim(union.width) || !isFinitePositiveDim(union.height)) {
       return { ok: false as const, ids };
     }
 
-    const svg = this.svgManipulation.getSVGInstance();
+    const svg = this.svg.getSVGInstance();
     let rDeg: number | null = null;
     let rMixed = false;
     if (svg) {
