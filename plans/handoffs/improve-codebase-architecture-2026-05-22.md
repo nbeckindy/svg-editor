@@ -52,7 +52,7 @@ Explored the Angular svg-editor around canvas, tools, commands, and manipulation
 
 **Benefits:** Narrower seams, better **locality**, deletion test passes per slice.
 
-**Status (2026-05):** `SvgManipulationService` already **delegates** to focused injectables (`SvgEditorDocumentService`, `SvgShapeContentService`, `SvgSelectionGeometryService`, `SvgLayerStructureService`, `SvgGradientDefsService`). Further **file** splits are optional. Remaining #2 work is **typed seams at call sites** so consumers do not depend on the full class surface unless necessary (e.g. `TransformGestureDocSvgPort`, `TransformGestureSvgPort`, `SelectionTransformApplySvgPort`, `SelectionPaintApplySvgPort` / `SelectionPaintStrokeDashSvgPort`, `SelectionTransformReadoutSvgPort`, `HistoryPaintPort`, `implements …` on the façade class).
+**Status (2026-05):** `SvgManipulationService` already **delegates** to focused injectables (`SvgEditorDocumentService`, `SvgShapeContentService`, `SvgSelectionGeometryService`, `SvgLayerStructureService`, `SvgGradientDefsService`). Further **file** splits are optional. Remaining #2 work is **typed seams at call sites** so consumers do not depend on the full class surface unless necessary (e.g. `TransformGestureDocSvgPort`, `TransformGestureSvgPort`, `SelectionTransformApplySvgPort`, `SelectionPaintApplySvgPort` / `SelectionPaintStrokeDashSvgPort`, `SelectionTransformReadoutSvgPort`, `DocumentSettingsSvgPort`, `SvgDebugPanelSvgPort`, `AppRootSvgManipulationPort`, `GradientFillEditorSvgPort`, `HistoryPaintPort`, `implements …` on the façade class).
 
 ---
 

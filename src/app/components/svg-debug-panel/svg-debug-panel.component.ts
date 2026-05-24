@@ -1,6 +1,7 @@
 import { Component, computed, inject, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
+import type { SvgDebugPanelSvgPort } from '../../history/editor-chrome-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { formatSvgXmlWithHighlightSegments } from '../../utils/svg-debug-xml';
 
@@ -13,12 +14,12 @@ import { formatSvgXmlWithHighlightSegments } from '../../utils/svg-debug-xml';
 })
 export class SvgDebugPanelComponent {
   private shapeSelection = inject(ShapeSelectionService);
-  private svgManipulation = inject(SvgManipulationService);
+  private readonly svg: SvgDebugPanelSvgPort = inject(SvgManipulationService);
   readonly isCollapsed = signal(true);
 
   readonly segments = computed(() => {
-    this.svgManipulation.documentRevision();
-    const raw = this.svgManipulation.exportSVG().trim();
+    this.svg.documentRevision();
+    const raw = this.svg.exportSVG().trim();
     if (!raw) {
       return null;
     }

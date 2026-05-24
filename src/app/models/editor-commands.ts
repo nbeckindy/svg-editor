@@ -10,4 +10,7 @@ export type {
 } from '../history/transform-gesture-svg.port';
 export type { SelectionPaintApplySvgPort, SelectionPaintStrokeDashSvgPort } from '../history/selection-paint-apply-svg.port';
 export type { SelectionTransformReadoutSvgPort } from '../history/selection-transform-readout-svg.port';
+export type { DocumentArtboardCommandSvgPort, DocumentSettingsSvgPort } from '../history/document-settings-svg.port';
+export type { SvgDebugPanelSvgPort, AppRootSvgManipulationPort } from '../history/editor-chrome-svg.port';
+export type { GradientFillSnapshotSvgPort, GradientFillEditorSvgPort } from '../history/gradient-fill-editor-svg.port';
 export * from '../history/commands/editor-command-implementations';

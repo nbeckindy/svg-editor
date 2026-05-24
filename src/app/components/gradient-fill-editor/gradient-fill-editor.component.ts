@@ -1,6 +1,7 @@
 import { ChangeDetectorRef, Component, effect, inject, input } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import type { GradientFillEditorSvgPort } from '../../history/gradient-fill-editor-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import {
@@ -21,7 +22,7 @@ import { ColorPickerComponent } from '../color-picker/color-picker.component';
 export class GradientFillEditorComponent {
   readonly shapeId = input.required<string>();
 
-  private readonly svc = inject(SvgManipulationService);
+  private readonly svc: GradientFillEditorSvgPort = inject(SvgManipulationService);
   private readonly history = inject(EditorHistoryService);
   private readonly cdr = inject(ChangeDetectorRef);
 

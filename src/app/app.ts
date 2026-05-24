@@ -7,6 +7,7 @@ import { EditorTopBarComponent } from './components/editor-top-bar/editor-top-ba
 import { EditorToolContextBarComponent } from './components/editor-tool-context-bar/editor-tool-context-bar.component';
 import { EditorLeftRailComponent } from './components/editor-left-rail/editor-left-rail.component';
 import { EditorRightDockComponent } from './components/editor-right-dock/editor-right-dock.component';
+import type { AppRootSvgManipulationPort } from './history/editor-chrome-svg.port';
 import { SvgManipulationService } from './services/svg-manipulation.service';
 import { ShapeSelectionService } from './services/shape-selection.service';
 import { EditorHistoryService } from './services/editor-history.service';
@@ -29,7 +30,7 @@ export class AppComponent {
   private static readonly DEFAULT_SVG =
     '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600"></svg>';
 
-  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly svg: AppRootSvgManipulationPort = inject(SvgManipulationService);
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly editorHistory = inject(EditorHistoryService);
 
@@ -46,7 +47,7 @@ export class AppComponent {
       return;
     }
     this.shapeSelection.clearSelection();
-    this.svgManipulation.clearHighlight();
+    this.svg.clearHighlight();
     this.editorHistory.clear();
     this.svgContent = '';
     this.uploadedFileName = '';
@@ -60,7 +61,7 @@ export class AppComponent {
   }
 
   downloadSvg(): void {
-    const svgText = this.svgManipulation.exportSVG();
+    const svgText = this.svg.exportSVG();
     if (!svgText) return;
 
     const blob = new Blob([svgText], { type: 'image/svg+xml' });

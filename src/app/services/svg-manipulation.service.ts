@@ -17,6 +17,9 @@ import type {
 } from '../history/transform-gesture-svg.port';
 import type { SelectionPaintApplySvgPort } from '../history/selection-paint-apply-svg.port';
 import type { SelectionTransformReadoutSvgPort } from '../history/selection-transform-readout-svg.port';
+import type { DocumentSettingsSvgPort } from '../history/document-settings-svg.port';
+import type { AppRootSvgManipulationPort, SvgDebugPanelSvgPort } from '../history/editor-chrome-svg.port';
+import type { GradientFillEditorSvgPort } from '../history/gradient-fill-editor-svg.port';
 import type { ResizeHandle } from '../utils/selection-resize';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 
@@ -31,7 +34,11 @@ export class SvgManipulationService
     TransformGestureDocSvgPort,
     SelectionTransformApplySvgPort,
     SelectionPaintApplySvgPort,
-    SelectionTransformReadoutSvgPort
+    SelectionTransformReadoutSvgPort,
+    DocumentSettingsSvgPort,
+    SvgDebugPanelSvgPort,
+    AppRootSvgManipulationPort,
+    GradientFillEditorSvgPort
 {
   private readonly doc = inject(SvgEditorDocumentService);
   private readonly gradients = inject(SvgGradientDefsService);

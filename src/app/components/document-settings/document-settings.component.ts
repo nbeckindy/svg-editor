@@ -1,6 +1,7 @@
 import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import type { DocumentSettingsSvgPort } from '../../history/document-settings-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
@@ -14,12 +15,12 @@ import { ArtboardSizeCommand, ArtboardBackgroundCommand } from '../../models/edi
   styleUrl: './document-settings.component.css'
 })
 export class DocumentSettingsComponent {
-  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly svg: DocumentSettingsSvgPort = inject(SvgManipulationService);
   private readonly editorHistory = inject(EditorHistoryService);
 
-  readonly artboard = this.svgManipulation.artboard;
-  readonly artboardResizeAnchor = this.svgManipulation.artboardResizeAnchor;
-  readonly hasDocument = computed(() => this.svgManipulation.getSVGInstance() != null);
+  readonly artboard = this.svg.artboard;
+  readonly artboardResizeAnchor = this.svg.artboardResizeAnchor;
+  readonly hasDocument = computed(() => this.svg.getSVGInstance() != null);
 
   readonly MIN_DIMENSION = 1;
   readonly MAX_DIMENSION = 10000;
@@ -42,7 +43,7 @@ export class DocumentSettingsComponent {
     if (!this.isValidDimension(value)) return;
     const ab = this.artboard();
     const cmd = new ArtboardSizeCommand(
-      this.svgManipulation,
+      this.svg,
       ab.width,
       ab.height,
       ab.minX,
@@ -58,7 +59,7 @@ export class DocumentSettingsComponent {
     if (!this.isValidDimension(value)) return;
     const ab = this.artboard();
     const cmd = new ArtboardSizeCommand(
-      this.svgManipulation,
+      this.svg,
       ab.width,
       ab.height,
       ab.minX,
@@ -70,12 +71,12 @@ export class DocumentSettingsComponent {
   }
 
   onResizeAnchorSelect(anchor: ArtboardResizeAnchor): void {
-    this.svgManipulation.setArtboardResizeAnchor(anchor);
+    this.svg.setArtboardResizeAnchor(anchor);
   }
 
   onBackgroundColorChange(color: string): void {
     const ab = this.artboard();
-    const cmd = new ArtboardBackgroundCommand(this.svgManipulation, ab.backgroundColor, color);
+    const cmd = new ArtboardBackgroundCommand(this.svg, ab.backgroundColor, color);
     this.editorHistory.pushAndExecute(cmd);
   }
 

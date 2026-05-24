@@ -14,6 +14,8 @@ import type { HistoryPaintPort } from '../history-paint.port';
 import type { SelectionSyncPort } from '../history-selection.port';
 import type { TransformGestureSvgPort } from '../transform-gesture-svg.port';
 import type { SelectionPaintStrokeDashSvgPort } from '../selection-paint-apply-svg.port';
+import type { DocumentArtboardCommandSvgPort } from '../document-settings-svg.port';
+import type { GradientFillSnapshotSvgPort } from '../gradient-fill-editor-svg.port';
 
 export class FillColorCommand implements CoalesceableCommand {
   readonly description: string;
@@ -49,7 +51,7 @@ export class GradientFillSnapshotCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: GradientFillSnapshotSvgPort,
     private readonly shapeId: string,
     private readonly paintProperty: 'fill' | 'stroke',
     readonly before: PaintGradientSnapshot,
@@ -1118,7 +1120,7 @@ export class ArtboardSizeCommand implements CoalesceableCommand {
   readonly coalesceKey = 'artboard-size';
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: DocumentArtboardCommandSvgPort,
     private readonly oldWidth: number,
     private readonly oldHeight: number,
     private readonly oldMinX: number,
@@ -1159,7 +1161,7 @@ export class ArtboardBackgroundCommand implements CoalesceableCommand {
   readonly coalesceKey = 'artboard-bg';
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: DocumentArtboardCommandSvgPort,
     private readonly oldColor: string,
     private readonly newColor: string
   ) {
