@@ -1,4 +1,5 @@
 import { Injectable, inject } from '@angular/core';
+import type { SelectionTransformApplySvgPort } from '../history/transform-gesture-svg.port';
 import { EditorToolService } from './editor-tool.service';
 import { SvgManipulationService } from './svg-manipulation.service';
 import { SelectionPaintApplyService } from './selection-paint-apply.service';
@@ -21,7 +22,7 @@ import {
   providedIn: 'root'
 })
 export class SelectionTransformApplyService {
-  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly svg: SelectionTransformApplySvgPort = inject(SvgManipulationService);
   private readonly editorTool = inject(EditorToolService);
   private readonly transformReadout = inject(SelectionTransformReadoutService);
   private readonly selectionPaintApply = inject(SelectionPaintApplyService);
@@ -46,8 +47,8 @@ export class SelectionTransformApplyService {
     if (field === 'x') {
       const dx = parsed - unionBefore.x;
       if (Math.abs(dx) < epsPos) return;
-      const snap = this.svgManipulation.snapshotSelectionTransforms(ids);
-      const cmds = ids.map((id) => new TranslateCommand(this.svgManipulation, id, dx, 0, snap));
+      const snap = this.svg.snapshotSelectionTransforms(ids);
+      const cmds = ids.map((id) => new TranslateCommand(this.svg, id, dx, 0, snap));
       this.selectionPaintApply.executeEditorCommands(cmds, `Set selection X to ${parsed}`);
       this.selectionPaintApply.syncSelectedShapesFromDom();
       return;
@@ -56,8 +57,8 @@ export class SelectionTransformApplyService {
     if (field === 'y') {
       const dy = parsed - unionBefore.y;
       if (Math.abs(dy) < epsPos) return;
-      const snap = this.svgManipulation.snapshotSelectionTransforms(ids);
-      const cmds = ids.map((id) => new TranslateCommand(this.svgManipulation, id, 0, dy, snap));
+      const snap = this.svg.snapshotSelectionTransforms(ids);
+      const cmds = ids.map((id) => new TranslateCommand(this.svg, id, 0, dy, snap));
       this.selectionPaintApply.executeEditorCommands(cmds, `Set selection Y to ${parsed}`);
       this.selectionPaintApply.syncSelectedShapesFromDom();
       return;
@@ -67,10 +68,10 @@ export class SelectionTransformApplyService {
       if (!isFinitePositiveDim(parsed) || parsed < MIN_UNION_SIZE) return;
       if (Math.abs(parsed - unionBefore.width) < epsPos) return;
       const unionAfter = { ...unionBefore, width: parsed };
-      const snap = this.svgManipulation.snapshotSelectionTransforms(ids);
-      const ve = this.svgManipulation.snapshotVectorEffectsForShapes(ids);
+      const snap = this.svg.snapshotSelectionTransforms(ids);
+      const ve = this.svg.snapshotVectorEffectsForShapes(ids);
       this.selectionPaintApply.executeEditorCommands(
-        [new UnionScaleCommand(this.svgManipulation, ids, unionBefore, unionAfter, snap, 'e', ve)],
+        [new UnionScaleCommand(this.svg, ids, unionBefore, unionAfter, snap, 'e', ve)],
         `Set selection width to ${parsed}`
       );
       this.selectionPaintApply.syncSelectedShapesFromDom();
@@ -81,10 +82,10 @@ export class SelectionTransformApplyService {
       if (!isFinitePositiveDim(parsed) || parsed < MIN_UNION_SIZE) return;
       if (Math.abs(parsed - unionBefore.height) < epsPos) return;
       const unionAfter = { ...unionBefore, height: parsed };
-      const snap = this.svgManipulation.snapshotSelectionTransforms(ids);
-      const ve = this.svgManipulation.snapshotVectorEffectsForShapes(ids);
+      const snap = this.svg.snapshotSelectionTransforms(ids);
+      const ve = this.svg.snapshotVectorEffectsForShapes(ids);
       this.selectionPaintApply.executeEditorCommands(
-        [new UnionScaleCommand(this.svgManipulation, ids, unionBefore, unionAfter, snap, 's', ve)],
+        [new UnionScaleCommand(this.svg, ids, unionBefore, unionAfter, snap, 's', ve)],
         `Set selection height to ${parsed}`
       );
       this.selectionPaintApply.syncSelectedShapesFromDom();
@@ -98,10 +99,10 @@ export class SelectionTransformApplyService {
       const delta = shortestSignedDeltaDeg(model.rDeg, rTarget);
       if (Math.abs(delta) < ROTATION_MIXED_EPS_DEG) return;
       const pivot =
-        this.svgManipulation.getSelectionRotationPivot(ids) ?? unionRotationPivot(unionBefore);
-      const snap = this.svgManipulation.snapshotSelectionTransforms(ids);
+        this.svg.getSelectionRotationPivot(ids) ?? unionRotationPivot(unionBefore);
+      const snap = this.svg.snapshotSelectionTransforms(ids);
       this.selectionPaintApply.executeEditorCommands(
-        [new UnionRotateCommand(this.svgManipulation, ids, pivot, delta, snap)],
+        [new UnionRotateCommand(this.svg, ids, pivot, delta, snap)],
         `Rotate selection toward ${rTarget}°`
       );
       this.selectionPaintApply.syncSelectedShapesFromDom();

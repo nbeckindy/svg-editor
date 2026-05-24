@@ -59,6 +59,17 @@ export interface TransformGestureDocSvgPort extends TransformGestureSvgPort {
 }
 
 /**
+ * Svg seam for committing union bbox edits from the properties panel
+ * (`SelectionTransformApplyService`): {@link TransformGestureSvgPort} plus snapshot / pivot
+ * reads used with translate / union-scale / union-rotate commands.
+ */
+export interface SelectionTransformApplySvgPort extends TransformGestureSvgPort {
+  snapshotSelectionTransforms(shapeIds: string[]): Map<string, Matrix>;
+  snapshotVectorEffectsForShapes(shapeIds: string[]): Map<string, (string | null)[]>;
+  getSelectionRotationPivot(shapeIds: string[]): { x: number; y: number } | null;
+}
+
+/**
  * Two-method read seam for union ghost subtree cloning (`GhostSession.buildFragmentsForUnion`).
  * Matches a slice of {@link TransformGestureDocSvgPort}.
  */
