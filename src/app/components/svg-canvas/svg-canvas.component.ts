@@ -348,6 +348,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     );
   }
 
+  /**
+   * Skew handles are hidden when every selected shape is a raster `<image>`. Union skew applies a
+   * generic `matrix()` which is confusing and rarely useful for bitmaps; resize and rotate stay.
+   */
+  get showSelectionSkewHandles(): boolean {
+    if (!this.showResizeHandles) return false;
+    const shapes = this.shapeSelection.getSelectedShapes();
+    if (shapes.length === 0) return true;
+    return !shapes.every((s) => s.type === 'image');
+  }
+
   /** Resize/skew/rotate handle circle radius in overlay px (inverse zoom, clamped 4–8 screen px). */
   get selectionHandleRadiusOverlay(): number {
     return selectionHandleRadiusOverlayPx(this.canvasView.scale);

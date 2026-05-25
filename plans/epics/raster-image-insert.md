@@ -61,3 +61,4 @@ e4s.1 (spec)
 
 - Prefer **svg.js** for DOM mutations inside the canvas per project rules.
 - `svg-editor-e4s.9` was created in error and **closed** as duplicate of `e4s.8`.
+- **Post–e4s.6 follow-ups:** skew handles are hidden when the selection is **image-only** (resize/rotate remain). `SvgSelectionGeometryService.getShapeBBox` falls back to layout `x`/`y`/`width`/`height` for `<image>` when `getBBox()` is zero-area so unions stay aligned with the opaque hit box. Manual QA checklist: bead **`svg-editor-d4m`**.

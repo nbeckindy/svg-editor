@@ -1124,6 +1124,76 @@ describe('SvgCanvasComponent', () => {
     expect(highlightRectEl.getAttribute('height')).toBe('40');
   });
 
+  it('hides skew handles for image-only selection but keeps resize handles', async () => {
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
+      x: 5,
+      y: 6,
+      width: 20,
+      height: 30
+    });
+    vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({
+      x: 5,
+      y: 6,
+      width: 20,
+      height: 30
+    });
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><image id="i1" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" x="5" y="6" width="20" height="30"/></svg>'
+    );
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    shapeSelectionService.selectShape({
+      id: 'i1',
+      type: 'image',
+      fill: undefined,
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-handle-skew-n"]')).toBeFalsy();
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-handle-resize-n"]')).toBeTruthy();
+  });
+
+  it('shows skew handles when selection mixes raster image and vector shape', async () => {
+    vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 25,
+      height: 36
+    });
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/><image id="i1" href="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==" x="5" y="6" width="20" height="30"/></svg>'
+    );
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    shapeSelectionService.selectShape({
+      id: 'r1',
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    shapeSelectionService.toggleShapeInSelection({
+      id: 'i1',
+      type: 'image',
+      fill: undefined,
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-handle-skew-n"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-handle-resize-n"]')).toBeTruthy();
+  });
+
   it('should show union bbox overlay when multiple shapes are selected', async () => {
     vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({
       x: 0,

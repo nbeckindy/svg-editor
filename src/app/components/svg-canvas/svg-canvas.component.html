@@ -384,6 +384,7 @@
           }
           @if (editorChrome.showResizeHandles && editorChrome.highlightRect; as hr) {
             <!-- Skew first (below): discs extend inward and must not steal hits from edge-scale / corners above. -->
+            @if (editorChrome.showSelectionSkewHandles) {
             <circle
               class="selection-skew-handle selection-skew-n"
               [attr.r]="editorChrome.selectionHandleRadiusOverlay"
@@ -412,6 +413,7 @@
               data-testid="canvas-handle-skew-e"
               [attr.cx]="hr.x + hr.width + editorChrome.selectionSkewEdgeOutset"
               [attr.cy]="hr.y + hr.height / 2"/>
+            }
             <circle
               class="selection-resize-handle selection-resize-edge-n"
               [attr.r]="editorChrome.selectionHandleRadiusOverlay"

@@ -69,17 +69,53 @@ export class SvgSelectionGeometryService implements SvgSelectionGeometryPort {
       try {
         const local = node.getBBox();
         const fromDom = localBBoxToRootUserAabb(node, rootSvg, local);
+        const isImage = node.tagName?.toLowerCase() === 'image';
+        const degenerate = fromDom && (fromDom.width <= 0 || fromDom.height <= 0);
+        // Do not use a zero-area `getBBox()` for `<image>` (bitmap not decoded / jsdom); use
+        // layout attrs × transform below instead (ADR 0001 layout box for tools).
         if (
           fromDom &&
           Number.isFinite(fromDom.width) &&
           Number.isFinite(fromDom.height) &&
           fromDom.width >= 0 &&
-          fromDom.height >= 0
+          fromDom.height >= 0 &&
+          !(isImage && degenerate)
         ) {
           return fromDom;
         }
       } catch {
         // fall through: e.g. jsdom / detached node
+      }
+    }
+
+    // `<image>`: x/y/width/height layout box in root user space when `getBBox()` is unusable
+    // (decoder, letterbox edge cases, test env). Aligns selection union with the opaque hit box.
+    if (rootSvg && node.tagName?.toLowerCase() === 'image') {
+      const img = node as SVGImageElement;
+      const wAttr = img.getAttribute('width');
+      const hAttr = img.getAttribute('height');
+      const lw = wAttr != null && wAttr !== '' ? parseFloat(wAttr) : Number.NaN;
+      const lh = hAttr != null && hAttr !== '' ? parseFloat(hAttr) : Number.NaN;
+      const xAttr = img.getAttribute('x');
+      const yAttr = img.getAttribute('y');
+      const lx = xAttr != null && xAttr !== '' ? parseFloat(xAttr) : 0;
+      const ly = yAttr != null && yAttr !== '' ? parseFloat(yAttr) : 0;
+      if (Number.isFinite(lw) && Number.isFinite(lh) && lw > 0 && lh > 0) {
+        try {
+          const localRect = { x: lx, y: ly, width: lw, height: lh } as DOMRect;
+          const aabb = localBBoxToRootUserAabb(img, rootSvg, localRect);
+          if (
+            aabb &&
+            Number.isFinite(aabb.width) &&
+            Number.isFinite(aabb.height) &&
+            aabb.width > 0 &&
+            aabb.height > 0
+          ) {
+            return aabb;
+          }
+        } catch {
+          /* fall through */
+        }
       }
     }
 

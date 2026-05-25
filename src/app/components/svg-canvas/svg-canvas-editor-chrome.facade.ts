@@ -113,6 +113,9 @@ export class SvgCanvasEditorChromeFacade {
   get showResizeHandles(): boolean {
     return this.root.showResizeHandles;
   }
+  get showSelectionSkewHandles(): boolean {
+    return this.root.showSelectionSkewHandles;
+  }
   get selectionHandleRadiusOverlay(): number {
     return this.root.selectionHandleRadiusOverlay;
   }
