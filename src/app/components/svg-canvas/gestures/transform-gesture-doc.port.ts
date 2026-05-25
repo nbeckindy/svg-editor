@@ -27,6 +27,7 @@ export interface TransformGestureDocPort extends GhostUnionSvgPort {
   setShapeVisibility(id: string, visible: boolean): void;
   getSelectionRotationPivot(ids: string[]): { x: number; y: number } | null;
   getShapeBBox(shapeId: string, options?: { preferScreenBounds?: boolean }): BBox | null;
+  isElementOrAncestorLocked(shapeId: string): boolean;
   pushAndExecute(cmd: EditorCommand): void;
 }
 
@@ -75,6 +76,10 @@ export class DefaultTransformGestureDoc implements TransformGestureDocPort {
 
   getShapeBBox(shapeId: string, options?: { preferScreenBounds?: boolean }): BBox | null {
     return this.svgManipulation.getShapeBBox(shapeId, options);
+  }
+
+  isElementOrAncestorLocked(shapeId: string): boolean {
+    return this.svgManipulation.isElementOrAncestorLocked(shapeId);
   }
 
   pushAndExecute(cmd: EditorCommand): void {

@@ -8,9 +8,28 @@
 | **Goal** | Users can **lock** layers to prevent accidental edits, **hide** layers for visibility control, and **reorder** layer rows by dragging within the layers panel. |
 | **Labels** | `roadmap`, `layers`, `chrome` |
 | **Type** | `epic` |
-| **bd id** | `TBD` |
+| **bd id** | `svg-editor-m2k` (`CLOSED` in `bd` 2026-05-25) |
 
-## Child issues (bd-mappable)
+## Child issues (`bd`)
+
+| bd id | Title |
+|--------|--------|
+| `svg-editor-m2k.1` | Epic 23: visibility audit and gap list |
+| `svg-editor-m2k.2` | Epic 23: layer lock — model and history |
+| `svg-editor-m2k.3` | Epic 23: layer lock — enforce on canvas and inspector |
+| `svg-editor-m2k.4` | Epic 23: layers DnD — interaction choice |
+| `svg-editor-m2k.5` | Epic 23: layers DnD — sibling reorder command |
+| `svg-editor-m2k.6` | Epic 23: layers DnD — panel UI |
+| `svg-editor-m2k.7` | Epic 23: QA + regression |
+
+## Implementation notes (2026-05-25)
+
+- **Lock model**: `data-editor-locked="true"` on layer row elements (`EDITOR_LAYER_LOCKED_ATTR`); `ToggleLayerLockCommand`; `LayerTreeNode.locked`; `SvgLayerStructureService` / port helpers `isElementOrAncestorLocked`, `setLayerLocked`.
+- **Guards**: `ChromeEditorApplyService` blocks inspector mutations when selection touches a locked subtree; **panel** actions remain: visibility, lock toggle, reorder (buttons + DnD), `group`/`ungroup` blocked when locked; canvas **drag / resize / rotate / skew** start blocked via `gesture-layer-lock.ts` + `TransformGestureDocPort.isElementOrAncestorLocked`; keyboard delete; `svg-canvas` align / distribute / duplicate / group / ungroup.
+- **DnD**: Native HTML5 drag from `.layer-drag-handle`; drop on row — upper half = move before target’s following sibling (toward front), lower half = `insertBefore` target; `ReorderBeforeSiblingCommand` + `moveElementBeforeNextSibling` (same parent only).
+- **Tests**: `ToggleLayerLockCommand` / `ReorderBeforeSiblingCommand` command specs; layers panel lock button spec; `getLayerTree` locked attribute spec; gesture spec mocks extended.
+
+## Child issues (local LL refs — historical)
 
 | Local ref | Title | Type | Acceptance criteria (summary) | Depends on |
 |-----------|--------|------|--------------------------------|------------|

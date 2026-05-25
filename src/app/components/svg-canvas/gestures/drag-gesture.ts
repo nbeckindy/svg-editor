@@ -7,6 +7,7 @@ import {
 import { SmartGuideResult } from '../../../services/snap.service';
 import type { GestureRuntimeContext, GhostPreviewFragment, Rect, Point } from './gesture-context';
 import { computeGestureVisibilityToggleIds } from './gesture-visibility';
+import { isGestureSelectionLocked } from './gesture-layer-lock';
 import { GhostSession } from './ghost-session';
 
 export class DragGesture {
@@ -39,6 +40,8 @@ export class DragGesture {
   ): boolean {
     const svgInstance = ctx.transformDoc.getSVGInstance();
     if (!svgInstance) return false;
+
+    if (isGestureSelectionLocked(ctx, selectedIds)) return false;
 
     this.visibilityShapeIds = computeGestureVisibilityToggleIds(
       svgInstance,

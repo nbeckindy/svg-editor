@@ -29,6 +29,8 @@ import {
   ReorderCommand,
   buildReorderToExtremeCommand,
   ToggleVisibilityCommand,
+  ToggleLayerLockCommand,
+  ReorderBeforeSiblingCommand,
   GroupCommand,
   UngroupCommand,
   UngroupElementsCommand,
@@ -74,6 +76,7 @@ export class ChromeEditorApplyService {
   private readonly transformReadout = inject(SelectionTransformReadoutService);
 
   applyFillColor(color: string): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
     const cleared = !color || color.toLowerCase() === 'none';
     const nextFill = cleared ? 'none' : color;
     const shapes = this.selectedShapesList();
@@ -106,6 +109,7 @@ export class ChromeEditorApplyService {
   }
 
   applyStrokeColor(color: string): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
     if (color === 'none' || color === '') {
       const shapes = this.selectedShapesList();
       const commands: EditorCommand[] = shapes.map(
@@ -176,6 +180,7 @@ export class ChromeEditorApplyService {
   }
 
   applyStrokeWidth(width: number): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
     if (!Number.isFinite(width)) return;
     const shapes = this.selectedShapesList();
     const commands: EditorCommand[] = shapes.map((s) => {
@@ -219,6 +224,7 @@ export class ChromeEditorApplyService {
   }
 
   applyOpacity(opacity: number): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
     if (!Number.isFinite(opacity)) return;
     const commands = this.selectedShapesList().map(
       (s) => new OpacityCommand(this.paintSvg, s.id, s.opacity ?? 1, opacity)
@@ -228,6 +234,7 @@ export class ChromeEditorApplyService {
   }
 
   applyStrokeDasharray(dasharray: string): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
     const commands = this.selectedShapesList().map(
       (s) => new StrokeDashArrayCommand(this.paintSvg, s.id, s.strokeDasharray ?? '', dasharray)
     );
@@ -239,6 +246,7 @@ export class ChromeEditorApplyService {
   }
 
   applyStrokeDashoffset(offset: number): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
     if (!Number.isFinite(offset)) return;
     const commands = this.selectedShapesList().map(
       (s) => new StrokeDashOffsetCommand(this.paintSvg, s.id, s.strokeDashoffset ?? 0, offset)
@@ -252,6 +260,7 @@ export class ChromeEditorApplyService {
     textShapes: ShapeProperties[],
     placementDefaults: boolean
   ): void {
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
     if (textShapes.length > 0) {
       const commands = textShapes.map(
         (s) =>
@@ -287,6 +296,7 @@ export class ChromeEditorApplyService {
     textShapes: ShapeProperties[],
     placementDefaults: boolean
   ): void {
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
     if (textShapes.length > 0) {
       const commands = textShapes.map(
         (s) =>
@@ -312,6 +322,7 @@ export class ChromeEditorApplyService {
   }
 
   applyTextToggleBoldFromChrome(textShapes: ShapeProperties[], placementDefaults: boolean): void {
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
     if (textShapes.length > 0) {
       const allBold = textShapes.every((s) => (s.fontWeight ?? 'normal') === 'bold');
       const nextWeight = allBold ? 'normal' : 'bold';
@@ -349,6 +360,7 @@ export class ChromeEditorApplyService {
   }
 
   applyTextToggleItalicFromChrome(textShapes: ShapeProperties[], placementDefaults: boolean): void {
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
     if (textShapes.length > 0) {
       const allItalic = textShapes.every((s) => (s.fontStyle ?? 'normal') === 'italic');
       const nextStyle = allItalic ? 'normal' : 'italic';
@@ -390,6 +402,7 @@ export class ChromeEditorApplyService {
     textShapes: ShapeProperties[],
     placementDefaults: boolean
   ): void {
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
     if (textShapes.length > 0) {
       const commands = textShapes.map(
         (s) =>
@@ -423,6 +436,7 @@ export class ChromeEditorApplyService {
     textShapes: ShapeProperties[],
     paintOrder: 'stroke fill' | undefined
   ): void {
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
     if (textShapes.length === 0) return;
     const commands = textShapes.map(
       (s) => new TextPaintOrderCommand(this.propertiesSvg, s.id, s.paintOrder, paintOrder)
@@ -437,6 +451,7 @@ export class ChromeEditorApplyService {
     textShapes: ShapeProperties[],
     vectorEffect: 'non-scaling-stroke' | undefined
   ): void {
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
     if (textShapes.length === 0) return;
     const commands = textShapes.map(
       (s) =>
@@ -450,17 +465,20 @@ export class ChromeEditorApplyService {
 
   applyBakeFillFromChrome(shapes: ShapeProperties[]): void {
     if (shapes.length === 0) return;
+    if (this.shapeIdsTouchLocked(shapes.map((s) => s.id))) return;
     const commands = shapes.map((s) => new BakeFillCommand(this.propertiesSvg, s.id));
     this.pushCommandsAndSyncSelection(commands, 'Bake fill to local');
   }
 
   applyBakeStrokeFromChrome(shapes: ShapeProperties[]): void {
     if (shapes.length === 0) return;
+    if (this.shapeIdsTouchLocked(shapes.map((s) => s.id))) return;
     const commands = shapes.map((s) => new BakeStrokeCommand(this.propertiesSvg, s.id));
     this.pushCommandsAndSyncSelection(commands, 'Bake stroke to local');
   }
 
   applyAddLinearGradientFillFromChrome(shape: ShapeProperties, solidFrom: string): void {
+    if (this.layerSvg.isElementOrAncestorLocked(shape.id)) return;
     const id = this.propertiesSvg.allocateUniqueDefId('grad');
     const model = defaultLinearGradientModel(id, solidFrom, '#ffffff');
     const before = this.propertiesSvg.capturePaintGradientSnapshot(shape.id, 'fill');
@@ -480,6 +498,7 @@ export class ChromeEditorApplyService {
     shapeIds: string[]
   ): void {
     if (shapeIds.length < 2) return;
+    if (this.shapeIdsTouchLocked(shapeIds)) return;
     this.pushCommandsAndSyncSelection(
       [new AlignCommand(this.propertiesSvg, shapeIds, direction)],
       undefined
@@ -488,6 +507,7 @@ export class ChromeEditorApplyService {
 
   applyDistributeFromChrome(direction: 'horizontal' | 'vertical', shapeIds: string[]): void {
     if (shapeIds.length < 3) return;
+    if (this.shapeIdsTouchLocked(shapeIds)) return;
     this.pushCommandsAndSyncSelection(
       [new DistributeCommand(this.propertiesSvg, shapeIds, direction)],
       undefined
@@ -533,6 +553,7 @@ export class ChromeEditorApplyService {
     const model = this.transformReadout.selectionBBoxFieldModel();
     if (!model || !model.ok) return;
     const { ids, union: unionBefore } = model;
+    if (this.shapeIdsTouchLocked(ids)) return;
     const epsPos = 1e-6;
 
     if (field === 'x') {
@@ -599,6 +620,16 @@ export class ChromeEditorApplyService {
     this.editorHistory.pushAndExecute(new ToggleVisibilityCommand(this.layerSvg, layerId));
   }
 
+  toggleLayerLock(layerId: string): void {
+    this.editorHistory.pushAndExecute(new ToggleLayerLockCommand(this.layerSvg, layerId));
+  }
+
+  moveLayerBeforeSibling(draggedLayerId: string, referenceNextSiblingId: string | null): void {
+    this.editorHistory.pushAndExecute(
+      new ReorderBeforeSiblingCommand(this.layerSvg, draggedLayerId, referenceNextSiblingId)
+    );
+  }
+
   moveLayerForward(layerId: string): void {
     this.editorHistory.pushAndExecute(new ReorderCommand(this.layerSvg, layerId, 'forward'));
   }
@@ -619,6 +650,7 @@ export class ChromeEditorApplyService {
 
   groupSelectedFromLayersPanel(selectedShapeIds: string[]): void {
     if (selectedShapeIds.length < 2) return;
+    if (this.shapeIdsTouchLocked(selectedShapeIds)) return;
     const cmd = new GroupCommand(this.layerSvg, selectedShapeIds);
     this.editorHistory.pushAndExecute(cmd);
     const newGroupId = cmd.createdGroupId;
@@ -633,6 +665,7 @@ export class ChromeEditorApplyService {
 
   ungroupSelectedFromLayersPanel(groupIds: string[]): void {
     if (groupIds.length === 0) return;
+    if (groupIds.some((id) => this.layerSvg.isElementOrAncestorLocked(id))) return;
     const svg = this.paintSvg.getSVGInstance();
     if (!svg) return;
 
@@ -679,6 +712,16 @@ export class ChromeEditorApplyService {
 
   private selectedShapesList(): ShapeProperties[] {
     return this.shapeSelection.getSelectedShapes();
+  }
+
+  /** True when current **Selection** includes any shape under a **Layer lock** row. */
+  private shouldBlockShapeOnlyMutations(): boolean {
+    const shapes = this.selectedShapesList();
+    return shapes.length > 0 && shapes.some((s) => this.layerSvg.isElementOrAncestorLocked(s.id));
+  }
+
+  private shapeIdsTouchLocked(ids: string[]): boolean {
+    return ids.some((id) => this.layerSvg.isElementOrAncestorLocked(id));
   }
 
   private hasStrokeColor(shape: ShapeProperties): boolean {

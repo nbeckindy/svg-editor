@@ -58,6 +58,8 @@ export interface TransformGestureDocSvgPort extends TransformGestureSvgPort {
   setShapeVisibility(shapeId: string, visible: boolean): void;
   getSelectionRotationPivot(shapeIds: string[]): { x: number; y: number } | null;
   getShapeBBox(shapeId: string, options?: { preferScreenBounds?: boolean }): TransformGestureUnionRect | null;
+  /** True if this node or any ancestor `<g>` / row has `data-editor-locked="true"`. */
+  isElementOrAncestorLocked(shapeId: string): boolean;
 }
 
 /**

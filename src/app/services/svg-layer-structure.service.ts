@@ -4,6 +4,7 @@ import { SvgEditorDocumentService } from './svg-editor-document.service';
 import {
   CONTENT_SHAPE_SELECTOR,
   EDITOR_CONTENT_GROUP_ID,
+  EDITOR_LAYER_LOCKED_ATTR,
   LAYER_TREE_SKIP_TAGS
 } from './svg-editor-stage.constants';
 import type { LayerStackItem, LayerTreeNode, SvgLayerStructurePort } from './svg-layer-structure.port';
@@ -103,6 +104,66 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
     }
     this.doc.bumpDocumentRevision();
     return hidden;
+  }
+
+  isElementDirectLocked(elementId: string): boolean {
+    if (!this.doc.getSVGInstance()) return false;
+    const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return false;
+    return (el.node as Element).getAttribute(EDITOR_LAYER_LOCKED_ATTR) === 'true';
+  }
+
+  isElementOrAncestorLocked(elementId: string): boolean {
+    if (!this.doc.getSVGInstance()) return false;
+    const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return false;
+    let n: Element | null = el.node as Element;
+    while (n) {
+      if (n.getAttribute(EDITOR_LAYER_LOCKED_ATTR) === 'true') return true;
+      n = n.parentElement;
+    }
+    return false;
+  }
+
+  setLayerLocked(elementId: string, locked: boolean): void {
+    if (!this.doc.getSVGInstance()) return;
+    const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return;
+    if (locked) {
+      el.attr(EDITOR_LAYER_LOCKED_ATTR, 'true');
+    } else {
+      el.attr(EDITOR_LAYER_LOCKED_ATTR, null);
+    }
+    this.doc.bumpDocumentRevision();
+  }
+
+  moveElementBeforeNextSibling(elementId: string, referenceNextSiblingId: string | null): boolean {
+    if (!this.doc.getSVGInstance()) return false;
+    const svg = this.doc.getSVGInstance()!;
+    const moved = svg.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!moved?.node) return false;
+    const node = moved.node as Element;
+    const parent = node.parentNode;
+    if (!parent) return false;
+
+    if (referenceNextSiblingId === null) {
+      if (parent.lastElementChild === node) return false;
+      parent.appendChild(node);
+      this.doc.bumpDocumentRevision();
+      return true;
+    }
+
+    if (referenceNextSiblingId === elementId) return false;
+
+    const ref = svg.findOne(`#${referenceNextSiblingId}`) as SvgJsElement | undefined;
+    if (!ref?.node) return false;
+    const refNode = ref.node as Element;
+    if (refNode.parentNode !== parent) return false;
+    if (node.nextElementSibling === refNode) return false;
+
+    parent.insertBefore(node, refNode);
+    this.doc.bumpDocumentRevision();
+    return true;
   }
 
   isElementVisible(elementId: string): boolean {
@@ -295,6 +356,7 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
       const id = child.id || '';
       const name = child.getAttribute('data-name') || id || tagName;
       const visible = !isSvgEditorNodeHidden(child);
+      const locked = child.getAttribute(EDITOR_LAYER_LOCKED_ATTR) === 'true';
       const elementMarkup = child.outerHTML;
 
       if (tagName === 'g') {
@@ -304,7 +366,7 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
           if (node) children.push(node);
         }
         const paint = this.shapes.getRenderedPaint(child);
-        return { id, type: 'g', name, children, visible, elementMarkup, ...paint };
+        return { id, type: 'g', name, children, visible, locked, elementMarkup, ...paint };
       }
 
       if (!contentShapeTags.has(tagName)) return null;
@@ -340,7 +402,7 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
         ? renderedPaint.opacity
         : (Number.isFinite(rawOpacity) ? rawOpacity : undefined);
 
-      return { id, type: tagName, name, visible, elementMarkup, fill, stroke, strokeWidth, opacity };
+      return { id, type: tagName, name, visible, locked, elementMarkup, fill, stroke, strokeWidth, opacity };
     };
 
     const root = contentGroup.node as Element;

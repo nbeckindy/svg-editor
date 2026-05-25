@@ -19,6 +19,7 @@ interface LayerTreeViewModel {
   isGroup: boolean;
   isExpanded: boolean;
   visible: boolean;
+  locked: boolean;
   selected: boolean;
   previewUrl: string;
 }
@@ -74,6 +75,63 @@ export class LayersPanelComponent {
 
   onVisibilityToggle(layerId: string): void {
     this.chromeApply.toggleLayerVisibility(layerId);
+  }
+
+  onLockToggle(layerId: string): void {
+    this.chromeApply.toggleLayerLock(layerId);
+  }
+
+  onLayerDragStart(layerId: string, event: DragEvent): void {
+    event.dataTransfer?.setData('application/x-svg-editor-layer-id', layerId);
+    event.dataTransfer?.setData('text/plain', layerId);
+    if (event.dataTransfer) {
+      event.dataTransfer.effectAllowed = 'move';
+    }
+  }
+
+  onLayerRowDragOver(_targetId: string, event: DragEvent): void {
+    event.preventDefault();
+    if (event.dataTransfer) {
+      event.dataTransfer.dropEffect = 'move';
+    }
+  }
+
+  onLayerRowDrop(targetId: string, event: DragEvent): void {
+    event.preventDefault();
+    const draggedId =
+      event.dataTransfer?.getData('application/x-svg-editor-layer-id') ||
+      event.dataTransfer?.getData('text/plain');
+    if (!draggedId || draggedId === targetId) return;
+    const row = event.currentTarget as HTMLElement;
+    const frontHalf = event.offsetY < row.clientHeight / 2;
+    const res = this.resolveDropReferenceSibling(draggedId, targetId, frontHalf);
+    if (!res.ok) return;
+    this.chromeApply.moveLayerBeforeSibling(draggedId, res.ref);
+  }
+
+  private resolveDropReferenceSibling(
+    draggedId: string,
+    targetId: string,
+    frontHalf: boolean
+  ): { ok: true; ref: string | null } | { ok: false } {
+    const svg = this.svg.getSVGInstance();
+    if (!svg) return { ok: false };
+    const d = svg.findOne(`#${draggedId}`) as SvgJsElement | undefined;
+    const t = svg.findOne(`#${targetId}`) as SvgJsElement | undefined;
+    if (!d?.node || !t?.node) return { ok: false };
+    const dn = d.node as Element;
+    const tn = t.node as Element;
+    if (dn.parentElement !== tn.parentElement) return { ok: false };
+
+    if (frontHalf) {
+      let s: Element | null = tn.nextElementSibling;
+      while (s && (!s.id || s.id === draggedId)) {
+        s = s.nextElementSibling;
+      }
+      const ref: string | null = s?.id ?? null;
+      return { ok: true, ref };
+    }
+    return { ok: true, ref: targetId };
   }
 
   onMoveForward(layerId: string): void {
@@ -162,6 +220,7 @@ export class LayersPanelComponent {
         isGroup,
         isExpanded,
         visible: node.visible,
+        locked: node.locked,
         selected,
         previewUrl: this.createPreviewDataUrl(node)
       });

@@ -27,10 +27,13 @@
           [class.selected]="layer.selected"
           [class.group-row]="layer.isGroup"
           [class.hidden-layer]="!layer.visible"
+          [class.locked-layer]="layer.locked"
           [style.padding-left.px]="12 + layer.depth * 16"
           [title]="layer.name"
           [attr.data-testid]="'layer-row-' + layer.id"
           [attr.aria-label]="layer.name + ' (' + layer.type + ')'"
+          (dragover)="onLayerRowDragOver(layer.id, $event)"
+          (drop)="onLayerRowDrop(layer.id, $event)"
           (click)="onLayerClick(layer.id, $event)">
 
           @if (layer.isGroup) {
@@ -41,11 +44,27 @@
                   aria-hidden="true">▶</span>
           }
 
+          <span
+            class="layer-drag-handle"
+            draggable="true"
+            [attr.data-testid]="'layer-drag-handle-' + layer.id"
+            title="Drag to reorder"
+            aria-hidden="true"
+            (dragstart)="onLayerDragStart(layer.id, $event); $event.stopPropagation()"
+            (click)="$event.stopPropagation()">⋮⋮</span>
+
           <button type="button" class="visibility-toggle"
                   [attr.aria-label]="layer.visible ? 'Hide ' + layer.name : 'Show ' + layer.name"
                   [attr.data-testid]="'layer-visibility-' + layer.id"
                   (click)="onVisibilityToggle(layer.id); $event.stopPropagation()">
             <span aria-hidden="true">{{ layer.visible ? '●' : '○' }}</span>
+          </button>
+
+          <button type="button" class="lock-toggle"
+                  [attr.aria-label]="layer.locked ? 'Unlock ' + layer.name : 'Lock ' + layer.name"
+                  [attr.data-testid]="'layer-lock-' + layer.id"
+                  (click)="onLockToggle(layer.id); $event.stopPropagation()">
+            <span aria-hidden="true">{{ layer.locked ? '\u25A0' : '\u25A1' }}</span>
           </button>
 
           <img class="layer-preview" [src]="layer.previewUrl" [alt]="layer.type + ' preview'" />

@@ -15,7 +15,9 @@ function createSkewContext(): GestureRuntimeContext {
       snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
       setShapeVisibility: vi.fn(),
       getSVGInstance: vi.fn().mockReturnValue({}),
-      getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids)
+      getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids),
+      getShapeBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
+      isElementOrAncestorLocked: vi.fn().mockReturnValue(false)
     },
     shapeSelection: {
       getSelectedShapes: vi.fn().mockReturnValue([{ id: 'shape-a' }])

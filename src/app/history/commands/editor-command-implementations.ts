@@ -774,6 +774,58 @@ export class ToggleVisibilityCommand implements EditorCommand {
   }
 }
 
+export class ToggleLayerLockCommand implements EditorCommand {
+  readonly description = 'Toggle layer lock';
+  private readonly lockedBefore: boolean;
+
+  constructor(
+    private readonly svc: LayerReorderGroupSvgPort,
+    private readonly elementId: string
+  ) {
+    this.lockedBefore = this.svc.isElementDirectLocked(elementId);
+  }
+
+  execute(): void {
+    this.svc.setLayerLocked(this.elementId, !this.lockedBefore);
+  }
+
+  undo(): void {
+    this.svc.setLayerLocked(this.elementId, this.lockedBefore);
+  }
+}
+
+export class ReorderBeforeSiblingCommand implements EditorCommand {
+  readonly description = 'Reorder layer (drag)';
+  private oldIndex = -1;
+
+  constructor(
+    private readonly svc: LayerReorderGroupSvgPort,
+    private readonly elementId: string,
+    private readonly referenceNextSiblingId: string | null
+  ) {}
+
+  private captureOldIndex(): void {
+    const svgInstance = this.svc.getSVGInstance();
+    if (!svgInstance) return;
+    const el = svgInstance.findOne(`#${this.elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return;
+    const node = el.node as Element;
+    const parent = node.parentElement;
+    if (!parent) return;
+    this.oldIndex = Array.from(parent.children).indexOf(node);
+  }
+
+  execute(): void {
+    this.captureOldIndex();
+    this.svc.moveElementBeforeNextSibling(this.elementId, this.referenceNextSiblingId);
+  }
+
+  undo(): void {
+    if (this.oldIndex < 0) return;
+    this.svc.restoreElementSiblingOrder(this.elementId, this.oldIndex);
+  }
+}
+
 export class GroupCommand implements EditorCommand {
   readonly description = 'Group elements';
   private groupId: string | null = null;

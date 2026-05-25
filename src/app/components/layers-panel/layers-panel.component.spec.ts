@@ -8,6 +8,7 @@ import { EditorHistoryService } from '../../services/editor-history.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   ToggleVisibilityCommand,
+  ToggleLayerLockCommand,
   ReorderCommand,
   GroupCommand,
   UngroupCommand,
@@ -49,7 +50,11 @@ describe('LayersPanelComponent', () => {
             getLayerTree,
             getSVGInstance,
             getShapeProperties,
-            getShapePropertiesInSameClipGroup
+            getShapePropertiesInSameClipGroup,
+            isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
+            isElementDirectLocked: vi.fn().mockReturnValue(false),
+            setLayerLocked: vi.fn(),
+            moveElementBeforeNextSibling: vi.fn().mockReturnValue(true)
           }
         },
         {
@@ -84,6 +89,7 @@ describe('LayersPanelComponent', () => {
         type: 'rect',
         name: 'shape-back',
         visible: true,
+        locked: false,
         elementMarkup: '<rect id="shape-back" x="0" y="0" width="10" height="10" />'
       },
       {
@@ -91,6 +97,7 @@ describe('LayersPanelComponent', () => {
         type: 'circle',
         name: 'shape-front',
         visible: true,
+        locked: false,
         elementMarkup: '<circle id="shape-front" cx="5" cy="5" r="4" />'
       }
     ]);
@@ -107,8 +114,10 @@ describe('LayersPanelComponent', () => {
 
   it('marks selected layer rows', () => {
     getLayerTree.mockReturnValue([
-      { id: 'shape-a', type: 'path', name: 'shape-a', visible: true, elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' },
-      { id: 'shape-b', type: 'rect', name: 'shape-b', visible: true, elementMarkup: '<rect id="shape-b" x="0" y="0" width="5" height="5" />' }
+      { id: 'shape-a', type: 'path', name: 'shape-a', visible: true,
+        locked: false, elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' },
+      { id: 'shape-b', type: 'rect', name: 'shape-b', visible: true,
+        locked: false, elementMarkup: '<rect id="shape-b" x="0" y="0" width="5" height="5" />' }
     ]);
     selectedShapes.set([{ id: 'shape-a', type: 'path' }, { id: 'shape-b', type: 'rect' }]);
     documentRevision.set(1);
@@ -131,7 +140,8 @@ describe('LayersPanelComponent', () => {
       { id: 'shape-b', type: 'rect' }
     ]);
     getLayerTree.mockReturnValue([
-      { id: 'shape-a', type: 'path', name: 'shape-a', visible: true, elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' }
+      { id: 'shape-a', type: 'path', name: 'shape-a', visible: true,
+        locked: false, elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' }
     ]);
     documentRevision.set(1);
     fixture.detectChanges();
@@ -156,7 +166,8 @@ describe('LayersPanelComponent', () => {
     getSVGInstance.mockReturnValue({ findOne });
     getShapePropertiesInSameClipGroup.mockReturnValue([{ id: 'shape-a', type: 'path' }]);
     getLayerTree.mockReturnValue([
-      { id: 'shape-a', type: 'path', name: 'shape-a', visible: true, elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' }
+      { id: 'shape-a', type: 'path', name: 'shape-a', visible: true,
+        locked: false, elementMarkup: '<path id="shape-a" d="M0 0 L5 5" />' }
     ]);
     documentRevision.set(1);
     fixture.detectChanges();
@@ -172,9 +183,11 @@ describe('LayersPanelComponent', () => {
     getLayerTree.mockReturnValue([
       {
         id: 'group-1', type: 'g', name: 'group-1', visible: true,
+        locked: false,
         elementMarkup: '<g id="group-1"><circle id="child-1" /></g>',
         children: [
-          { id: 'child-1', type: 'circle', name: 'child-1', visible: true, elementMarkup: '<circle id="child-1" />' }
+          { id: 'child-1', type: 'circle', name: 'child-1', visible: true,
+        locked: false, elementMarkup: '<circle id="child-1" />' }
         ]
       }
     ]);
@@ -192,9 +205,11 @@ describe('LayersPanelComponent', () => {
     getLayerTree.mockReturnValue([
       {
         id: 'group-1', type: 'g', name: 'group-1', visible: true,
+        locked: false,
         elementMarkup: '<g id="group-1"><circle id="child-1" /></g>',
         children: [
-          { id: 'child-1', type: 'circle', name: 'child-1', visible: true, elementMarkup: '<circle id="child-1" />' }
+          { id: 'child-1', type: 'circle', name: 'child-1', visible: true,
+        locked: false, elementMarkup: '<circle id="child-1" />' }
         ]
       }
     ]);
@@ -211,9 +226,11 @@ describe('LayersPanelComponent', () => {
     getLayerTree.mockReturnValue([
       {
         id: 'group-1', type: 'g', name: 'group-1', visible: true,
+        locked: false,
         elementMarkup: '<g id="group-1"><circle id="child-1" /></g>',
         children: [
-          { id: 'child-1', type: 'circle', name: 'child-1', visible: true, elementMarkup: '<circle id="child-1" />' }
+          { id: 'child-1', type: 'circle', name: 'child-1', visible: true,
+        locked: false, elementMarkup: '<circle id="child-1" />' }
         ]
       }
     ]);
@@ -240,7 +257,8 @@ describe('LayersPanelComponent', () => {
 
   it('visibility toggle button dispatches ToggleVisibilityCommand', () => {
     getLayerTree.mockReturnValue([
-      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-1" />' }
     ]);
     documentRevision.set(1);
     fixture.detectChanges();
@@ -253,9 +271,33 @@ describe('LayersPanelComponent', () => {
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ToggleVisibilityCommand);
   });
 
+  it('lock toggle button dispatches ToggleLayerLockCommand', () => {
+    getLayerTree.mockReturnValue([
+      {
+        id: 'rect-1',
+        type: 'rect',
+        name: 'rect-1',
+        visible: true,
+        locked: false,
+        elementMarkup: '<rect id="rect-1" />'
+      }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const lockBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="layer-lock-rect-1"]'
+    ) as HTMLButtonElement;
+    lockBtn.click();
+
+    expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ToggleLayerLockCommand);
+  });
+
   it('reorder forward button dispatches ReorderCommand', () => {
     getLayerTree.mockReturnValue([
-      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-1" />' }
     ]);
     documentRevision.set(1);
     fixture.detectChanges();
@@ -270,7 +312,8 @@ describe('LayersPanelComponent', () => {
 
   it('reorder backward button dispatches ReorderCommand', () => {
     getLayerTree.mockReturnValue([
-      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-1" />' }
     ]);
     documentRevision.set(1);
     fixture.detectChanges();
@@ -292,7 +335,8 @@ describe('LayersPanelComponent', () => {
       findOne: vi.fn((sel: string) => (sel === '#rect-1' ? { node } : null))
     });
     getLayerTree.mockReturnValue([
-      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-1" />' }
     ]);
     documentRevision.set(1);
     fixture.detectChanges();
@@ -316,7 +360,8 @@ describe('LayersPanelComponent', () => {
       findOne: vi.fn((sel: string) => (sel === '#rect-1' ? { node } : null))
     });
     getLayerTree.mockReturnValue([
-      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-1" />' }
     ]);
     documentRevision.set(1);
     fixture.detectChanges();
@@ -333,7 +378,8 @@ describe('LayersPanelComponent', () => {
 
   it('group button is disabled when < 2 shapes selected', () => {
     getLayerTree.mockReturnValue([
-      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-1" />' }
     ]);
     selectedShapes.set([{ id: 'rect-1', type: 'rect' }]);
     documentRevision.set(1);
@@ -346,8 +392,10 @@ describe('LayersPanelComponent', () => {
 
   it('group button groups selected shapes via GroupCommand', () => {
     getLayerTree.mockReturnValue([
-      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' },
-      { id: 'circle-1', type: 'circle', name: 'circle-1', visible: true, elementMarkup: '<circle id="circle-1" />' }
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-1" />' },
+      { id: 'circle-1', type: 'circle', name: 'circle-1', visible: true,
+        locked: false, elementMarkup: '<circle id="circle-1" />' }
     ]);
     selectedShapes.set([
       { id: 'rect-1', type: 'rect' },
@@ -367,7 +415,8 @@ describe('LayersPanelComponent', () => {
 
   it('ungroup button is disabled when no group is selected', () => {
     getLayerTree.mockReturnValue([
-      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true, elementMarkup: '<rect id="rect-1" />' }
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-1" />' }
     ]);
     selectedShapes.set([{ id: 'rect-1', type: 'rect' }]);
     documentRevision.set(1);
@@ -382,10 +431,12 @@ describe('LayersPanelComponent', () => {
     getLayerTree.mockReturnValue([
       {
         id: 'g1', type: 'g', name: 'g1', visible: true,
+        locked: false,
         elementMarkup: '<g id="g1"></g>', children: []
       },
       {
         id: 'g2', type: 'g', name: 'g2', visible: true,
+        locked: false,
         elementMarkup: '<g id="g2"></g>', children: []
       }
     ]);
@@ -412,9 +463,11 @@ describe('LayersPanelComponent', () => {
     getLayerTree.mockReturnValue([
       {
         id: 'group-1', type: 'g', name: 'group-1', visible: true,
+        locked: false,
         elementMarkup: '<g id="group-1"><circle id="child-1" /></g>',
         children: [
-          { id: 'child-1', type: 'circle', name: 'child-1', visible: true, elementMarkup: '<circle id="child-1" />' }
+          { id: 'child-1', type: 'circle', name: 'child-1', visible: true,
+        locked: false, elementMarkup: '<circle id="child-1" />' }
         ]
       }
     ]);
@@ -445,8 +498,10 @@ describe('LayersPanelComponent', () => {
     getSVGInstance.mockReturnValue(mockSvg);
 
     getLayerTree.mockReturnValue([
-      { id: 'g1', type: 'g', name: 'g1', visible: true, elementMarkup: '<g id="g1"/>', children: [] },
-      { id: 'g2', type: 'g', name: 'g2', visible: true, elementMarkup: '<g id="g2"/>', children: [] }
+      { id: 'g1', type: 'g', name: 'g1', visible: true,
+        locked: false, elementMarkup: '<g id="g1"/>', children: [] },
+      { id: 'g2', type: 'g', name: 'g2', visible: true,
+        locked: false, elementMarkup: '<g id="g2"/>', children: [] }
     ]);
     selectedShapes.set([
       { id: 'g1', type: 'g' },
@@ -476,8 +531,9 @@ describe('LayersPanelComponent', () => {
 
   it('hidden layers have .hidden-layer class', () => {
     getLayerTree.mockReturnValue([
-      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: false, elementMarkup: '<rect id="rect-1" />' },
-      { id: 'rect-2', type: 'rect', name: 'rect-2', visible: true, elementMarkup: '<rect id="rect-2" />' }
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: false, locked: false, elementMarkup: '<rect id="rect-1" />' },
+      { id: 'rect-2', type: 'rect', name: 'rect-2', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-2" />' }
     ]);
     documentRevision.set(1);
     fixture.detectChanges();
@@ -491,9 +547,11 @@ describe('LayersPanelComponent', () => {
     getLayerTree.mockReturnValue([
       {
         id: 'group-1', type: 'g', name: 'group-1', visible: true,
+        locked: false,
         elementMarkup: '<g id="group-1"><circle id="child-1" /></g>',
         children: [
-          { id: 'child-1', type: 'circle', name: 'child-1', visible: true, elementMarkup: '<circle id="child-1" />' }
+          { id: 'child-1', type: 'circle', name: 'child-1', visible: true,
+        locked: false, elementMarkup: '<circle id="child-1" />' }
         ]
       }
     ]);
@@ -518,6 +576,7 @@ describe('LayersPanelComponent', () => {
         type: 'image',
         name: 'img-1',
         visible: true,
+        locked: false,
         elementMarkup: `<image id="img-1" href="${hugeHref}" x="0" y="0" width="20" height="20" />`
       }
     ]);

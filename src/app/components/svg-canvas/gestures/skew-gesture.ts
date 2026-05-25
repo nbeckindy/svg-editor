@@ -11,6 +11,7 @@ import {
 } from '../../../utils/selection-skew';
 import type { GestureRuntimeContext, GhostPreviewFragment, Point, Rect } from './gesture-context';
 import { computeGestureVisibilityToggleIds } from './gesture-visibility';
+import { isGestureSelectionLocked } from './gesture-layer-lock';
 import { GhostSession } from './ghost-session';
 
 export class SkewGesture {
@@ -32,6 +33,7 @@ export class SkewGesture {
   start(ctx: GestureRuntimeContext, edge: SkewEdge, event: MouseEvent): boolean {
     const selectedIds = ctx.transformDoc.selectedShapeIds();
     if (selectedIds.length === 0) return false;
+    if (isGestureSelectionLocked(ctx, selectedIds)) return false;
     const union = ctx.transformDoc.getUnionBBox(selectedIds);
     if (!union) return false;
 

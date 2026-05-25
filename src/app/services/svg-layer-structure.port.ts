@@ -14,6 +14,8 @@ export interface LayerTreeNode {
   name: string;
   children?: LayerTreeNode[];
   visible: boolean;
+  /** Direct `data-editor-locked` on this row's element (not inherited). */
+  locked: boolean;
   elementMarkup: string;
   fill?: string;
   stroke?: string;
@@ -36,6 +38,14 @@ export interface SvgLayerStructurePort {
   restoreElementSiblingOrder(elementId: string, oldIndex: number): void;
   toggleLayerVisibility(elementId: string): boolean;
   isElementVisible(elementId: string): boolean;
+  isElementDirectLocked(elementId: string): boolean;
+  isElementOrAncestorLocked(elementId: string): boolean;
+  setLayerLocked(elementId: string, locked: boolean): void;
+  /**
+   * Move `elementId` within its parent so it sits immediately before `referenceNextSiblingId`
+   * in DOM order (`null` = append as last child). Returns false if siblings differ or nodes missing.
+   */
+  moveElementBeforeNextSibling(elementId: string, referenceNextSiblingId: string | null): boolean;
   groupSelectedElements(elementIds: string[]): string | null;
   ungroupElement(groupId: string): string[];
   ungroupElements(

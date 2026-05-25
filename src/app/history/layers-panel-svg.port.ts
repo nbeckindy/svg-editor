@@ -5,7 +5,8 @@ import type { LayerTreeNode } from '../services/svg-layer-structure.port';
 
 /**
  * Svg slice for layer reorder / visibility / group commands (`ReorderCommand`,
- * `ToggleVisibilityCommand`, `GroupCommand`, `UngroupCommand`, `UngroupElementsCommand`).
+ * `ToggleVisibilityCommand`, `ToggleLayerLockCommand`, `GroupCommand`, `UngroupCommand`, `UngroupElementsCommand`,
+ * `ReorderBeforeSiblingCommand`).
  */
 export interface LayerReorderGroupSvgPort {
   getSVGInstance(): Svg | null;
@@ -14,6 +15,11 @@ export interface LayerReorderGroupSvgPort {
   moveElementToFront(elementId: string): boolean;
   moveElementToBack(elementId: string): boolean;
   toggleLayerVisibility(elementId: string): boolean;
+  isElementVisible(elementId: string): boolean;
+  isElementDirectLocked(elementId: string): boolean;
+  isElementOrAncestorLocked(elementId: string): boolean;
+  setLayerLocked(elementId: string, locked: boolean): void;
+  moveElementBeforeNextSibling(elementId: string, referenceNextSiblingId: string | null): boolean;
   groupSelectedElements(elementIds: string[]): string | null;
   ungroupElement(groupId: string): string[];
   ungroupElements(

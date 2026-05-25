@@ -395,6 +395,22 @@ export class SvgManipulationService
     return this.layers.toggleLayerVisibility(elementId);
   }
 
+  isElementDirectLocked(elementId: string): boolean {
+    return this.layers.isElementDirectLocked(elementId);
+  }
+
+  isElementOrAncestorLocked(elementId: string): boolean {
+    return this.layers.isElementOrAncestorLocked(elementId);
+  }
+
+  setLayerLocked(elementId: string, locked: boolean): void {
+    this.layers.setLayerLocked(elementId, locked);
+  }
+
+  moveElementBeforeNextSibling(elementId: string, referenceNextSiblingId: string | null): boolean {
+    return this.layers.moveElementBeforeNextSibling(elementId, referenceNextSiblingId);
+  }
+
   isElementVisible(elementId: string): boolean {
     return this.layers.isElementVisible(elementId);
   }

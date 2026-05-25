@@ -108,7 +108,11 @@ describe('PropertiesPanelComponent', () => {
         shapePaintAttr: '#00aa00',
         gradientOuterHtml: null
       })),
-      applyPaintGradientSnapshot: vi.fn()
+      applyPaintGradientSnapshot: vi.fn(),
+      isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
+      isElementDirectLocked: vi.fn().mockReturnValue(false),
+      setLayerLocked: vi.fn(),
+      moveElementBeforeNextSibling: vi.fn().mockReturnValue(true)
     };
     const editorToolServiceMock = {
       currentTool: editorToolSignal

@@ -1006,6 +1006,17 @@ describe('SvgManipulationService', () => {
       expect(tree[0].visible).toBe(true);
       expect(tree[1].visible).toBe(false);
     });
+
+    it('includes locked flag from data-editor-locked', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="free" x="0" y="0" width="10" height="10"/>
+        <circle id="lck" cx="5" cy="5" r="3" data-editor-locked="true"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree.find((n) => n.id === 'free')?.locked).toBe(false);
+      expect(tree.find((n) => n.id === 'lck')?.locked).toBe(true);
+    });
   });
 
   describe('moveElementForward / moveElementBackward', () => {

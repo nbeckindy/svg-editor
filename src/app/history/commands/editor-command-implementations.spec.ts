@@ -19,6 +19,8 @@ import {
   ReorderCommand,
   buildReorderToExtremeCommand,
   ToggleVisibilityCommand,
+  ToggleLayerLockCommand,
+  ReorderBeforeSiblingCommand,
   GroupCommand,
   UngroupCommand,
   UngroupElementsCommand,
@@ -61,6 +63,10 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     moveElementToBack: vi.fn(),
     restoreElementSiblingOrder: vi.fn(),
     toggleLayerVisibility: vi.fn(),
+    moveElementBeforeNextSibling: vi.fn(),
+    isElementDirectLocked: vi.fn().mockReturnValue(false),
+    isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
+    setLayerLocked: vi.fn(),
     groupSelectedElements: vi.fn(),
     ungroupElement: vi.fn(),
     ungroupElements: vi.fn().mockReturnValue({ allChildElementIds: [], undoSnapshots: [] }),
@@ -969,6 +975,70 @@ describe('ToggleVisibilityCommand', () => {
 
   it('should have description "Toggle visibility"', () => {
     expect(new ToggleVisibilityCommand(mockSvc(), 'l1').description).toBe('Toggle visibility');
+  });
+});
+
+describe('ToggleLayerLockCommand', () => {
+  it('execute toggles lock from ctor snapshot', () => {
+    const svc = mockSvc({
+      isElementDirectLocked: vi.fn().mockReturnValue(false),
+      setLayerLocked: vi.fn(),
+    });
+    const cmd = new ToggleLayerLockCommand(svc, 'layer1');
+    cmd.execute();
+    expect(svc.setLayerLocked).toHaveBeenCalledWith('layer1', true);
+    cmd.undo();
+    expect(svc.setLayerLocked).toHaveBeenCalledWith('layer1', false);
+  });
+
+  it('execute sets locked false when ctor saw locked true', () => {
+    const svc = mockSvc({
+      isElementDirectLocked: vi.fn().mockReturnValue(true),
+      setLayerLocked: vi.fn(),
+    });
+    const cmd = new ToggleLayerLockCommand(svc, 'g1');
+    cmd.execute();
+    expect(svc.setLayerLocked).toHaveBeenCalledWith('g1', false);
+  });
+});
+
+describe('ReorderBeforeSiblingCommand', () => {
+  function buildParentWithChildren(ids: string[]) {
+    const parent = document.createElement('div');
+    const elements = new Map<string, { node: Element }>();
+    for (const id of ids) {
+      const child = document.createElement('div');
+      child.id = id;
+      parent.appendChild(child);
+      elements.set(id, { node: child });
+    }
+    return { parent, elements };
+  }
+
+  it('calls moveElementBeforeNextSibling on execute', () => {
+    const { elements } = buildParentWithChildren(['a', 'b', 'c']);
+    const findOne = vi.fn((sel: string) => elements.get(sel.replace('#', '')));
+    const svc = mockSvc({
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+    });
+    const cmd = new ReorderBeforeSiblingCommand(svc, 'c', 'b');
+    cmd.execute();
+    expect(svc.moveElementBeforeNextSibling).toHaveBeenCalledWith('c', 'b');
+  });
+
+  it('undo restores sibling order', () => {
+    const { parent, elements } = buildParentWithChildren(['a', 'b', 'c']);
+    const findOne = vi.fn((sel: string) => elements.get(sel.replace('#', '')));
+    const svc = mockSvc({
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+      moveElementBeforeNextSibling: vi.fn(() => {
+        parent.insertBefore(elements.get('a')!.node, elements.get('c')!.node);
+      }),
+    });
+    const cmd = new ReorderBeforeSiblingCommand(svc, 'a', 'c');
+    cmd.execute();
+    cmd.undo();
+    expect(svc.restoreElementSiblingOrder).toHaveBeenCalled();
   });
 });
 

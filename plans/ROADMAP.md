@@ -35,6 +35,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 17 | Tool parity and pen authoring | [tool-parity-pen](./epics/tool-parity-pen.md) | `svg-editor-j24` | `CLOSED` | **Closed in `bd` 2026-05-25** — in-scope 12/12; booleans → epic `svg-editor-0zh`, symbols → epic `svg-editor-hya`, arc → [arc-shape-tool](./epics/arc-shape-tool.md). |
 | 18 | Always-visible paint defaults | [always-visible-paint-defaults](./epics/always-visible-paint-defaults.md) | `svg-editor-6g0` | `CLOSED` | **Closed in `bd`** — 5/5 children (`6g0.1`–`6g0.4`, `9i5`). |
 | 20 | Text editing refinement | [text-editing-refinement](./epics/text-editing-refinement.md) | `svg-editor-79x` | `CLOSED` | **Closed in `bd` 2026-05-22** — 4/4 children (`79x.1`–`79x.4`). |
+| 23 | Layer panel — lock, hide, reorder | [layers-panel-lock-hide-reorder](./epics/layers-panel-lock-hide-reorder.md) | `svg-editor-m2k` | `CLOSED` | **Closed in `bd` 2026-05-25** — lock + DnD + guards; children `m2k.1`–`m2k.7` |
 
 ## Active epics (phase 3)
 
@@ -43,7 +44,6 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 19 | Insert raster images into SVG | [raster-image-insert](./epics/raster-image-insert.md) | `svg-editor-e4s` | `OPEN` | Spec → insert API → command → toolbar + drop → parity + export + tests (`e4s.1`–`e4s.8`) |
 | 21 | Boolean path operations | [boolean-path-operations](./epics/boolean-path-operations.md) | `svg-editor-0zh` | `OPEN` | Union / subtract / intersect; **dedicated boolean panel**; epic bead (`type=epic`) |
 | 22 | Elliptical arc shape tool | [arc-shape-tool](./epics/arc-shape-tool.md) | `TBD` | `OPEN` | **Arc tool** next to rect/circle (not pen-only); bead `svg-editor-j24.7`; spike [`pen-elliptical-arc-authoring`](./spikes/pen-elliptical-arc-authoring.md); exit `svg-editor-bmy` when superseded |
-| 23 | Layer panel — lock, hide, reorder | [layers-panel-lock-hide-reorder](./epics/layers-panel-lock-hide-reorder.md) | `TBD` | `PLANNED` | **Layer lock**, **Layer visibility**, DnD reorder within panel; map to `bd` when scheduled |
 | 24 | Layer–group drag-and-drop | [layers-groups-dnd](./epics/layers-groups-dnd.md) | `TBD` | `PLANNED` | Reparent rows in/out of **Group**s, intra-group order; depends on epic 23 panel DnD |
 | 25 | Path primitives and node topology | [path-primitives-and-node-topology](./epics/path-primitives-and-node-topology.md) | `TBD` | `PLANNED` | **Outline to path**, add/remove **Path node**s, **Corner node** ↔ **Smooth node** |
 | 26 | Pen and shape tool interaction UX | [pen-shape-tool-ux](./epics/pen-shape-tool-ux.md) | `TBD` | `PLANNED` | Pen clicks place nodes over existing shapes; auto-switch to select after shape draw |
@@ -191,7 +191,7 @@ flowchart LR
 14. ~~**Epic 18 ([always-visible-paint-defaults](./epics/always-visible-paint-defaults.md), `svg-editor-6g0`):** always-visible paint + defaults~~ — **CLOSED in `bd`** (5/5).
 15. ~~**Epic 20 ([text-editing-refinement](./epics/text-editing-refinement.md), `svg-editor-79x`):** live preview + text outline + tests~~ — **CLOSED in `bd` 2026-05-22** (4/4).
 16. **Post-MVP — [symbols-reusable-instances](./epics/symbols-reusable-instances.md):** epic `svg-editor-hya`; document-level symbols / `<use>`.
-17. **Epic 23 ([layers-panel-lock-hide-reorder](./epics/layers-panel-lock-hide-reorder.md)):** **Layer visibility**, **Layer lock**, drag reorder in layers panel — create `bd` epic when prioritized.
+17. ~~**Epic 23 ([layers-panel-lock-hide-reorder](./epics/layers-panel-lock-hide-reorder.md), `svg-editor-m2k`):** **Layer visibility**, **Layer lock**, drag reorder in layers panel~~ — **CLOSED in `bd` 2026-05-25** (`m2k.1`–`m2k.7`).
 18. **Epic 24 ([layers-groups-dnd](./epics/layers-groups-dnd.md)):** panel DnD reparent in/out of **Group**s and reorder within groups — after epic 23 reorder exists.
 19. **Epic 25 ([path-primitives-and-node-topology](./epics/path-primitives-and-node-topology.md)):** convert rect/circle/line to path; path node add/remove; corner ↔ smooth nodes — extends closed path epics.
 20. **Epic 26 ([pen-shape-tool-ux](./epics/pen-shape-tool-ux.md)):** pen **Tool** places nodes when clicking existing shapes; auto-return to select **Tool** after shape creation.
@@ -206,7 +206,7 @@ Status synced from **`bd show`** on **2026-05-25**; re-run if drift.
 | raster-image-insert | `svg-editor-e4s` | Insert raster images into SVG | `OPEN` | 1/9 (see `bd show svg-editor-e4s`) |
 | boolean-path-operations | `svg-editor-0zh` | Boolean path operations | `OPEN` | epic umbrella |
 | arc-shape-tool | `TBD` | Elliptical arc shape tool | `OPEN` | migrate `svg-editor-j24.7` |
-| layers-panel-lock-hide-reorder | `TBD` | Layer panel — lock, hide, reorder | `PLANNED` | roadmap only until `bd create` |
+| layers-panel-lock-hide-reorder | `svg-editor-m2k` | Layer panel — lock, hide, reorder | `CLOSED` | children closed `m2k.1`–`m2k.7` |
 | layers-groups-dnd | `TBD` | Layer–group drag-and-drop | `PLANNED` | depends on layers-panel epic |
 | path-primitives-and-node-topology | `TBD` | Path primitives and node topology | `PLANNED` | outline + node CRUD + corner/smooth |
 | pen-shape-tool-ux | `TBD` | Pen and shape tool interaction UX | `PLANNED` | pen-over-shapes + post-create select |

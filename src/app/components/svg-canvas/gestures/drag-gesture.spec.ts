@@ -15,7 +15,9 @@ function createMultiSelectDragContext(): GestureRuntimeContext {
       snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
       setShapeVisibility: vi.fn(),
       getSVGInstance: vi.fn().mockReturnValue({}),
-      getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids)
+      getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids),
+      getShapeBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 10, height: 10 }),
+      isElementOrAncestorLocked: vi.fn().mockReturnValue(false)
     },
     shapeSelection: {
       getSelectedShapes: vi.fn().mockReturnValue([{ id: 'a' }, { id: 'b' }])

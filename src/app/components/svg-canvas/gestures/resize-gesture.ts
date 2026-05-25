@@ -13,6 +13,7 @@ import {
 } from '../../../utils/selection-resize';
 import type { GestureRuntimeContext, GhostPreviewFragment, Rect } from './gesture-context';
 import { computeGestureVisibilityToggleIds } from './gesture-visibility';
+import { isGestureSelectionLocked } from './gesture-layer-lock';
 import { GhostSession } from './ghost-session';
 
 const GHOST_SVG_MIN_PX = 1e-6;
@@ -40,6 +41,7 @@ export class ResizeGesture {
   start(ctx: GestureRuntimeContext, handle: ResizeHandle, _event: MouseEvent): boolean {
     const selectedIds = ctx.transformDoc.selectedShapeIds();
     if (selectedIds.length === 0) return false;
+    if (isGestureSelectionLocked(ctx, selectedIds)) return false;
     const union = ctx.transformDoc.getUnionBBox(selectedIds);
     if (!union) return false;
 

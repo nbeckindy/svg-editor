@@ -9,6 +9,7 @@ import {
 import type { BBox } from '../../../utils/selection-resize';
 import type { GestureRuntimeContext, GhostPreviewFragment, Point } from './gesture-context';
 import { computeGestureVisibilityToggleIds } from './gesture-visibility';
+import { isGestureSelectionLocked } from './gesture-layer-lock';
 import { GhostSession } from './ghost-session';
 
 /** Hotspot (px) for the 32×32 rotate cursor artwork. */
@@ -49,6 +50,7 @@ export class RotateGesture {
   start(ctx: GestureRuntimeContext, event: MouseEvent): boolean {
     const selectedIds = ctx.transformDoc.selectedShapeIds();
     if (selectedIds.length === 0) return false;
+    if (isGestureSelectionLocked(ctx, selectedIds)) return false;
     const union = ctx.transformDoc.getUnionBBox(selectedIds);
     if (!union) return false;
 

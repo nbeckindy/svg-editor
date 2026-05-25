@@ -309,6 +309,9 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
     ctx.shapeSelection.getSelectedShapes().length > 0
   ) {
     const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
+    if (ids.some((id) => ctx.svgManipulation.isElementOrAncestorLocked(id))) {
+      return;
+    }
     const cmd = new RemoveShapesCommand(ctx.svgManipulation, ids, ctx.shapeSelection);
     ctx.editorHistory.pushAndExecute(cmd);
     ctx.svgManipulation.clearHighlight();
