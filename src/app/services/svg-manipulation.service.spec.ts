@@ -2271,6 +2271,25 @@ describe('SvgManipulationService', () => {
       const el = container.querySelector(`#${id}`) as Element;
       expect(el.getAttribute('transform')).toBeTruthy();
     });
+
+    it('applyUnionRotationFromSnapshot rotates inserted <image>', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 10,
+        y: 20,
+        width: 100,
+        height: 50
+      });
+      expect(id).toBeTruthy();
+      const union = { x: 10, y: 20, width: 100, height: 50 };
+      const pivot = { x: union.x + union.width / 2, y: union.y + union.height / 2 };
+      const snap = service.snapshotSelectionTransforms([id!]);
+      service.applyUnionRotationFromSnapshot([id!], pivot, 15, snap);
+      const el = container.querySelector(`#${id}`) as Element;
+      expect(el.getAttribute('transform')).toBeTruthy();
+    });
   });
 
   describe('text typography updates', () => {
