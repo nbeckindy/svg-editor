@@ -1,8 +1,9 @@
 import { Injectable, inject } from '@angular/core';
-import { Element as SvgJsElement, Matrix, G } from '@svgdotjs/svg.js';
+import { Element as SvgJsElement, Image as SvgJsImage, Matrix, G, namespaces } from '@svgdotjs/svg.js';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../models/shape-properties.interface';
 import type {
   CreatableShapeType,
+  InsertRasterImageAttrs,
   ShapeCreationAttrs,
   SvgShapeContentPort,
   SvgShapePaintReadout
@@ -1185,6 +1186,46 @@ export class SvgShapeContentService implements SvgShapeContentPort {
       color: attrs?.stroke ?? defaults.stroke,
       width: attrs?.strokeWidth ?? defaults.strokeWidth
     });
+    try {
+      shape.css({ cursor: 'pointer' });
+    } catch {
+      /* jsdom */
+    }
+    this.doc.bumpDocumentRevision();
+    return newId;
+  }
+
+  /**
+   * Insert an `<image>` into the editor content group.
+   * Mirrors {@link addShape} id allocation, pointer styling, and document revision bump.
+   */
+  insertRasterImageIntoContentGroup(attrs: InsertRasterImageAttrs): string | null {
+    if (!this.doc.getSVGInstance()) return null;
+    const contentGroup = this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`) as G | null;
+    if (!contentGroup) return null;
+
+    const usedIds = new Set<string>();
+    contentGroup.find('*').forEach((el: SvgJsElement) => {
+      const id = el.id();
+      if (id) usedIds.add(id);
+    });
+    let newId: string;
+    do {
+      newId = `shape-${Math.random().toString(36).substr(2, 9)}`;
+    } while (usedIds.has(newId));
+
+    const shape = contentGroup.put(new SvgJsImage()) as SvgJsElement;
+    shape.id(newId);
+    shape.attr('href', attrs.href, namespaces.xlink);
+    shape.attr({
+      x: attrs.x,
+      y: attrs.y,
+      width: attrs.width,
+      height: attrs.height
+    });
+    if (attrs.preserveAspectRatio != null && attrs.preserveAspectRatio !== '') {
+      shape.attr('preserveAspectRatio', attrs.preserveAspectRatio);
+    }
     try {
       shape.css({ cursor: 'pointer' });
     } catch {

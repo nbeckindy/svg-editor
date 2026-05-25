@@ -5,6 +5,18 @@ import type { ClipboardPayload } from '../models/clipboard-payload';
 
 export type CreatableShapeType = 'rect' | 'ellipse' | 'line' | 'text';
 
+/** Insert a raster as `<image>` in the editor content group (see ADR 0001). */
+export interface InsertRasterImageAttrs {
+  /** Raster reference, typically a `data:` URL per ADR 0001. */
+  href: string;
+  x: number;
+  y: number;
+  width: number;
+  height: number;
+  /** When set, written as `preserveAspectRatio`; omit for SVG default (`xMidYMid meet`). */
+  preserveAspectRatio?: string;
+}
+
 export interface ShapeCreationAttrs {
   x?: number;
   y?: number;
@@ -105,6 +117,7 @@ export interface SvgShapeContentPort {
     attrs?: { fill?: string; stroke?: string; strokeWidth?: number },
     options?: { closedPath?: boolean }
   ): string | null;
+  insertRasterImageIntoContentGroup(attrs: InsertRasterImageAttrs): string | null;
   insertShapeMarkup(markup: string, insertionIndex?: number): void;
 
   createClipboardPayload(shapeIds: string[]): ClipboardPayload;

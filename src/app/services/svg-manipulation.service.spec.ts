@@ -2134,6 +2134,86 @@ describe('SvgManipulationService', () => {
     });
   });
 
+  describe('insertRasterImageIntoContentGroup', () => {
+    const tinyPngDataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+    function readImageHref(el: Element): string {
+      return (
+        el.getAttribute('href') ??
+        el.getAttributeNS('http://www.w3.org/1999/xlink', 'href') ??
+        ''
+      );
+    }
+
+    it('inserts <image> with href, geometry, stable id, pointer, and bumps revision', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const before = service.documentRevision();
+      const id = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 12,
+        y: 34,
+        width: 64,
+        height: 48
+      });
+      expect(id).toBeTruthy();
+      expect(service.documentRevision()).toBeGreaterThan(before);
+
+      const contentGroup = container.querySelector('[data-editor-content-group]');
+      const el = contentGroup?.querySelector(`#${id}`) as Element | null | undefined;
+      expect(el?.tagName.toLowerCase()).toBe('image');
+      expect(readImageHref(el!)).toBe(tinyPngDataUrl);
+      expect(el?.getAttribute('x')).toBe('12');
+      expect(el?.getAttribute('y')).toBe('34');
+      expect(el?.getAttribute('width')).toBe('64');
+      expect(el?.getAttribute('height')).toBe('48');
+      expect(el?.getAttribute('preserveAspectRatio')).toBeNull();
+
+      const svgInstance = service.getSVGInstance();
+      const shape = svgInstance?.findOne(`#${id}`) as import('@svgdotjs/svg.js').Element | undefined;
+      expect(shape).toBeTruthy();
+      expect(service.getShapeProperties(shape!).type).toBe('image');
+    });
+
+    it('allocates unique ids for successive inserts', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const a = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 0,
+        y: 0,
+        width: 1,
+        height: 1
+      });
+      const b = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 1,
+        y: 1,
+        width: 1,
+        height: 1
+      });
+      expect(a).toBeTruthy();
+      expect(b).toBeTruthy();
+      expect(a).not.toBe(b);
+    });
+
+    it('writes preserveAspectRatio when provided', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 0,
+        y: 0,
+        width: 10,
+        height: 10,
+        preserveAspectRatio: 'xMaxYMax slice'
+      });
+      const el = container.querySelector(`#${id}`) as Element | null;
+      expect(el?.getAttribute('preserveAspectRatio')).toBe('xMaxYMax slice');
+    });
+  });
+
   describe('text typography updates', () => {
     it('updates text typography and anchor attributes', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><text id="t1" x="10" y="20">Hello</text></svg>';

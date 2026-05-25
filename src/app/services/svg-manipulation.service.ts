@@ -4,7 +4,7 @@ import type { EditableGradientModel, PaintGradientSnapshot } from '../models/svg
 import { ArtboardModel, ArtboardResizeAnchor } from '../models/artboard.model';
 import { ShapeProperties } from '../models/shape-properties.interface';
 import type { ClipboardPayload } from '../models/clipboard-payload';
-import type { CreatableShapeType, ShapeCreationAttrs } from './svg-shape-content.port';
+import type { CreatableShapeType, InsertRasterImageAttrs, ShapeCreationAttrs } from './svg-shape-content.port';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgGradientDefsService } from './svg-gradient-defs.service';
 import { SvgLayerStructureService } from './svg-layer-structure.service';
@@ -26,7 +26,7 @@ import type { EditorShapeLifecycleSvgPort, PathDataEditorSvgPort } from '../hist
 import type { ResizeHandle } from '../utils/selection-resize';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 
-export type { CreatableShapeType, ShapeCreationAttrs } from './svg-shape-content.port';
+export type { CreatableShapeType, InsertRasterImageAttrs, ShapeCreationAttrs } from './svg-shape-content.port';
 export type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
 
 @Injectable({
@@ -329,6 +329,10 @@ export class SvgManipulationService
     options?: { closedPath?: boolean }
   ): string | null {
     return this.shapes.insertPathIntoContentGroup(d, attrs, options);
+  }
+
+  insertRasterImageIntoContentGroup(attrs: InsertRasterImageAttrs): string | null {
+    return this.shapes.insertRasterImageIntoContentGroup(attrs);
   }
 
   removeShape(shapeId: string): void {
