@@ -33,6 +33,8 @@ export class ColorPickerComponent {
   readonly indeterminate = input(false);
   /** When true, popover shows a control to clear paint (`none`). */
   readonly clearable = input(false);
+  /** When true, the picker is read-only (no popover / no color edits). */
+  readonly disabled = input(false);
   readonly colorChange = output<string>();
 
   /** Draft HEX while the popover is open (no inline rail). */
@@ -56,12 +58,14 @@ export class ColorPickerComponent {
   }
 
   onNativeColorInput(event: Event): void {
+    if (this.disabled()) return;
     const v = (event.target as HTMLInputElement).value;
     this.hexDraft.set(v.toUpperCase());
     this.colorChange.emit(v);
   }
 
   onHexModelChange(raw: string): void {
+    if (this.disabled()) return;
     this.hexDraft.set(raw);
     const parsed = parseHexColorInput(raw);
     if (parsed) {
@@ -70,6 +74,7 @@ export class ColorPickerComponent {
   }
 
   onClear(event: Event): void {
+    if (this.disabled()) return;
     event.preventDefault();
     event.stopPropagation();
     this.colorChange.emit('none');

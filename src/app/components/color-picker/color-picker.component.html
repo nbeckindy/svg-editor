@@ -1,62 +1,89 @@
-<details
-  class="color-picker"
-  [class.indeterminate]="indeterminate()"
-  data-testid="color-picker"
-  (toggle)="onDetailsToggle($event)">
-  <summary
-    class="cp-summary"
-    data-testid="color-picker-swatch"
+@if (disabled()) {
+  <div
+    class="color-picker color-picker--disabled"
+    data-testid="color-picker"
+    [attr.aria-disabled]="true"
     [attr.aria-label]="
-      indeterminate() ? 'Choose color to apply to selection' : empty() ? 'No paint — open to choose' : 'Color — open to edit'
+      indeterminate() ? 'Choose color to apply to selection' : empty() ? 'No paint' : 'Color (locked layer)'
     ">
-    @if (indeterminate()) {
-      <span class="cp-swatch cp-swatch-mixed" aria-hidden="true"></span>
-    } @else if (empty()) {
-      <span class="cp-swatch cp-swatch-empty" aria-hidden="true">
-        <svg class="cp-slash" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
-          <line x1="4" y1="4" x2="28" y2="28" stroke="#c62828" stroke-width="2.5" stroke-linecap="round" />
-        </svg>
-      </span>
-    } @else {
-      <span
-        class="cp-swatch cp-swatch-solid"
-        [style.background-color]="nativePickerValue()"
-        aria-hidden="true"></span>
-    }
-  </summary>
-  <div class="cp-panel" (click)="$event.stopPropagation()">
-    <div class="cp-panel-row">
-      <label class="cp-native-label">
-        <span class="cp-label-text">Preview</span>
-        <input
-          type="color"
-          class="cp-native"
-          data-testid="color-picker-native"
-          [value]="nativePickerValue()"
-          (input)="onNativeColorInput($event)" />
-      </label>
-      <label class="cp-hex-label">
-        <span class="cp-label-text">HEX</span>
-        <input
-          type="text"
-          class="cp-hex"
-          data-testid="color-picker-hex"
-          spellcheck="false"
-          autocomplete="off"
-          [ngModel]="hexDraft()"
-          (ngModelChange)="onHexModelChange($event)"
-          [attr.placeholder]="indeterminate() ? 'Mixed' : empty() ? '#000000' : ''" />
-      </label>
+    <div class="cp-summary cp-summary-disabled" data-testid="color-picker-swatch">
+      @if (indeterminate()) {
+        <span class="cp-swatch cp-swatch-mixed" aria-hidden="true"></span>
+      } @else if (empty()) {
+        <span class="cp-swatch cp-swatch-empty" aria-hidden="true">
+          <svg class="cp-slash" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <line x1="4" y1="4" x2="28" y2="28" stroke="#c62828" stroke-width="2.5" stroke-linecap="round" />
+          </svg>
+        </span>
+      } @else {
+        <span
+          class="cp-swatch cp-swatch-solid"
+          [style.background-color]="nativePickerValue()"
+          aria-hidden="true"></span>
+      }
     </div>
-    @if (clearable()) {
-      <button
-        type="button"
-        class="cp-clear"
-        data-testid="color-picker-clear"
-        [disabled]="indeterminate() || empty()"
-        (click)="onClear($event)">
-        Clear paint
-      </button>
-    }
   </div>
-</details>
+} @else {
+  <details
+    class="color-picker"
+    [class.indeterminate]="indeterminate()"
+    data-testid="color-picker"
+    (toggle)="onDetailsToggle($event)">
+    <summary
+      class="cp-summary"
+      data-testid="color-picker-swatch"
+      [attr.aria-label]="
+        indeterminate() ? 'Choose color to apply to selection' : empty() ? 'No paint — open to choose' : 'Color — open to edit'
+      ">
+      @if (indeterminate()) {
+        <span class="cp-swatch cp-swatch-mixed" aria-hidden="true"></span>
+      } @else if (empty()) {
+        <span class="cp-swatch cp-swatch-empty" aria-hidden="true">
+          <svg class="cp-slash" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg" aria-hidden="true">
+            <line x1="4" y1="4" x2="28" y2="28" stroke="#c62828" stroke-width="2.5" stroke-linecap="round" />
+          </svg>
+        </span>
+      } @else {
+        <span
+          class="cp-swatch cp-swatch-solid"
+          [style.background-color]="nativePickerValue()"
+          aria-hidden="true"></span>
+      }
+    </summary>
+    <div class="cp-panel" (click)="$event.stopPropagation()">
+      <div class="cp-panel-row">
+        <label class="cp-native-label">
+          <span class="cp-label-text">Preview</span>
+          <input
+            type="color"
+            class="cp-native"
+            data-testid="color-picker-native"
+            [value]="nativePickerValue()"
+            (input)="onNativeColorInput($event)" />
+        </label>
+        <label class="cp-hex-label">
+          <span class="cp-label-text">HEX</span>
+          <input
+            type="text"
+            class="cp-hex"
+            data-testid="color-picker-hex"
+            spellcheck="false"
+            autocomplete="off"
+            [ngModel]="hexDraft()"
+            (ngModelChange)="onHexModelChange($event)"
+            [attr.placeholder]="indeterminate() ? 'Mixed' : empty() ? '#000000' : ''" />
+        </label>
+      </div>
+      @if (clearable()) {
+        <button
+          type="button"
+          class="cp-clear"
+          data-testid="color-picker-clear"
+          [disabled]="indeterminate() || empty()"
+          (click)="onClear($event)">
+          Clear paint
+        </button>
+      }
+    </div>
+  </details>
+}

@@ -21,6 +21,8 @@ import { ColorPickerComponent } from '../color-picker/color-picker.component';
 })
 export class GradientFillEditorComponent {
   readonly shapeId = input.required<string>();
+  /** When true, gradient edits cannot be committed (e.g. shape is on a locked layer). */
+  readonly disabled = input(false);
 
   private readonly svc: GradientFillEditorSvgPort = inject(SvgManipulationService);
   private readonly history = inject(EditorHistoryService);
@@ -67,6 +69,7 @@ export class GradientFillEditorComponent {
   }
 
   onKindChange(kind: 'linear' | 'radial'): void {
+    if (this.disabled()) return;
     const d = this.draftModel;
     const id = this.shapeId();
     if (!d) return;
@@ -76,6 +79,7 @@ export class GradientFillEditorComponent {
   }
 
   addStop(): void {
+    if (this.disabled()) return;
     const d = this.draftModel;
     if (!d || d.stops.length >= 16) return;
     const last = d.stops[d.stops.length - 1];
@@ -93,6 +97,7 @@ export class GradientFillEditorComponent {
   }
 
   removeStop(i: number): void {
+    if (this.disabled()) return;
     const d = this.draftModel;
     if (!d || d.stops.length <= 2) return;
     const copy = JSON.parse(JSON.stringify(d)) as EditableGradientModel;
@@ -102,12 +107,14 @@ export class GradientFillEditorComponent {
   }
 
   onStopColor(i: number, hex: string): void {
+    if (this.disabled()) return;
     const d = this.draftModel;
     if (!d || !d.stops[i]) return;
     d.stops[i].color = hex;
   }
 
   commit(): void {
+    if (this.disabled()) return;
     const d = this.draftModel;
     const sid = this.shapeId();
     if (!d || !this.undoBaseline) return;

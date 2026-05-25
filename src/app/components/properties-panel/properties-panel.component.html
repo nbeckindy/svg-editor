@@ -46,6 +46,7 @@
                   [empty]="allSelectedLackFill(shape)"
                   [indeterminate]="fillMixed()"
                   [clearable]="true"
+                  [disabled]="anySelectedShapeLocked()"
                   (colorChange)="onFillColorChange($event)">
                 </app-color-picker>
               }
@@ -106,6 +107,7 @@
                 [empty]="allSelectedLackStroke(shape)"
                 [indeterminate]="strokeMixed()"
                 [clearable]="true"
+                [disabled]="anySelectedShapeLocked()"
                 (colorChange)="onStrokeColorChange($event)">
               </app-color-picker>
             }
@@ -132,6 +134,7 @@
             type="button"
             class="btn-paint-action secondary"
             data-testid="properties-add-gradient-fill"
+            [disabled]="anySelectedShapeLocked()"
             (click)="onCreateGradientFill(ps)">
             Add gradient fill
           </button>
@@ -141,7 +144,10 @@
             <summary class="gradient-fill-summary" data-testid="properties-gradient-fill-summary">
               Edit gradient fill
             </summary>
-            <app-gradient-fill-editor [shapeId]="ps.id" data-testid="properties-gradient-fill-editor" />
+            <app-gradient-fill-editor
+              [shapeId]="ps.id"
+              [disabled]="anySelectedShapeLocked()"
+              data-testid="properties-gradient-fill-editor" />
           </details>
         }
       </div>
@@ -170,7 +176,7 @@
             <button
               type="button"
               class="align-btn"
-              [disabled]="!canAlignSelection()"
+              [disabled]="!canAlignSelection() || anySelectedShapeLocked()"
               [attr.title]="'Align left (' + alignShortcutLabels.left + ')'"
               (click)="onAlign('left')">
               Left
@@ -178,7 +184,7 @@
             <button
               type="button"
               class="align-btn"
-              [disabled]="!canAlignSelection()"
+              [disabled]="!canAlignSelection() || anySelectedShapeLocked()"
               [attr.title]="'Align center (' + alignShortcutLabels.center + ')'"
               (click)="onAlign('center')">
               Center
@@ -186,7 +192,7 @@
             <button
               type="button"
               class="align-btn"
-              [disabled]="!canAlignSelection()"
+              [disabled]="!canAlignSelection() || anySelectedShapeLocked()"
               [attr.title]="'Align right (' + alignShortcutLabels.right + ')'"
               (click)="onAlign('right')">
               Right
@@ -194,7 +200,7 @@
             <button
               type="button"
               class="align-btn"
-              [disabled]="!canAlignSelection()"
+              [disabled]="!canAlignSelection() || anySelectedShapeLocked()"
               [attr.title]="'Align top (' + alignShortcutLabels.top + ')'"
               (click)="onAlign('top')">
               Top
@@ -202,7 +208,7 @@
             <button
               type="button"
               class="align-btn"
-              [disabled]="!canAlignSelection()"
+              [disabled]="!canAlignSelection() || anySelectedShapeLocked()"
               [attr.title]="'Align middle (' + alignShortcutLabels.middle + ')'"
               (click)="onAlign('middle')">
               Middle
@@ -210,7 +216,7 @@
             <button
               type="button"
               class="align-btn"
-              [disabled]="!canAlignSelection()"
+              [disabled]="!canAlignSelection() || anySelectedShapeLocked()"
               [attr.title]="'Align bottom (' + alignShortcutLabels.bottom + ')'"
               (click)="onAlign('bottom')">
               Bottom
@@ -222,7 +228,7 @@
             <button
               type="button"
               class="align-btn"
-              [disabled]="!canDistributeSelection()"
+              [disabled]="!canDistributeSelection() || anySelectedShapeLocked()"
               [attr.title]="'Distribute horizontally (' + alignShortcutLabels.distributeHorizontal + ')'"
               (click)="onDistribute('horizontal')">
               Horizontal
@@ -230,7 +236,7 @@
             <button
               type="button"
               class="align-btn"
-              [disabled]="!canDistributeSelection()"
+              [disabled]="!canDistributeSelection() || anySelectedShapeLocked()"
               [attr.title]="'Distribute vertically (' + alignShortcutLabels.distributeVertical + ')'"
               (click)="onDistribute('vertical')">
               Vertical
@@ -249,6 +255,7 @@
             step="any"
             inputmode="decimal"
             data-testid="properties-transform-x"
+            [disabled]="anySelectedShapeLocked()"
             [value]="bb.x"
             (change)="onSelectionBBoxFieldCommit('x', $event)"
             aria-label="Selection bounding box X" />
@@ -262,6 +269,7 @@
             step="any"
             inputmode="decimal"
             data-testid="properties-transform-y"
+            [disabled]="anySelectedShapeLocked()"
             [value]="bb.y"
             (change)="onSelectionBBoxFieldCommit('y', $event)"
             aria-label="Selection bounding box Y" />
@@ -275,6 +283,7 @@
             step="any"
             inputmode="decimal"
             data-testid="properties-transform-w"
+            [disabled]="anySelectedShapeLocked()"
             [value]="bb.w"
             (change)="onSelectionBBoxFieldCommit('w', $event)"
             aria-label="Selection bounding box width" />
@@ -288,6 +297,7 @@
             step="any"
             inputmode="decimal"
             data-testid="properties-transform-h"
+            [disabled]="anySelectedShapeLocked()"
             [value]="bb.h"
             (change)="onSelectionBBoxFieldCommit('h', $event)"
             aria-label="Selection bounding box height" />
@@ -302,6 +312,7 @@
               step="any"
               inputmode="decimal"
               data-testid="properties-transform-r"
+              [disabled]="anySelectedShapeLocked()"
               [value]="bb.rDeg"
               (change)="onSelectionBBoxFieldCommit('r', $event)"
               aria-label="Selection rotation in degrees" />
@@ -363,6 +374,7 @@
             min="0"
             max="20"
             step="0.5"
+            [disabled]="anySelectedShapeLocked()"
             [value]="strokeWidthsMixed() ? 0 : (shape.strokeWidth || 0)"
             (input)="onStrokeWidthChange($event)">
           <input
@@ -372,6 +384,7 @@
             min="0"
             max="100"
             step="0.5"
+            [disabled]="anySelectedShapeLocked()"
             [value]="strokeWidthsMixed() ? '' : (shape.strokeWidth || 0)"
             [attr.placeholder]="strokeWidthsMixed() ? '—' : ''"
             (change)="onStrokeWidthChange($event)">
@@ -404,6 +417,7 @@
             id="font-family"
             class="dash-select"
             [class.mixed-control]="fontFamiliesMixed()"
+            [disabled]="textSelectionTouchesLocked()"
             [value]="fontFamilyControlValue()"
             (change)="onFontFamilyChange($event)">
             @for (font of fontFamilies; track font) {
@@ -423,6 +437,7 @@
             class="range-number"
             min="1"
             step="1"
+            [disabled]="textSelectionTouchesLocked()"
             [class.mixed-control]="fontSizesMixed()"
             [value]="fontSizeControlValue()"
             [attr.placeholder]="fontSizesMixed() ? '—' : ''"
@@ -435,6 +450,7 @@
             <button
               type="button"
               class="align-btn"
+              [disabled]="textSelectionTouchesLocked()"
               [class.active]="!fontWeightsMixed() && fontWeightControlValue() === 'bold'"
               (click)="onToggleBold()">
               Bold
@@ -442,6 +458,7 @@
             <button
               type="button"
               class="align-btn"
+              [disabled]="textSelectionTouchesLocked()"
               [class.active]="!fontStylesMixed() && fontStyleControlValue() === 'italic'"
               (click)="onToggleItalic()">
               Italic
@@ -455,6 +472,7 @@
             <button
               type="button"
               class="align-btn"
+              [disabled]="textSelectionTouchesLocked()"
               [class.active]="!textAnchorsMixed() && textAnchorControlValue() === 'start'"
               (click)="onTextAlignChange('start')">
               Left
@@ -462,6 +480,7 @@
             <button
               type="button"
               class="align-btn"
+              [disabled]="textSelectionTouchesLocked()"
               [class.active]="!textAnchorsMixed() && textAnchorControlValue() === 'middle'"
               (click)="onTextAlignChange('middle')">
               Center
@@ -469,6 +488,7 @@
             <button
               type="button"
               class="align-btn"
+              [disabled]="textSelectionTouchesLocked()"
               [class.active]="!textAnchorsMixed() && textAnchorControlValue() === 'end'"
               (click)="onTextAlignChange('end')">
               Right
@@ -488,7 +508,7 @@
             class="dash-select"
             data-testid="properties-text-paint-order"
             [class.mixed-control]="textPaintOrdersMixed()"
-            [disabled]="textPaintOrdersMixed()"
+            [disabled]="textPaintOrdersMixed() || textSelectionTouchesLocked()"
             [value]="textPaintOrdersMixed() ? '' : selectedTextPaintOrderForSelect()"
             [attr.title]="
               'Default: fill then stroke (outline on top). stroke fill: draw stroke beneath the fill (SVG paint-order). Browser support varies.'
@@ -509,6 +529,7 @@
               type="checkbox"
               id="text-non-scaling-stroke"
               data-testid="properties-text-vector-effect"
+              [disabled]="textSelectionTouchesLocked()"
               [checked]="textNonScalingStrokeOutline()"
               [attr.title]="
                 'vector-effect=non-scaling-stroke keeps outline width in screen pixels when the SVG is scaled (e.g. editor zoom). Without it, outline scales in user space like the glyphs.'
@@ -531,6 +552,7 @@
               id="dash-pattern"
               class="dash-select"
               [class.mixed-control]="dashArraysMixed()"
+              [disabled]="anySelectedShapeLocked()"
               [value]="currentDashPreset(shape)"
               (change)="onDashPresetChange($event)">
               @for (preset of dashPresets; track preset.value) {
@@ -542,6 +564,7 @@
                 type="text"
                 class="dash-custom-input"
                 placeholder="e.g. 5,3,2,3"
+                [disabled]="anySelectedShapeLocked()"
                 [value]="shape.strokeDasharray ?? ''"
                 (change)="onCustomDashArrayChange($event)">
             }
@@ -562,6 +585,7 @@
                   min="0"
                   max="50"
                   step="0.5"
+                  [disabled]="anySelectedShapeLocked()"
                   [value]="dashOffsetsMixed() ? 0 : (shape.strokeDashoffset ?? 0)"
                   (input)="onDashOffsetChange($event)">
                 <input
@@ -571,6 +595,7 @@
                   min="0"
                   max="100"
                   step="0.5"
+                  [disabled]="anySelectedShapeLocked()"
                   [value]="dashOffsetsMixed() ? '' : (shape.strokeDashoffset ?? 0)"
                   [attr.placeholder]="dashOffsetsMixed() ? '—' : ''"
                   (change)="onDashOffsetChange($event)">
@@ -604,6 +629,7 @@
               min="0"
               max="1"
               step="0.01"
+              [disabled]="anySelectedShapeLocked()"
               [value]="opacitiesMixed() ? 1 : (shape.opacity || 1)"
               (input)="onOpacityChange($event)">
             <input
@@ -613,6 +639,7 @@
               min="0"
               max="1"
               step="0.01"
+              [disabled]="anySelectedShapeLocked()"
               [value]="opacitiesMixed() ? '' : (shape.opacity || 1)"
               [attr.placeholder]="opacitiesMixed() ? '—' : ''"
               (change)="onOpacityChange($event)">

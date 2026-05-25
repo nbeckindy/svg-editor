@@ -35,6 +35,14 @@ describe('ColorPickerComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  it('renders read-only swatch when disabled input is true', () => {
+    fixture.componentRef.setInput('disabled', true);
+    fixture.detectChanges();
+    const root = fixture.nativeElement.querySelector('[data-testid="color-picker"]') as HTMLElement;
+    expect(root.classList.contains('color-picker--disabled')).toBe(true);
+    expect(root.querySelector('details')).toBeNull();
+  });
+
   it('should default color to #000000', () => {
     expect(component.color()).toBe('#000000');
   });

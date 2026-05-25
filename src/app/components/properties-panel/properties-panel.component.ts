@@ -11,6 +11,7 @@ import { parsePaintReferenceId } from '../../models/svg-gradient';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
+import { SvgManipulationService } from '../../services/svg-manipulation.service';
 
 @Component({
   selector: 'app-properties-panel',
@@ -35,6 +36,7 @@ export class PropertiesPanelComponent {
   private editorTool = inject(EditorToolService);
   private chromeApply = inject(ChromeEditorApplyService);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
+  private readonly svgManipulation = inject(SvgManipulationService);
 
   readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
   readonly selectionTransformReadout = this.transformReadoutSvc.selectionTransformReadout;
@@ -42,6 +44,22 @@ export class PropertiesPanelComponent {
 
   readonly isSelectorMode = computed(() => this.editorTool.currentTool() === 'selector');
   readonly hasSelection = computed(() => this.selectionCount() > 0);
+  /**
+   * True when the current selection includes any shape under a locked layer row
+   * (paint, stroke, opacity, dash, bbox, align, etc. are blocked in chrome apply).
+   */
+  readonly anySelectedShapeLocked = computed(() => {
+    const shapes = this.shapeSelectionService.getSelectedShapes();
+    return shapes.some((s) => this.svgManipulation.isElementOrAncestorLocked(s.id));
+  });
+  /**
+   * True when selected `<text>` nodes include any that are under a lock
+   * (typography commands are blocked only for those paths).
+   */
+  readonly textSelectionTouchesLocked = computed(() => {
+    const texts = this.shapeSelectionService.getSelectedShapes().filter((s) => s.type === 'text');
+    return texts.length > 0 && texts.some((t) => this.svgManipulation.isElementOrAncestorLocked(t.id));
+  });
   /** Text tool active: typography controls edit placement defaults when nothing is selected. */
   readonly textToolPlacementMode = computed(() => this.editorTool.currentTool() === 'text');
   readonly paintTargetLabel = computed(() => {

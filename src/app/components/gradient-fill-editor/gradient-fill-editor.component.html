@@ -1,5 +1,5 @@
 @if (draftModel; as d) {
-  <div class="gradient-editor" data-testid="gradient-fill-editor-root">
+  <fieldset class="gradient-editor" [disabled]="disabled()" data-testid="gradient-fill-editor-root">
     <div class="row">
       <span class="label">Type</span>
       <label><input type="radio" name="gk" [checked]="d.kind === 'linear'" (change)="onKindChange('linear')" /> Linear</label>
@@ -38,7 +38,7 @@
     @for (s of d.stops; track $index) {
       <div class="stop-row">
         <input type="text" class="offset" [(ngModel)]="s.offset" [name]="'off' + $index" placeholder="0%" />
-        <app-color-picker [color]="s.color" (colorChange)="onStopColor($index, $event)" />
+        <app-color-picker [color]="s.color" [disabled]="disabled()" (colorChange)="onStopColor($index, $event)" />
         @if (d.stops.length > 2) {
           <button type="button" class="btn-mini" (click)="removeStop($index)">Remove</button>
         }
@@ -46,5 +46,5 @@
     }
 
     <button type="button" class="btn-apply" (click)="commit()">Apply gradient</button>
-  </div>
+  </fieldset>
 }

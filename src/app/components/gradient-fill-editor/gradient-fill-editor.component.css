@@ -1,10 +1,17 @@
 .gradient-editor {
   margin-top: 0.5rem;
   padding: 0.5rem 0;
+  border: none;
   border-top: 1px solid var(--app-border, #e0e0e0);
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
+  margin-inline: 0;
+  min-inline-size: 0;
+}
+
+.gradient-editor:disabled {
+  opacity: 0.72;
 }
 
 .row,

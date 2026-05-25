@@ -714,6 +714,53 @@ describe('PropertiesPanelComponent', () => {
     expect(el.querySelector('[data-testid="properties-stroke-color-picker"]')).toBeTruthy();
   });
 
+  describe('layer lock disables inspector inputs', () => {
+    function fillColorPickerRoot(): HTMLElement | null {
+      const host = fixture.nativeElement.querySelector(
+        '[data-testid="properties-fill-color-picker"]'
+      ) as HTMLElement | null;
+      return host?.querySelector('[data-testid="color-picker"]') as HTMLElement | null;
+    }
+
+    it('uses read-only fill swatch when selection is under a locked layer', () => {
+      vi.mocked(svgManipulationService.isElementOrAncestorLocked).mockReturnValue(true);
+      selectedShapesSignal.set([{ id: 'r1', type: 'rect', fill: '#aabbcc' }]);
+      fixture.detectChanges();
+      const inner = fillColorPickerRoot();
+      expect(inner?.classList.contains('color-picker--disabled')).toBe(true);
+    });
+
+    it('uses interactive fill picker when selection is not locked', () => {
+      selectedShapesSignal.set([{ id: 'r1', type: 'rect', fill: '#aabbcc' }]);
+      fixture.detectChanges();
+      const inner = fillColorPickerRoot();
+      expect(inner?.tagName.toLowerCase()).toBe('details');
+    });
+
+    it('disables paint controls but keeps typography enabled when only non-text shapes are locked', () => {
+      vi.mocked(svgManipulationService.isElementOrAncestorLocked).mockImplementation((id: string) =>
+        id === 'r1' ? true : false
+      );
+      selectedShapesSignal.set([
+        { id: 'r1', type: 'rect', fill: '#000000' },
+        { id: 't1', type: 'text', fontFamily: 'Arial, sans-serif' }
+      ]);
+      fixture.detectChanges();
+      const inner = fillColorPickerRoot();
+      expect(inner?.classList.contains('color-picker--disabled')).toBe(true);
+      const font = fixture.nativeElement.querySelector('#font-family') as HTMLSelectElement | null;
+      expect(font?.disabled).toBe(false);
+    });
+
+    it('disables typography when selected text is under a locked layer', () => {
+      vi.mocked(svgManipulationService.isElementOrAncestorLocked).mockReturnValue(true);
+      selectedShapesSignal.set([{ id: 'text-1', type: 'text', fontFamily: 'Arial, sans-serif' }]);
+      fixture.detectChanges();
+      const font = fixture.nativeElement.querySelector('#font-family') as HTMLSelectElement | null;
+      expect(font?.disabled).toBe(true);
+    });
+  });
+
   it('Set fill button applies black fill via manipulation service', () => {
     selectedShapesSignal.set([{ id: 'shape-1', type: 'rect' }]);
     fixture.detectChanges();
