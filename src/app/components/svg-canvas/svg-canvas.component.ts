@@ -1876,11 +1876,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
 
   private async handleCanvasRasterDrop(event: DragEvent): Promise<void> {
     if (!this.svgContent() || this.svgManipulation.getSVGInstance() == null) return;
-    if (!this.canvasRasterDragHasFiles(event.dataTransfer)) return;
+    const dt = event.dataTransfer;
+    if (!dt || !this.canvasRasterDragHasFiles(dt)) return;
     event.preventDefault();
     const anchor = this.clientToEditorSvgPoint(event.clientX, event.clientY);
     if (!anchor) return;
-    const files = event.dataTransfer.files;
+    const files = dt.files;
     if (!files?.length) return;
 
     for (let i = 0; i < files.length; i++) {
