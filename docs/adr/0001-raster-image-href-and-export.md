@@ -31,6 +31,11 @@ We treat inserted rasters as normal SVG `<image>` nodes in the **Live tree**. In
 - **External `href`s** (`http(s):`, site-relative paths, `file:`): on export/download, **do not silently drop** the reference. v1 policy: **emit the same `href` string** and treat “broken when opened elsewhere” as a **known limitation** unless e4s.7 adds explicit UI to embed or block; until then, copy in UI/docs should avoid promising portability for external refs.
 - **`blob:` `href`s:** **not portable.** Before producing downloadable **Serialized**, the editor must **block or rewrite** (e4s.7 implements the UX): never emit a naked `blob:` `href` in a saved file without user-visible handling (error, or user-confirmed inline embed).
 
+### Download UX (e4s.7 implementation)
+
+- **`blob:`:** Download is **blocked**; the app shows **`window.alert`** and does not call `exportSVG()` for that download. Users must replace the `<image>` href (for example re-insert via **Insert image**). No automatic inline embed in v1.
+- **Very large `data:` URLs:** If any `<image>` `href` / `xlink:href` exceeds the same **~16 MiB binary** intent as insert-time limits (approximated by base64-expanded string length, see `MAX_DATA_IMAGE_HREF_CHARS_WITHOUT_CONFIRM` in code), the app shows **`window.confirm`** before download; cancel aborts; proceed emits **Serialized** unchanged (no silent stripping).
+
 ## Multi-file insert
 
 - Detailed behavior (queue vs single selection, etc.) belongs to **e4s.5**; each inserted image still obeys the limits and **href** rules above.

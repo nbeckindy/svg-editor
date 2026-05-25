@@ -5,6 +5,7 @@ import { AddPathCommand, AddImageCommand, ArtboardSizeCommand, ArtboardBackgroun
 import { ShapeSelectionService } from './shape-selection.service';
 import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
 import { EditorHistoryService } from './editor-history.service';
+import { MAX_DATA_IMAGE_HREF_CHARS_WITHOUT_CONFIRM } from '../utils/svg-export-image-href-policy';
 
 describe('SvgManipulationService', () => {
   let service: SvgManipulationService;
@@ -541,6 +542,37 @@ describe('SvgManipulationService', () => {
       expect(exported).toContain('id="inside"');
       expect(exported).toContain('id="outside"');
       expect(exported).toContain('viewBox="0 0 100 100"');
+    });
+  });
+
+  describe('getSvgExportImagePolicyResult (e4s.7)', () => {
+    it('returns not blocked when there are no images', () => {
+      const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const p = service.getSvgExportImagePolicyResult();
+      expect(p.blocked).toBe(false);
+      expect(p.hasOversizedDataUrl).toBe(false);
+    });
+
+    it('blocks when an image uses blob:', () => {
+      const svgContent =
+        '<svg viewBox="0 0 100 100"><image id="i1" href="blob:http://localhost/x" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      const p = service.getSvgExportImagePolicyResult();
+      expect(p.blocked).toBe(true);
+      expect(p.blockedReason).toMatch(/blob/i);
+    });
+
+    it('flags oversized data URL without blocking', () => {
+      const prefix = 'data:image/png;base64,';
+      const padLen = MAX_DATA_IMAGE_HREF_CHARS_WITHOUT_CONFIRM - prefix.length + 1;
+      const huge = prefix + 'x'.repeat(Math.max(0, padLen));
+      const svgContent = `<svg viewBox="0 0 100 100"><image id="i1" href="${huge}" width="10" height="10"/></svg>`;
+      service.initializeSVG(container, svgContent);
+      const p = service.getSvgExportImagePolicyResult();
+      expect(p.blocked).toBe(false);
+      expect(p.hasOversizedDataUrl).toBe(true);
+      expect(p.oversizedConfirmMessage).toBeTruthy();
     });
   });
 

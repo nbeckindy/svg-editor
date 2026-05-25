@@ -127,6 +127,87 @@ describe('AppComponent', () => {
       vi.unstubAllGlobals();
     });
 
+    it('should alert and skip download when export image policy blocks (blob:)', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const svgManipulation = TestBed.inject(SvgManipulationService);
+
+      vi.spyOn(svgManipulation, 'getSvgExportImagePolicyResult').mockReturnValue({
+        blocked: true,
+        blockedReason: 'blob blocked',
+        hasOversizedDataUrl: false,
+        oversizedDataHrefCount: 0,
+        oversizedConfirmMessage: null
+      });
+      const exportSpy = vi.spyOn(svgManipulation, 'exportSVG');
+      const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+      const createObjectURLSpy = vi.fn();
+      vi.stubGlobal('URL', { ...URL, createObjectURL: createObjectURLSpy, revokeObjectURL: vi.fn() });
+      vi.spyOn(document, 'createElement').mockReturnValue({ set href(_: string) {}, set download(_: string) {}, click: vi.fn() } as unknown as HTMLAnchorElement);
+
+      app.downloadSvg();
+
+      expect(alertSpy).toHaveBeenCalledWith('blob blocked');
+      expect(exportSpy).not.toHaveBeenCalled();
+      expect(createObjectURLSpy).not.toHaveBeenCalled();
+
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    it('should skip download when oversized data URL confirm is declined', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const svgManipulation = TestBed.inject(SvgManipulationService);
+
+      vi.spyOn(svgManipulation, 'getSvgExportImagePolicyResult').mockReturnValue({
+        blocked: false,
+        blockedReason: null,
+        hasOversizedDataUrl: true,
+        oversizedDataHrefCount: 1,
+        oversizedConfirmMessage: 'Really download?'
+      });
+      const exportSpy = vi.spyOn(svgManipulation, 'exportSVG').mockReturnValue('<svg></svg>');
+      vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const createObjectURLSpy = vi.fn();
+      vi.stubGlobal('URL', { ...URL, createObjectURL: createObjectURLSpy, revokeObjectURL: vi.fn() });
+
+      app.downloadSvg();
+
+      expect(exportSpy).not.toHaveBeenCalled();
+      expect(createObjectURLSpy).not.toHaveBeenCalled();
+
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
+    it('should download when oversized data URL confirm is accepted', () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      const app = fixture.componentInstance;
+      const svgManipulation = TestBed.inject(SvgManipulationService);
+
+      vi.spyOn(svgManipulation, 'getSvgExportImagePolicyResult').mockReturnValue({
+        blocked: false,
+        blockedReason: null,
+        hasOversizedDataUrl: true,
+        oversizedDataHrefCount: 2,
+        oversizedConfirmMessage: 'Really download?'
+      });
+      vi.spyOn(svgManipulation, 'exportSVG').mockReturnValue('<svg></svg>');
+      vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const createObjectURLSpy = vi.fn().mockReturnValue('blob:ok');
+      vi.stubGlobal('URL', { ...URL, createObjectURL: createObjectURLSpy, revokeObjectURL: vi.fn() });
+      vi.spyOn(document, 'createElement').mockReturnValue({ set href(_: string) {}, set download(_: string) {}, click: vi.fn() } as unknown as HTMLAnchorElement);
+
+      app.downloadSvg();
+
+      expect(svgManipulation.exportSVG).toHaveBeenCalled();
+      expect(createObjectURLSpy).toHaveBeenCalledTimes(1);
+
+      vi.restoreAllMocks();
+      vi.unstubAllGlobals();
+    });
+
     it('should render download button disabled when no SVG content', () => {
       const fixture = TestBed.createComponent(AppComponent);
       const app = fixture.componentInstance;

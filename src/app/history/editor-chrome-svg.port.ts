@@ -1,4 +1,5 @@
 import type { Signal } from '@angular/core';
+import type { SvgExportImagePolicyResult } from '../utils/svg-export-image-href-policy';
 
 /** Svg slice for `SvgDebugPanelComponent` (revision + serialized document). */
 export interface SvgDebugPanelSvgPort {
@@ -10,4 +11,5 @@ export interface SvgDebugPanelSvgPort {
 export interface AppRootSvgManipulationPort {
   clearHighlight(): void;
   exportSVG(): string;
+  getSvgExportImagePolicyResult(): SvgExportImagePolicyResult;
 }

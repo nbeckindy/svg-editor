@@ -61,6 +61,17 @@ export class AppComponent {
   }
 
   downloadSvg(): void {
+    const policy = this.svg.getSvgExportImagePolicyResult();
+    if (policy.blocked) {
+      window.alert(policy.blockedReason ?? 'Export is blocked because this document contains images that cannot be saved to a portable SVG file.');
+      return;
+    }
+    if (policy.hasOversizedDataUrl && policy.oversizedConfirmMessage) {
+      if (!window.confirm(policy.oversizedConfirmMessage)) {
+        return;
+      }
+    }
+
     const svgText = this.svg.exportSVG();
     if (!svgText) return;
 
