@@ -153,6 +153,116 @@ describe('SvgCanvasComponent', () => {
     insertSpy.mockRestore();
   });
 
+  it('raster multi-file drop: skips disallowed MIME then inserts PNG (two service calls, no alert)', async () => {
+    const rasterInsert = TestBed.inject(RasterImageInsertService);
+    const insertSpy = vi
+      .spyOn(rasterInsert, 'insertRasterFileAtAnchor')
+      .mockResolvedValueOnce({ kind: 'skipped' })
+      .mockResolvedValueOnce({ kind: 'inserted' });
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
+    vi.spyOn(component as unknown as { clientToEditorSvgPoint: typeof component.clientToEditorSvgPoint }, 'clientToEditorSvgPoint').mockReturnValue({
+      x: 10,
+      y: 20
+    });
+
+    const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const png = new File([bytes], 't.png', { type: 'image/png' });
+    const tiff = new File(['x'], 'x.tif', { type: 'image/tiff' });
+
+    const fileList = {
+      length: 2,
+      item: (i: number) => (i === 0 ? tiff : i === 1 ? png : null)
+    } as FileList;
+
+    const dropEvent = {
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      clientX: 5,
+      clientY: 6,
+      dataTransfer: {
+        files: fileList,
+        types: ['Files'],
+        items: { length: 2 }
+      }
+    } as unknown as DragEvent;
+
+    component.onCanvasRasterDrop(dropEvent);
+    await fixture.whenStable();
+
+    expect(insertSpy).toHaveBeenCalledTimes(2);
+    expect(insertSpy.mock.calls[0][2]).toEqual({ silentDisallowedMime: true });
+    expect(insertSpy.mock.calls[1][2]).toEqual({ silentDisallowedMime: true });
+    expect(alertSpy).not.toHaveBeenCalled();
+
+    insertSpy.mockRestore();
+    alertSpy.mockRestore();
+  });
+
+  it('raster multi-file drop: stops on first failure and alerts (no second insert call)', async () => {
+    const rasterInsert = TestBed.inject(RasterImageInsertService);
+    const insertSpy = vi
+      .spyOn(rasterInsert, 'insertRasterFileAtAnchor')
+      .mockResolvedValueOnce({ kind: 'failed', message: 'decode failed' })
+      .mockResolvedValueOnce({ kind: 'inserted' });
+    const alertSpy = vi.spyOn(window, 'alert').mockImplementation(() => undefined);
+
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
+    vi.spyOn(component as unknown as { clientToEditorSvgPoint: typeof component.clientToEditorSvgPoint }, 'clientToEditorSvgPoint').mockReturnValue({
+      x: 1,
+      y: 2
+    });
+
+    const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const pngA = new File([bytes], 'a.png', { type: 'image/png' });
+    const pngB = new File([bytes], 'b.png', { type: 'image/png' });
+
+    const fileList = {
+      length: 2,
+      item: (i: number) => (i === 0 ? pngA : i === 1 ? pngB : null)
+    } as FileList;
+
+    const dropEvent = {
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      clientX: 3,
+      clientY: 4,
+      dataTransfer: {
+        files: fileList,
+        types: ['Files'],
+        items: { length: 2 }
+      }
+    } as unknown as DragEvent;
+
+    component.onCanvasRasterDrop(dropEvent);
+    await fixture.whenStable();
+
+    expect(alertSpy).toHaveBeenCalledWith('decode failed');
+    expect(insertSpy).toHaveBeenCalledTimes(1);
+
+    insertSpy.mockRestore();
+    alertSpy.mockRestore();
+  });
+
   it('should display placeholder when no SVG content', () => {
     fixture.detectChanges();
     const compiled = fixture.nativeElement;
