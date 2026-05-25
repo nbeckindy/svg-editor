@@ -34,6 +34,7 @@ function makeHost(over: Partial<SvgCanvasPointerGestureHost>): SvgCanvasPointerG
     applyPanDragFromEvent: vi.fn(),
     isDraggingShape: false,
     updateTextToolPreviewFromClient: vi.fn(),
+    recordInsertAnchorFromClient: vi.fn(),
     finishPathNodeDrag: vi.fn(),
     onPenDocumentMouseUp: vi.fn(),
     commitZoomMarquee: vi.fn(),
@@ -198,6 +199,13 @@ describe('PointerGestureRouter', () => {
     const host = makeHost({ updateTextToolPreviewFromClient });
     router.onDocumentMouseMove(host, { clientX: 11, clientY: 12, shiftKey: false } as MouseEvent);
     expect(updateTextToolPreviewFromClient).toHaveBeenCalledWith(11, 12);
+  });
+
+  it('onDocumentMouseMove always asks host to record insert anchor', () => {
+    const recordInsertAnchorFromClient = vi.fn();
+    const host = makeHost({ recordInsertAnchorFromClient });
+    router.onDocumentMouseMove(host, { clientX: 3, clientY: 4, shiftKey: false } as MouseEvent);
+    expect(recordInsertAnchorFromClient).toHaveBeenCalledWith(3, 4);
   });
 
   it('onDocumentMouseUp ignores non-primary button', () => {

@@ -1048,6 +1048,12 @@ describe('SvgCanvasComponent', () => {
       width: 50,
       height: 40
     });
+    vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({
+      x: 10,
+      y: 20,
+      width: 50,
+      height: 40
+    });
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="10" y="20" width="50" height="40"/></svg>');
     component.wrapperWidth = 100;
     component.wrapperHeight = 100;
@@ -2159,6 +2165,12 @@ describe('SvgCanvasComponent', () => {
       width: 10,
       height: 10
     });
+    vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 10,
+      height: 10
+    });
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="c1" cx="5" cy="5" r="5"/></svg>');
     component.wrapperWidth = 100;
     component.wrapperHeight = 100;
@@ -2223,6 +2235,12 @@ describe('SvgCanvasComponent', () => {
 
   it('highlightRect recomputes DOM union when documentRevision bumps even if lastBbox is unchanged', async () => {
     vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
+      x: 10,
+      y: 20,
+      width: 50,
+      height: 40
+    });
+    vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({
       x: 10,
       y: 20,
       width: 50,

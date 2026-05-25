@@ -1,4 +1,4 @@
-import { Component, input, viewChild, AfterViewInit, ElementRef, OnInit, OnDestroy, ChangeDetectorRef, effect, signal } from '@angular/core';
+import { Component, input, viewChild, AfterViewInit, ElementRef, OnInit, OnDestroy, ChangeDetectorRef, effect, signal, inject } from '@angular/core';
 import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -6,6 +6,7 @@ import { EditorToolService, type EditorTool } from '../../services/editor-tool.s
 import { CanvasViewService } from '../../services/canvas-view.service';
 import { SnapService } from '../../services/snap.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
+import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
 import {
   computeProportionalResizedUnion,
   type BBox,
@@ -241,6 +242,7 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
   }
 })
 export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, SvgCanvasPointerGestureHost {
+  private readonly rasterInsertAnchor = inject(RasterInsertAnchorStore);
   readonly RULER_SIZE = 24;
   readonly svgContent = input<string>('');
   readonly svgContainer = viewChild<ElementRef<HTMLElement>>('svgContainer');
@@ -1416,6 +1418,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
         return;
       }
       this.acceptedSvgContent.set(incomingSvgContent);
+      this.rasterInsertAnchor.clear();
       this.canvasView.resetZoom();
     });
     effect(() => {
@@ -2909,5 +2912,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     if (!raw) return;
     this.textToolPreviewLastPoint = raw;
     this.syncTextToolPreviewPresentation();
+  }
+
+  recordInsertAnchorFromClient(clientX: number, clientY: number): void {
+    if (!this.svgContent()) return;
+    if (!this.svgManipulation.getSVGInstance()) return;
+    const raw = this.clientToEditorSvgPoint(clientX, clientY);
+    if (!raw) return;
+    this.rasterInsertAnchor.setFromDoc(raw.x, raw.y);
   }
 }

@@ -33,6 +33,7 @@ export interface SvgCanvasPointerGestureHost {
   applyPanDragFromEvent(event: MouseEvent): void;
   readonly isDraggingShape: boolean;
   updateTextToolPreviewFromClient(clientX: number, clientY: number): void;
+  recordInsertAnchorFromClient(clientX: number, clientY: number): void;
 
   // --- document:mouseup ---
   finishPathNodeDrag(): void;
@@ -113,6 +114,7 @@ export class PointerGestureRouter {
       this.g.drag.move(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
     }
     host.updateTextToolPreviewFromClient(event.clientX, event.clientY);
+    host.recordInsertAnchorFromClient(event.clientX, event.clientY);
   }
 
   onDocumentMouseUp(host: SvgCanvasPointerGestureHost, event: MouseEvent): void {

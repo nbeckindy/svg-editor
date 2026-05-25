@@ -1,15 +1,37 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { signal } from '@angular/core';
 import { ToolStripComponent } from './tool-strip.component';
 import { EditorToolService } from '../../services/editor-tool.service';
+import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { ShapeSelectionService } from '../../services/shape-selection.service';
+import { EditorHistoryService } from '../../services/editor-history.service';
+import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
+import * as RasterFile from '../../utils/raster-insert-file';
 
 describe('ToolStripComponent', () => {
   let fixture: ComponentFixture<ToolStripComponent>;
   let editorToolService: EditorToolService;
+  const svgManipulationMock = {
+    documentRevision: signal(0),
+    getSVGInstance: vi.fn(() => ({}) as unknown),
+    getDocumentViewBox: vi.fn(() => '0 0 800 600'),
+    insertRasterImageIntoContentGroup: vi.fn(() => 'shape-img'),
+    getShapeProperties: vi.fn(() => ({ id: 'shape-img', type: 'image' }))
+  };
 
   beforeEach(async () => {
+    vi.restoreAllMocks();
+    svgManipulationMock.getSVGInstance.mockReturnValue({} as unknown);
+    svgManipulationMock.insertRasterImageIntoContentGroup.mockReturnValue('shape-img');
     await TestBed.configureTestingModule({
       imports: [ToolStripComponent],
-      providers: [EditorToolService]
+      providers: [
+        EditorToolService,
+        { provide: SvgManipulationService, useValue: svgManipulationMock },
+        { provide: ShapeSelectionService, useValue: { selectShape: vi.fn() } },
+        { provide: EditorHistoryService, useValue: { pushAndExecute: vi.fn() } },
+        RasterInsertAnchorStore
+      ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(ToolStripComponent);
@@ -28,9 +50,20 @@ describe('ToolStripComponent', () => {
     expect(selectorBtn.classList.contains('active')).toBe(true);
   });
 
-  it('should render ten tool buttons', () => {
+  it('should render eleven tool buttons', () => {
     const compiled = fixture.nativeElement as HTMLElement;
-    expect(compiled.querySelectorAll('.tool-btn').length).toBe(10);
+    expect(compiled.querySelectorAll('.tool-btn').length).toBe(11);
+  });
+
+  it('disables insert image when no SVG instance', () => {
+    svgManipulationMock.getSVGInstance.mockReturnValue(null);
+    const f = TestBed.createComponent(ToolStripComponent);
+    f.detectChanges();
+    const btn = (f.nativeElement as HTMLElement).querySelector(
+      '[data-testid="tool-insert-image"]'
+    ) as HTMLButtonElement;
+    expect(btn.disabled).toBe(true);
+    svgManipulationMock.getSVGInstance.mockReturnValue({} as unknown);
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {
@@ -176,5 +209,32 @@ describe('ToolStripComponent', () => {
     fixture.detectChanges();
 
     expect(editorToolService.getCurrentTool()).toBe('pen');
+  });
+
+  it('insert pipeline calls manipulation, selection, history, and switches to selector', async () => {
+    const shapeEl = { node: document.createElementNS('http://www.w3.org/2000/svg', 'image') };
+    svgManipulationMock.getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => (sel === '#shape-img' ? shapeEl : null))
+    } as unknown);
+    vi.spyOn(RasterFile, 'readRasterIntrinsicDimensionsFromFile').mockResolvedValue({ width: 4, height: 2 });
+    vi.spyOn(RasterFile, 'readFileAsDataUrl').mockResolvedValue('data:image/png;base64,abcd');
+
+    const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const file = new File([bytes], 't.png', { type: 'image/png' });
+
+    const selection = TestBed.inject(ShapeSelectionService) as unknown as { selectShape: ReturnType<typeof vi.fn> };
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+
+    await fixture.componentInstance.onRasterImageFileChosen({
+      target: { files: [file], value: '' }
+    } as unknown as Event);
+
+    expect(svgManipulationMock.insertRasterImageIntoContentGroup).toHaveBeenCalled();
+    expect(selection.selectShape).toHaveBeenCalled();
+    expect(history.pushAndExecute).toHaveBeenCalled();
+    expect(editorToolService.getCurrentTool()).toBe('selector');
   });
 });
