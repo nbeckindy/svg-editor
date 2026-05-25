@@ -1225,9 +1225,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return true;
   }
 
+  private selectionTouchesLocked(shapeIds: string[]): boolean {
+    return shapeIds.some((id) => this.svgManipulation.isElementOrAncestorLocked(id));
+  }
+
   private duplicateSelection(): boolean {
     const ids = this.getExpandedSelectedShapeIds();
     if (ids.length === 0) return false;
+    if (this.selectionTouchesLocked(ids)) return false;
     this.duplicateInvocationCount += 1;
     const delta = this.duplicateInvocationCount * 10;
     const cmd = new DuplicateCommand(
@@ -1268,6 +1273,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
   private alignSelection(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'): boolean {
     const ids = this.getExpandedSelectedShapeIds();
     if (ids.length < 2) return false;
+    if (this.selectionTouchesLocked(ids)) return false;
     this.editorHistory.pushAndExecute(new AlignCommand(this.svgManipulation, ids, direction));
     this.svgManipulation.clearHighlight();
     return true;
@@ -1276,6 +1282,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
   private distributeSelection(direction: 'horizontal' | 'vertical'): boolean {
     const ids = this.getExpandedSelectedShapeIds();
     if (ids.length < 3) return false;
+    if (this.selectionTouchesLocked(ids)) return false;
     this.editorHistory.pushAndExecute(new DistributeCommand(this.svgManipulation, ids, direction));
     this.svgManipulation.clearHighlight();
     return true;
@@ -1285,6 +1292,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     const selected = this.shapeSelection.getSelectedShapes();
     if (selected.length < 2) return;
     const ids = selected.map((s) => s.id);
+    if (this.selectionTouchesLocked(ids)) return;
     const cmd = new GroupCommand(this.svgManipulation, ids);
     this.editorHistory.pushAndExecute(cmd);
     const newGroupId = cmd.createdGroupId;
@@ -1303,6 +1311,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     const selected = this.shapeSelection.getSelectedShapes();
     const groupIds = selected.filter((s) => s.type === 'g').map((s) => s.id);
     if (groupIds.length === 0) return;
+    if (groupIds.some((id) => this.svgManipulation.isElementOrAncestorLocked(id))) return;
 
     const svg = this.svgManipulation.getSVGInstance();
     if (!svg) return;
