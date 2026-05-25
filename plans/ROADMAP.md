@@ -24,22 +24,29 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 10 | Text editing | [text-editing](./epics/text-editing.md) | `CLOSED` | 5/5 (100%) | Shape creation (SC-1, SC-2a, SC-5) |
 | 11 | Align and distribute | [align-distribute](./epics/align-distribute.md) | `CLOSED` | 5/5 (100%) | Multi-select (done) |
 | 12 | Snap and guides | [snap-guides](./epics/snap-guides.md) | `CLOSED` | 9/9 (100%) | Shape creation (epic 7) helpful |
-| 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `CLOSED` | 7/7 (100%) | Shape creation (SC-1, shares tool infra); optional beads tfs.8–11 open in bd |
+| 13 | Pen and path tool | [pen-path-tool](./epics/pen-path-tool.md) | `CLOSED` | 7/7 (100%) | Shape creation (SC-1, shares tool infra); follow-on beads `tfs.8`+ also **closed** in `bd` |
 | 15 | Path node editing | [path-node-editing](./epics/path-node-editing.md) | `CLOSED` | 5/5 (100%) | Pen tool (PP-2a segment model) |
 | 16 | Advanced path editing | [advanced-path-editing](./epics/advanced-path-editing.md) | `CLOSED` | 10/10 (100%) | Path node editing (`svg-editor-cfc`), pen/path foundation (`svg-editor-tfs`) |
+
+## Completed epics (phase 3)
+
+| Order | Epic | Slug | bd epic ID | Status | Notes |
+|------:|------|------|-------------|--------|-------|
+| 17 | Tool parity and pen authoring | [tool-parity-pen](./epics/tool-parity-pen.md) | `svg-editor-j24` | `CLOSED` | **Closed in `bd` 2026-05-25** — in-scope 12/12; booleans → epic `svg-editor-0zh`, symbols → epic `svg-editor-hya`, arc → [arc-shape-tool](./epics/arc-shape-tool.md). |
+| 18 | Always-visible paint defaults | [always-visible-paint-defaults](./epics/always-visible-paint-defaults.md) | `svg-editor-6g0` | `CLOSED` | **Closed in `bd`** — 5/5 children (`6g0.1`–`6g0.4`, `9i5`). |
+| 20 | Text editing refinement | [text-editing-refinement](./epics/text-editing-refinement.md) | `svg-editor-79x` | `CLOSED` | **Closed in `bd` 2026-05-22** — 4/4 children (`79x.1`–`79x.4`). |
 
 ## Active epics (phase 3)
 
 | Order | Epic | Slug | bd epic ID | Status | Notes |
 |------:|------|------|-------------|--------|-------|
-| 17 | Tool parity and pen authoring | [tool-parity-pen](./epics/tool-parity-pen.md) | `svg-editor-j24` | `OPEN` | Transform/readout gaps + pen parity (`j24.1`–`j24.7`, arc phased after Q/S/T); does not reopen closed epics |
-| 18 | Always-visible paint defaults | [always-visible-paint-defaults](./epics/always-visible-paint-defaults.md) | `svg-editor-6g0` | `OPEN` | Single contextual paint controls + drawing defaults across creation flows |
 | 19 | Insert raster images into SVG | [raster-image-insert](./epics/raster-image-insert.md) | `svg-editor-e4s` | `OPEN` | Spec → insert API → command → toolbar + drop → parity + export + tests (`e4s.1`–`e4s.8`) |
-| 20 | Text editing refinement | [text-editing-refinement](./epics/text-editing-refinement.md) | `svg-editor-79x` | `OPEN` | Live typographic preview while placing/editing text; first-class text outline (stroke) + semantics (`79x.1`–`79x.4`); builds on closed `nkz` |
+| 21 | Boolean path operations | [boolean-path-operations](./epics/boolean-path-operations.md) | `svg-editor-0zh` | `OPEN` | Union / subtract / intersect; **dedicated boolean panel**; epic bead (`type=epic`) |
+| 22 | Elliptical arc shape tool | [arc-shape-tool](./epics/arc-shape-tool.md) | `TBD` | `OPEN` | **Arc tool** next to rect/circle (not pen-only); bead `svg-editor-j24.7`; spike [`pen-elliptical-arc-authoring`](./spikes/pen-elliptical-arc-authoring.md); exit `svg-editor-bmy` when superseded |
 
 ## Free-standing issues
 
-These beads are not part of an epic and can be tackled independently.
+All items below are **closed in `bd`** (audit trail); there are **no open** roadmap freestanding beads as of 2026-05-25.
 
 | bd ID | Title | Priority | Notes |
 |-------|-------|----------|-------|
@@ -47,23 +54,22 @@ These beads are not part of an epic and can be tackled independently.
 | `svg-editor-ag5` | Undo delete should restore selection | P2 | DONE (small UX fix) |
 | `svg-editor-brz` | Bug: normalizeColorForPicker destroys gradient fills | P2 | DONE (bug fix) |
 | `svg-editor-e1x` | Full gradient editor UI | P3 | **DONE** — plan [gradient-editor](./epics/gradient-editor.md) |
-| `svg-editor-cno` | Bug: dragging Tree group hides child layer elements after drop | P2 | Drag/drop visibility bug with nested groups |
-| `svg-editor-0lx` | Investigate group/ungroup behavior with pre-existing groups | P2 | Edge-case exploration for nested group operations |
-| `svg-editor-5el` | Bug: artboard boundary stroke scales with zoom despite vector-effect | P2 | `vector-effect: non-scaling-stroke` ineffective under `preserveAspectRatio="none"` |
-| `svg-editor-j1a` | Enhancement: artboard resize anchor point selector (9-point) | P3 | Choose which corner/edge/center stays fixed when resizing |
+| `svg-editor-cno` | Bug: dragging Tree group hides child layer elements after drop | P2 | **DONE** — closed in `bd` 2026-05-07 |
+| `svg-editor-0lx` | Investigate group/ungroup behavior with pre-existing groups | P2 | **DONE** — closed in `bd` 2026-04-30 (tests + group/ungroup behavior) |
+| `svg-editor-5el` | Bug: artboard boundary stroke scales with zoom despite vector-effect | P2 | **DONE** — closed in `bd` 2026-05-07; artboard outline → CSS-zoom-independent overlay (see bead close reason) |
+| `svg-editor-j1a` | Enhancement: artboard resize anchor point selector (9-point) | P3 | **DONE** — document settings 9-point grid; `setArtboardSize` + `ArtboardSizeCommand` undo (`document-settings`, `artboard.model`, specs) |
 
-## Tool parity and pen authoring (epic `svg-editor-j24`)
+## Boolean path operations (new epic)
 
-All items below are **children of epic** [`svg-editor-j24`](./epics/tool-parity-pen.md) (`bd show svg-editor-j24`). See the epic plan for local refs **TP-1…TP-6** (transform/UI) and **PPEN-1…PPEN-7** (pen).
+Plan: [boolean-path-operations](./epics/boolean-path-operations.md). Epic bead: `svg-editor-0zh` (`bd show svg-editor-0zh`).
 
-| Theme | bd IDs |
-|--------|--------|
-| Transform / readouts | `svg-editor-e9a`, `svg-editor-jqe`, `svg-editor-zc7`, `svg-editor-269`, `svg-editor-0zh`, `svg-editor-hya` |
-| Pen authoring parity | `svg-editor-j24.1` … `svg-editor-j24.7` (phase: Q/S/T in `j24.2`, then `A` in `j24.7`) |
+## Elliptical arc shape tool (new epic)
+
+Plan: [arc-shape-tool](./epics/arc-shape-tool.md). Primary bead: `svg-editor-j24.7` (reparent from `svg-editor-bmy` to new epic; product = **Arc tool** alongside rect/circle).
 
 ## Text editing refinement (epic `svg-editor-79x`)
 
-All items below are **children of epic** [`svg-editor-79x`](./epics/text-editing-refinement.md) (`bd show svg-editor-79x`). Follow-on to closed [text editing](./epics/text-editing.md) (`svg-editor-nkz`).
+Epic **`CLOSED` in `bd` (2026-05-22)** — children were:
 
 | Theme | bd IDs |
 |--------|--------|
@@ -84,7 +90,7 @@ All items below are **children of epic** [`svg-editor-e4s`](./epics/raster-image
 
 ## Always-visible paint defaults (epic `svg-editor-6g0`)
 
-All items below are **children of epic** [`svg-editor-6g0`](./epics/always-visible-paint-defaults.md) (`bd show svg-editor-6g0`).
+Epic **`CLOSED` in `bd`** — children were:
 
 | Theme | bd IDs |
 |--------|--------|
@@ -100,6 +106,8 @@ All items below are **children of epic** [`svg-editor-6g0`](./epics/always-visib
 | — | Preview mode (artboard clipping) | P4 | Clip/dim content outside artboard boundary |
 | — | Configurable keyboard shortcuts | P4 | User-editable shortcut bindings |
 | — | Align to artboard/canvas | P4 | Align shapes relative to document bounds (vs. selection bounds) |
+| — | Symbols and reusable instances | P4 | Epic **`svg-editor-hya`** — plan [symbols-reusable-instances](./epics/symbols-reusable-instances.md) (post-MVP) |
+| — | Animation authoring GUI | P4 | **Massive epic:** timeline/keyframe-style UI for authoring animations; **phase 1 — CSS** (e.g. `@keyframes`, transitions on SVG/CSS properties); **phase 2 — optional** JavaScript-driven or scriptable motion if product needs it; expect many bd children when scoped |
 
 ## Dependency graph
 
@@ -145,14 +153,13 @@ flowchart LR
   end
 
   subgraph phase3 [Phase 3 - Backlog]
-    e17[tool_parity_pen_j24]
-    e18[always_visible_paint_defaults_6g0]
-    e20[text_editing_refinement_79x]
+    e19[raster_image_insert_e4s]
+    e21[boolean_path_ops]
+    e22[arc_shape_tool]
   end
 
-  e15 --> e17
-  e5 --> e18
-  e7 --> e18
+  e15 --> e21
+  e7 --> e22
 ```
 
 ## Recommended execution order
@@ -167,20 +174,27 @@ flowchart LR
 8. ~~**Epic 10** (text editing)~~ -- **DONE**
 9. ~~**Epic 16** (advanced path editing)~~ -- **DONE**
 10. ~~**`svg-editor-e1x`** (gradient editor)~~ -- **DONE**
-11. **Epic 17 ([tool-parity-pen](./epics/tool-parity-pen.md), `svg-editor-j24`):** transform parity (`svg-editor-e9a` … `svg-editor-hya`) and pen parity (`svg-editor-j24.1` … `svg-editor-j24.7`, with `j24.7` blocked by `j24.2` phase 1); see epic plan for order and acceptance.
-12. **Epic 18 ([always-visible-paint-defaults](./epics/always-visible-paint-defaults.md), `svg-editor-6g0`):** always-visible fill/stroke/stroke-width controls, canonical defaults service, creation-flow wiring, and regression coverage.
-13. **Epic 20 ([text-editing-refinement](./epics/text-editing-refinement.md), `svg-editor-79x`):** live font/size/style preview for text tool and inline edit; text outline (stroke) UX and paint-order policy; tests (`79x.1`–`79x.4`).
+11. ~~**Epic 17 ([tool-parity-pen](./epics/tool-parity-pen.md), `svg-editor-j24`):** transform + pen parity~~ — **CLOSED in `bd` 2026-05-25**; booleans → epic `svg-editor-0zh`, symbols → epic `svg-editor-hya`, arc → [arc-shape-tool](./epics/arc-shape-tool.md).
+12. **Epic 21 ([boolean-path-operations](./epics/boolean-path-operations.md)):** path booleans; **dedicated panel**; bead `svg-editor-0zh`.
+13. **Epic 22 ([arc-shape-tool](./epics/arc-shape-tool.md)):** **Arc creation tool** (toolbar with rect/circle); bead `svg-editor-j24.7`; consolidate/close `svg-editor-bmy` when done.
+14. ~~**Epic 18 ([always-visible-paint-defaults](./epics/always-visible-paint-defaults.md), `svg-editor-6g0`):** always-visible paint + defaults~~ — **CLOSED in `bd`** (5/5).
+15. ~~**Epic 20 ([text-editing-refinement](./epics/text-editing-refinement.md), `svg-editor-79x`):** live preview + text outline + tests~~ — **CLOSED in `bd` 2026-05-22** (4/4).
+16. **Post-MVP — [symbols-reusable-instances](./epics/symbols-reusable-instances.md):** epic `svg-editor-hya`; document-level symbols / `<use>`.
 
 ## Beads epic references
 
 Epic issues in `bd` (see `bd list -t epic` or `bd show <id>` if this table drifts).
-Status/progress below is current as of 2026-05-06.
+Status synced from **`bd show`** on **2026-05-25**; re-run if drift.
 
 | Slug | bd epic ID | Title | Status | Progress |
 |------|------------|--------|--------|----------|
-| text-editing-refinement | `svg-editor-79x` | Text editing refinement | `OPEN` | 0/4 |
-| tool-parity-pen | `svg-editor-j24` | Tool parity and pen authoring | `OPEN` | 0/13 |
-| always-visible-paint-defaults | `svg-editor-6g0` | Always-visible paint defaults | `OPEN` | 0/5 |
+| raster-image-insert | `svg-editor-e4s` | Insert raster images into SVG | `OPEN` | 1/9 (see `bd show svg-editor-e4s`) |
+| boolean-path-operations | `svg-editor-0zh` | Boolean path operations | `OPEN` | epic umbrella |
+| arc-shape-tool | `TBD` | Elliptical arc shape tool | `OPEN` | migrate `svg-editor-j24.7` |
+| symbols-reusable-instances | `svg-editor-hya` | Symbols and reusable instances | `BACKLOG` | post-MVP epic |
+| always-visible-paint-defaults | `svg-editor-6g0` | Always-visible paint defaults | `CLOSED` | 5/5 |
+| text-editing-refinement | `svg-editor-79x` | Text editing refinement | `CLOSED` | 4/4 |
+| tool-parity-pen | `svg-editor-j24` | Tool parity and pen authoring | `CLOSED` | 12/12 |
 | selection-interaction | `svg-editor-3b7` | Multi-select and keyboard shortcuts | `CLOSED` | 8/8 |
 | editing-history | `svg-editor-bbc` | Undo and redo | `CLOSED` | 5/5 |
 | shape-transforms | `svg-editor-2zo` | Shape transforms | `CLOSED` | 5/5 |

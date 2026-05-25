@@ -1,9 +1,9 @@
-# Spike: Pen tool — elliptical arc (`A`) authoring
+# Spike: Elliptical arc (`A` / `a`) authoring
 
-**Epic:** `svg-editor-j24` (tool parity / pen authoring)  
-**Bead:** `svg-editor-j24.7`  
-**Date:** 2026-05-07  
-**Depends on:** `svg-editor-j24.2` (Q / S / T pen phase 1) — session/parser shape should be stable before locking arc integration details.
+**Epic:** [Arc shape tool](../epics/arc-shape-tool.md) (phase 3) — **dedicated Arc tool** alongside rect/circle; pen-only `A` authoring is optional follow-on.  
+**Bead:** `svg-editor-j24.7` (re-scope acceptance to shape-tool primary; reparent in `bd` to the arc epic when created).  
+**Date:** 2026-05-07 (updated 2026-05-25)  
+**Depends on:** `svg-editor-j24.2` (Q / S / T pen phase 1) — path model stable for shared serialization / tests.
 
 ---
 
@@ -114,13 +114,14 @@ These are **proposals** for implementation follow-up, not commitments.
 
 ---
 
-## 6. Next steps (for `svg-editor-j24.7` — issue stays open)
+## 6. Next steps (for `svg-editor-j24.7` / Arc tool epic)
 
-1. Land / confirm **`svg-editor-j24.2`** pen model (Q/S/T) so segment types and preview patterns are stable.  
-2. Finalize **one** primary interaction (recommend §3.1 + modifier from §3.2) and a **default flag** policy.  
-3. Extend `PenPathSegment` + serialization + preview; wire pen tool state machine in `svg-canvas.component.ts`.  
-4. Add **`path-d` / pen integration tests** for authored arcs (parse → expected geometry or stable `d` strings).  
-5. Decide whether **inspector** exposes raw `A` parameters in v1 or defers to v2.
+1. Land / confirm **`svg-editor-j24.2`** pen model (Q/S/T) so shared path types and preview patterns stay stable.  
+2. Finalize **one** primary interaction for the **Arc shape tool** (recommend §3.1 + modifier from §3.2) and a **default flag** policy.  
+3. Implement **Arc tool** session in the shape-creation stack (toolbar alongside rect/circle); extend `PenPathSegment` + serialization + preview only where the arc tool commits into the same path model.  
+4. Optional later: wire **`A`/`a` into the pen tool** if product still wants pen-native arc segments.  
+5. Add **`path-d` / tool integration tests** for authored arcs (parse → expected geometry or stable `d` strings).  
+6. Decide whether **inspector** exposes raw `A` parameters in v1 or defers to v2.
 
 ---
 
