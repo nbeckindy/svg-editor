@@ -494,6 +494,30 @@ export class ChromeEditorApplyService {
     );
   }
 
+  /** Properties panel: nearest `<g>` ancestor for inherited paint / "select parent". */
+  getNearestGroupAncestorId(shapeId: string): string | null {
+    return this.propertiesSvg.getNearestGroupAncestorId(shapeId);
+  }
+
+  /** Properties panel: select parent `<g>` when exactly one shape is selected. */
+  selectParentGroupForSingleSelection(): void {
+    const list = this.selectedShapesList();
+    if (list.length !== 1) return;
+    const shape = list[0]!;
+    const parentId = this.propertiesSvg.getNearestGroupAncestorId(shape.id);
+    if (!parentId) return;
+    const svg = this.propertiesSvg.getSVGInstance();
+    const el = svg?.findOne(`#${parentId}`) as SvgJsElement | undefined;
+    if (!el) return;
+    this.shapeSelection.selectShape(this.propertiesSvg.getShapeProperties(el));
+  }
+
+  /** Properties panel: clear **Selection** and editor chrome highlight (e.g. dash preview). */
+  clearInspectorSelection(): void {
+    this.shapeSelection.clearSelection();
+    this.propertiesSvg.clearHighlight();
+  }
+
   /**
    * Commit a numeric bbox / rotation edit from the properties panel (same semantics as **Canvas**
    * union transforms).

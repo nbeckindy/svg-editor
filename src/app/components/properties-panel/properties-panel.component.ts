@@ -1,10 +1,7 @@
 import { Component, computed, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
-import type { PropertiesPanelSvgPort } from '../../history/properties-panel-svg.port';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-properties.interface';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
@@ -34,7 +31,6 @@ export class PropertiesPanelComponent {
   private shapeSelectionService = inject(ShapeSelectionService);
   readonly selectedShape = this.shapeSelectionService.selectedShape;
   readonly selectionCount = this.shapeSelectionService.selectionCount;
-  private svg: PropertiesPanelSvgPort = inject(SvgManipulationService);
   private drawingDefaults = inject(DrawingStyleDefaultsService);
   private editorTool = inject(EditorToolService);
   private chromeApply = inject(ChromeEditorApplyService);
@@ -440,11 +436,11 @@ export class PropertiesPanelComponent {
     const inheritedFill = shape.fillSource?.kind === 'inherited';
     const inheritedStroke = shape.strokeSource?.kind === 'inherited';
     if (!inheritedFill && !inheritedStroke) return false;
-    return !!this.svg.getNearestGroupAncestorId(shape.id);
+    return !!this.chromeApply.getNearestGroupAncestorId(shape.id);
   }
 
   parentGroupId(shape: ShapeProperties): string | null {
-    return this.svg.getNearestGroupAncestorId(shape.id);
+    return this.chromeApply.getNearestGroupAncestorId(shape.id);
   }
 
   onBakeFillClick(): void {
@@ -460,16 +456,7 @@ export class PropertiesPanelComponent {
   }
 
   onSelectParentGroupClick(): void {
-    if (this.selectionCount() !== 1) return;
-    const shape = this.selectedShape();
-    if (!shape) return;
-    const parentId = this.svg.getNearestGroupAncestorId(shape.id);
-    if (!parentId) return;
-    const svg = this.svg.getSVGInstance();
-    const el = svg?.findOne(`#${parentId}`) as SvgJsElement | undefined;
-    if (!el) return;
-    const props = this.svg.getShapeProperties(el);
-    this.shapeSelectionService.selectShape(props);
+    this.chromeApply.selectParentGroupForSingleSelection();
   }
 
   /** True when the fill is a url(#...) reference (gradient or pattern) that the hex picker can't edit. */
@@ -640,8 +627,7 @@ export class PropertiesPanelComponent {
   }
 
   onClearSelection(): void {
-    this.shapeSelectionService.clearSelection();
-    this.svg.clearHighlight();
+    this.chromeApply.clearInspectorSelection();
   }
 
   canAlignSelection(): boolean {

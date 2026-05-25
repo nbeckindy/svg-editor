@@ -2,7 +2,8 @@ import { Matrix, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { PaintGradientSnapshot } from '../../models/svg-gradient';
 import type { CreatableShapeType, ShapeCreationAttrs } from '../../services/svg-shape-content.port';
 import type { ClipboardPayload } from '../../models/clipboard-payload';
-import { DrawingStyleDefaults, DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
+import type { DrawingStyleDefaults } from '../../models/drawing-style-defaults';
+import type { DrawingStyleDefaultsWritePort } from '../drawing-style-defaults.port';
 import { type ResizeHandle } from '../../utils/selection-resize';
 import { type SkewAxis } from '../../utils/selection-skew';
 import { ArtboardModel } from '../../models/artboard.model';
@@ -275,7 +276,7 @@ export class UpdateDrawingDefaultsCommand implements CoalesceableCommand {
   readonly coalesceKey: string;
 
   constructor(
-    private readonly defaultsSvc: DrawingStyleDefaultsService,
+    private readonly defaults: DrawingStyleDefaultsWritePort,
     private readonly before: DrawingStyleDefaults,
     private readonly after: DrawingStyleDefaults,
     private readonly scope:
@@ -289,16 +290,16 @@ export class UpdateDrawingDefaultsCommand implements CoalesceableCommand {
   }
 
   execute(): void {
-    this.defaultsSvc.setDefaults(this.after);
+    this.defaults.setDefaults(this.after);
   }
 
   undo(): void {
-    this.defaultsSvc.setDefaults(this.before);
+    this.defaults.setDefaults(this.before);
   }
 
   coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
     const n = newer as UpdateDrawingDefaultsCommand;
-    return new UpdateDrawingDefaultsCommand(this.defaultsSvc, this.before, n.after, this.scope);
+    return new UpdateDrawingDefaultsCommand(this.defaults, this.before, n.after, this.scope);
   }
 }
 

@@ -59,7 +59,8 @@ describe('PropertiesPanelComponent', () => {
       patchAllSelected: vi.fn((updates: Partial<ShapeProperties>) => {
         selectedShapesSignal.update((arr) => arr.map((s) => ({ ...s, ...updates })));
       }),
-      clearSelection: vi.fn(() => selectedShapesSignal.set([]))
+      clearSelection: vi.fn(() => selectedShapesSignal.set([])),
+      selectShape: vi.fn((shape: ShapeProperties) => selectedShapesSignal.set([shape]))
     };
 
     const artboardSig = signal({ ...DEFAULT_ARTBOARD });

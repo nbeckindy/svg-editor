@@ -30,7 +30,9 @@ describe('ChromeEditorApplyService', () => {
       patchAllSelected: vi.fn((u: Partial<ShapeProperties>) => {
         selectedShapesSignal.update((arr) => arr.map((s) => ({ ...s, ...u })));
       }),
-      selectShapes: vi.fn((next: ShapeProperties[]) => selectedShapesSignal.set(next))
+      selectShapes: vi.fn((next: ShapeProperties[]) => selectedShapesSignal.set(next)),
+      selectShape: vi.fn((shape: ShapeProperties) => selectedShapesSignal.set([shape])),
+      clearSelection: vi.fn(() => selectedShapesSignal.set([]))
     };
 
     const svgMock = {
@@ -71,7 +73,9 @@ describe('ChromeEditorApplyService', () => {
       applyUnionRotationFromSnapshot: vi.fn(),
       snapshotSelectionTransforms: vi.fn(),
       snapshotVectorEffectsForShapes: vi.fn(),
-      getSelectionRotationPivot: vi.fn()
+      getSelectionRotationPivot: vi.fn(),
+      getNearestGroupAncestorId: vi.fn(() => null),
+      clearHighlight: vi.fn()
     };
 
     const drawingDefaultsMock = {
@@ -207,5 +211,26 @@ describe('ChromeEditorApplyService', () => {
     };
     service.applyAlignFromChrome('left', ['only-one']);
     expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('clearInspectorSelection clears selection and editor highlight', () => {
+    const shapeSelection = TestBed.inject(ShapeSelectionService) as unknown as {
+      clearSelection: ReturnType<typeof vi.fn>;
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      clearHighlight: ReturnType<typeof vi.fn>;
+    };
+    service.clearInspectorSelection();
+    expect(shapeSelection.clearSelection).toHaveBeenCalled();
+    expect(manip.clearHighlight).toHaveBeenCalled();
+  });
+
+  it('getNearestGroupAncestorId delegates to manipulation façade', () => {
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      getNearestGroupAncestorId: ReturnType<typeof vi.fn>;
+    };
+    vi.mocked(manip.getNearestGroupAncestorId).mockReturnValue('g1');
+    expect(service.getNearestGroupAncestorId('s1')).toBe('g1');
+    expect(manip.getNearestGroupAncestorId).toHaveBeenCalledWith('s1');
   });
 });

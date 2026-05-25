@@ -1,12 +1,16 @@
 ---
 description: Follow the EditorCommand pattern for undo/redo when adding new editing operations
-globs: src/app/models/editor-commands.ts,src/app/models/editor-command.ts,src/app/history/commands/editor-command-implementations.ts,src/app/history/*-svg.port.ts
+globs: src/app/models/editor-commands.ts,src/app/models/editor-command.ts,src/app/history/commands/editor-command-implementations.ts,src/app/history/*-svg.port.ts,src/app/history/drawing-style-defaults.port.ts
 alwaysApply: false
 ---
 
 # EditorCommand pattern (undo/redo)
 
 Every user-visible mutation to the SVG must be wrapped in an `EditorCommand` and dispatched through `EditorHistoryService.pushAndExecute(cmd)` so undo/redo works.
+
+## `editor-commands.ts` barrel
+
+[`src/app/models/editor-commands.ts`](src/app/models/editor-commands.ts) is the **History public API**: it re-exports `EditorCommand` / `CompositeCommand`, **narrow ports** from `src/app/history/*.port.ts`, and **all command class implementations**. It lives under `models/` for historical path stability, not because it is pure domain data. When adding features: define or extend a **port** in `history/`, re-export its type from this barrel if command constructors need it, and inject only that port into new commands (e.g. `DrawingStyleDefaultsWritePort` for `UpdateDrawingDefaultsCommand`).
 
 ## Structure
 
@@ -17,14 +21,14 @@ export class MyCommand implements EditorCommand {
   readonly description = 'What the user did';
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly paint: HistoryPaintPort,
     // capture old state in constructor so undo can restore it
     private readonly oldValue: T,
     private readonly newValue: T
   ) {}
 
-  execute(): void { /* apply newValue via svc */ }
-  undo(): void    { /* restore oldValue via svc */ }
+  execute(): void { /* apply newValue via paint */ }
+  undo(): void    { /* restore oldValue via paint */ }
 }
 ```
 

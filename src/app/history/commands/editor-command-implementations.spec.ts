@@ -38,7 +38,7 @@ import {
   type EditorCommand,
 } from '../../models/editor-commands';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
-import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
+import type { DrawingStyleDefaultsWritePort } from '../../history/drawing-style-defaults.port';
 
 function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown>> = {}) {
   return {
@@ -1545,7 +1545,7 @@ describe('UpdateDrawingDefaultsCommand', () => {
   it('applies next defaults on execute and restores previous defaults on undo', () => {
     const defaultsSvc = {
       setDefaults: vi.fn()
-    } as unknown as DrawingStyleDefaultsService;
+    } as unknown as DrawingStyleDefaultsWritePort;
     const before = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
     const after = { fill: '#ff0000', stroke: '#00ff00', strokeWidth: 5 };
     const cmd = new UpdateDrawingDefaultsCommand(defaultsSvc, before, after, 'all');
@@ -1560,7 +1560,7 @@ describe('UpdateDrawingDefaultsCommand', () => {
   it('coalesces by scope while preserving original before snapshot', () => {
     const defaultsSvc = {
       setDefaults: vi.fn()
-    } as unknown as DrawingStyleDefaultsService;
+    } as unknown as DrawingStyleDefaultsWritePort;
     const before = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
     const afterA = { fill: '#111111', stroke: '#000000', strokeWidth: 2 };
     const afterB = { fill: '#222222', stroke: '#000000', strokeWidth: 2 };
