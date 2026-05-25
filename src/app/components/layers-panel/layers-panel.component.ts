@@ -5,15 +5,7 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { LayerTreeNode } from '../../services/svg-layer-structure.port';
 import type { LayersPanelSvgPort } from '../../history/layers-panel-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
-import { EditorHistoryService } from '../../services/editor-history.service';
-import {
-  ReorderCommand,
-  buildReorderToExtremeCommand,
-  ToggleVisibilityCommand,
-  GroupCommand,
-  UngroupCommand,
-  UngroupElementsCommand
-} from '../../models/editor-commands';
+import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 
 interface LayerTreeViewModel {
   id: string;
@@ -45,7 +37,7 @@ interface PreviewPaintData {
 export class LayersPanelComponent {
   private readonly svg: LayersPanelSvgPort = inject(SvgManipulationService);
   private readonly shapeSelection = inject(ShapeSelectionService);
-  private readonly editorHistory = inject(EditorHistoryService);
+  private readonly chromeApply = inject(ChromeEditorApplyService);
 
   readonly collapsedGroups = signal(new Set<string>());
 
@@ -77,86 +69,35 @@ export class LayersPanelComponent {
   }
 
   onVisibilityToggle(layerId: string): void {
-    this.editorHistory.pushAndExecute(
-      new ToggleVisibilityCommand(this.svg, layerId)
-    );
+    this.chromeApply.toggleLayerVisibility(layerId);
   }
 
   onMoveForward(layerId: string): void {
-    this.editorHistory.pushAndExecute(
-      new ReorderCommand(this.svg, layerId, 'forward')
-    );
+    this.chromeApply.moveLayerForward(layerId);
   }
 
   onMoveBackward(layerId: string): void {
-    this.editorHistory.pushAndExecute(
-      new ReorderCommand(this.svg, layerId, 'backward')
-    );
+    this.chromeApply.moveLayerBackward(layerId);
   }
 
   onMoveToFront(layerId: string): void {
-    const cmd = buildReorderToExtremeCommand(this.svg, [layerId], 'front');
-    if (cmd) this.editorHistory.pushAndExecute(cmd);
+    this.chromeApply.moveLayerToFront(layerId);
   }
 
   onMoveToBack(layerId: string): void {
-    const cmd = buildReorderToExtremeCommand(this.svg, [layerId], 'back');
-    if (cmd) this.editorHistory.pushAndExecute(cmd);
+    this.chromeApply.moveLayerToBack(layerId);
   }
 
   onGroupSelected(): void {
     const selected = this.shapeSelection.selectedShapes();
     if (selected.length < 2) return;
-    const ids = selected.map((s) => s.id);
-    const cmd = new GroupCommand(this.svg, ids);
-    this.editorHistory.pushAndExecute(cmd);
-    const newGroupId = cmd.createdGroupId;
-    if (newGroupId) {
-      const svg = this.svg.getSVGInstance();
-      const groupEl = svg?.findOne(`#${newGroupId}`) as SvgJsElement | undefined;
-      if (groupEl) {
-        const groupProps = this.svg.getShapeProperties(groupEl);
-        this.shapeSelection.selectShapes([groupProps]);
-      }
-    }
+    this.chromeApply.groupSelectedFromLayersPanel(selected.map((s) => s.id));
   }
 
   onUngroupSelected(): void {
     const selected = this.shapeSelection.selectedShapes();
     const groupIds = selected.filter((s) => s.type === 'g').map((s) => s.id);
-    if (groupIds.length === 0) return;
-
-    const svg = this.svg.getSVGInstance();
-    if (!svg) return;
-
-    const selectFreedChildren = (childIds: string[]): void => {
-      const shapes = childIds
-        .map((id) => svg.findOne(`#${id}`) as SvgJsElement | null)
-        .filter((el): el is SvgJsElement => el != null)
-        .map((el) => this.svg.getShapeProperties(el));
-      if (shapes.length > 0) {
-        this.shapeSelection.selectShapes(shapes);
-      } else {
-        this.shapeSelection.clearSelection();
-      }
-    };
-
-    if (groupIds.length === 1) {
-      const groupId = groupIds[0];
-      const childIds: string[] = [];
-      const groupNode = svg.findOne(`#${groupId}`)?.node;
-      if (groupNode) {
-        for (const child of Array.from(groupNode.children)) {
-          if (child.id) childIds.push(child.id);
-        }
-      }
-      this.editorHistory.pushAndExecute(new UngroupCommand(this.svg, groupId));
-      selectFreedChildren(childIds);
-    } else {
-      const multi = new UngroupElementsCommand(this.svg, groupIds);
-      this.editorHistory.pushAndExecute(multi);
-      selectFreedChildren(multi.ungroupedChildIds);
-    }
+    this.chromeApply.ungroupSelectedFromLayersPanel(groupIds);
   }
 
   onLayerClick(layerId: string, event?: MouseEvent): void {

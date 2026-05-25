@@ -20,11 +20,11 @@ Explored the Angular svg-editor around canvas, tools, commands, and manipulation
 | Gravity wells | `svg-canvas.component.ts` (~4k+ lines) and `svg-manipulation.service.ts` (~2.9k+ lines) centralize orchestration |
 | Shallow split | `editor-tool.service.ts` is mostly signals; substantive tool behavior lives on the canvas |
 | Layering | `src/app/models/editor-commands.ts` imports Angular services — blurs command data vs application wiring |
-| Duplication | `selection-paint-apply.service.ts` mirrors properties-panel command patterns; panel still orchestrates heavily |
+| Duplication | ~~`selection-paint-apply.service.ts`~~ superseded by `chrome-editor-apply.service.ts` (high-level **Chrome** → **History** API); further panel slimming optional |
 | Gesture coupling | `gestures/gesture-context.ts` bundles many services + callbacks — second orchestrator alongside canvas |
-| Properties panel | `properties-panel.component.ts` mixes matrix math, freshness signals, and `EditorCommand` construction |
+| Properties panel | `properties-panel.component.ts` still mixes matrix readouts with UI; command batches moved behind **`ChromeEditorApplyService`** |
 | Pass-through UI | `editor-dock-panel.ts` (types only), thin `tool-strip`, `editor-right-dock`, `editor-tool-context-bar` |
-| Tests | Strong on pure models (`pen-path`, `path-d`, `path-pen-insert`); gaps on `selection-paint-apply.service`, `editor-tool.service`; canvas spec very large (integration-style) |
+| Tests | Strong on pure models (`pen-path`, `path-d`, `path-pen-insert`); `chrome-editor-apply.service.spec.ts` covers the chrome write path basics; gaps on `editor-tool.service`; canvas spec very large (integration-style) |
 
 ---
 
@@ -52,7 +52,7 @@ Explored the Angular svg-editor around canvas, tools, commands, and manipulation
 
 **Benefits:** Narrower seams, better **locality**, deletion test passes per slice.
 
-**Status (2026-05):** `SvgManipulationService` already **delegates** to focused injectables (`SvgEditorDocumentService`, `SvgShapeContentService`, `SvgSelectionGeometryService`, `SvgLayerStructureService`, `SvgGradientDefsService`). Further **file** splits are optional. Remaining #2 work is **typed seams at call sites** so consumers do not depend on the full class surface unless necessary (e.g. `TransformGestureDocSvgPort`, `TransformGestureSvgPort`, `SelectionTransformApplySvgPort`, `SelectionPaintApplySvgPort` / `SelectionPaintStrokeDashSvgPort`, `SelectionTransformReadoutSvgPort`, `DocumentSettingsSvgPort`, `SvgDebugPanelSvgPort`, `AppRootSvgManipulationPort`, `GradientFillEditorSvgPort`, `HistoryPaintPort`, `implements …` on the façade class).
+**Status (2026-05):** `SvgManipulationService` already **delegates** to focused injectables (`SvgEditorDocumentService`, `SvgShapeContentService`, `SvgSelectionGeometryService`, `SvgLayerStructureService`, `SvgGradientDefsService`). Further **file** splits are optional. Remaining #2 work is **typed seams at call sites** so consumers do not depend on the full class surface unless necessary (e.g. `TransformGestureDocSvgPort`, `TransformGestureSvgPort`, `SelectionTransformApplySvgPort`, `ChromeEditorApplySvgPort` / `SelectionPaintStrokeDashSvgPort`, `SelectionTransformReadoutSvgPort`, `DocumentSettingsSvgPort`, `SvgDebugPanelSvgPort`, `AppRootSvgManipulationPort`, `GradientFillEditorSvgPort`, `HistoryPaintPort`, `implements …` on the façade class).
 
 ---
 
@@ -70,9 +70,9 @@ Explored the Angular svg-editor around canvas, tools, commands, and manipulation
 
 ### 4. Properties panel as geometry + command hub
 
-**Files:** `src/app/components/properties-panel/properties-panel.component.ts`, `src/app/services/selection-paint-apply.service.ts`, `src/app/services/svg-manipulation.service.ts`
+**Files:** `src/app/components/properties-panel/properties-panel.component.ts`, `src/app/services/chrome-editor-apply.service.ts`, `src/app/services/svg-manipulation.service.ts`
 
-**Problem:** Panel mixes read-model math (matrices, bbox, skew/rotation) with command orchestration; overlaps `SelectionPaintApplyService` and manipulation — two homes, wide UI seam.
+**Problem:** Panel mixed read-model math with command orchestration; **`ChromeEditorApplyService`** now owns **Chrome** → **History** + **Selection** sync for the inspector and related flows (see `src/app/services/chrome-editor-apply.service.ts`).
 
 **Solution:** Extract selection → transform readout module; single write path for “apply paint/style from UI” so the panel is mostly binding.
 
@@ -94,7 +94,7 @@ Explored the Angular svg-editor around canvas, tools, commands, and manipulation
 
 ### 6. Canvas spec as the only fine-grained test surface
 
-**Files:** `src/app/components/svg-canvas/svg-canvas.component.spec.ts`; gaps on `selection-paint-apply.service`, `editor-tool.service`
+**Files:** `src/app/components/svg-canvas/svg-canvas.component.spec.ts`; gaps on `editor-tool.service` beyond chrome apply coverage
 
 **Problem:** Huge integration-style specs; **interface as test surface** is often the whole canvas.
 

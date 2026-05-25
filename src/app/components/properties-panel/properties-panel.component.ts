@@ -10,27 +10,10 @@ import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
 import { DocumentSettingsComponent } from '../document-settings/document-settings.component';
 import { GradientFillEditorComponent } from '../gradient-fill-editor/gradient-fill-editor.component';
-import {
-  GradientFillSnapshotCommand,
-  BakeFillCommand,
-  BakeStrokeCommand,
-  AlignCommand,
-  DistributeCommand,
-  FontCommand,
-  TextAlignCommand,
-  TextPaintOrderCommand,
-  TextVectorEffectCommand,
-  UpdateDrawingDefaultsCommand
-} from '../../models/editor-commands';
-import {
-  defaultLinearGradientModel,
-  parsePaintReferenceId,
-  serializeGradientElementToOuterHtml
-} from '../../models/svg-gradient';
+import { parsePaintReferenceId } from '../../models/svg-gradient';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
-import { SelectionPaintApplyService } from '../../services/selection-paint-apply.service';
+import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
-import { SelectionTransformApplyService } from '../../services/selection-transform-apply.service';
 
 @Component({
   selector: 'app-properties-panel',
@@ -54,9 +37,8 @@ export class PropertiesPanelComponent {
   private svg: PropertiesPanelSvgPort = inject(SvgManipulationService);
   private drawingDefaults = inject(DrawingStyleDefaultsService);
   private editorTool = inject(EditorToolService);
-  private selectionPaintApply = inject(SelectionPaintApplyService);
+  private chromeApply = inject(ChromeEditorApplyService);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
-  private readonly selectionTransformApply = inject(SelectionTransformApplyService);
 
   readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
   readonly selectionTransformReadout = this.transformReadoutSvc.selectionTransformReadout;
@@ -74,7 +56,7 @@ export class PropertiesPanelComponent {
   });
 
   onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event): void {
-    this.selectionTransformApply.onBBoxFieldCommit(field, event);
+    this.chromeApply.onSelectionBBoxFieldCommit(field, event);
   }
 
   readonly alignShortcutLabels = {
@@ -256,170 +238,43 @@ export class PropertiesPanelComponent {
 
   onFontFamilyChange(event: Event): void {
     const fontFamily = (event.target as HTMLSelectElement).value;
-    const textShapes = this.textSelection();
-    if (textShapes.length > 0) {
-      const commands = textShapes.map((s) =>
-        new FontCommand(
-          this.svg,
-          s.id,
-          'fontFamily',
-          s.fontFamily ?? 'Arial, sans-serif',
-          fontFamily
-        )
-      );
-      this.selectionPaintApply.executeEditorCommands(commands, `Set font family to ${fontFamily}`);
-      this.selectionPaintApply.syncSelectedShapesFromDom();
-      return;
-    }
-    if (this.textToolPlacementMode()) {
-      const before = this.drawingDefaults.defaults();
-      this.selectionPaintApply.executeEditorCommands(
-        [
-          new UpdateDrawingDefaultsCommand(
-            this.drawingDefaults,
-            before,
-            { ...before, fontFamily },
-            'typography'
-          )
-        ],
-        `Set default font family to ${fontFamily}`
-      );
-    }
+    this.chromeApply.applyTextFontFamilyFromChrome(
+      fontFamily,
+      this.textSelection(),
+      this.textToolPlacementMode()
+    );
   }
 
   onFontSizeChange(event: Event): void {
     const fontSize = Number.parseFloat((event.target as HTMLInputElement).value);
     if (!Number.isFinite(fontSize) || fontSize <= 0) return;
-    const textShapes = this.textSelection();
-    if (textShapes.length > 0) {
-      const commands = textShapes.map((s) =>
-        new FontCommand(
-          this.svg,
-          s.id,
-          'fontSize',
-          s.fontSize ?? 16,
-          fontSize
-        )
-      );
-      this.selectionPaintApply.executeEditorCommands(commands, `Set font size to ${fontSize}`);
-      this.selectionPaintApply.syncSelectedShapesFromDom();
-      return;
-    }
-    if (this.textToolPlacementMode()) {
-      const before = this.drawingDefaults.defaults();
-      this.selectionPaintApply.executeEditorCommands(
-        [
-          new UpdateDrawingDefaultsCommand(
-            this.drawingDefaults,
-            before,
-            { ...before, fontSize },
-            'typography'
-          )
-        ],
-        `Set default font size to ${fontSize}`
-      );
-    }
+    this.chromeApply.applyTextFontSizeFromChrome(
+      fontSize,
+      this.textSelection(),
+      this.textToolPlacementMode()
+    );
   }
 
   onToggleBold(): void {
-    const textShapes = this.textSelection();
-    if (textShapes.length > 0) {
-      const allBold = textShapes.every((s) => (s.fontWeight ?? 'normal') === 'bold');
-      const nextWeight = allBold ? 'normal' : 'bold';
-      const commands = textShapes.map((s) =>
-        new FontCommand(
-          this.svg,
-          s.id,
-          'fontWeight',
-          s.fontWeight ?? 'normal',
-          nextWeight
-        )
-      );
-      this.selectionPaintApply.executeEditorCommands(commands, `${nextWeight === 'bold' ? 'Enable' : 'Disable'} bold`);
-      this.selectionPaintApply.syncSelectedShapesFromDom();
-      return;
-    }
-    if (this.textToolPlacementMode()) {
-      const before = this.drawingDefaults.defaults();
-      const nextWeight = before.fontWeight === 'bold' ? 'normal' : 'bold';
-      this.selectionPaintApply.executeEditorCommands(
-        [
-          new UpdateDrawingDefaultsCommand(
-            this.drawingDefaults,
-            before,
-            { ...before, fontWeight: nextWeight },
-            'typography'
-          )
-        ],
-        `${nextWeight === 'bold' ? 'Enable' : 'Disable'} default bold`
-      );
-    }
+    this.chromeApply.applyTextToggleBoldFromChrome(
+      this.textSelection(),
+      this.textToolPlacementMode()
+    );
   }
 
   onToggleItalic(): void {
-    const textShapes = this.textSelection();
-    if (textShapes.length > 0) {
-      const allItalic = textShapes.every((s) => (s.fontStyle ?? 'normal') === 'italic');
-      const nextStyle = allItalic ? 'normal' : 'italic';
-      const commands = textShapes.map((s) =>
-        new FontCommand(
-          this.svg,
-          s.id,
-          'fontStyle',
-          s.fontStyle ?? 'normal',
-          nextStyle
-        )
-      );
-      this.selectionPaintApply.executeEditorCommands(commands, `${nextStyle === 'italic' ? 'Enable' : 'Disable'} italic`);
-      this.selectionPaintApply.syncSelectedShapesFromDom();
-      return;
-    }
-    if (this.textToolPlacementMode()) {
-      const before = this.drawingDefaults.defaults();
-      const nextStyle: 'normal' | 'italic' = before.fontStyle === 'italic' ? 'normal' : 'italic';
-      this.selectionPaintApply.executeEditorCommands(
-        [
-          new UpdateDrawingDefaultsCommand(
-            this.drawingDefaults,
-            before,
-            { ...before, fontStyle: nextStyle },
-            'typography'
-          )
-        ],
-        `${nextStyle === 'italic' ? 'Enable' : 'Disable'} default italic`
-      );
-    }
+    this.chromeApply.applyTextToggleItalicFromChrome(
+      this.textSelection(),
+      this.textToolPlacementMode()
+    );
   }
 
   onTextAlignChange(textAnchor: 'start' | 'middle' | 'end'): void {
-    const textShapes = this.textSelection();
-    if (textShapes.length > 0) {
-      const commands = textShapes.map((s) =>
-        new TextAlignCommand(
-          this.svg,
-          s.id,
-          s.textAnchor ?? 'start',
-          textAnchor
-        )
-      );
-      this.selectionPaintApply.executeEditorCommands(commands, 'Set text alignment');
-      this.selectionPaintApply.syncSelectedShapesFromDom();
-      return;
-    }
-    if (this.textToolPlacementMode()) {
-      const before = this.drawingDefaults.defaults();
-      this.selectionPaintApply.executeEditorCommands(
-        [
-          new UpdateDrawingDefaultsCommand(
-            this.drawingDefaults,
-            before,
-            { ...before, textAnchor },
-            'typography'
-          )
-        ],
-        'Set default text alignment'
-      );
-    }
+    this.chromeApply.applyTextAnchorFromChrome(
+      textAnchor,
+      this.textSelection(),
+      this.textToolPlacementMode()
+    );
   }
 
   /** True when every selected shape is `<text>` — use outline-oriented labels and text-only extras. */
@@ -451,11 +306,7 @@ export class PropertiesPanelComponent {
     const raw = (event.target as HTMLSelectElement).value;
     if (raw === '') return;
     const next = raw === 'stroke fill' ? 'stroke fill' : undefined;
-    const commands = this.textSelection().map(
-      (s) => new TextPaintOrderCommand(this.svg, s.id, s.paintOrder, next)
-    );
-    this.selectionPaintApply.executeEditorCommands(commands, next ? 'Set text paint order' : 'Reset text paint order');
-    this.selectionPaintApply.syncSelectedShapesFromDom();
+    this.chromeApply.applyTextPaintOrderFromChrome(this.textSelection(), next);
   }
 
   textVectorEffectsMixed(): boolean {
@@ -472,15 +323,7 @@ export class PropertiesPanelComponent {
   onTextNonScalingStrokeChange(event: Event): void {
     const checked = (event.target as HTMLInputElement).checked;
     const next = checked ? 'non-scaling-stroke' : undefined;
-    const commands = this.textSelection().map(
-      (s) =>
-        new TextVectorEffectCommand(this.svg, s.id, s.vectorEffect, next)
-    );
-    this.selectionPaintApply.executeEditorCommands(
-      commands,
-      checked ? 'Enable non-scaling text outline' : 'Disable non-scaling text outline'
-    );
-    this.selectionPaintApply.syncSelectedShapesFromDom();
+    this.chromeApply.applyTextVectorEffectFromChrome(this.textSelection(), next);
   }
 
   /** All selected shapes have no visible fill — show “No fill” only in this case (not when mixed). */
@@ -605,19 +448,15 @@ export class PropertiesPanelComponent {
   }
 
   onBakeFillClick(): void {
-    const commands = this.selectedShapesList()
-      .filter((s) => this.shouldOfferBakeFill(s))
-      .map((s) => new BakeFillCommand(this.svg, s.id));
-    this.selectionPaintApply.executeEditorCommands(commands, 'Bake fill to local');
-    this.selectionPaintApply.syncSelectedShapesFromDom();
+    this.chromeApply.applyBakeFillFromChrome(
+      this.selectedShapesList().filter((s) => this.shouldOfferBakeFill(s))
+    );
   }
 
   onBakeStrokeClick(): void {
-    const commands = this.selectedShapesList()
-      .filter((s) => this.shouldOfferBakeStroke(s))
-      .map((s) => new BakeStrokeCommand(this.svg, s.id));
-    this.selectionPaintApply.executeEditorCommands(commands, 'Bake stroke to local');
-    this.selectionPaintApply.syncSelectedShapesFromDom();
+    this.chromeApply.applyBakeStrokeFromChrome(
+      this.selectedShapesList().filter((s) => this.shouldOfferBakeStroke(s))
+    );
   }
 
   onSelectParentGroupClick(): void {
@@ -651,19 +490,7 @@ export class PropertiesPanelComponent {
       shape.fill && shape.fill.trim() !== '' && shape.fill.toLowerCase() !== 'none'
         ? shape.fill
         : '#000000';
-    const id = this.svg.allocateUniqueDefId('grad');
-    const model = defaultLinearGradientModel(id, from, '#ffffff');
-    const before = this.svg.capturePaintGradientSnapshot(shape.id, 'fill');
-    const after = {
-      gradientId: id,
-      shapePaintAttr: `url(#${id})`,
-      gradientOuterHtml: serializeGradientElementToOuterHtml(model)
-    };
-    this.selectionPaintApply.executeEditorCommands(
-      [new GradientFillSnapshotCommand(this.svg, shape.id, 'fill', before, after)],
-      'Add gradient fill'
-    );
-    this.selectionPaintApply.syncSelectedShapesFromDom();
+    this.chromeApply.applyAddLinearGradientFillFromChrome(shape, from);
   }
 
   isGradientOrPatternStroke(shape: ShapeProperties): boolean {
@@ -720,23 +547,23 @@ export class PropertiesPanelComponent {
   }
 
   onFillColorChange(color: string): void {
-    this.selectionPaintApply.applyFillColor(color);
+    this.chromeApply.applyFillColor(color);
   }
 
   onStrokeColorChange(color: string): void {
-    this.selectionPaintApply.applyStrokeColor(color);
+    this.chromeApply.applyStrokeColor(color);
   }
 
   onStrokeWidthChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const width = parseFloat(target.value);
-    this.selectionPaintApply.applyStrokeWidth(width);
+    this.chromeApply.applyStrokeWidth(width);
   }
 
   onOpacityChange(event: Event): void {
     const target = event.target as HTMLInputElement;
     const opacity = parseFloat(target.value);
-    this.selectionPaintApply.applyOpacity(opacity);
+    this.chromeApply.applyOpacity(opacity);
   }
 
   readonly dashPresets: { label: string; value: string }[] = [
@@ -799,7 +626,7 @@ export class PropertiesPanelComponent {
     const target = event.target as HTMLInputElement;
     const offset = parseFloat(target.value);
     if (!Number.isFinite(offset)) return;
-    this.selectionPaintApply.applyStrokeDashoffset(offset);
+    this.chromeApply.applyStrokeDashoffset(offset);
   }
 
   /** Validate a custom dasharray string: comma/space-separated positive numbers. */
@@ -809,7 +636,7 @@ export class PropertiesPanelComponent {
   }
 
   private applyDashArray(dasharray: string): void {
-    this.selectionPaintApply.applyStrokeDasharray(dasharray);
+    this.chromeApply.applyStrokeDasharray(dasharray);
   }
 
   onClearSelection(): void {
@@ -827,15 +654,11 @@ export class PropertiesPanelComponent {
 
   onAlign(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'): void {
     const ids = this.selectedShapesList().map((shape) => shape.id);
-    if (ids.length < 2) return;
-    this.selectionPaintApply.executeEditorCommands([new AlignCommand(this.svg, ids, direction)]);
-    this.selectionPaintApply.syncSelectedShapesFromDom();
+    this.chromeApply.applyAlignFromChrome(direction, ids);
   }
 
   onDistribute(direction: 'horizontal' | 'vertical'): void {
     const ids = this.selectedShapesList().map((shape) => shape.id);
-    if (ids.length < 3) return;
-    this.selectionPaintApply.executeEditorCommands([new DistributeCommand(this.svg, ids, direction)]);
-    this.selectionPaintApply.syncSelectedShapesFromDom();
+    this.chromeApply.applyDistributeFromChrome(direction, ids);
   }
 }

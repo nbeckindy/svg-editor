@@ -60,7 +60,7 @@ export interface TransformGestureDocSvgPort extends TransformGestureSvgPort {
 
 /**
  * Svg seam for committing union bbox edits from the properties panel
- * (`SelectionTransformApplyService`): {@link TransformGestureSvgPort} plus snapshot / pivot
+ * (`ChromeEditorApplyService`): {@link TransformGestureSvgPort} plus snapshot / pivot
  * reads used with translate / union-scale / union-rotate commands.
  */
 export interface SelectionTransformApplySvgPort extends TransformGestureSvgPort {

@@ -20,7 +20,7 @@ Existing gesture / unit specs (overlap notes):
 | [`drag-gesture.spec.ts`](src/app/components/svg-canvas/gestures/drag-gesture.spec.ts) | Drag start failure + union commit (mocked ghost) |
 | [`resize-gesture.spec.ts`](src/app/components/svg-canvas/gestures/resize-gesture.spec.ts) | Resize start preconditions |
 | [`skew-gesture.spec.ts`](src/app/components/svg-canvas/gestures/skew-gesture.spec.ts) | Skew start + noop end |
-| [`selection-paint-apply.service.spec.ts`](src/app/services/selection-paint-apply.service.spec.ts) | Chrome paint write path (expanded) |
+| [`chrome-editor-apply.service.spec.ts`](src/app/services/chrome-editor-apply.service.spec.ts) | Chrome → History write path (paint + inspector) |
 
 ---
 
@@ -78,4 +78,4 @@ This session added **new** gesture/service coverage without deleting canvas case
 ## 5. Done-enough metrics (initiative)
 
 - Track line count of [`svg-canvas.component.spec.ts`](../src/app/components/svg-canvas/svg-canvas.component.spec.ts): goal **no net growth**; shrink as clusters migrate.
-- New failures should pin to **small** files first (`gestures/*.spec.ts`, `selection-paint-apply.service.spec.ts`).
+- New failures should pin to **small** files first (`gestures/*.spec.ts`, `chrome-editor-apply.service.spec.ts`).

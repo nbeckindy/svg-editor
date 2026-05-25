@@ -93,6 +93,7 @@ The workspace **Chrome** around the **Canvas** includes intentionally shallow co
 - **`EditorRightDockComponent`** follows a parent-owned seam: `activeDockPanel` and `dockCollapsed` are passed in with `input()` / `output()` from the app shell; the dock only forwards tab clicks and collapse/expand. That pattern is the reference if a second layout (alternate shell, embedded editor) needs the same inspector contract without duplicating state.
 - **`ToolStripComponent`** and **`EditorToolContextBarComponent`** call **`EditorToolService`** directly (constructor injection or `inject()`). That is appropriate while there is only one shell: there is no duplicated forwarding to deduplicate, and extracting `input()` / `output()` boundaries would add noise without a second consumer.
 - **`editor-dock-panel.ts`** holds the `'properties' | 'layers'` union only; extend it when new dock tabs are real product requirements, not preemptively.
+- **`ChromeEditorApplyService`** is the **Chrome** → **History** write path for the inspector dock and eyedropper: high-level methods batch `EditorCommand`s and reconcile **Selection** with the **Live tree** so panels do not duplicate `pushAndExecute` + sync ceremony.
 
 **When to deepen**
 

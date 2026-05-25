@@ -13,7 +13,7 @@ import { CompositeCommand } from '../../models/editor-command';
 import type { HistoryPaintPort } from '../history-paint.port';
 import type { SelectionSyncPort } from '../history-selection.port';
 import type { TransformGestureSvgPort } from '../transform-gesture-svg.port';
-import type { SelectionPaintStrokeDashSvgPort } from '../selection-paint-apply-svg.port';
+import type { SelectionPaintStrokeDashSvgPort } from '../chrome-editor-apply-svg.port';
 import type { DocumentArtboardCommandSvgPort } from '../document-settings-svg.port';
 import type { GradientFillSnapshotSvgPort } from '../gradient-fill-editor-svg.port';
 import type { LayerReorderGroupSvgPort } from '../layers-panel-svg.port';

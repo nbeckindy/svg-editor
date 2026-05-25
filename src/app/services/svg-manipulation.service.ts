@@ -15,7 +15,7 @@ import type {
   TransformGestureDocSvgPort,
   SelectionTransformApplySvgPort
 } from '../history/transform-gesture-svg.port';
-import type { SelectionPaintApplySvgPort } from '../history/selection-paint-apply-svg.port';
+import type { ChromeEditorApplySvgPort } from '../history/chrome-editor-apply-svg.port';
 import type { SelectionTransformReadoutSvgPort } from '../history/selection-transform-readout-svg.port';
 import type { DocumentSettingsSvgPort } from '../history/document-settings-svg.port';
 import type { AppRootSvgManipulationPort, SvgDebugPanelSvgPort } from '../history/editor-chrome-svg.port';
@@ -35,7 +35,7 @@ export class SvgManipulationService
   implements
     TransformGestureDocSvgPort,
     SelectionTransformApplySvgPort,
-    SelectionPaintApplySvgPort,
+    ChromeEditorApplySvgPort,
     SelectionTransformReadoutSvgPort,
     DocumentSettingsSvgPort,
     SvgDebugPanelSvgPort,
