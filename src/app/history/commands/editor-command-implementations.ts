@@ -2,7 +2,6 @@ import { Matrix, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { PaintGradientSnapshot } from '../../models/svg-gradient';
 import type { CreatableShapeType, ShapeCreationAttrs } from '../../services/svg-shape-content.port';
 import type { ClipboardPayload } from '../../models/clipboard-payload';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { DrawingStyleDefaults, DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { type ResizeHandle } from '../../utils/selection-resize';
 import { type SkewAxis } from '../../utils/selection-skew';
@@ -19,6 +18,7 @@ import type { GradientFillSnapshotSvgPort } from '../gradient-fill-editor-svg.po
 import type { LayerReorderGroupSvgPort } from '../layers-panel-svg.port';
 import type { AlignDistributeSvgPort } from '../align-distribute-svg.port';
 import type { PropertiesPanelTextSvgPort, BakePresentationSvgPort } from '../properties-panel-svg.port';
+import type { EditorShapeLifecycleSvgPort, PathDataEditorSvgPort } from '../editor-shape-lifecycle-svg.port';
 
 export class FillColorCommand implements CoalesceableCommand {
   readonly description: string;
@@ -322,13 +322,7 @@ export class TranslateCommand implements CoalesceableCommand {
   }
 
   undo(): void {
-    const svgInstance = this.svc.getSVGInstance();
-    if (!svgInstance) return;
-    const shape = svgInstance.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
-    const saved = this.snapshotBefore.get(this.shapeId);
-    if (shape && saved && typeof shape.matrix === 'function') {
-      shape.matrix(saved);
-    }
+    this.svc.restoreSelectionTransformsFromSnapshot([this.shapeId], this.snapshotBefore);
   }
 
   coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
@@ -546,15 +540,7 @@ export class UnionScaleCommand implements CoalesceableCommand {
   }
 
   undo(): void {
-    const svgInstance = this.svc.getSVGInstance();
-    if (!svgInstance) return;
-    for (const id of this.shapeIds) {
-      const shape = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const saved = this.snapshotBefore.get(id);
-      if (shape && saved && typeof shape.matrix === 'function') {
-        shape.matrix(saved);
-      }
-    }
+    this.svc.restoreSelectionTransformsFromSnapshot(this.shapeIds, this.snapshotBefore);
     this.svc.restoreVectorEffectsForShapeSubtrees(this.shapeIds, this.vectorEffectBefore);
   }
 
@@ -597,15 +583,7 @@ export class UnionScaleFromCenterCommand implements EditorCommand {
   }
 
   undo(): void {
-    const svgInstance = this.svc.getSVGInstance();
-    if (!svgInstance) return;
-    for (const id of this.shapeIds) {
-      const shape = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const saved = this.snapshotBefore.get(id);
-      if (shape && saved && typeof shape.matrix === 'function') {
-        shape.matrix(saved);
-      }
-    }
+    this.svc.restoreSelectionTransformsFromSnapshot(this.shapeIds, this.snapshotBefore);
     this.svc.restoreVectorEffectsForShapeSubtrees(this.shapeIds, this.vectorEffectBefore);
   }
 }
@@ -635,15 +613,7 @@ export class UnionRotateCommand implements CoalesceableCommand {
   }
 
   undo(): void {
-    const svgInstance = this.svc.getSVGInstance();
-    if (!svgInstance) return;
-    for (const id of this.shapeIds) {
-      const shape = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const saved = this.snapshotBefore.get(id);
-      if (shape && saved && typeof shape.matrix === 'function') {
-        shape.matrix(saved);
-      }
-    }
+    this.svc.restoreSelectionTransformsFromSnapshot(this.shapeIds, this.snapshotBefore);
   }
 
   coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
@@ -681,15 +651,7 @@ export class SkewCommand implements EditorCommand {
   }
 
   undo(): void {
-    const svgInstance = this.svc.getSVGInstance();
-    if (!svgInstance) return;
-    for (const id of this.shapeIds) {
-      const shape = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
-      const saved = this.snapshotBefore.get(id);
-      if (shape && saved && typeof shape.matrix === 'function') {
-        shape.matrix(saved);
-      }
-    }
+    this.svc.restoreSelectionTransformsFromSnapshot(this.shapeIds, this.snapshotBefore);
   }
 }
 
@@ -739,19 +701,7 @@ export class ReorderCommand implements EditorCommand {
 
   undo(): void {
     if (this.oldIndex < 0) return;
-    const svgInstance = this.svc.getSVGInstance();
-    if (!svgInstance) return;
-    const el = svgInstance.findOne(`#${this.elementId}`) as SvgJsElement | undefined;
-    if (!el?.node) return;
-    const node = el.node as Element;
-    const parent = node.parentElement;
-    if (!parent) return;
-    const children = parent.children;
-    if (this.oldIndex >= children.length) {
-      parent.appendChild(node);
-    } else {
-      parent.insertBefore(node, children[this.oldIndex]);
-    }
+    this.svc.restoreElementSiblingOrder(this.elementId, this.oldIndex);
   }
 }
 
@@ -979,7 +929,7 @@ export class RemoveShapesCommand implements EditorCommand {
   private readonly insertionIndices: Map<string, number>;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: EditorShapeLifecycleSvgPort,
     private readonly shapeIds: string[],
     private readonly selectionSync?: SelectionSyncPort
   ) {
@@ -1036,7 +986,7 @@ export class PasteCommand implements EditorCommand {
   private insertedMarkup: string[] = [];
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: EditorShapeLifecycleSvgPort,
     private readonly payload: ClipboardPayload,
     private readonly offset: { dx: number; dy: number },
     private readonly selectionSync?: SelectionSyncPort
@@ -1079,7 +1029,7 @@ export class DuplicateCommand implements EditorCommand {
   private insertedMarkup: string[] = [];
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: EditorShapeLifecycleSvgPort,
     sourceShapeIds: string[],
     private readonly offset: { dx: number; dy: number },
     private readonly selectionSync?: SelectionSyncPort
@@ -1198,7 +1148,7 @@ export class AddShapeCommand implements EditorCommand {
   private executed = false;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: EditorShapeLifecycleSvgPort,
     private readonly shapeId: string,
     private readonly selectionSync?: SelectionSyncPort
   ) {
@@ -1254,7 +1204,7 @@ export class AddPathCommand implements EditorCommand {
   private executed = false;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: EditorShapeLifecycleSvgPort,
     private readonly shapeId: string,
     private readonly selectionSync?: SelectionSyncPort
   ) {
@@ -1306,7 +1256,7 @@ export class EditPathNodesCommand implements EditorCommand {
   private appliedAlready = false;
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: PathDataEditorSvgPort,
     private readonly pathId: string,
     private readonly oldD: string,
     private readonly newD: string,
@@ -1364,7 +1314,7 @@ export class TextContentCommand implements EditorCommand {
   readonly description = 'Edit text content';
 
   constructor(
-    private readonly svc: SvgManipulationService,
+    private readonly svc: EditorShapeLifecycleSvgPort,
     private readonly textId: string,
     private readonly oldText: string,
     private readonly newText: string

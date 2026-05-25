@@ -66,7 +66,7 @@ import {
   isTextToolPreviewNode,
   TEXT_TOOL_PREVIEW_DATA_ATTR
 } from '../../utils/text-typography-from-defaults';
-import { SelectionPaintApplyService } from '../../services/selection-paint-apply.service';
+import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { sampleSolidComputedPaint } from '../../utils/svg-computed-color-sample';
 import {
   inlineTextEditorFontShorthand,
@@ -1372,7 +1372,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     private editorHistory: EditorHistoryService,
     private clipboard: ClipboardService,
     protected drawingDefaults: DrawingStyleDefaultsService,
-    private selectionPaintApply: SelectionPaintApplyService
+    private chromeEditorApply: ChromeEditorApplyService
   ) {
     const pointerStack = createSvgCanvasPointerStack({
       cdr: this.cdr,
@@ -2835,9 +2835,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     const color = sampleSolidComputedPaint(el, kind);
     if (!color) return;
     if (kind === 'fill') {
-      this.selectionPaintApply.applyFillColor(color);
+      this.chromeEditorApply.applyFillColor(color);
     } else {
-      this.selectionPaintApply.applyStrokeColor(color);
+      this.chromeEditorApply.applyStrokeColor(color);
     }
     this.cdr.markForCheck();
   }

@@ -22,6 +22,7 @@ import type { AppRootSvgManipulationPort, SvgDebugPanelSvgPort } from '../histor
 import type { GradientFillEditorSvgPort } from '../history/gradient-fill-editor-svg.port';
 import type { LayersPanelSvgPort } from '../history/layers-panel-svg.port';
 import type { PropertiesPanelSvgPort } from '../history/properties-panel-svg.port';
+import type { EditorShapeLifecycleSvgPort, PathDataEditorSvgPort } from '../history/editor-shape-lifecycle-svg.port';
 import type { ResizeHandle } from '../utils/selection-resize';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 
@@ -42,7 +43,9 @@ export class SvgManipulationService
     AppRootSvgManipulationPort,
     GradientFillEditorSvgPort,
     LayersPanelSvgPort,
-    PropertiesPanelSvgPort
+    PropertiesPanelSvgPort,
+    EditorShapeLifecycleSvgPort,
+    PathDataEditorSvgPort
 {
   private readonly doc = inject(SvgEditorDocumentService);
   private readonly gradients = inject(SvgGradientDefsService);
@@ -309,6 +312,10 @@ export class SvgManipulationService
     this.geometry.applyUnionSkewFromSnapshot(shapeIds, axis, angleDeg, pivot, snapshot);
   }
 
+  restoreSelectionTransformsFromSnapshot(shapeIds: string[], snapshot: Map<string, Matrix>): void {
+    this.geometry.restoreSelectionTransformsFromSnapshot(shapeIds, snapshot);
+  }
+
   getShapePropertiesIntersectingRect(rect: AxisAlignedRect): ShapeProperties[] {
     return this.shapes.getShapePropertiesIntersectingRect(rect);
   }
@@ -378,6 +385,10 @@ export class SvgManipulationService
 
   moveElementToBack(elementId: string): boolean {
     return this.layers.moveElementToBack(elementId);
+  }
+
+  restoreElementSiblingOrder(elementId: string, oldIndex: number): void {
+    this.layers.restoreElementSiblingOrder(elementId, oldIndex);
   }
 
   toggleLayerVisibility(elementId: string): boolean {

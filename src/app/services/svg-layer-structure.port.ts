@@ -32,6 +32,8 @@ export interface SvgLayerStructurePort {
   moveElementBackward(elementId: string): boolean;
   moveElementToFront(elementId: string): boolean;
   moveElementToBack(elementId: string): boolean;
+  /** Undo for layer reorder: restore `elementId` to `oldIndex` among its parent's element children. */
+  restoreElementSiblingOrder(elementId: string, oldIndex: number): void;
   toggleLayerVisibility(elementId: string): boolean;
   isElementVisible(elementId: string): boolean;
   groupSelectedElements(elementIds: string[]): string | null;

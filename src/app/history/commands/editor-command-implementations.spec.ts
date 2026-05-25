@@ -53,10 +53,12 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     restoreVectorEffectsForShapeSubtrees: vi.fn(),
     applyUnionRotationFromSnapshot: vi.fn(),
     applyUnionSkewFromSnapshot: vi.fn(),
+    restoreSelectionTransformsFromSnapshot: vi.fn(),
     moveElementForward: vi.fn(),
     moveElementBackward: vi.fn(),
     moveElementToFront: vi.fn(),
     moveElementToBack: vi.fn(),
+    restoreElementSiblingOrder: vi.fn(),
     toggleLayerVisibility: vi.fn(),
     groupSelectedElements: vi.fn(),
     ungroupElement: vi.fn(),
@@ -348,7 +350,7 @@ describe('TranslateCommand', () => {
     const snapshot = new Map([['s1', savedMatrix]]);
     const cmd = new TranslateCommand(svc, 's1', 10, 20, snapshot);
     cmd.undo();
-    expect(mockEl.matrix).toHaveBeenCalledWith(savedMatrix);
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledWith(['s1'], snapshot);
   });
 
   it('should no-op undo when svgInstance is null', () => {
@@ -478,8 +480,9 @@ describe('AlignCommand', () => {
     const cmd = new AlignCommand(svc, ['a', 'b'], 'center');
     cmd.execute();
     cmd.undo();
-    expect(elA.matrix).toHaveBeenCalledWith(matrixA);
-    expect(elB.matrix).toHaveBeenCalledWith(matrixB);
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledTimes(2);
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenNthCalledWith(1, ['b'], expect.any(Map));
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenNthCalledWith(2, ['a'], expect.any(Map));
   });
 
   it('no-ops when any bbox has zero area', () => {
@@ -575,9 +578,8 @@ describe('DistributeCommand', () => {
     const cmd = new DistributeCommand(svc, ['a', 'b', 'c'], 'horizontal');
     cmd.execute();
     cmd.undo();
-    expect(elB.matrix).toHaveBeenCalledWith(matrixB);
-    expect(elA.matrix).not.toHaveBeenCalled();
-    expect(elC.matrix).not.toHaveBeenCalled();
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledTimes(1);
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledWith(['b'], expect.any(Map));
   });
 
   it('no-ops when any bbox has zero area', () => {
@@ -626,8 +628,7 @@ describe('UnionScaleCommand', () => {
     const snapshot = new Map([['s1', m1], ['s2', m2]]);
     const cmd = new UnionScaleCommand(svc, ['s1', 's2'], before, after, snapshot, 'se', emptyVe);
     cmd.undo();
-    expect(el1.matrix).toHaveBeenCalledWith(m1);
-    expect(el2.matrix).toHaveBeenCalledWith(m2);
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledWith(['s1', 's2'], snapshot);
     expect(svc.restoreVectorEffectsForShapeSubtrees).toHaveBeenCalledWith(['s1', 's2'], emptyVe);
   });
 
@@ -686,7 +687,7 @@ describe('UnionScaleFromCenterCommand', () => {
     const ve = new Map<string, (string | null)[]>([['s1', ['non-scaling-stroke']]]);
     const cmd = new UnionScaleFromCenterCommand(svc, ['s1'], before, after, new Map([['s1', m1]]), ve);
     cmd.undo();
-    expect(el1.matrix).toHaveBeenCalledWith(m1);
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledWith(['s1'], new Map([['s1', m1]]));
     expect(svc.restoreVectorEffectsForShapeSubtrees).toHaveBeenCalledWith(['s1'], ve);
   });
 });
@@ -715,7 +716,7 @@ describe('UnionRotateCommand', () => {
     const snapshot = new Map([['s1', m1]]);
     const cmd = new UnionRotateCommand(svc, ['s1'], pivot, 45, snapshot);
     cmd.undo();
-    expect(el1.matrix).toHaveBeenCalledWith(m1);
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledWith(['s1'], snapshot);
   });
 
   it('should no-op undo when svgInstance is null', () => {
@@ -771,7 +772,7 @@ describe('SkewCommand', () => {
     const snapshot = new Map([['s1', m1]]);
     const cmd = new SkewCommand(svc, ['s1'], 'x', 10, pivot, snapshot);
     cmd.undo();
-    expect(el1.matrix).toHaveBeenCalledWith(m1);
+    expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledWith(['s1'], snapshot);
   });
 });
 
@@ -847,6 +848,15 @@ describe('ReorderCommand', () => {
       moveElementToFront: vi.fn(() => {
         parent.appendChild(elements.get('target')!.node);
       }),
+      restoreElementSiblingOrder: vi.fn((id: string, oldIdx: number) => {
+        const node = elements.get(id)?.node;
+        if (!node) return;
+        if (oldIdx >= parent.children.length) {
+          parent.appendChild(node);
+        } else {
+          parent.insertBefore(node, parent.children[oldIdx]);
+        }
+      })
     });
 
     const cmd = new ReorderCommand(svc, 'target', 'front');

@@ -361,6 +361,7 @@ describe('EditorHistoryService', () => {
       const applyUnionScaleFromSnapshot = vi.fn();
       const mockSvg = {
         applyUnionScaleFromSnapshot,
+        restoreSelectionTransformsFromSnapshot: vi.fn(),
         restoreVectorEffectsForShapeSubtrees: vi.fn(),
         getSVGInstance: vi.fn().mockReturnValue(null)
       } as unknown as SvgManipulationService;

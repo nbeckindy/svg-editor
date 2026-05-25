@@ -40,6 +40,8 @@ export interface TransformGestureSvgPort {
     pivot: { x: number; y: number },
     snapshot: Map<string, Matrix>
   ): void;
+  /** Restore each shape's `transform` matrix from a prior {@link snapshotSelectionTransforms} map (undo for pointer transforms). */
+  restoreSelectionTransformsFromSnapshot(shapeIds: string[], snapshot: Map<string, Matrix>): void;
 }
 
 /**

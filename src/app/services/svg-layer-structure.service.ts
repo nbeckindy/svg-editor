@@ -70,6 +70,21 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
     return true;
   }
 
+  restoreElementSiblingOrder(elementId: string, oldIndex: number): void {
+    if (!this.doc.getSVGInstance() || oldIndex < 0) return;
+    const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return;
+    const node = el.node as Element;
+    const parent = node.parentElement;
+    if (!parent) return;
+    const children = parent.children;
+    if (oldIndex >= children.length) {
+      parent.appendChild(node);
+    } else {
+      parent.insertBefore(node, children[oldIndex]);
+    }
+  }
+
   toggleLayerVisibility(elementId: string): boolean {
     if (!this.doc.getSVGInstance()) return true;
     const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;

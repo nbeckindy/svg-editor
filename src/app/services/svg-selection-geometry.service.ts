@@ -413,4 +413,15 @@ export class SvgSelectionGeometryService implements SvgSelectionGeometryPort {
     this.doc.bumpDocumentRevision();
   }
 
+  restoreSelectionTransformsFromSnapshot(shapeIds: string[], snapshot: Map<string, Matrix>): void {
+    if (!this.doc.getSVGInstance()) return;
+    for (const id of shapeIds) {
+      const shape = this.doc.getSVGInstance()!.findOne(`#${id}`) as SvgJsElement | undefined;
+      const saved = snapshot.get(id);
+      if (shape && saved && typeof shape.matrix === 'function') {
+        shape.matrix(saved);
+      }
+    }
+  }
+
 }

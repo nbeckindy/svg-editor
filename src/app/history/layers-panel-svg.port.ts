@@ -19,6 +19,8 @@ export interface LayerReorderGroupSvgPort {
   ungroupElements(
     groupIds: string[]
   ): { allChildElementIds: string[]; undoSnapshots: string[][] };
+  /** Undo for {@link ReorderCommand}: move `elementId` back to `oldIndex` among its parent's element children. */
+  restoreElementSiblingOrder(elementId: string, oldIndex: number): void;
 }
 
 /**

@@ -45,4 +45,5 @@ export interface SvgSelectionGeometryPort {
     pivot: { x: number; y: number },
     snapshot: Map<string, Matrix>
   ): void;
+  restoreSelectionTransformsFromSnapshot(shapeIds: string[], snapshot: Map<string, Matrix>): void;
 }

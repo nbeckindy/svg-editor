@@ -22,4 +22,5 @@ export type {
   BakedStrokeBefore,
   PropertiesPanelSvgPort
 } from '../history/properties-panel-svg.port';
+export type { EditorShapeLifecycleSvgPort, PathDataEditorSvgPort } from '../history/editor-shape-lifecycle-svg.port';
 export * from '../history/commands/editor-command-implementations';
