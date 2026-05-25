@@ -7,6 +7,10 @@ import type { LayersPanelSvgPort } from '../../history/layers-panel-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 
+/** Tiny PNG for layer-row previews — avoids re-embedding huge `data:` raster hrefs in preview SVG. */
+const LAYER_ROW_RASTER_PREVIEW_HREF =
+  'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
 interface LayerTreeViewModel {
   id: string;
   type: string;
@@ -211,6 +215,11 @@ export class LayersPanelComponent {
       const doc = parser.parseFromString(layer.elementMarkup, 'image/svg+xml');
       const el = doc.documentElement;
       if (!el || el.tagName.toLowerCase() === 'parsererror') return layer.elementMarkup;
+      if (el.tagName.toLowerCase() === 'image') {
+        el.removeAttribute('href');
+        el.removeAttributeNS('http://www.w3.org/1999/xlink', 'href');
+        el.setAttribute('href', LAYER_ROW_RASTER_PREVIEW_HREF);
+      }
       if (layer.fill) el.setAttribute('fill', layer.fill);
       if (layer.stroke) el.setAttribute('stroke', layer.stroke);
       if (typeof layer.strokeWidth === 'number') el.setAttribute('stroke-width', String(layer.strokeWidth));
@@ -248,11 +257,27 @@ export class LayersPanelComponent {
       if (!liveShape || typeof liveShape.getBBox !== 'function') return defaultViewBox;
 
       const bbox = liveShape.getBBox();
-      if (bbox.width <= 0 || bbox.height <= 0) return defaultViewBox;
+      let bx = bbox.x;
+      let by = bbox.y;
+      let bw = bbox.width;
+      let bh = bbox.height;
+      if ((bw <= 0 || bh <= 0) && liveShape.tagName?.toLowerCase() === 'image') {
+        const w = parseFloat(liveShape.getAttribute('width') || '');
+        const h = parseFloat(liveShape.getAttribute('height') || '');
+        const x = parseFloat(liveShape.getAttribute('x') || '0');
+        const y = parseFloat(liveShape.getAttribute('y') || '0');
+        if (Number.isFinite(w) && Number.isFinite(h) && w > 0 && h > 0) {
+          bx = x;
+          by = y;
+          bw = w;
+          bh = h;
+        }
+      }
+      if (bw <= 0 || bh <= 0) return defaultViewBox;
 
-      const padX = Math.max(1, bbox.width * 0.1);
-      const padY = Math.max(1, bbox.height * 0.1);
-      return `${bbox.x - padX} ${bbox.y - padY} ${bbox.width + padX * 2} ${bbox.height + padY * 2}`;
+      const padX = Math.max(1, bw * 0.1);
+      const padY = Math.max(1, bh * 0.1);
+      return `${bx - padX} ${by - padY} ${bw + padX * 2} ${bh + padY * 2}`;
     } catch {
       return defaultViewBox;
     } finally {

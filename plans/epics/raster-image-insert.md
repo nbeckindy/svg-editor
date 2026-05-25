@@ -31,7 +31,7 @@ Summary:
 | RIMG-3 | AddImageCommand + history (undo/redo) | `svg-editor-e4s.3` | `feature` | Undoable insert/remove; selection rules; `EditorHistoryService` integration. | `e4s.2` | 90 |
 | RIMG-4 | Toolbar — Insert image file picker + placement | `svg-editor-e4s.4` | `feature` | File picker `image/*`; read as data URL; insert via command; disabled when no SVG; `data-testid` hooks. | `e4s.3` | 120 |
 | RIMG-5 | Drag-and-drop raster files onto canvas | `svg-editor-e4s.5` | `feature` | Same pipeline as toolbar; `preventDefault`; **multi-file:** iterate in order, skip disallowed MIME silently, alert and stop on first hard failure, one `AddImageCommand` per successful insert; drop test. | `e4s.3` | 120 |
-| RIMG-6 | Selection, bbox, and transform parity for `<image>` | `svg-editor-e4s.6` | `task` | Audit/fix `getShapeBBox`, handles, layer row vs rect/path. | `e4s.2` | 90 |
+| RIMG-6 | Selection, bbox, and transform parity for `<image>` | `svg-editor-e4s.6` | `task` | Marquee partial-hit uses opaque box for `<image>` (not `isPointInFill`); layer preview swaps huge `data:` href for tiny placeholder + viewBox fallback from `width`/`height`; Vitest for marquee/translate/union-scale on inserted image. | `e4s.2` | 90 |
 | RIMG-7 | Export/download — data URLs and external href policy | `svg-editor-e4s.7` | `task` | No silent loss for `blob:` / huge data URLs; user-visible policy. | `e4s.1` | 60 |
 | RIMG-8 | Tests — insert pipeline (command + canvas) | `svg-editor-e4s.8` | `task` | Vitest + canvas integration; jsdom-safe attrs. | `e4s.4`, `e4s.5` | 90 |
 

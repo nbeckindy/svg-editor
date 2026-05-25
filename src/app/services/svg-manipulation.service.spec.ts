@@ -853,6 +853,29 @@ describe('SvgManipulationService', () => {
       const hits = service.getShapePropertiesIntersectingRect({ x: 45, y: 12, width: 20, height: 6 });
       expect(hits.map((h) => h.id)).toEqual(['moved']);
     });
+
+    it('image partial marquee selects when isPointInFill always misses (opaque raster box)', () => {
+      const tinyPngDataUrl =
+        'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 12,
+        y: 34,
+        width: 64,
+        height: 48
+      });
+      expect(id).toBeTruthy();
+      const el = container.querySelector(`#${id}`) as SVGGraphicsElement;
+      (el as SVGGraphicsElement & { getBBox: () => DOMRect }).getBBox = () =>
+        ({ x: 12, y: 34, width: 64, height: 48 } as DOMRect);
+      const g = el as SVGGeometryElement;
+      g.isPointInFill = () => false;
+      g.isPointInStroke = () => false;
+      const hits = service.getShapePropertiesIntersectingRect({ x: 30, y: 40, width: 40, height: 40 });
+      expect(hits.map((h) => h.id)).toEqual([id!]);
+    });
   });
 
   describe('getLayerStackItems', () => {
@@ -2212,6 +2235,41 @@ describe('SvgManipulationService', () => {
       });
       const el = container.querySelector(`#${id}`) as Element | null;
       expect(el?.getAttribute('preserveAspectRatio')).toBe('xMaxYMax slice');
+    });
+
+    it('translateShape prepends translation on inserted <image>', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 12,
+        y: 34,
+        width: 64,
+        height: 48
+      });
+      expect(id).toBeTruthy();
+      service.translateShape(id!, 3, -2);
+      const el = container.querySelector(`#${id}`) as Element;
+      expect(el.getAttribute('transform')).toBeTruthy();
+    });
+
+    it('applyUnionScaleFromSnapshot sets transform on inserted <image>', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 10,
+        y: 20,
+        width: 100,
+        height: 50
+      });
+      expect(id).toBeTruthy();
+      const unionBefore = { x: 10, y: 20, width: 100, height: 50 };
+      const unionAfter = { x: 10, y: 20, width: 200, height: 100 };
+      const snap = service.snapshotSelectionTransforms([id!]);
+      service.applyUnionScaleFromSnapshot([id!], unionBefore, unionAfter, snap, 'se');
+      const el = container.querySelector(`#${id}`) as Element;
+      expect(el.getAttribute('transform')).toBeTruthy();
     });
   });
 

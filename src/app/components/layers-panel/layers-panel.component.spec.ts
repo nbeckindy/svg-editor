@@ -508,4 +508,25 @@ describe('LayersPanelComponent', () => {
     expect(groupRow.style.paddingLeft).toBe('12px');
     expect(childRow.style.paddingLeft).toBe('28px');
   });
+
+  it('layer preview for <image> does not embed huge raster href in preview data URL', () => {
+    const junk = 'z'.repeat(6000);
+    const hugeHref = `data:image/png;base64,${junk}`;
+    getLayerTree.mockReturnValue([
+      {
+        id: 'img-1',
+        type: 'image',
+        name: 'img-1',
+        visible: true,
+        elementMarkup: `<image id="img-1" href="${hugeHref}" x="0" y="0" width="20" height="20" />`
+      }
+    ]);
+    documentRevision.set(3);
+    fixture.detectChanges();
+
+    const preview = (fixture.nativeElement as HTMLElement).querySelector('.layer-preview') as HTMLImageElement | null;
+    expect(preview).toBeTruthy();
+    expect(preview!.src).not.toContain(junk);
+    expect(preview!.src.length).toBeLessThan(8000);
+  });
 });

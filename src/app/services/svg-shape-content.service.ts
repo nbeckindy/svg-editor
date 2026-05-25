@@ -960,7 +960,14 @@ export class SvgShapeContentService implements SvgShapeContentPort {
         continue;
       }
       const node = shape.node as SVGGraphicsElement | undefined;
-      if (!node || !this.shapeMarqueeIntersectsPaint(shape, rect)) continue;
+      if (!node) continue;
+      // `<image>`: treat as opaque in its layout box. Partial marquee must not depend on
+      // `SVGImageElement.isPointInFill` (often false / inconsistent across UAs vs paths).
+      if (node.tagName?.toLowerCase() === 'image') {
+        out.push(this.getShapeProperties(shape));
+        continue;
+      }
+      if (!this.shapeMarqueeIntersectsPaint(shape, rect)) continue;
       out.push(this.getShapeProperties(shape));
     }
     return out;
