@@ -235,16 +235,7 @@ export class SvgManipulationService
     shapeIds: string[],
     options?: { preferScreenBounds?: boolean }
   ): { x: number; y: number; width: number; height: number } | null {
-    const bboxes = shapeIds
-      .map((id) => this.getShapeBBox(id, options))
-      .filter((b): b is { x: number; y: number; width: number; height: number } => b != null);
-    if (bboxes.length === 0) return null;
-    if (bboxes.length === 1) return bboxes[0];
-    const minX = Math.min(...bboxes.map((b) => b.x));
-    const minY = Math.min(...bboxes.map((b) => b.y));
-    const maxX = Math.max(...bboxes.map((b) => b.x + b.width));
-    const maxY = Math.max(...bboxes.map((b) => b.y + b.height));
-    return { x: minX, y: minY, width: maxX - minX, height: maxY - minY };
+    return this.geometry.getUnionBBox(shapeIds, options);
   }
 
   getSelectionRotationPivot(shapeIds: string[]): { x: number; y: number } | null {
