@@ -40,9 +40,47 @@ _Avoid_: Using **Selection** for the marquee rectangle while dragging before sha
 The named pointer/keyboard interaction mode—select, direct node edit, shape creation, pan, zoom, pen, eyedropper, and similar—that routes input on the **Canvas** to the **Live tree** and **Selection**.
 _Avoid_: Calling snap toggles or pen curve-variant flags a **Tool** when they only constrain the active **Tool**; using **Tool** for **Chrome** panels; conflating with browser DevTools “tools”.
 
+**Node-edit tool**:
+The selector **Tool** variant (direct-select / node tool) used to edit **Path node**s and Bezier handles on `<path>` elements, rather than applying object-level bbox transforms.
+_Avoid_: Using **Node-edit tool** for marquee multi-select or group drill-in unless the product explicitly unifies those modes; calling uncommitted pen preview anchors **Path node**s before the path is finalized.
+
+**Primitive shape**:
+A basic drawable element created by shape tools—typically `<rect>`, `<circle>`, and `<line>` in this product—before any **Outline to path** conversion.
+_Avoid_: Treating `<path>` as a **Primitive shape** in roadmap prose; using “primitive” for raw DOM nodes outside the editor’s shape-tool set.
+
+**Outline to path**:
+An edit that replaces a **Primitive shape** with a `<path>` whose `d` geometry matches the former element (stroke/fill/transform preserved per command rules) so **Node-edit tool** workflows apply.
+_Avoid_: Confusing with “outline stroke” (stroke-to-path) unless the same command implements both; using for text-to-path without defining text scope separately.
+
+**Path node**:
+A knot in a `<path>`’s segment model that **Node-edit tool** exposes as draggable, and that may support insertion, deletion, or type toggles (**Corner node** vs **Smooth node**).
+_Avoid_: Equating every parsed `d` token with a user-facing **Path node**—helpers and degenerate segments may not get handles; using for uncommitted pen preview points before path commit.
+
+**Corner node**:
+A **Path node** where segments meet with a sharp tangent discontinuity (no smooth outgoing handles).
+
+**Smooth node**:
+A **Path node** with Bezier control handles arranged so adjacent segments meet with tangent continuity (implementation defines symmetric vs independent handles).
+
+**Automatic tool revert (after creation)**:
+Policy where completing a new object with a shape-creation **Tool** immediately activates the primary Select **Tool**, so the user does not remain in draw mode by default.
+_Avoid_: Applying the name to pen paths if pen policy differs (pen may stay active until closed or confirmed—say so in product rules).
+
 **Layer**:
 A shape or `<g>` subtree in **Live tree** DOM paint order that the layers list exposes for visibility and reorder—not **Selection** and not **Chrome**.
 _Avoid_: Using **Layer** for **Selection** or for **Editor chrome**; assuming the list is exhaustive of every SVG node (structural tags like `<defs>` / `<clipPath>` / `<mask>` are not layer rows); using **Layer** for the **Canvas** viewport.
+
+**Group**:
+A `<g>` subtree treated as an organizational container in the **Live tree**—often one **Layer** row with nested child rows—used to move, reorder, or hide collections of shapes together.
+_Avoid_: Using **Group** for every `<g>` wrapper the serializer emits (some are structural); equating **Group** with **Selection** when the user has not actually selected that subtree.
+
+**Layer visibility**:
+Whether a **Layer** subtree paints on the **Canvas**; a hidden layer is omitted from normal drawing (or shown only via **Chrome** affordances like outlines, if product adds that), while still existing in the **Document**.
+_Avoid_: Confusing hide with **Layer lock** (lock blocks edits; hide blocks display—product may combine UI but the concepts differ).
+
+**Layer lock**:
+A per-layer guard that blocks direct user edits to shapes under that row—transforms, drags, property writes, and path vertex edits—while the subtree may still paint unless also hidden; exact exceptions (e.g. unlock from panel only) are product rules.
+_Avoid_: Implying lock prevents reorder in the panel unless product explicitly says so; using “lock” for version-control or file permissions.
 
 **History**:
 The session’s undo and redo stacks of reversible edits to the **Live tree**, distinct from saved-file versioning or browser navigation history.
@@ -59,6 +97,10 @@ _Avoid_: Using **PenSession** for the whole **Pen authoring session**; using it 
 **PenToolSession**:
 The TypeScript class that implements **Pen authoring session** orchestration; it owns signals/readouts for previews and calls **PenSession** helpers; it does not own the DOM.
 _Avoid_: User-facing product copy; conflating with **PenSession** the model instance.
+
+**Pen-over-shape input**:
+Pointer routing where, with the pen **Tool** active, hits on existing artwork prefer starting or continuing the **Pen authoring session** (dropping anchors) instead of only transferring **Selection** to the shape under the cursor.
+_Avoid_: Implying pen ignores modifiers or right-click policies; using for non-pen tools without stating the exception.
 
 **Ports**:
 Narrow dependencies injected into **PenToolSession** (and similar tool orchestrators) so they can push **History**, update **Selection**, ask for user confirm, and apply svg.js mutations without importing the full component graph.
@@ -81,8 +123,14 @@ _Avoid_: Using **Canvas adapter** when you mean the **Canvas** viewport alone; n
 - **Tool** describes how pointers and keys are interpreted on the **Canvas**; **Selection** describes which shapes are targeted—app code may couple changes, but the concepts differ.
 - **Editor chrome** (handles, marquee, guides) reacts to both **Tool** and **Selection**.
 - **Layer** ordering is **Live tree** paint order under the artwork content; reordering changes how the **Document** draws.
+- **Group** rows in the layers list reflect `<g>` containers; reparent and intra-group order change the same paint-order structure as **Layer** reorder.
+- **Layer visibility** and **Layer lock** are independent axes on a row: hidden vs visible, editable vs guarded—UI may present them together but prose should stay precise.
 - **History** records applied edits and their inverses; undo/redo walks those stacks and mutates the **Live tree** (and may change **Selection** or **Layer** order as a side effect).
+- **Outline to path** turns **Primitive shape**s into `<path>` so **Path node**, **Corner node**, and **Smooth node** edits apply; until conversion, bbox handles own the shape.
+- **Node-edit tool** is still a **Tool** variant: it changes pointer routing on the **Canvas** like other tools and cooperates with **Editor chrome** overlays for knots and handles.
 - The pen **Tool** routes through a **Canvas adapter** into **PenToolSession**, which owns **Pen authoring session** policy while mutating or reading a **PenSession** model; **PenToolSession** uses **Ports** to touch **History**, **Selection**, and svg.js—not the full widget tree.
+- **Pen-over-shape input** is a hit-test priority policy in the **Canvas adapter** / pen stack, not a separate **Tool** name.
+- **Automatic tool revert (after creation)** couples shape-creation tools with the Select **Tool**; it does not by itself change **History** beyond the creation command already pushed.
 
 ## Shell UI (thin **Chrome**)
 
