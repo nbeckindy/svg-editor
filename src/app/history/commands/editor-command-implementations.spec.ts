@@ -25,6 +25,7 @@ import {
   RemoveShapesCommand,
   AddShapeCommand,
   AddPathCommand,
+  AddImageCommand,
   EditPathNodesCommand,
   TextContentCommand,
   FontCommand,
@@ -1359,6 +1360,79 @@ describe('AddPathCommand', () => {
   it('redo re-inserts and re-selects', () => {
     const { svc, selectionSvc } = buildMockSvcsForAddPath('shape-p1');
     const cmd = new AddPathCommand(svc, 'shape-p1', selectionSvc);
+    cmd.execute();
+    cmd.execute();
+    expect(svc.insertShapeMarkup).toHaveBeenCalledTimes(1);
+    expect(selectionSvc.selectShapes).toHaveBeenCalled();
+  });
+});
+
+describe('AddImageCommand', () => {
+  function buildContentGroupForAddImage(shapeId: string) {
+    const contentGroup = document.createElement('div');
+    contentGroup.setAttribute('data-editor-content-group', '');
+    const existing = document.createElement('div');
+    existing.id = 'existing';
+    contentGroup.appendChild(existing);
+    const imageNode = document.createElement('div');
+    imageNode.id = shapeId;
+    imageNode.innerHTML = 'image-content';
+    contentGroup.appendChild(imageNode);
+
+    return { contentGroup, imageNode };
+  }
+
+  function buildMockSvcsForAddImage(shapeId: string) {
+    const { contentGroup, imageNode } = buildContentGroupForAddImage(shapeId);
+
+    const mockShapeProps = { id: shapeId, type: 'image' as const };
+
+    const findOne = vi.fn((sel: string) => {
+      if (sel === `#${shapeId}`) return { node: imageNode };
+      if (sel === '[data-editor-content-group]') return { node: contentGroup };
+      return undefined;
+    });
+
+    const svc = {
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+      removeShape: vi.fn(),
+      insertShapeMarkup: vi.fn(),
+      getShapeProperties: vi.fn().mockReturnValue(mockShapeProps),
+    } as unknown as SvgManipulationService;
+
+    const selectionSvc = {
+      selectShapes: vi.fn(),
+      clearSelection: vi.fn(),
+    } as unknown as ShapeSelectionService;
+
+    return { svc, selectionSvc, imageNode };
+  }
+
+  it('constructor captures serialized markup and insertion index', () => {
+    const { svc, selectionSvc, imageNode } = buildMockSvcsForAddImage('shape-img1');
+    const cmd = new AddImageCommand(svc, 'shape-img1', selectionSvc);
+    expect(cmd.description).toBe('Add image');
+    expect(imageNode.outerHTML).toBeTruthy();
+  });
+
+  it('first execute() is a no-op', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddImage('shape-img1');
+    const cmd = new AddImageCommand(svc, 'shape-img1', selectionSvc);
+    cmd.execute();
+    expect(svc.insertShapeMarkup).not.toHaveBeenCalled();
+  });
+
+  it('undo() removes image and clears selection', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddImage('shape-img1');
+    const cmd = new AddImageCommand(svc, 'shape-img1', selectionSvc);
+    cmd.undo();
+    expect(svc.removeShape).toHaveBeenCalledWith('shape-img1');
+    expect(selectionSvc.clearSelection).toHaveBeenCalled();
+  });
+
+  it('redo re-inserts and re-selects', () => {
+    const { svc, selectionSvc } = buildMockSvcsForAddImage('shape-img1');
+    const cmd = new AddImageCommand(svc, 'shape-img1', selectionSvc);
     cmd.execute();
     cmd.execute();
     expect(svc.insertShapeMarkup).toHaveBeenCalledTimes(1);

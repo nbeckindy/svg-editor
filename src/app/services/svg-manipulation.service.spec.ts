@@ -1,9 +1,10 @@
 import { TestBed } from '@angular/core/testing';
 import { SvgManipulationService, CreatableShapeType } from './svg-manipulation.service';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
-import { AddPathCommand, ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
+import { AddPathCommand, AddImageCommand, ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
 import { ShapeSelectionService } from './shape-selection.service';
 import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
+import { EditorHistoryService } from './editor-history.service';
 
 describe('SvgManipulationService', () => {
   let service: SvgManipulationService;
@@ -2278,6 +2279,83 @@ describe('SvgManipulationService', () => {
       const reinserted = container.querySelector(`#${id!}`) as Element | null;
       expect(reinserted).not.toBeNull();
       expect(reinserted?.getAttribute('d')).toBe(pathD);
+      expect(selectionSvc.selectedShape()?.id).toBe(id!);
+    });
+  });
+
+  describe('AddImageCommand (real SvgManipulationService + DOM)', () => {
+    const tinyPngDataUrl =
+      'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+
+    it('undo/redo round-trip: DOM and selection', () => {
+      const selectionSvc = TestBed.inject(ShapeSelectionService);
+      selectionSvc.clearSelection();
+
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+
+      const id = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 1,
+        y: 2,
+        width: 8,
+        height: 6
+      });
+      expect(id).toBeTruthy();
+
+      const svgInstance = service.getSVGInstance()!;
+      const imageEl = svgInstance.findOne(`#${id!}`)! as import('@svgdotjs/svg.js').Element;
+      selectionSvc.selectShape(service.getShapeProperties(imageEl));
+
+      expect(container.querySelectorAll('image').length).toBe(1);
+
+      const cmd = new AddImageCommand(service, id!, selectionSvc);
+      cmd.execute();
+      expect(container.querySelectorAll('image').length).toBe(1);
+
+      cmd.undo();
+      expect(container.querySelector(`#${id!}`)).toBeNull();
+      expect(selectionSvc.getSelectedShapes().length).toBe(0);
+
+      cmd.execute();
+      const reinserted = container.querySelector(`#${id!}`) as SVGImageElement | null;
+      expect(reinserted).not.toBeNull();
+      expect(reinserted?.getAttribute('width')).toBe('8');
+      expect(reinserted?.getAttribute('height')).toBe('6');
+      expect(selectionSvc.selectedShape()?.id).toBe(id!);
+    });
+
+    it('EditorHistoryService pushAndExecute, undo, redo', () => {
+      const selectionSvc = TestBed.inject(ShapeSelectionService);
+      const history = TestBed.inject(EditorHistoryService);
+      history.clear();
+      selectionSvc.clearSelection();
+
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+
+      const id = service.insertRasterImageIntoContentGroup({
+        href: tinyPngDataUrl,
+        x: 0,
+        y: 0,
+        width: 4,
+        height: 4
+      });
+      expect(id).toBeTruthy();
+      const svgInstance = service.getSVGInstance()!;
+      const imageEl = svgInstance.findOne(`#${id!}`)! as import('@svgdotjs/svg.js').Element;
+      selectionSvc.selectShape(service.getShapeProperties(imageEl));
+
+      const cmd = new AddImageCommand(service, id!, selectionSvc);
+      history.pushAndExecute(cmd);
+      expect(container.querySelector(`#${id!}`)).not.toBeNull();
+
+      history.undo();
+      expect(container.querySelector(`#${id!}`)).toBeNull();
+      expect(selectionSvc.getSelectedShapes().length).toBe(0);
+
+      history.redo();
+      expect(container.querySelector(`#${id!}`)).not.toBeNull();
       expect(selectionSvc.selectedShape()?.id).toBe(id!);
     });
   });

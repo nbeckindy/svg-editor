@@ -4,7 +4,7 @@ import type { ClipboardPayload } from '../models/clipboard-payload';
 
 /**
  * Svg seam for **History** commands that add/remove/repaste shapes in the **Live tree**
- * (`RemoveShapesCommand`, `PasteCommand`, `DuplicateCommand`, `AddShapeCommand`, `AddPathCommand`).
+ * (`RemoveShapesCommand`, `PasteCommand`, `DuplicateCommand`, `AddShapeCommand`, `AddPathCommand`, `AddImageCommand`).
  */
 export interface EditorShapeLifecycleSvgPort {
   getSVGInstance(): Svg | null;
