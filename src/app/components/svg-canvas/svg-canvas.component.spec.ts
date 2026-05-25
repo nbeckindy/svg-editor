@@ -13,6 +13,7 @@ import { EditorHistoryService } from '../../services/editor-history.service';
 import { ClipboardService } from '../../services/clipboard.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { SnapService } from '../../services/snap.service';
+import { RasterImageInsertService } from '../../services/raster-image-insert.service';
 import { CompositeCommand, TranslateCommand } from '../../models/editor-commands';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
 
@@ -108,6 +109,48 @@ describe('SvgCanvasComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  it('raster drop on canvas calls RasterImageInsertService with mapped anchor and silent MIME skips', async () => {
+    const rasterInsert = TestBed.inject(RasterImageInsertService);
+    const insertSpy = vi.spyOn(rasterInsert, 'insertRasterFileAtAnchor').mockResolvedValue({ kind: 'inserted' });
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>');
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+
+    vi.spyOn(component as unknown as { clientToEditorSvgPoint: typeof component.clientToEditorSvgPoint }, 'clientToEditorSvgPoint').mockReturnValue({
+      x: 12,
+      y: 34
+    });
+
+    const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+    const bin = atob(b64);
+    const bytes = new Uint8Array(bin.length);
+    for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+    const file = new File([bytes], 't.png', { type: 'image/png' });
+
+    const fileList = { length: 1, item: (i: number) => (i === 0 ? file : null) } as FileList;
+
+    const dropEvent = {
+      preventDefault: vi.fn(),
+      stopPropagation: vi.fn(),
+      clientX: 40,
+      clientY: 50,
+      dataTransfer: {
+        files: fileList,
+        types: ['Files'],
+        items: { length: 1 }
+      }
+    } as unknown as DragEvent;
+
+    component.onCanvasRasterDrop(dropEvent);
+    await fixture.whenStable();
+
+    expect(insertSpy).toHaveBeenCalledWith(file, { x: 12, y: 34 }, { silentDisallowedMime: true });
+    insertSpy.mockRestore();
   });
 
   it('should display placeholder when no SVG content', () => {

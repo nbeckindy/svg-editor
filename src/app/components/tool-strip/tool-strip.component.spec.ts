@@ -6,7 +6,7 @@ import { SvgManipulationService } from '../../services/svg-manipulation.service'
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
-import * as RasterFile from '../../utils/raster-insert-file';
+import { RasterImageInsertService } from '../../services/raster-image-insert.service';
 
 describe('ToolStripComponent', () => {
   let fixture: ComponentFixture<ToolStripComponent>;
@@ -19,8 +19,11 @@ describe('ToolStripComponent', () => {
     getShapeProperties: vi.fn(() => ({ id: 'shape-img', type: 'image' }))
   };
 
+  const rasterInsertSpy = vi.fn().mockResolvedValue({ kind: 'inserted' as const });
+
   beforeEach(async () => {
     vi.restoreAllMocks();
+    rasterInsertSpy.mockResolvedValue({ kind: 'inserted' as const });
     svgManipulationMock.getSVGInstance.mockReturnValue({} as unknown);
     svgManipulationMock.insertRasterImageIntoContentGroup.mockReturnValue('shape-img');
     await TestBed.configureTestingModule({
@@ -30,6 +33,7 @@ describe('ToolStripComponent', () => {
         { provide: SvgManipulationService, useValue: svgManipulationMock },
         { provide: ShapeSelectionService, useValue: { selectShape: vi.fn() } },
         { provide: EditorHistoryService, useValue: { pushAndExecute: vi.fn() } },
+        { provide: RasterImageInsertService, useValue: { insertRasterFileAtAnchor: rasterInsertSpy } },
         RasterInsertAnchorStore
       ]
     }).compileComponents();
@@ -211,30 +215,20 @@ describe('ToolStripComponent', () => {
     expect(editorToolService.getCurrentTool()).toBe('pen');
   });
 
-  it('insert pipeline calls manipulation, selection, history, and switches to selector', async () => {
-    const shapeEl = { node: document.createElementNS('http://www.w3.org/2000/svg', 'image') };
-    svgManipulationMock.getSVGInstance.mockReturnValue({
-      findOne: vi.fn((sel: string) => (sel === '#shape-img' ? shapeEl : null))
-    } as unknown);
-    vi.spyOn(RasterFile, 'readRasterIntrinsicDimensionsFromFile').mockResolvedValue({ width: 4, height: 2 });
-    vi.spyOn(RasterFile, 'readFileAsDataUrl').mockResolvedValue('data:image/png;base64,abcd');
-
+  it('insert image delegates to RasterImageInsertService with resolved anchor', async () => {
     const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
     const bin = atob(b64);
     const bytes = new Uint8Array(bin.length);
     for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
     const file = new File([bytes], 't.png', { type: 'image/png' });
 
-    const selection = TestBed.inject(ShapeSelectionService) as unknown as { selectShape: ReturnType<typeof vi.fn> };
-    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
-
     await fixture.componentInstance.onRasterImageFileChosen({
       target: { files: [file], value: '' }
     } as unknown as Event);
 
-    expect(svgManipulationMock.insertRasterImageIntoContentGroup).toHaveBeenCalled();
-    expect(selection.selectShape).toHaveBeenCalled();
-    expect(history.pushAndExecute).toHaveBeenCalled();
-    expect(editorToolService.getCurrentTool()).toBe('selector');
+    expect(rasterInsertSpy).toHaveBeenCalledTimes(1);
+    expect(rasterInsertSpy.mock.calls[0][0]).toBe(file);
+    expect(rasterInsertSpy.mock.calls[0][1]).toEqual({ x: 400, y: 300 });
+    expect(rasterInsertSpy.mock.calls[0][2]).toBeUndefined();
   });
 });

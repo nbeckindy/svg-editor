@@ -7,6 +7,7 @@ import { CanvasViewService } from '../../services/canvas-view.service';
 import { SnapService } from '../../services/snap.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
+import { RasterImageInsertService } from '../../services/raster-image-insert.service';
 import {
   computeProportionalResizedUnion,
   type BBox,
@@ -243,6 +244,7 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
 })
 export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, SvgCanvasPointerGestureHost {
   private readonly rasterInsertAnchor = inject(RasterInsertAnchorStore);
+  private readonly rasterImageInsert = inject(RasterImageInsertService);
   readonly RULER_SIZE = 24;
   readonly svgContent = input<string>('');
   readonly svgContainer = viewChild<ElementRef<HTMLElement>>('svgContainer');
@@ -1858,6 +1860,48 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       this.updateViewBoxOverlayRect();
       this.cdr.markForCheck();
     }, 0);
+  }
+
+  /** Raster drag-drop (e4s.5): allow drop only when a document is loaded and the drag carries files. */
+  onCanvasRasterDragOver(event: DragEvent): void {
+    if (!this.svgContent() || this.svgManipulation.getSVGInstance() == null) return;
+    if (!this.canvasRasterDragHasFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    event.dataTransfer!.dropEffect = 'copy';
+  }
+
+  onCanvasRasterDrop(event: DragEvent): void {
+    void this.handleCanvasRasterDrop(event);
+  }
+
+  private async handleCanvasRasterDrop(event: DragEvent): Promise<void> {
+    if (!this.svgContent() || this.svgManipulation.getSVGInstance() == null) return;
+    if (!this.canvasRasterDragHasFiles(event.dataTransfer)) return;
+    event.preventDefault();
+    const anchor = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+    if (!anchor) return;
+    const files = event.dataTransfer.files;
+    if (!files?.length) return;
+
+    for (let i = 0; i < files.length; i++) {
+      const file = files.item(i);
+      if (!file) continue;
+      const result = await this.rasterImageInsert.insertRasterFileAtAnchor(file, anchor, {
+        silentDisallowedMime: true
+      });
+      if (result.kind === 'failed') {
+        window.alert(result.message);
+        break;
+      }
+    }
+    this.cdr.markForCheck();
+  }
+
+  /** True when the drag payload may include local files (see `DataTransfer.types` / `files`). */
+  private canvasRasterDragHasFiles(dt: DataTransfer | null): boolean {
+    if (!dt) return false;
+    if (dt.types?.includes('Files')) return true;
+    return (dt.files?.length ?? 0) > 0;
   }
 
   onCanvasMouseDown(event: MouseEvent): void {
