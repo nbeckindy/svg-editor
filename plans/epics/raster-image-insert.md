@@ -10,6 +10,18 @@
 | **Type** | `epic` |
 | **bd id** | `svg-editor-e4s` |
 
+## Spec (canonical)
+
+Decisions for raster **Live tree** insert and **Serialized** export live in **[ADR 0001: Raster image `href` and export](../../docs/adr/0001-raster-image-href-and-export.md)** (`svg-editor-e4s.1`).
+
+Summary:
+
+- **Formats:** `image/png`, `image/jpeg`, `image/webp` required; `image/gif` accepted (UA-driven playback); other MIME types rejected at insert.
+- **Insert `href`:** file picker / drag-drop default to **`data:`** URLs; no `file://` from local picks; opening existing SVG does not auto-rewrite external refs.
+- **Limits:** reject **> 16 MiB** files and **> 32 MP** decoded bitmaps before insert, with user-visible errors.
+- **Geometry:** intrinsic `width`/`height` in user units (1:1 px→unit), clamp down to fit root `viewBox` when present; omit `preserveAspectRatio` (default `xMidYMid meet`).
+- **Export:** keep `data:` as-is; preserve external `href` strings (portability caveat); never silently ship `blob:` — block or rewrite with UX (e4s.7).
+
 ## Child issues (bd-mappable)
 
 | Local ref | Title | bd id | Type | Acceptance criteria | Depends on (bd) | Est (min) |
