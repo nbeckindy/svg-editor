@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
 import { signal, WritableSignal } from '@angular/core';
 import { vi } from 'vitest';
+import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
 import { LayersPanelComponent } from './layers-panel.component';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { LayerTreeNode, SvgManipulationService } from '../../services/svg-manipulation.service';
@@ -43,6 +45,7 @@ describe('LayersPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [LayersPanelComponent],
       providers: [
+        ...mdiIconHttpTestProviders,
         {
           provide: SvgManipulationService,
           useValue: {
@@ -68,7 +71,14 @@ describe('LayersPanelComponent', () => {
       ]
     }).compileComponents();
 
+    registerMdiSvgIconSetForTests();
+
     fixture = TestBed.createComponent(LayersPanelComponent);
+  });
+
+  afterEach(() => {
+    flushMdiSvgIfPending();
+    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
   });
 
   it('should create', () => {

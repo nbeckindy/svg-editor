@@ -1,5 +1,6 @@
 import { CommonModule } from '@angular/common';
 import { Component, computed, inject, signal } from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { LayerTreeNode } from '../../services/svg-layer-structure.port';
@@ -35,7 +36,7 @@ interface PreviewPaintData {
 @Component({
   selector: 'app-layers-panel',
   standalone: true,
-  imports: [CommonModule],
+  imports: [CommonModule, MatIconModule],
   templateUrl: './layers-panel.component.html',
   styleUrl: './layers-panel.component.css'
 })

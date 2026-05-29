@@ -183,6 +183,13 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
+.visibility-toggle .layer-row-mdi,
+.lock-toggle .layer-row-mdi {
+  width: 16px;
+  height: 16px;
+  font-size: 16px;
+}
+
 .lock-toggle {
   display: inline-flex;
   align-items: center;

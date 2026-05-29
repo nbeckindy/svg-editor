@@ -57,14 +57,20 @@
                   [attr.aria-label]="layer.visible ? 'Hide ' + layer.name : 'Show ' + layer.name"
                   [attr.data-testid]="'layer-visibility-' + layer.id"
                   (click)="onVisibilityToggle(layer.id); $event.stopPropagation()">
-            <span aria-hidden="true">{{ layer.visible ? '●' : '○' }}</span>
+            <mat-icon
+              class="layer-row-mdi"
+              aria-hidden="true"
+              [svgIcon]="layer.visible ? 'eye-outline' : 'eye-off-outline'"></mat-icon>
           </button>
 
           <button type="button" class="lock-toggle"
                   [attr.aria-label]="layer.locked ? 'Unlock ' + layer.name : 'Lock ' + layer.name"
                   [attr.data-testid]="'layer-lock-' + layer.id"
                   (click)="onLockToggle(layer.id); $event.stopPropagation()">
-            <span aria-hidden="true">{{ layer.locked ? '\u25A0' : '\u25A1' }}</span>
+            <mat-icon
+              class="layer-row-mdi"
+              aria-hidden="true"
+              [svgIcon]="layer.locked ? 'lock-outline' : 'lock-open-variant-outline'"></mat-icon>
           </button>
 
           <img class="layer-preview" [src]="layer.previewUrl" [alt]="layer.type + ' preview'" />
