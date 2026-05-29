@@ -2940,6 +2940,38 @@ describe('SvgCanvasComponent', () => {
       expect(anchors.length).toBe(2);
     });
 
+    it('does not duplicate start/end anchors mid-drag when dragging moveto of closed cubic (svg-editor-19z)', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 200 200"><path id="path-drag-close-m" fill="none" stroke="black" d="M 10 10 C 55 5 55 25 100 25 C 100 15.5 10 10 10 10 Z"/></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-drag-close-m',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      fixture.detectChanges();
+      stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 200, 200), '0 0 200 200');
+
+      const firstAnchor = fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]')[0] as Element;
+      expect(firstAnchor).toBeTruthy();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        target: firstAnchor,
+        preventDefault: vi.fn(),
+        stopPropagation: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 80, clientY: 70 } as MouseEvent);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBe(2);
+    });
+
     it('pen-style two-cubic close: two anchors and no degenerate handles on collapsed controls (user regression)', async () => {
       const d =
         'M 251 188.703125 C 251 188.703125 436 118.553125 436 191.703125 C 436 264.853125 251 188.703125 251 188.703125 Z';
