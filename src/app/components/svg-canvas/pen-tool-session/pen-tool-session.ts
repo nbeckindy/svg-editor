@@ -23,6 +23,7 @@ import {
   penPathSegmentsToD,
   penReflectStateAfterCommitted,
   penSvgDistanceSq,
+  penRewriteLastSegmentEndToMatchMoveto,
   penLastOutgoingHandleSvg,
   movePenLastOutgoingHandleTo,
   snapVectorTo45DegFrom,
@@ -38,6 +39,15 @@ import type { EditorTool } from '../../../services/editor-tool.service';
 
 const PEN_FINISH_FEEDBACK_DURATION_MS = 1200;
 const PEN_SINGLE_CLICK_CLOSE_RADIUS_PX = 8;
+/**
+ * Close-from-start: mousedown is on a small hit target (~{@link PEN_SINGLE_CLICK_CLOSE_RADIUS_PX} px).
+ * {@link MARQUEE_MIN_DRAG_PX} is intentionally not lowered globally; this threshold applies only when
+ * {@link penPendingStartNearPathMoveto} is true (see plans/bugs/pen-close-from-start-preview-and-endpoint.md).
+ */
+const PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SCREEN_PX = 2;
+const PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SVG_DRAG_SQ = 1e-6;
+/** When finishing closed paths: absorb CTM / float mismatch vs session `M` without a mirrored closing `C`. */
+const PEN_CLOSE_MOVETO_REWRITE_MAX_SQ = 1e-8;
 
 export type PenDiscardReason = 'tool switch' | 'document replace/load';
 
@@ -97,11 +107,55 @@ export class PenToolSession {
     return this.penSession.getSegments().length > 0;
   }
 
-  get penPendingShowsCurvePreview(): boolean {
+  /**
+   * True when the pending segment began on the path start (within join/close tolerance in screen space).
+   * Enables a scoped curve-preview rule without changing global marquee thresholds.
+   */
+  private penPendingStartNearPathMoveto(): boolean {
+    const pending = this.penPendingSegment;
+    const m = this.penPathStartMv();
+    if (!pending || !m) return false;
+    return this.penEndpointsWithinJoinTolerance(pending.startSvg.x, pending.startSvg.y, m.x, m.y);
+  }
+
+  /** Pending curve preview end vertex: exact `M` when closing from start, else the mousedown `startSvg`. */
+  private penPendingCurvePreviewEndSvg(pending: {
+    anchor: { x: number; y: number };
+    startClient: { x: number; y: number };
+    startSvg: { x: number; y: number };
+    ctrlCurve: boolean;
+  }): { x: number; y: number } {
+    const m = this.penPathStartMv();
+    if (m && this.penEndpointsWithinJoinTolerance(pending.startSvg.x, pending.startSvg.y, m.x, m.y)) {
+      return { x: m.x, y: m.y };
+    }
+    return pending.startSvg;
+  }
+
+  /**
+   * Whether the pending segment should show Bézier curve preview (handles + `penCurvePreviewPathD`).
+   * Uses {@link MARQUEE_MIN_DRAG_PX} for normal drags; when closing from start, also allows a smaller
+   * screen threshold or a tiny root-SVG drag so users can shape the closing segment without leaving the start ring.
+   */
+  private penPendingShowsCurvePreviewForClose(): boolean {
     if (!this.penPendingSegment || !this.penPendingLastClient) return false;
-    const { startClient } = this.penPendingSegment;
+    const { startClient, startSvg } = this.penPendingSegment;
     const lc = this.penPendingLastClient;
-    return Math.hypot(lc.x - startClient.x, lc.y - startClient.y) >= MARQUEE_MIN_DRAG_PX;
+    const screenHyp = Math.hypot(lc.x - startClient.x, lc.y - startClient.y);
+    if (screenHyp >= MARQUEE_MIN_DRAG_PX) return true;
+    if (!this.penPendingStartNearPathMoveto()) return false;
+    if (screenHyp >= PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SCREEN_PX) return true;
+    const dragSvg = this.penPendingDragSvg;
+    const m = this.penPathStartMv();
+    if (dragSvg) {
+      if (penSvgDistanceSq(dragSvg, startSvg) > PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SVG_DRAG_SQ) return true;
+      if (m && penSvgDistanceSq(dragSvg, m) > PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SVG_DRAG_SQ) return true;
+    }
+    return false;
+  }
+
+  get penPendingShowsCurvePreview(): boolean {
+    return this.penPendingShowsCurvePreviewForClose();
   }
 
   /**
@@ -151,8 +205,8 @@ export class PenToolSession {
     if (!this.penCurvePreviewPathD || !this.penPendingSegment || !this.penPointerSvg) return [];
     const pending = this.penPendingSegment;
     const anchor = pending.anchor;
-    const end = pending.startSvg;
-    const dragCurrent = this.penPendingDragSvg ?? end;
+    const end = this.penPendingCurvePreviewEndSvg(pending);
+    const dragCurrent = this.penPendingDragSvg ?? pending.startSvg;
     const kind = penDragCurveAuthoringKind(pending.ctrlCurve, this.penSession.getSegments());
     const toOverlay = (x: number, y: number) =>
       this.ports.svgBboxToOverlayPixels({ x, y, width: 0, height: 0 });
@@ -289,8 +343,8 @@ export class PenToolSession {
       return null;
     }
     const pending = this.penPendingSegment;
-    const end = pending.startSvg;
-    const dragCurrent = this.penPendingDragSvg ?? end;
+    const end = this.penPendingCurvePreviewEndSvg(pending);
+    const dragCurrent = this.penPendingDragSvg ?? pending.startSvg;
     const kind = penDragCurveAuthoringKind(pending.ctrlCurve, this.penSession.getSegments());
     const segs = this.penSession.getSegments();
     const anchor = pending.anchor;
@@ -404,6 +458,18 @@ export class PenToolSession {
     const m = this.penPathStartMv();
     if (!m) return false;
     return this.penClientPxWithinJoinToleranceVsSvgPoint(clientX, clientY, m.x, m.y);
+  }
+
+  /**
+   * True if this pending segment began with primary **mousedown** within close radius of path start.
+   * Close is evaluated on **mouseup** using this (not release position alone): drag-close-from-start can
+   * release outside the ring and still close + `Z`. We do **not** close when the user only **dragged over**
+   * the start and released there without pressing down on the close target first.
+   */
+  private penPendingMousedownInCloseRadius(): boolean {
+    const pending = this.penPendingSegment;
+    if (!pending) return false;
+    return this.isPenPointerWithinCloseRadius(pending.startClient.x, pending.startClient.y);
   }
 
   /** Viewport-pixel tolerance match for pen join / single-click-close (never true if mapping fails). */
@@ -682,8 +748,8 @@ export class PenToolSession {
     const segs = this.penSession.getSegments();
     const kind = penDragCurveAuthoringKind(pending.ctrlCurve, segs);
     const anchor = pending.anchor;
-    const end = pending.startSvg;
-    const dragCurrent = this.penPendingDragSvg ?? end;
+    const end = this.penPendingCurvePreviewEndSvg(pending);
+    const dragCurrent = this.penPendingDragSvg ?? pending.startSvg;
 
     switch (kind) {
       case 'cubic': {
@@ -799,10 +865,11 @@ export class PenToolSession {
     startSvg: { x: number; y: number },
     dragCurrent: { x: number; y: number },
     ctrlCurve: boolean,
-    /** When set (e.g. pen close-to-start), the segment ends here instead of `startSvg`. */
+    /** When set (e.g. pen close-to-start), terminal anchor must match moveto `M` exactly — use session moveto, not pointer/snapped copies. */
     segmentEnd?: { x: number; y: number }
   ): void {
-    const end = segmentEnd ?? startSvg;
+    const mv = this.penPathStartMv();
+    const end = segmentEnd !== undefined ? (mv ?? segmentEnd) : startSvg;
     const kind = penDragCurveAuthoringKind(ctrlCurve, this.penSession.getSegments());
     const segs = this.penSession.getSegments();
     switch (kind) {
@@ -902,7 +969,7 @@ export class PenToolSession {
 
     if (
       penPathSegmentsAreValid(this.penSession.getSegments()) &&
-      this.isPenPointerWithinCloseRadius(event.clientX, event.clientY)
+      this.penPendingMousedownInCloseRadius()
     ) {
       const m = this.penPathStartMv();
       if (m && this.penPendingShowsCurvePreview && this.penPendingSegment) {
@@ -917,6 +984,24 @@ export class PenToolSession {
         this.penPendingCurveAltChord = false;
         this.penPendingShiftAngleSnap = false;
         this.commitPenDraggedCurve(pending.anchor, pending.startSvg, releaseSvg, pending.ctrlCurve, m);
+        this.tryFinishPenPath(true);
+        return;
+      }
+      if (this.penPendingSegment && m) {
+        const pending = this.penPendingSegment;
+        const releaseSvg =
+          this.ports.clientToEditorSvgPoint(event.clientX, event.clientY) ??
+          this.penPendingDragSvg ??
+          pending.startSvg;
+        this.penPendingSegment = null;
+        this.penPendingLastClient = null;
+        this.penPendingDragSvg = null;
+        this.penPendingCurveAltChord = false;
+        this.penPendingShiftAngleSnap = false;
+        const { anchor, startSvg } = pending;
+        if (penSvgDistanceSq(anchor, m) > 1e-12) {
+          this.commitPenDraggedCurve(anchor, startSvg, releaseSvg, pending.ctrlCurve, m);
+        }
         this.tryFinishPenPath(true);
         return;
       }
@@ -946,7 +1031,11 @@ export class PenToolSession {
     if (screenDist < MARQUEE_MIN_DRAG_PX) {
       const segs = this.penSession.getSegments();
       const st = penReflectStateAfterCommitted(segs);
-      if (st?.canReflectCubic) {
+      const mClose = this.penPathStartMv();
+      if (this.penPendingStartNearPathMoveto() && mClose) {
+        const dragCurrentClose = this.penPendingDragSvg ?? startSvg;
+        this.commitPenDraggedCurve(anchor, startSvg, dragCurrentClose, this.penPendingSegment.ctrlCurve, mClose);
+      } else if (st?.canReflectCubic) {
         this.penSession.appendCubic(
           2 * anchor.x - st.cubicCp2X, 2 * anchor.y - st.cubicCp2Y,
           end.x, end.y,
@@ -956,14 +1045,20 @@ export class PenToolSession {
         this.penSession.addLinePoint(end.x, end.y);
       }
     } else {
-      this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve);
+      const mClose = this.penPathStartMv();
+      if (this.penPendingStartNearPathMoveto() && mClose) {
+        this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve, mClose);
+      } else {
+        this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve);
+      }
     }
     this.penPendingSegment = null;
     this.penPendingLastClient = null;
     this.penPendingDragSvg = null;
     this.penPendingCurveAltChord = false;
     this.penPendingShiftAngleSnap = false;
-    this.penPointerSvg = { x: end.x, y: end.y };
+    const lvAfter = lastCommittedVertex(this.penSession.getSegments());
+    if (lvAfter) this.penPointerSvg = { x: lvAfter.x, y: lvAfter.y };
     this.ports.markForCheck();
   }
 
@@ -992,7 +1087,11 @@ export class PenToolSession {
     if (screenDist < MARQUEE_MIN_DRAG_PX) {
       const segs = this.penSession.getSegments();
       const st = penReflectStateAfterCommitted(segs);
-      if (st?.canReflectCubic) {
+      const mClose = this.penPathStartMv();
+      if (this.penPendingStartNearPathMoveto() && mClose) {
+        const dragCurrentClose = this.penPendingDragSvg ?? startSvg;
+        this.commitPenDraggedCurve(anchor, startSvg, dragCurrentClose, this.penPendingSegment.ctrlCurve, mClose);
+      } else if (st?.canReflectCubic) {
         this.penSession.appendCubic(
           2 * anchor.x - st.cubicCp2X, 2 * anchor.y - st.cubicCp2Y,
           end.x, end.y,
@@ -1003,14 +1102,20 @@ export class PenToolSession {
       }
     } else {
       const dragCurrent = this.penPendingDragSvg ?? startSvg;
-      this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve);
+      const mClose = this.penPathStartMv();
+      if (this.penPendingStartNearPathMoveto() && mClose) {
+        this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve, mClose);
+      } else {
+        this.commitPenDraggedCurve(anchor, startSvg, dragCurrent, this.penPendingSegment.ctrlCurve);
+      }
     }
     this.penPendingSegment = null;
     this.penPendingLastClient = null;
     this.penPendingDragSvg = null;
     this.penPendingCurveAltChord = false;
     this.penPendingShiftAngleSnap = false;
-    this.penPointerSvg = { x: end.x, y: end.y };
+    const lvFlush = lastCommittedVertex(this.penSession.getSegments());
+    if (lvFlush) this.penPointerSvg = { x: lvFlush.x, y: lvFlush.y };
     this.ports.markForCheck();
   }
 
@@ -1020,6 +1125,23 @@ export class PenToolSession {
     }
     this.flushPenPendingAsCurrentPointer();
     this.purgeProvisionalPenSegmentHistory();
+
+    if (
+      closePath &&
+      penPathSegmentsAreValid(this.penSession.getSegments()) &&
+      this.penPathStartMv()
+    ) {
+      const m0 = this.penPathStartMv()!;
+      const rewritten = penRewriteLastSegmentEndToMatchMoveto(
+        this.penSession.getSegments(),
+        m0,
+        PEN_CLOSE_MOVETO_REWRITE_MAX_SQ
+      );
+      if (rewritten) {
+        this.penSession.restoreDrawableSegments(rewritten);
+      }
+    }
+
     const finishingSegsSnapshot = [...this.penSession.getSegments()] as PenPathSegment[];
 
     const d = this.penSession.finishPath();
@@ -1028,33 +1150,9 @@ export class PenToolSession {
       return;
     }
     this.clearPenFinishFeedback();
-    let finalClosed: string;
-    if (closePath) {
-      const firstSeg = finishingSegsSnapshot[0];
-      const lastV = lastCommittedVertex(finishingSegsSnapshot);
-      const geometryAlreadyMeetsStart =
-        firstSeg?.type === 'M' &&
-        lastV &&
-        penSvgDistanceSq(lastV, { x: firstSeg.x, y: firstSeg.y }) < 1e-10;
-      if (geometryAlreadyMeetsStart) {
-        // Drag-to-close (or any segment already ending at moveto): only append `Z`, no extra closing `C`.
-        finalClosed = `${d} Z`;
-      } else {
-        const st = penReflectStateAfterCommitted(finishingSegsSnapshot);
-        if (st?.canReflectCubic && firstSeg?.type === 'M') {
-          finalClosed =
-            appendCubicToD(
-              d,
-              { x1: 2 * st.x - st.cubicCp2X, y1: 2 * st.y - st.cubicCp2Y, x2: firstSeg.x, y2: firstSeg.y },
-              { x: firstSeg.x, y: firstSeg.y }
-            ) + ' Z';
-        } else {
-          finalClosed = `${d} Z`;
-        }
-      }
-    } else {
-      finalClosed = d;
-    }
+    // Closed subpath: `Z` only — no mirrored corrective `C` at the moveto (plans/bugs/pen-drag-close-m-z-parity.md).
+    // Tiny endpoint drift vs `M` is absorbed via {@link penRewriteLastSegmentEndToMatchMoveto} before `finishPath`.
+    let finalClosed = closePath ? `${d} Z` : d;
 
     const cont = this.penContinuingPathRewrite;
     if (cont) {

@@ -457,6 +457,38 @@ export function penSvgDistanceSq(
   return dx * dx + dy * dy;
 }
 
+/**
+ * Option C (pen-drag-close-m-z-parity): if the last drawable vertex misses the subpath `M` by
+ * numerical dust only, rewrite that segment’s endpoint to the moveto — avoids a corrective segment
+ * and keeps `Z` paired with exact `M` tokens after serialize.
+ */
+export function penRewriteLastSegmentEndToMatchMoveto(
+  segments: readonly PenPathSegment[],
+  moveto: { x: number; y: number },
+  /** Max squared user-space gap to treat as float drift (strict {@link penSvgDistanceSq} “closed” uses 1e-10). */
+  maxSq = 1e-8
+): PenPathSegment[] | null {
+  if (segments.length < 2 || segments[0].type !== 'M') return null;
+  const lv = lastCommittedVertex(segments);
+  if (!lv) return null;
+  const gapSq = penSvgDistanceSq(lv, moveto);
+  if (gapSq < 1e-10 || gapSq > maxSq) return null;
+  const idx = segments.length - 1;
+  const segs = segments.map((s) => ({ ...s })) as PenPathSegment[];
+  const last = segs[idx];
+  switch (last.type) {
+    case 'L':
+    case 'C':
+    case 'Q':
+    case 'S':
+    case 'T':
+      segs[idx] = { ...last, x: moveto.x, y: moveto.y } as PenPathSegment;
+      return segs;
+    default:
+      return null;
+  }
+}
+
 /** End vertex of the last segment (anchor for rubber-band preview). */
 export function lastCommittedVertex(
   segments: readonly PenPathSegment[]
