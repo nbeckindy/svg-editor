@@ -1,4 +1,5 @@
 import { Component, ElementRef, computed, inject, viewChild } from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
 import { EditorToolService, EditorTool } from '../../services/editor-tool.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
@@ -8,7 +9,7 @@ import { parseRootViewBox } from '../../utils/raster-insert-layout';
 @Component({
   selector: 'app-tool-strip',
   standalone: true,
-  imports: [],
+  imports: [MatIconModule],
   templateUrl: './tool-strip.component.html',
   styleUrl: './tool-strip.component.css'
 })

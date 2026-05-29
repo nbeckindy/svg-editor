@@ -1,6 +1,8 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { describe, it, expect, beforeEach } from 'vitest';
+import { HttpTestingController } from '@angular/common/http/testing';
+import { describe, it, expect, beforeEach, afterEach } from 'vitest';
 import { ColorPickerComponent, parseHexColorInput } from './color-picker.component';
+import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
 
 describe('parseHexColorInput', () => {
   it('normalizes 3-digit and 6-digit hex', () => {
@@ -23,12 +25,22 @@ describe('ColorPickerComponent', () => {
 
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [ColorPickerComponent]
+      imports: [ColorPickerComponent],
+      providers: [...mdiIconHttpTestProviders]
     }).compileComponents();
+
+    registerMdiSvgIconSetForTests();
 
     fixture = TestBed.createComponent(ColorPickerComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    flushMdiSvgIfPending();
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    flushMdiSvgIfPending();
+    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
   });
 
   it('should create', () => {
@@ -96,11 +108,13 @@ describe('ColorPickerComponent', () => {
     expect(component.color()).toBe('#abcdef');
   });
 
-  it('empty state shows slash marker in template', () => {
+  it('empty state shows empty paint icon in template', () => {
     fixture.componentRef.setInput('empty', true);
+    fixture.detectChanges();
+    flushMdiSvgIfPending();
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.cp-swatch-empty')).toBeTruthy();
-    expect(compiled.querySelector('.cp-slash')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="color-picker-empty-icon"]')).toBeTruthy();
   });
 });

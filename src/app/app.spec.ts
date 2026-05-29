@@ -1,14 +1,27 @@
 import { TestBed } from '@angular/core/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
+import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
+import { provideRouter } from '@angular/router';
 import { AppComponent } from './app';
 import { SvgManipulationService } from './services/svg-manipulation.service';
 import { ShapeSelectionService } from './services/shape-selection.service';
 import { EditorHistoryService } from './services/editor-history.service';
+import { routes } from './app.routes';
+import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from './testing/mdi-icon-testing';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
-      imports: [AppComponent]
+      imports: [AppComponent],
+      providers: [provideAnimationsAsync(), provideRouter(routes), ...mdiIconHttpTestProviders]
     }).compileComponents();
+
+    registerMdiSvgIconSetForTests();
+  });
+
+  afterEach(() => {
+    flushMdiSvgIfPending();
+    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
   });
 
   it('should create the app', () => {

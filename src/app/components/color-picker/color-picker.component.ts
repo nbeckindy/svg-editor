@@ -1,6 +1,7 @@
 import { Component, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
+import { MatIconModule } from '@angular/material/icon';
 
 /** Parse user HEX input to normalized `#rrggbb` or null if invalid/incomplete. */
 export function parseHexColorInput(raw: string): string | null {
@@ -21,7 +22,7 @@ export function parseHexColorInput(raw: string): string | null {
 
 @Component({
   selector: 'app-color-picker',
-  imports: [CommonModule, FormsModule],
+  imports: [CommonModule, FormsModule, MatIconModule],
   templateUrl: './color-picker.component.html',
   styleUrl: './color-picker.component.css'
 })

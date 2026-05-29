@@ -49,6 +49,12 @@
   display: block;
 }
 
+.tool-mdi {
+  width: 18px;
+  height: 18px;
+  font-size: 18px;
+}
+
 .tool-btn:disabled {
   opacity: 0.4;
   cursor: default;

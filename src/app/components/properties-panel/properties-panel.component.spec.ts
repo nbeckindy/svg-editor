@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import { HttpTestingController } from '@angular/common/http/testing';
 import { computed, signal, WritableSignal } from '@angular/core';
 import { Matrix } from '@svgdotjs/svg.js';
 import { PropertiesPanelComponent } from './properties-panel.component';
@@ -9,6 +10,7 @@ import { EditorToolService } from '../../services/editor-tool.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import { DEFAULT_ARTBOARD, ArtboardResizeAnchor } from '../../models/artboard.model';
+import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
 import { vi } from 'vitest';
 
 describe('PropertiesPanelComponent', () => {
@@ -158,6 +160,7 @@ describe('PropertiesPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [PropertiesPanelComponent],
       providers: [
+        ...mdiIconHttpTestProviders,
         { provide: ShapeSelectionService, useValue: shapeSelectionServiceMock },
         { provide: SvgManipulationService, useValue: svgManipulationServiceMock },
         { provide: EditorToolService, useValue: editorToolServiceMock },
@@ -166,12 +169,21 @@ describe('PropertiesPanelComponent', () => {
       ]
     }).compileComponents();
 
+    registerMdiSvgIconSetForTests();
+
     shapeSelectionService = TestBed.inject(ShapeSelectionService);
     svgManipulationService = TestBed.inject(SvgManipulationService);
     editorToolService = TestBed.inject(EditorToolService);
     fixture = TestBed.createComponent(PropertiesPanelComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
+    flushMdiSvgIfPending();
+    fixture.detectChanges();
+  });
+
+  afterEach(() => {
+    flushMdiSvgIfPending();
+    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
   });
 
   it('should create', () => {
