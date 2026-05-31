@@ -16,6 +16,7 @@ import { SnapService } from '../../services/snap.service';
 import { RasterImageInsertService } from '../../services/raster-image-insert.service';
 import { CompositeCommand, TranslateCommand } from '../../models/editor-commands';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
+import { parsePathDForNodeEditing } from '../../models/path-d';
 
 /** Mock SVG.js shape with clone() for drag-ghost tests. clone() returns a real DOM node so SVG.js add() can adopt it. */
 function mockSvgJsShape(
@@ -3878,6 +3879,20 @@ describe('SvgCanvasComponent', () => {
       await loadSvgAndPenMode('<svg viewBox="0 0 100 100"></svg>');
     }
 
+    /** Non-square viewBox + linear client map → fractional root user coords (exposes M vs closing-end drift). */
+    async function loadEmptySvgAndPenModeFractionalView(): Promise<void> {
+      fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100.3 100.7"></svg>');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      component.wrapperWidth = 100;
+      component.wrapperHeight = 100;
+      editorToolService.setTool('pen');
+      editorToolService.setPenAltCurveMode(false);
+      stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100.3 100.7');
+      fixture.detectChanges();
+    }
+
     it('ignores pen mousedown when target is existing editor content shape', async () => {
       await loadSvgAndPenMode('<svg viewBox="0 0 100 100"><rect id="existing-shape" x="10" y="10" width="20" height="20"/></svg>');
       const shapeEl = fixture.nativeElement.querySelector('#existing-shape') as Element | null;
@@ -3914,6 +3929,13 @@ describe('SvgCanvasComponent', () => {
         preventDefault
       } as unknown as MouseEvent);
 
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 50,
+        clientY: 4
+      } as MouseEvent);
+      fixture.detectChanges();
+
       expect(preventDefault).toHaveBeenCalled();
       const d = pathEl?.getAttribute('d') ?? '';
       const ls = (d.match(/\bL\b/g) ?? []).length;
@@ -3938,9 +3960,14 @@ describe('SvgCanvasComponent', () => {
         preventDefault
       } as unknown as MouseEvent);
 
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 50,
+        clientY: 38
+      } as MouseEvent);
+      fixture.detectChanges();
+
       expect(preventDefault).toHaveBeenCalled();
-      const d = pathEl?.getAttribute('d') ?? '';
-      expect((d.match(/\bC\b/g) ?? []).length).toBe(2);
     });
 
     it('pen tool inserts a node on a quadratic segment', async () => {
@@ -3959,6 +3986,13 @@ describe('SvgCanvasComponent', () => {
         target: pathEl,
         preventDefault
       } as unknown as MouseEvent);
+
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 50,
+        clientY: 38
+      } as MouseEvent);
+      fixture.detectChanges();
 
       expect(preventDefault).toHaveBeenCalled();
       const d = pathEl?.getAttribute('d') ?? '';
@@ -4024,6 +4058,13 @@ describe('SvgCanvasComponent', () => {
         target: pathEl,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
+
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 40,
+        clientY: 3
+      } as MouseEvent);
+      fixture.detectChanges();
 
       expect(pathEl?.getAttribute('d')).not.toBe(before);
       editorHistoryService.undo();
@@ -4390,7 +4431,7 @@ describe('SvgCanvasComponent', () => {
       expect(fixture.nativeElement.querySelector('[data-testid="canvas-pen-close-hover"]')).toBeTruthy();
     });
 
-    it('closes path on mouseup inside radius of pen start anchor (single-click close)', async () => {
+    it('closes path when mousedown was in close radius of start (mouseup may be same or nearby)', async () => {
       await loadEmptySvgAndPenMode();
 
       component.onCanvasMouseDown({
@@ -4415,8 +4456,8 @@ describe('SvgCanvasComponent', () => {
 
       component.onCanvasMouseDown({
         button: 0,
-        clientX: 50,
-        clientY: 50,
+        clientX: 12,
+        clientY: 10,
         detail: 1,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
@@ -4441,7 +4482,53 @@ describe('SvgCanvasComponent', () => {
       expect(editorToolService.getCurrentTool()).toBe('selector');
     });
 
-    it('closing segment uses reflected P1 when last committed node has a handle', async () => {
+    it('closes path when mousedown was on start but mouseup left close radius (drag-close release)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 52, clientY: 48 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 88, clientY: 72 } as MouseEvent);
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      expect(d.replace(/\s+/g, ' ').trim().endsWith('Z')).toBe(true);
+      expect(editorToolService.getCurrentTool()).toBe('selector');
+    });
+
+    it('does not close when only mouseup is on start (mousedown was not in close radius)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+
+      // Next anchor: mousedown away from path start (10,10); release on start — should not auto-close.
+      component.onCanvasMouseDown({ button: 0, clientX: 82, clientY: 18, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 40, clientY: 40 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 10, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+
+      expect(editorToolService.getCurrentTool()).toBe('pen');
+      expect(component.isPenSessionActive).toBe(true);
+    });
+
+    it('closing segment ends at session moveto before Z (no mirrored corrective cubic)', async () => {
       await loadEmptySvgAndPenMode();
       editorToolService.setGridSnapEnabled(false);
       editorToolService.setShapeSnapEnabled(false);
@@ -4464,8 +4551,12 @@ describe('SvgCanvasComponent', () => {
           .querySelector('[data-editor-content-group]')
           ?.querySelector('path')
           ?.getAttribute('d') ?? '';
-      // Closing segment: C with reflected P1=(100,15.5), P2=start=(10,10), then Z
-      expect(d).toContain('C 100 15.5 10 10 10 10 Z');
+      const sp = d.replace(/\s+/g, ' ').trim();
+      expect(sp.endsWith('Z')).toBe(true);
+      expect(sp.split(/ C /).length).toBe(3);
+      expect(sp).toMatch(/10 10 Z$/);
+      // Legacy tryFinishPenPath appended a mirrored corrective C (P2 collapsed to start); policy is illustrator-style close to exact `M` instead.
+      expect(d).not.toContain('C 100 15.5 10 10 10 10 Z');
       expect(editorToolService.getCurrentTool()).toBe('selector');
     });
 
@@ -4495,6 +4586,150 @@ describe('SvgCanvasComponent', () => {
       // Plain smooth close is always … 10 10 10 10 Z (P2 collapsed onto start). Drag-close must differ.
       expect(d).not.toMatch(/10 10 10 10 Z$/);
       expect(editorToolService.getCurrentTool()).toBe('selector');
+    });
+
+    it('pen: committed segment list is unchanged during pending cubic drag (only preview moves)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      const bend = MARQUEE_MIN_DRAG_PX + 6;
+      component.onDocumentMouseMove({ clientX: 100, clientY: 10 + bend } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 10 + bend } as MouseEvent);
+
+      const committedJson = JSON.stringify(component.penTool.getPenSessionSegments());
+
+      component.onCanvasMouseDown({ button: 0, clientX: 80, clientY: 50, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 80, clientY: 50 + bend } as MouseEvent);
+      expect(JSON.stringify(component.penTool.getPenSessionSegments())).toBe(committedJson);
+      component.onDocumentMouseMove({ clientX: 95, clientY: 72 } as MouseEvent);
+      expect(JSON.stringify(component.penTool.getPenSessionSegments())).toBe(committedJson);
+      expect(component.penCurvePreviewPathD).toBeTruthy();
+    });
+
+    /**
+     * Last `C` endpoint must equal `M` numerically (`===`), not only `toBeCloseTo`; catches
+     * off-by-one / alternate-source moveto vs closing anchor (e.g. 260 vs 261).
+     */
+    it('pen: drag-close from start commits last cubic endpoint exactly on moveto', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+
+      component.onCanvasMouseDown({ button: 0, clientX: 12, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 52, clientY: 48 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 11, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      const sp = d.replace(/\s+/g, ' ').trim();
+      expect(sp.endsWith('Z')).toBe(true);
+      const m = /^M\s+([\d.+-]+)\s+([\d.+-]+)\b/.exec(sp);
+      expect(m).toBeTruthy();
+      const mx = Number(m![1]);
+      const my = Number(m![2]);
+      const beforeZ = sp.slice(0, -1).trim();
+      const lastC = beforeZ.lastIndexOf(' C ');
+      expect(lastC).toBeGreaterThanOrEqual(0);
+      const afterC = beforeZ.slice(lastC + 3).trim();
+      const nums = afterC.split(/\s+/).map(Number);
+      const ex = nums[nums.length - 2];
+      const ey = nums[nums.length - 1];
+      expect(ex).toBe(mx);
+      expect(ey).toBe(my);
+    });
+
+    /**
+     * Stricter than "pen: drag-close from start commits last cubic endpoint exactly on moveto":
+     * fractional root user space + **exact** parsed `C` end === `M`, **exactly two** cubics (no
+     * `tryFinishPenPath` corrective `appendCubicToD`), and serialized **tokens** for last endpoint
+     * match `M` tokens (catches 260 vs 261 style drift).
+     */
+    it('pen: drag-close from start (fractional viewBox) M+Z parity — two C, parsed end, tokens', async () => {
+      await loadEmptySvgAndPenModeFractionalView();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+
+      component.onCanvasMouseDown({ button: 0, clientX: 12, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 52, clientY: 48 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 11, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      const sp = d.replace(/\s+/g, ' ').trim();
+      expect(sp.endsWith('Z')).toBe(true);
+
+      const beforeZChop = sp.slice(0, -1).trim();
+      const cCount = (beforeZChop.match(/\bC\b/g) ?? []).length;
+      expect(cCount).toBe(2);
+      expect(beforeZChop.split(/ C /).length).toBe(3);
+
+      const openD = beforeZChop;
+      const parsed = parsePathDForNodeEditing(openD);
+      expect(parsed).toBeTruthy();
+      const mSeg = parsed!.find((s) => s.type === 'M') as { type: 'M'; x: number; y: number };
+      expect(mSeg).toBeTruthy();
+      const lastC = [...parsed!].reverse().find((s) => s.type === 'C') as
+        | { type: 'C'; x: number; y: number }
+        | undefined;
+      expect(lastC).toBeTruthy();
+      expect(lastC!.x).toBe(mSeg.x);
+      expect(lastC!.y).toBe(mSeg.y);
+
+      const mMatch = /^M\s+([\d.+-]+)\s+([\d.+-]+)\b/.exec(sp);
+      expect(mMatch).toBeTruthy();
+      const lastCIdx = beforeZChop.lastIndexOf(' C ');
+      expect(lastCIdx).toBeGreaterThanOrEqual(0);
+      const tailParts = beforeZChop.slice(lastCIdx + 3).trim().split(/\s+/);
+      expect(tailParts[tailParts.length - 2]).toBe(mMatch![1]);
+      expect(tailParts[tailParts.length - 1]).toBe(mMatch![2]);
+    });
+
+    /**
+     * Closing by mousedown on the path start is a **small hit target** (~8px). Requiring
+     * {@link MARQUEE_MIN_DRAG_PX} screen travel before showing a curve preview forces the user to
+     * drag away from the start ring before they see handles, and tiny motions complete without a
+     * visible curve affordance. Expected: curve preview (handles) appears once the pointer has
+     * moved meaningfully toward shaping the closing segment, even if screen delta is under 5px.
+     */
+    it('pen: curve preview appears during drag-close from start after small screen motion (TDD)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
+
+      component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 12, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+      expect(component.penCurvePreviewPathD).toBeTruthy();
     });
 
     it('closing via start-node click does not add a duplicate anchor at the start position', async () => {

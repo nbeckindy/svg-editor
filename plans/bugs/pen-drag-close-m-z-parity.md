@@ -100,3 +100,4 @@ The Vitest that requires **exactly two `C`** matches **Option A**; relax only fo
 
 - Original close-from-start plan: `plans/bugs/pen-close-from-start-preview-and-endpoint.md`  
 - Code: `PenToolSession.commitPenPendingSegment`, `commitPenDraggedCurve`, `tryFinishPenPath`, `clientToEditorSvgPoint`, `getSnappedPenPoint`
+- Follow-up: **svg-editor-jlp** — node-edit handle pairing wrong after drag-close (non-mirrored close vs smooth mirror logic).
