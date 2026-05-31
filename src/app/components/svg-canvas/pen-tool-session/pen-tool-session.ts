@@ -1323,7 +1323,7 @@ export class PenToolSession {
   ): void {
     this.penHoverClientPx = { x: event.clientX, y: event.clientY };
     if (this.penInsertOnPath) {
-      this.updatePenInsertOnPathFromPointer(event, getSnappedPenPoint);
+      this.updatePenInsertOnPathFromPointer(event);
       return;
     }
     if (this.penOutgoingHandleDrag) {
@@ -1429,9 +1429,13 @@ export class PenToolSession {
   }
 
   private clearPenInsertOnPathDragState(): void {
+    const pathId = this.penInsertOnPath?.pathId;
     this.penInsertOnPath = null;
     this.penInsertOnPathLastClient = null;
     this.penInsertOnPathPointerSvg = null;
+    if (pathId) {
+      this.ports.svgManipulation.setShapeVisibility(pathId, true);
+    }
   }
 
   /** Escape / cancel without mutating `d`. */
@@ -1570,6 +1574,7 @@ export class PenToolSession {
     };
     this.penInsertOnPathLastClient = { x: event.clientX, y: event.clientY };
     this.penInsertOnPathPointerSvg = { x: ev.pt.x, y: ev.pt.y };
+    this.ports.svgManipulation.setShapeVisibility(ev.pathId, false);
     this.ports.markForCheck();
     return true;
   }
@@ -1602,15 +1607,16 @@ export class PenToolSession {
     this.ports.markForCheck();
   }
 
-  private updatePenInsertOnPathFromPointer(
-    event: MouseEvent,
-    getSnappedPenPoint: (clientX: number, clientY: number, suspendSnap: boolean) => { x: number; y: number } | null
-  ): void {
+  /**
+   * Insert-on-path drag uses **unsnapped** SVG coordinates so grid / smart-guide snapping cannot
+   * pin the pointer to the planted vertex (which would zero the drag vector and hide curve preview).
+   */
+  private updatePenInsertOnPathFromPointer(event: MouseEvent): void {
     if (!this.penInsertOnPath) return;
     this.penInsertOnPathLastClient = { x: event.clientX, y: event.clientY };
-    const pt = getSnappedPenPoint(event.clientX, event.clientY, event.altKey || event.metaKey || event.ctrlKey);
-    if (pt) {
-      this.penInsertOnPathPointerSvg = { x: pt.x, y: pt.y };
+    const raw = this.ports.clientToEditorSvgPoint(event.clientX, event.clientY);
+    if (raw) {
+      this.penInsertOnPathPointerSvg = { x: raw.x, y: raw.y };
     }
     this.ports.markForCheck();
   }
@@ -1623,6 +1629,9 @@ export class PenToolSession {
     if (this.penFinishFeedbackTimer) {
       clearTimeout(this.penFinishFeedbackTimer);
       this.penFinishFeedbackTimer = null;
+    }
+    if (this.penInsertOnPath) {
+      this.clearPenInsertOnPathDragState();
     }
   }
 }

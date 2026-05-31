@@ -6,7 +6,7 @@ Ship in this order:
 
 1. **Option B** — While **Pen** is active, pen session **idle** (`canTryPenInsertNodeOnPath`), change the **cursor** when the pointer is over a **valid pen-insert hit** (same geometry as `findPenPathInsertHit` + `getPenPathInsertToleranceSvg`). Throttle pointer work for cursor updates; revert when not insert-eligible. **On `mousedown`**, always run a **fresh** hit test (same code path as commit) so throttling cannot desync cursor from click.
 2. **After a successful insert** on an existing path — show a **Pen-owned** overlay of **anchor dots only** (node-edit–like styling; **no** handles — not editable in this mode). **Suppress** this overlay whenever **true** path node-edit is already showing for that path (single visual source of truth). Overlay tracks the **last path inserted on**; inserting on another path **replaces** it. **Clear** the overlay on the next **meaningful Pen action** other than another insert on the same path; **another insert on the same path** redisplays updated anchors.
-3. **Insert gesture = pen draw parity** — Pen insert on an existing segment supports **mousedown → drag → mouseup** like drawing a curved segment. **Tangents:** **smooth into both neighbors**; **drag** updates **incoming and outgoing** tangent geometry together (modifier for cusp / break = **TBD**; see §Insert drag parity).
+3. **Insert gesture = pen draw parity** — Pen insert on an existing segment supports **mousedown → drag → mouseup** like drawing a curved segment. The **planted anchor** stays at the **mousedown hit** on the path; **drag** only reshapes **handles** (incoming + **mirrored** outgoing at the new node for **C–C** / **Q–Q**). Modifier for cusp / break = **TBD** (see §Insert drag parity).
 
 **Explicitly out of v1:** Session/tooltips/tutorial copy for insert discoverability (no first-hover hint; revisit when a broader **tutorial prefs** / localStorage story exists). Option A hover-only full node preview remains deferred.
 
@@ -18,7 +18,7 @@ Ship in this order:
 | vs true node-edit | **Suppress** Pen overlay when real node-edit overlay is active for that path |
 | Hint / copy | **None** in v1 |
 | Pointer vs throttle | **Authoritative** insert hit on pointer down; throttle **display** only |
-| Insert drag tangents | **Smooth into both neighbors**; drag adjusts **incoming + outgoing**; non-smooth via **modifier TBD** |
+| Insert drag tangents | **Smooth into both neighbors**; anchor **fixed** at hit; drag adjusts **handles** (mirrored at join); non-smooth via **modifier TBD** |
 
 ---
 
@@ -30,7 +30,7 @@ Inserting an anchor on an **existing** path with the **Pen** tool already works 
 - There is **no** visual parity with **Node edit** (anchors/handles on the path) while using Pen over that path.
 - The **cursor** does not change when the pointer is over a valid insert hit, so the affordance matches “draw a new path” everywhere on the canvas.
 
-Related baseline doc: [`bezier-anchor-handle-interactions.md`](./bezier-anchor-handle-interactions.md) (pen insert is mentioned; node-edit visuals are described in §1).
+Related baseline doc: [`bezier-anchor-handle-interactions.md`](./bezier-anchor-handle-interactions.md) — **Terminology** (vertex, knot, node, handles, chord, anchor) at the top; pen insert is mentioned there; node-edit visuals are described in §1.
 
 ---
 

@@ -19,7 +19,8 @@ function minimalPorts(overrides: Partial<PenToolSessionPorts> = {}): PenToolSess
       getLayerStackItems: () => [],
       updatePathData: vi.fn(),
       insertPathIntoContentGroup: vi.fn(() => null),
-      getShapeBBox: vi.fn()
+      getShapeBBox: vi.fn(),
+      setShapeVisibility: vi.fn()
     } as unknown as PenToolSessionPorts['svgManipulation'],
     shapeSelection: {
       selectShape: vi.fn(),
@@ -83,5 +84,32 @@ describe('PenToolSession', () => {
     const ev = new MouseEvent('mousedown', { clientX: 5, clientY: 5, button: 0, detail: 1 });
     session.onCanvasPenPrimaryMouseDown(ev, () => ({ x: 1, y: 1 }));
     expect(session.tryPenBackspaceShortcut()).toBe(false);
+  });
+
+  it('hides the document path during insert-on-path drag and restores on cancel', () => {
+    const setShapeVisibility = vi.fn();
+    const ports = minimalPorts({
+      isEditorContentShapeTarget: () => true,
+      getPathDForId: (id: string) => (id === 'p1' ? 'M 0 0 L 100 0' : null),
+      clientToEditorSvgPoint: (cx: number, cy: number) => ({ x: cx, y: cy }),
+      svgManipulation: {
+        getSVGInstance: () => null,
+        getLayerStackItems: () => [],
+        updatePathData: vi.fn(),
+        insertPathIntoContentGroup: vi.fn(() => null),
+        getShapeBBox: vi.fn(),
+        setShapeVisibility
+      } as unknown as PenToolSessionPorts['svgManipulation']
+    });
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.id = 'p1';
+    const session = new PenToolSession(ports);
+    const down = new MouseEvent('mousedown', { clientX: 40, clientY: 0, button: 0, detail: 1 });
+    vi.spyOn(down, 'target', 'get').mockReturnValue(path);
+    session.onCanvasPenPrimaryMouseDown(down, () => ({ x: 40, y: 0 }));
+    expect(session.isPenInsertOnPathDragActive).toBe(true);
+    expect(setShapeVisibility).toHaveBeenCalledWith('p1', false);
+    session.cancelPenInsertOnPathDrag();
+    expect(setShapeVisibility).toHaveBeenCalledWith('p1', true);
   });
 });

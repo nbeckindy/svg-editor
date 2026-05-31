@@ -1,4 +1,4 @@
-import { placementIllustratorStyleCubicControlPoints, dragBendQuadraticControlPoint } from './pen-path';
+import { placementIllustratorStyleCubicControlPoints } from './pen-path';
 import { pathSegmentsToD, type PathSegment } from './path-d';
 import { applyPenPathInsert, pointBeforeSegmentIndex, type PenPathInsertHit } from './path-pen-insert';
 
@@ -26,9 +26,14 @@ export function penInsertHitAnchorSvg(
 }
 
 /**
- * Mutates `segments` (already split at insert) so the inserted anchor follows `dragCurrent`,
- * keeping **C–C**, **Q–Q**, or **L–L** joins smooth at the new point (mirrored handles like pen smooth).
- * For unsupported neighbor pairs, only moves the shared endpoint without retuning handles.
+ * Mutates `segments` (already split at insert) while keeping the inserted **anchor** fixed at
+ * `dragStart` (the planted hit point). `dragCurrent` only reshapes **handles at the inserted
+ * vertex** (incoming `x2/y2` and mirrored outgoing `x1/y1` for **C–C**, etc.). Controls that belong
+ * to the **previous** and **next** anchors (`segIn.x1y1` toward `p0`, `segOut.x2y2` toward the
+ * far end) stay exactly as produced by the split so neighbor tangents do not move. **Q–Q** keeps
+ * the split controls (a single `Q` control cannot be bent off-drag without changing both ends).
+ * **L–L** keeps the split geometry (no handles to bend). Mixed **L–C** / **C–L** only adjust the
+ * cubic handle(s) at `V`.
  */
 export function adjustSplitSegmentsForPenInsertDrag(
   segments: PathSegment[],
@@ -43,88 +48,59 @@ export function adjustSplitSegmentsForPenInsertDrag(
 
   const p0 = pointBeforeSegmentIndex(segments, i);
   if (!p0) return;
-  const P = { x: dragCurrent.x, y: dragCurrent.y };
+  /** Planted insert vertex — never slides with the pointer. */
+  const V = { x: dragStart.x, y: dragStart.y };
 
   if (segIn.type === 'L' && segOut.type === 'L') {
-    const ax = p0.x;
-    const ay = p0.y;
-    const bx = segOut.x;
-    const by = segOut.y;
-    const abx = bx - ax;
-    const aby = by - ay;
-    const lenSq = abx * abx + aby * aby;
-    if (lenSq < 1e-18) {
-      (segIn as { x: number; y: number }).x = P.x;
-      (segIn as { x: number; y: number }).y = P.y;
-      return;
-    }
-    let t = ((P.x - ax) * abx + (P.y - ay) * aby) / lenSq;
-    t = Math.max(0, Math.min(1, t));
-    const x = ax + t * abx;
-    const y = ay + t * aby;
-    segIn.x = x;
-    segIn.y = y;
+    // Split already placed the corner on the segment; lines have no handles to drag.
+    segIn.x = V.x;
+    segIn.y = V.y;
     return;
   }
 
   if (segIn.type === 'C' && segOut.type === 'C') {
-    const p3right = { x: segOut.x, y: segOut.y };
-    const cin = placementIllustratorStyleCubicControlPoints(p0, P, dragStart, dragCurrent);
-    segIn.x1 = cin.x1;
-    segIn.y1 = cin.y1;
+    const cin = placementIllustratorStyleCubicControlPoints(p0, V, V, dragCurrent);
+    // Keep split handles at p0 and at the far anchor; only bend toward V (incoming x2y2).
     segIn.x2 = cin.x2;
     segIn.y2 = cin.y2;
-    segIn.x = P.x;
-    segIn.y = P.y;
+    segIn.x = V.x;
+    segIn.y = V.y;
 
-    const cout = placementIllustratorStyleCubicControlPoints(P, p3right, dragStart, dragCurrent);
-    segOut.x1 = 2 * P.x - cin.x2;
-    segOut.y1 = 2 * P.y - cin.y2;
-    segOut.x2 = cout.x2;
-    segOut.y2 = cout.y2;
+    // Mirrored outgoing handle at V (same tangent as incoming end).
+    segOut.x1 = 2 * V.x - cin.x2;
+    segOut.y1 = 2 * V.y - cin.y2;
     return;
   }
 
   if (segIn.type === 'Q' && segOut.type === 'Q') {
-    const p2 = { x: segOut.x, y: segOut.y };
-    const qin = dragBendQuadraticControlPoint(p0, P, dragStart, dragCurrent);
-    segIn.x1 = qin.x1;
-    segIn.y1 = qin.y1;
-    segIn.x = P.x;
-    segIn.y = P.y;
-
-    segOut.x1 = 2 * P.x - qin.x1;
-    segOut.y1 = 2 * P.y - qin.y1;
-    segOut.x = p2.x;
-    segOut.y = p2.y;
+    // One control per `Q` moves the whole subcurve; preserving neighbor angles means keeping split.
+    segIn.x = V.x;
+    segIn.y = V.y;
     return;
   }
 
   if (segIn.type === 'L' && segOut.type === 'C') {
-    segIn.x = P.x;
-    segIn.y = P.y;
-    const cout = placementIllustratorStyleCubicControlPoints(P, { x: segOut.x, y: segOut.y }, dragStart, dragCurrent);
+    segIn.x = V.x;
+    segIn.y = V.y;
+    const p3right = { x: segOut.x, y: segOut.y };
+    const cout = placementIllustratorStyleCubicControlPoints(V, p3right, V, dragCurrent);
     segOut.x1 = cout.x1;
     segOut.y1 = cout.y1;
-    segOut.x2 = cout.x2;
-    segOut.y2 = cout.y2;
     return;
   }
 
   if (segIn.type === 'C' && segOut.type === 'L') {
-    const cin = placementIllustratorStyleCubicControlPoints(p0, P, dragStart, dragCurrent);
-    segIn.x1 = cin.x1;
-    segIn.y1 = cin.y1;
+    const cin = placementIllustratorStyleCubicControlPoints(p0, V, V, dragCurrent);
     segIn.x2 = cin.x2;
     segIn.y2 = cin.y2;
-    segIn.x = P.x;
-    segIn.y = P.y;
+    segIn.x = V.x;
+    segIn.y = V.y;
     return;
   }
 
   if (segIn.type !== 'Z') {
-    segIn.x = P.x;
-    segIn.y = P.y;
+    segIn.x = V.x;
+    segIn.y = V.y;
   }
 }
 
