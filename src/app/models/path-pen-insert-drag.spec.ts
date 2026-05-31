@@ -42,7 +42,7 @@ describe('adjustSplitSegmentsForPenInsertDrag', () => {
     expect(segOut.y2).toBeCloseTo(splitOut.y2, 8);
   });
 
-  it('does not slide an L–L insert along the chord when dragging', () => {
+  it('converts L–L split to C–C with bend at V when dragging off the chord', () => {
     const parsed = parsePathDForNodeEditing('M 0 0 L 100 0');
     expect(parsed).not.toBeNull();
     const hit = findPenPathInsertHit(parsed!, 40, 1, 1e6);
@@ -54,12 +54,13 @@ describe('adjustSplitSegmentsForPenInsertDrag', () => {
     expect(V).not.toBeNull();
 
     const work = split!.map((s) => ({ ...s }));
-    adjustSplitSegmentsForPenInsertDrag(work, insertIdx, V!, { x: 90, y: 50 });
+    adjustSplitSegmentsForPenInsertDrag(work, insertIdx, V!, { x: 40, y: 35 });
 
-    const segIn = work[insertIdx];
-    expect(segIn?.type).toBe('L');
-    if (segIn?.type !== 'L') return;
-    expect(segIn.x).toBeCloseTo(V!.x, 5);
-    expect(segIn.y).toBeCloseTo(V!.y, 5);
+    expect(work[insertIdx].type).toBe('C');
+    expect(work[insertIdx + 1].type).toBe('C');
+    const cin = work[insertIdx] as Extract<PathSegment, { type: 'C' }>;
+    expect(cin.x1).toBeCloseTo(40 / 3, 5);
+    expect(cin.y1).toBeCloseTo(0, 5);
+    expect(cin.y2).not.toBeCloseTo(0, 1);
   });
 });

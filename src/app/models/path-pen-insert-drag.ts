@@ -1,4 +1,4 @@
-import { placementIllustratorStyleCubicControlPoints } from './pen-path';
+import { placementIllustratorStyleCubicControlPoints, symmetricCubicControlPoints } from './pen-path';
 import { pathSegmentsToD, type PathSegment } from './path-d';
 import { applyPenPathInsert, pointBeforeSegmentIndex, type PenPathInsertHit } from './path-pen-insert';
 
@@ -32,8 +32,9 @@ export function penInsertHitAnchorSvg(
  * to the **previous** and **next** anchors (`segIn.x1y1` toward `p0`, `segOut.x2y2` toward the
  * far end) stay exactly as produced by the split so neighbor tangents do not move. **Q–Q** keeps
  * the split controls (a single `Q` control cannot be bent off-drag without changing both ends).
- * **L–L** keeps the split geometry (no handles to bend). Mixed **L–C** / **C–L** only adjust the
- * cubic handle(s) at `V`.
+ * **L–L** (straight split chord): drag replaces the two `L` segments with smooth **C–C** through `V`,
+ * using chord-thirds handles at `p0` and the far end so tangents stay along the original line while
+ * bend is introduced at `V`. Mixed **L–C** / **C–L** only adjust the cubic handle(s) at `V`.
  */
 export function adjustSplitSegmentsForPenInsertDrag(
   segments: PathSegment[],
@@ -52,9 +53,37 @@ export function adjustSplitSegmentsForPenInsertDrag(
   const V = { x: dragStart.x, y: dragStart.y };
 
   if (segIn.type === 'L' && segOut.type === 'L') {
-    // Split already placed the corner on the segment; lines have no handles to drag.
-    segIn.x = V.x;
-    segIn.y = V.y;
+    const B = { x: segOut.x, y: segOut.y };
+    const chordP0V = Math.hypot(V.x - p0.x, V.y - p0.y);
+    const chordVB = Math.hypot(B.x - V.x, B.y - V.y);
+    if (chordP0V < 1e-9 || chordVB < 1e-9) {
+      segIn.x = V.x;
+      segIn.y = V.y;
+      return;
+    }
+    const symPV = symmetricCubicControlPoints(p0, V);
+    const symVB = symmetricCubicControlPoints(V, B);
+    const cin = placementIllustratorStyleCubicControlPoints(p0, V, V, dragCurrent);
+    const cIn: Extract<PathSegment, { type: 'C' }> = {
+      type: 'C',
+      x1: symPV.x1,
+      y1: symPV.y1,
+      x2: cin.x2,
+      y2: cin.y2,
+      x: V.x,
+      y: V.y
+    };
+    const cOut: Extract<PathSegment, { type: 'C' }> = {
+      type: 'C',
+      x1: 2 * V.x - cin.x2,
+      y1: 2 * V.y - cin.y2,
+      x2: symVB.x2,
+      y2: symVB.y2,
+      x: B.x,
+      y: B.y
+    };
+    segments[i] = cIn;
+    segments[i + 1] = cOut;
     return;
   }
 
