@@ -2,6 +2,20 @@
 
 This document compares mainstream vector-editor patterns, aligns **smooth vs corner** semantics with how SVG paths are actually stored, and proposes interaction behavior phased for **MVP vs later** for this Angular canvas app (`svg-canvas` overlays, `node-edit-selector` tool, pen session).
 
+## Terminology
+
+Words below are used consistently in UX plans and code comments for this app. They overlap with general vector-editor vocabulary; **anchor** is the usual synonym for the on-curve point in tools like Illustrator.
+
+| Term | Definition |
+|------|------------|
+| **Vertex** | An **on-curve** point where path geometry is pinned: segment endpoints, join points between segments, and the start point after **`M`**. Moving a vertex changes the path’s shape at that joint. |
+| **Knot** | Informal term for an on-curve **joint** where path segments meet—the same locus as a **vertex**. It is **not** a separate SVG construct or a different kind of point than a vertex here; speech and comments use “knot” where other tools say “anchor” or “point on the path.” |
+| **Node** | **Editor shorthand** for an editable knot on a path—the **vertex** together with how the curve **enters and leaves** it (tangent **handles** and segment commands). Selecting a “node” in **Node Edit** means that vertex is the focus; operations like delete/remove refer to that knot. |
+| **Handles** | **Off-curve** control points (**direction points**) that pull a **cubic** (**C**) or **quadratic** (**Q**) segment without lying on the stroke itself. In this app they appear as green grips with dashed lines to their **anchor**. Dragging a handle changes tangent direction and strength on that side of the vertex. |
+| **Chord** | The **straight line** between two **on-curve** points—most often the segment between **consecutive anchors** (the endpoints of one logical edge of the path). Pen placement logic sometimes derives a control from **fractions along this chord** (e.g. “chord-thirds”: a point one-third of the way along the chord from one anchor toward the next). |
+
+**Related words:** **Anchor** = the visible on-curve dot for a vertex in overlays (same idea as “anchor point” in Illustrator). **Segment** = one contiguous piece of `d` between two vertices (e.g. a single **L**, **C**, or **Q**).
+
 ---
 
 ## 1. Current implementation snapshot (this repo)
