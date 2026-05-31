@@ -326,7 +326,8 @@ function splitQuadraticAtT(
   return [first, second];
 }
 
-function pointBeforeSegmentIndex(
+/** Start point of the segment at `index` in path-local space (for insert / split math). */
+export function pointBeforeSegmentIndex(
   segments: readonly PathSegment[],
   index: number
 ): { x: number; y: number } | null {

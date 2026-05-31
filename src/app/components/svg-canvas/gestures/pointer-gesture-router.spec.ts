@@ -24,6 +24,7 @@ function makeHost(over: Partial<SvgCanvasPointerGestureHost>): SvgCanvasPointerG
     getPathNodeDragSession: () => null,
     updatePathNodeDrag: vi.fn(),
     isPenToolWithActiveSession: () => false,
+    isPenInsertOnPathDragActive: () => false,
     onPenDocumentMouseMove: vi.fn(),
     isSelectionMarquee: false,
     isZoomMarquee: false,
@@ -35,6 +36,7 @@ function makeHost(over: Partial<SvgCanvasPointerGestureHost>): SvgCanvasPointerG
     isDraggingShape: false,
     updateTextToolPreviewFromClient: vi.fn(),
     recordInsertAnchorFromClient: vi.fn(),
+    schedulePenInsertHoverCursorHitTest: vi.fn(),
     finishPathNodeDrag: vi.fn(),
     onPenDocumentMouseUp: vi.fn(),
     commitZoomMarquee: vi.fn(),
@@ -146,6 +148,7 @@ describe('PointerGestureRouter', () => {
 
   it('onDocumentMouseMove prefers pen session over selection marquee', () => {
     const host = makeHost({
+      getCurrentTool: () => 'pen',
       isPenToolWithActiveSession: () => true,
       isSelectionMarquee: true,
       onPenDocumentMouseMove: vi.fn()

@@ -64,7 +64,7 @@
         class="svg-zoom-wrapper"
         [style.transform]="'translate(' + canvasView.panX + 'px,' + canvasView.panY + 'px) scale(' + canvasView.scale + ')'"
         style="transform-origin: 0 0">
-        <div #svgContainer></div>
+        <div #svgContainer class="svg-user-document"></div>
       </div>
       <div
         #highlightOverlayContainer
@@ -240,6 +240,16 @@
                 stroke-dasharray="6 3"
                 vector-effect="non-scaling-stroke"/>
             }
+          }
+          @if (editorChrome.penInsertOnPathPreviewPathD; as pins) {
+            <path
+              class="creation-ghost-shape"
+              data-testid="canvas-pen-insert-on-path-preview"
+              [attr.d]="pins"
+              fill="none"
+              [attr.stroke]="drawingDefaults.stroke()"
+              [attr.stroke-width]="drawingDefaults.strokeWidth()"
+              vector-effect="non-scaling-stroke"/>
           }
           @if (editorChrome.penSessionPreviewPathD; as pfull) {
             <path

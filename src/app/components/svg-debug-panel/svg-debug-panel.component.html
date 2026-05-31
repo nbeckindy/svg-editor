@@ -6,17 +6,42 @@
       class="debug-toggle"
       (click)="toggleCollapsed()"
       [attr.aria-expanded]="!isCollapsed()"
-      aria-controls="svg-debug-body">
+      aria-controls="svg-debug-regions">
       {{ isCollapsed() ? 'Expand' : 'Collapse' }}
     </button>
   </div>
   @if (!isCollapsed()) {
+    <div id="svg-debug-regions" class="debug-panel-regions">
+    <div
+      class="pointer-intent-block"
+      data-testid="editor-pointer-intent-debug"
+      aria-label="Predicted primary click on canvas">
+      <div class="pointer-intent-title">Pointer → primary click (canvas)</div>
+      @if (pointerIntent(); as pi) {
+        <div class="pointer-intent-cursor">{{ pi.expectedCursorLine }}</div>
+        <div class="pointer-intent-primary">{{ pi.primaryLine }}</div>
+        <div class="pointer-intent-meta">
+          client ({{ pi.clientX | number : '1.0-0' }}, {{ pi.clientY | number : '1.0-0' }}) ·
+          {{ pi.sampledAtMs | number : '1.0-0' }} ms
+        </div>
+        @if (pi.detailLines.length > 0) {
+          <div class="pointer-intent-details">
+            @for (line of pi.detailLines; track $index) {
+              <div>{{ line }}</div>
+            }
+          </div>
+        }
+      } @else {
+        <div class="pointer-intent-empty">Move the mouse over the editor to sample (driven by canvas).</div>
+      }
+    </div>
     @if (segments(); as segs) {
       <div id="svg-debug-body" class="debug-panel-body">
         <pre class="debug-xml" aria-label="Exported SVG XML"><code>@for (seg of segs; track $index) {<span [class.selected]="seg.selected">{{ seg.text }}</span>}</code></pre>
       </div>
     } @else {
-      <div id="svg-debug-body" class="debug-panel-empty">Load an SVG to see exported document XML.</div>
+      <div class="debug-panel-empty" data-testid="svg-debug-empty">Load an SVG to see exported document XML.</div>
     }
+    </div>
   }
 </div>

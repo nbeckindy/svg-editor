@@ -77,6 +77,9 @@ export class SvgCanvasEditorChromeFacade {
   get creationGhostLineOverlay() {
     return this.root.creationGhostLineOverlay;
   }
+  get penInsertOnPathPreviewPathD(): string | null {
+    return this.root.penInsertOnPathPreviewPathD;
+  }
   get penSessionPreviewPathD(): string | null {
     return this.root.penSessionPreviewPathD;
   }

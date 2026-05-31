@@ -350,11 +350,6 @@ export class SvgEditorDocumentService {
     });
 
     shapes.forEach((shape: SvgJsElement) => {
-      try {
-        shape.css({ cursor: 'pointer' });
-      } catch {
-        // jsdom or detached nodes may not support style.setProperty
-      }
       if (!shape.id()) {
         let newId: string;
         do {

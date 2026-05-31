@@ -23,6 +23,8 @@ export interface SvgCanvasPointerGestureHost {
   getPathNodeDragSession(): unknown | null;
   updatePathNodeDrag(clientX: number, clientY: number): void;
   isPenToolWithActiveSession(): boolean;
+  /** True while pen insert-on-path mousedown→mouseup is in progress (no committed pen session). */
+  isPenInsertOnPathDragActive(): boolean;
   onPenDocumentMouseMove(event: MouseEvent): void;
   readonly isSelectionMarquee: boolean;
   readonly isZoomMarquee: boolean;
@@ -34,6 +36,8 @@ export interface SvgCanvasPointerGestureHost {
   readonly isDraggingShape: boolean;
   updateTextToolPreviewFromClient(clientX: number, clientY: number): void;
   recordInsertAnchorFromClient(clientX: number, clientY: number): void;
+  /** Throttled idle pen: valid insert hit cursor on canvas host. */
+  schedulePenInsertHoverCursorHitTest(clientX: number, clientY: number): void;
 
   // --- document:mouseup ---
   finishPathNodeDrag(): void;
@@ -83,9 +87,12 @@ export class PointerGestureRouter {
       host.updatePathNodeDrag(event.clientX, event.clientY);
       return;
     }
-    if (host.isPenToolWithActiveSession()) {
+    if (host.getCurrentTool() === 'pen' && (host.isPenToolWithActiveSession() || host.isPenInsertOnPathDragActive())) {
       host.onPenDocumentMouseMove(event);
       return;
+    }
+    if (host.getCurrentTool() === 'pen') {
+      host.schedulePenInsertHoverCursorHitTest(event.clientX, event.clientY);
     }
     if (host.isSelectionMarquee) {
       this.g.selectionMarquee.move(event.clientX, event.clientY, host.gestureRuntime);
@@ -123,7 +130,7 @@ export class PointerGestureRouter {
       host.finishPathNodeDrag();
       return;
     }
-    if (host.isPenToolWithActiveSession()) {
+    if (host.isPenToolWithActiveSession() || host.isPenInsertOnPathDragActive()) {
       host.onPenDocumentMouseUp(event);
       return;
     }

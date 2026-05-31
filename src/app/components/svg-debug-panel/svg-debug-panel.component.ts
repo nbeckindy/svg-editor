@@ -3,6 +3,7 @@ import { CommonModule } from '@angular/common';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import type { SvgDebugPanelSvgPort } from '../../history/editor-chrome-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { EditorPointerIntentDebugService } from '../../services/editor-pointer-intent-debug.service';
 import { formatSvgXmlWithHighlightSegments } from '../../utils/svg-debug-xml';
 
 @Component({
@@ -15,7 +16,10 @@ import { formatSvgXmlWithHighlightSegments } from '../../utils/svg-debug-xml';
 export class SvgDebugPanelComponent {
   private shapeSelection = inject(ShapeSelectionService);
   private readonly svg: SvgDebugPanelSvgPort = inject(SvgManipulationService);
+  private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
   readonly isCollapsed = signal(true);
+
+  readonly pointerIntent = this.pointerIntentDebug.snapshot;
 
   readonly segments = computed(() => {
     this.svg.documentRevision();

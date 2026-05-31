@@ -160,6 +160,12 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
       ctx.markForCheck();
       return;
     }
+    if (ctx.getCurrentTool() === 'pen' && ctx.penTool.isPenInsertOnPathDragActive) {
+      ctx.penTool.cancelPenInsertOnPathDrag();
+      event.preventDefault();
+      ctx.markForCheck();
+      return;
+    }
     if (ctx.getCurrentTool() === 'pen' && ctx.isPenSessionActive()) {
       ctx.penTool.clearDrawingState();
       event.preventDefault();

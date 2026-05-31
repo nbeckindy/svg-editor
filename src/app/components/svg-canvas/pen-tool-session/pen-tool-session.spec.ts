@@ -33,7 +33,10 @@ function minimalPorts(overrides: Partial<PenToolSessionPorts> = {}): PenToolSess
     setLastBbox: vi.fn(),
     clearHighlightRectCache: vi.fn(),
     isEditorContentShapeTarget: () => false,
-    insertPenNodeOnExistingPath: () => false,
+    getPenPathInsertToleranceSvg: () => 8,
+    getPathDForId: () => null,
+    commitPenInsertOnExistingPath: vi.fn(),
+    clearPenPostInsertAnchorOverlay: vi.fn(),
     isCanvasReadyForPenInput: () => true,
     ...overrides
   };

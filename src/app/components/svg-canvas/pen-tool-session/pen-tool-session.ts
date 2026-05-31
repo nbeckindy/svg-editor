@@ -30,7 +30,17 @@ import {
   type CubicControlPoints,
   type PenPathSegment
 } from '../../../models/pen-path';
-import { parsePathDForNodeEditing } from '../../../models/path-d';
+import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../../models/path-d';
+import {
+  applyPenPathInsert,
+  findPenPathInsertHit,
+  type PenPathInsertHit
+} from '../../../models/path-pen-insert';
+import {
+  buildPenInsertDragPreviewD,
+  penInsertHitAnchorSvg,
+  penInsertMoveSegmentIndexAfterSplit
+} from '../../../models/path-pen-insert-drag';
 import { AddPathCommand, EditPathNodesCommand, PenSegmentReplaceCommand } from '../../../models/editor-commands';
 import type { SvgManipulationService } from '../../../services/svg-manipulation.service';
 import type { ShapeSelectionService } from '../../../services/shape-selection.service';
@@ -75,8 +85,11 @@ export interface PenToolSessionPorts {
   setLastBbox(bbox: { x: number; y: number; width: number; height: number } | null): void;
   clearHighlightRectCache(): void;
   isEditorContentShapeTarget(target: Element | null): boolean;
-  /** Pen tool: insert anchor on existing path near click (returns true if handled). */
-  insertPenNodeOnExistingPath(pathElement: Element, event: MouseEvent): boolean;
+  getPenPathInsertToleranceSvg(): number;
+  getPathDForId(pathId: string): string | null;
+  /** Apply committed insert edit (history, selection, overlays). */
+  commitPenInsertOnExistingPath(pathId: string, oldD: string, newD: string): void;
+  clearPenPostInsertAnchorOverlay(): void;
   /** True when SVG content is present and the canvas view is ready for pen input. */
   isCanvasReadyForPenInput(): boolean;
 }
@@ -99,6 +112,20 @@ export class PenToolSession {
   private penHoverClientPx: { x: number; y: number } | null = null;
   private penContinuingPathRewrite: { pathId: string; originalD: string } | null = null;
   private penOutgoingHandleDrag: { segmentIndex: number; before: PenPathSegment } | null = null;
+
+  /** Mousedown→drag→mouseup insert on an existing path (idle pen session). */
+  private penInsertOnPath: {
+    pathId: string;
+    originalD: string;
+    parsedBefore: PathSegment[];
+    hit: PenPathInsertHit;
+    insertMoveSegIndex: number;
+    splitBaseline: PathSegment[];
+    dragStartSvg: { x: number; y: number };
+    startClient: { x: number; y: number };
+  } | null = null;
+  private penInsertOnPathLastClient: { x: number; y: number } | null = null;
+  private penInsertOnPathPointerSvg: { x: number; y: number } | null = null;
 
   constructor(private readonly ports: PenToolSessionPorts) {}
 
@@ -163,6 +190,7 @@ export class PenToolSession {
    * pending segment to pointer. This keeps the whole path visible during authoring.
    */
   get penSessionPreviewPathD(): string | null {
+    if (this.penInsertOnPath) return null;
     if (this.ports.getCurrentTool() !== 'pen' || !this.isPenSessionActive) return null;
     const base = penPathSegmentsToD(this.penSession.getSegments());
     if (!base || !this.penPointerSvg) return base || null;
@@ -188,6 +216,7 @@ export class PenToolSession {
 
   /** Live Bézier preview `d` (committed segments + pending segment: default `C`, Ctrl+drag `Q` / `S` / `T`). */
   get penCurvePreviewPathD(): string | null {
+    if (this.penInsertOnPath) return null;
     if (
       !this.penPendingSegment ||
       !this.penPointerSvg ||
@@ -568,6 +597,7 @@ export class PenToolSession {
       this.penSession.restoreDrawableSegments(open.segments);
       this.penPointerSvg = { x: tail.x, y: tail.y };
       this.penHoverClientPx = { x: event.clientX, y: event.clientY };
+      this.ports.clearPenPostInsertAnchorOverlay();
       this.ports.markForCheck();
       return true;
     }
@@ -663,7 +693,8 @@ export class PenToolSession {
       this.penPendingDragSvg !== null ||
       this.penHoverClientPx !== null ||
       this.penContinuingPathRewrite !== null ||
-      this.penOutgoingHandleDrag !== null;
+      this.penOutgoingHandleDrag !== null ||
+      this.penInsertOnPath !== null;
     const hadFeedback = this.penFinishFeedbackMessage !== null;
     if (!hadPenState && !hadFeedback) return;
     if (hadPenState) {
@@ -677,6 +708,7 @@ export class PenToolSession {
       this.penHoverClientPx = null;
       this.penContinuingPathRewrite = null;
       this.penOutgoingHandleDrag = null;
+      this.clearPenInsertOnPathDragState();
       this.penPendingCurveAltChord = false;
       this.penPendingShiftAngleSnap = false;
       this.ports.setPenAltCurveMode(false);
@@ -1241,6 +1273,7 @@ export class PenToolSession {
       this.penPendingCurveAltChord = false;
       this.penPendingShiftAngleSnap = false;
       if (this.penSession.getSegments().length === 0) {
+        this.ports.clearPenPostInsertAnchorOverlay();
         this.penSession.beginPath(pt.x, pt.y);
         this.penPointerSvg = { x: pt.x, y: pt.y };
         this.ports.markForCheck();
@@ -1259,6 +1292,7 @@ export class PenToolSession {
         this.ports.markForCheck();
         return;
       }
+      this.ports.clearPenPostInsertAnchorOverlay();
       this.penSession.beginPath(pt.x, pt.y);
       this.penPointerSvg = { x: pt.x, y: pt.y };
       this.ports.markForCheck();
@@ -1266,6 +1300,7 @@ export class PenToolSession {
     }
     const anchor = lastCommittedVertex(segs);
     if (!anchor) return;
+    this.ports.clearPenPostInsertAnchorOverlay();
     this.penPendingSegment = {
       anchor: { x: anchor.x, y: anchor.y },
       startClient: { x: event.clientX, y: event.clientY },
@@ -1287,6 +1322,10 @@ export class PenToolSession {
     getSnappedPenPoint: (clientX: number, clientY: number, suspendSnap: boolean) => { x: number; y: number } | null
   ): void {
     this.penHoverClientPx = { x: event.clientX, y: event.clientY };
+    if (this.penInsertOnPath) {
+      this.updatePenInsertOnPathFromPointer(event, getSnappedPenPoint);
+      return;
+    }
     if (this.penOutgoingHandleDrag) {
       const raw = this.ports.clientToEditorSvgPoint(event.clientX, event.clientY);
       if (raw) {
@@ -1326,6 +1365,10 @@ export class PenToolSession {
   }
 
   onDocumentMouseUpPen(event: MouseEvent): void {
+    if (this.penInsertOnPath) {
+      this.finishPenInsertOnPathDrag(event);
+      return;
+    }
     if (this.penOutgoingHandleDrag) {
       this.finishPenOutgoingHandleDrag();
       return;
@@ -1365,7 +1408,7 @@ export class PenToolSession {
       if (
         this.penSession.getSegments().length === 0 &&
         !this.penPendingSegment &&
-        this.ports.insertPenNodeOnExistingPath(penTarget, event)
+        this.tryBeginPenInsertOnPath(penTarget, event)
       ) {
         return true;
       }
@@ -1378,7 +1421,198 @@ export class PenToolSession {
   }
 
   get canTryPenInsertNodeOnPath(): boolean {
-    return this.penSession.getSegments().length === 0 && this.penPendingSegment === null;
+    return (
+      this.penSession.getSegments().length === 0 &&
+      this.penPendingSegment === null &&
+      this.penInsertOnPath === null
+    );
+  }
+
+  private clearPenInsertOnPathDragState(): void {
+    this.penInsertOnPath = null;
+    this.penInsertOnPathLastClient = null;
+    this.penInsertOnPathPointerSvg = null;
+  }
+
+  /** Escape / cancel without mutating `d`. */
+  cancelPenInsertOnPathDrag(): void {
+    this.clearPenInsertOnPathDragState();
+    this.ports.markForCheck();
+  }
+
+  get isPenInsertOnPathDragActive(): boolean {
+    return this.penInsertOnPath !== null;
+  }
+
+  get penInsertOnPathPreviewPathD(): string | null {
+    if (!this.penInsertOnPath) return null;
+    const st = this.penInsertOnPath;
+    const lc = this.penInsertOnPathLastClient ?? st.startClient;
+    const screenDist = Math.hypot(lc.x - st.startClient.x, lc.y - st.startClient.y);
+    if (screenDist < MARQUEE_MIN_DRAG_PX) {
+      return pathSegmentsToD(st.splitBaseline);
+    }
+    const cur = this.penInsertOnPathPointerSvg ?? st.dragStartSvg;
+    const base = st.splitBaseline.map((seg) => ({ ...seg })) as PathSegment[];
+    return buildPenInsertDragPreviewD(base, st.insertMoveSegIndex, st.dragStartSvg, cur);
+  }
+
+  /**
+   * Read-only insert-on-path eligibility (shared with {@link tryBeginPenInsertOnPath} for debug HUD).
+   */
+  evaluatePenInsertOnPathAt(
+    penTarget: Element,
+    clientX: number,
+    clientY: number
+  ):
+    | { ok: false; reason: string }
+    | {
+        ok: true;
+        pathId: string;
+        oldD: string;
+        parsed: PathSegment[];
+        hit: PenPathInsertHit;
+        split: PathSegment[];
+        pt: { x: number; y: number };
+      } {
+    if (penTarget.tagName?.toLowerCase() !== 'path' || !penTarget.id) {
+      return { ok: false, reason: 'target is not <path id=…>' };
+    }
+    const pathId = penTarget.id;
+    const oldD = this.ports.getPathDForId(pathId)?.trim() ?? '';
+    if (!oldD) return { ok: false, reason: 'empty path d' };
+    const parsed = parsePathDForNodeEditing(oldD);
+    if (!parsed) return { ok: false, reason: 'path d not parseable for node editing' };
+    const pt = this.ports.clientToEditorSvgPoint(clientX, clientY);
+    if (!pt) return { ok: false, reason: 'client→SVG mapping failed' };
+    const tol = this.ports.getPenPathInsertToleranceSvg();
+    const maxDistSq = tol * tol;
+    const hit = findPenPathInsertHit(parsed, pt.x, pt.y, maxDistSq);
+    if (!hit) return { ok: false, reason: `no segment within insert tolerance (~${tol.toFixed(2)} svg u)` };
+    const split = applyPenPathInsert(parsed, hit);
+    if (!split) return { ok: false, reason: 'applyPenPathInsert rejected' };
+    const baselineD = pathSegmentsToD(split);
+    if (baselineD === oldD) return { ok: false, reason: 'insert would not change d' };
+    const reparsed = parsePathD(baselineD);
+    if (reparsed.errors.length > 0 || reparsed.segments.length === 0 || reparsed.segments[0].type !== 'M') {
+      return { ok: false, reason: 'split baseline invalid for commit' };
+    }
+    return { ok: true, pathId, oldD, parsed, hit, split, pt };
+  }
+
+  /**
+   * Human-readable prediction for primary mousedown while **Pen** is active (idle or active session).
+   */
+  describePenPrimaryMouseDownIntent(
+    penTarget: Element | null,
+    clientX: number,
+    clientY: number,
+    getSnappedPenPoint: (clientX: number, clientY: number, suspendSnap: boolean) => { x: number; y: number } | null
+  ): { headline: string; details: string[] } {
+    const details: string[] = [];
+    if (this.penInsertOnPath) {
+      details.push(`pathId=${this.penInsertOnPath.pathId}`, 'mousemove updates preview; mouseup commits or cancels');
+      return { headline: 'Pen: insert-on-path drag in progress', details };
+    }
+    if (!this.ports.isCanvasReadyForPenInput()) {
+      return { headline: 'Pen: canvas not ready (no SVG / view)', details };
+    }
+    const outgoingKnob = penTarget?.closest?.('[data-pen-outgoing-handle]');
+    if (outgoingKnob && this.isPenSessionActive && !this.penPendingSegment) {
+      if (penLastOutgoingHandleSvg(this.penSession.getSegments())) {
+        return { headline: 'Pen: drag last outgoing handle', details: ['Hit: pen outgoing handle knob'] };
+      }
+    }
+    if (penTarget && this.ports.isEditorContentShapeTarget(penTarget)) {
+      if (this.penSession.getSegments().length !== 0 || this.penPendingSegment) {
+        details.push(`segments=${this.penSession.getSegments().length} pendingSegment=${this.penPendingSegment ? 'yes' : 'no'}`);
+        return {
+          headline: 'Pen: over shape — insert-on-path disabled (session not empty)',
+          details
+        };
+      }
+      const ins = this.evaluatePenInsertOnPathAt(penTarget, clientX, clientY);
+      if (ins.ok) {
+        details.push(`pathId=${ins.pathId}`, 'mousedown starts insert-drag; mouseup commits');
+        return { headline: 'Pen: insert anchor on existing path', details };
+      }
+      details.push(`insert blocked: ${ins.reason}`);
+      return {
+        headline: 'Pen: over path — insert will NOT run (mousedown returns false; no new anchor here)',
+        details
+      };
+    }
+    const pt = getSnappedPenPoint(clientX, clientY, false);
+    if (!pt) {
+      return { headline: 'Pen: snap/grid produced no SVG point', details };
+    }
+    details.push(`svg (${pt.x.toFixed(1)}, ${pt.y.toFixed(1)})`);
+    return {
+      headline: 'Pen: new stroke / pickup / continue (handlePenCanvasMouseDown)',
+      details
+    };
+  }
+
+  private tryBeginPenInsertOnPath(penTarget: Element, event: MouseEvent): boolean {
+    if (event.detail !== 1) return false;
+    const ev = this.evaluatePenInsertOnPathAt(penTarget, event.clientX, event.clientY);
+    if (!ev.ok) return false;
+    const dragStartSvg = penInsertHitAnchorSvg(ev.parsed, ev.hit) ?? ev.pt;
+    this.penInsertOnPath = {
+      pathId: ev.pathId,
+      originalD: ev.oldD,
+      parsedBefore: ev.parsed,
+      hit: ev.hit,
+      insertMoveSegIndex: penInsertMoveSegmentIndexAfterSplit(ev.hit),
+      splitBaseline: ev.split.map((s) => ({ ...s })) as PathSegment[],
+      dragStartSvg,
+      startClient: { x: event.clientX, y: event.clientY }
+    };
+    this.penInsertOnPathLastClient = { x: event.clientX, y: event.clientY };
+    this.penInsertOnPathPointerSvg = { x: ev.pt.x, y: ev.pt.y };
+    this.ports.markForCheck();
+    return true;
+  }
+
+  private finishPenInsertOnPathDrag(event: MouseEvent): void {
+    const st = this.penInsertOnPath;
+    if (!st) return;
+    const release = this.ports.clientToEditorSvgPoint(event.clientX, event.clientY);
+    const lc = this.penInsertOnPathLastClient ?? st.startClient;
+    const screenDist = Math.hypot(lc.x - st.startClient.x, lc.y - st.startClient.y);
+    let newD: string;
+    if (screenDist < MARQUEE_MIN_DRAG_PX) {
+      newD = pathSegmentsToD(st.splitBaseline);
+    } else {
+      const cur = release ?? this.penInsertOnPathPointerSvg ?? st.dragStartSvg;
+      const base = st.splitBaseline.map((seg) => ({ ...seg })) as PathSegment[];
+      newD = buildPenInsertDragPreviewD(base, st.insertMoveSegIndex, st.dragStartSvg, cur) ?? pathSegmentsToD(st.splitBaseline);
+    }
+    this.clearPenInsertOnPathDragState();
+    if (newD === st.originalD) {
+      this.ports.markForCheck();
+      return;
+    }
+    const reparsed = parsePathD(newD);
+    if (reparsed.errors.length > 0) {
+      this.ports.markForCheck();
+      return;
+    }
+    this.ports.commitPenInsertOnExistingPath(st.pathId, st.originalD, newD);
+    this.ports.markForCheck();
+  }
+
+  private updatePenInsertOnPathFromPointer(
+    event: MouseEvent,
+    getSnappedPenPoint: (clientX: number, clientY: number, suspendSnap: boolean) => { x: number; y: number } | null
+  ): void {
+    if (!this.penInsertOnPath) return;
+    this.penInsertOnPathLastClient = { x: event.clientX, y: event.clientY };
+    const pt = getSnappedPenPoint(event.clientX, event.clientY, event.altKey || event.metaKey || event.ctrlKey);
+    if (pt) {
+      this.penInsertOnPathPointerSvg = { x: pt.x, y: pt.y };
+    }
+    this.ports.markForCheck();
   }
 
   getPenSessionSegments(): readonly PenPathSegment[] {

@@ -865,12 +865,6 @@ export class SvgShapeContentService implements SvgShapeContentPort {
       } else {
         contentNode.appendChild(newNode);
       }
-
-      try {
-        (newNode as SVGElement).style?.setProperty('cursor', 'pointer');
-      } catch {
-        // jsdom compatibility
-      }
     }
 
     this.doc.bumpDocumentRevision();
@@ -1151,18 +1145,13 @@ export class SvgShapeContentService implements SvgShapeContentPort {
     }
 
     shape.id(newId);
-    try {
-      shape.css({ cursor: 'pointer' });
-    } catch {
-      // jsdom may not support style.setProperty on SVG elements
-    }
     this.doc.bumpDocumentRevision();
     return newId;
   }
 
   /**
    * Insert a `<path>` with the given `d` into the editor content group.
-   * Mirrors {@link addShape} id allocation and pointer styling.
+   * Mirrors {@link addShape} id allocation.
    */
   insertPathIntoContentGroup(
     d: string,
@@ -1193,18 +1182,13 @@ export class SvgShapeContentService implements SvgShapeContentPort {
       color: attrs?.stroke ?? defaults.stroke,
       width: attrs?.strokeWidth ?? defaults.strokeWidth
     });
-    try {
-      shape.css({ cursor: 'pointer' });
-    } catch {
-      /* jsdom */
-    }
     this.doc.bumpDocumentRevision();
     return newId;
   }
 
   /**
    * Insert an `<image>` into the editor content group.
-   * Mirrors {@link addShape} id allocation, pointer styling, and document revision bump.
+   * Mirrors {@link addShape} id allocation and document revision bump.
    */
   insertRasterImageIntoContentGroup(attrs: InsertRasterImageAttrs): string | null {
     if (!this.doc.getSVGInstance()) return null;
@@ -1233,11 +1217,6 @@ export class SvgShapeContentService implements SvgShapeContentPort {
     if (attrs.preserveAspectRatio != null && attrs.preserveAspectRatio !== '') {
       shape.attr('preserveAspectRatio', attrs.preserveAspectRatio);
     }
-    try {
-      shape.css({ cursor: 'pointer' });
-    } catch {
-      /* jsdom */
-    }
     this.doc.bumpDocumentRevision();
     return newId;
   }
@@ -1256,7 +1235,7 @@ export class SvgShapeContentService implements SvgShapeContentPort {
 
   /**
    * Re-insert a serialized shape element (outerHTML) into the content group at the specified
-   * DOM index. Used by redo of AddShapeCommand. Sets cursor:pointer on the inserted element.
+   * DOM index. Used by redo of AddShapeCommand.
    */
   insertShapeMarkup(markup: string, insertionIndex?: number): void {
     if (!this.doc.getSVGInstance()) return;
@@ -1273,12 +1252,6 @@ export class SvgShapeContentService implements SvgShapeContentPort {
       parent.insertBefore(newNode, parent.children[insertionIndex]);
     } else {
       parent.appendChild(newNode);
-    }
-
-    try {
-      (newNode as SVGElement).style?.setProperty('cursor', 'pointer');
-    } catch {
-      // jsdom compatibility
     }
 
     this.doc.bumpDocumentRevision();
@@ -1365,12 +1338,6 @@ export class SvgShapeContentService implements SvgShapeContentPort {
       contentNode.appendChild(inserted);
       const insertedId = inserted.id;
       if (insertedId) insertedIds.push(insertedId);
-
-      try {
-        (inserted as SVGElement).style?.setProperty('cursor', 'pointer');
-      } catch {
-        // jsdom compatibility
-      }
 
       insertedMarkup.push(inserted.outerHTML);
     }

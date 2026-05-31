@@ -99,6 +99,19 @@
   display: inline-block;
 }
 
+/**
+ * User SVG must not impose its own cursor (e.g. pointer on paths) — it fights tool cursors
+ * (pen crosshair, insert copy on host, etc.). Overlays live outside `.svg-user-document`.
+ */
+.svg-user-document svg,
+.svg-user-document svg * {
+  cursor: inherit !important;
+}
+
+.svg-user-document {
+  cursor: inherit;
+}
+
 .canvas-inner {
   position: relative;
   display: inline-block;
