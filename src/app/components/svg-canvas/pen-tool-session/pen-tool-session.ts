@@ -1448,6 +1448,16 @@ export class PenToolSession {
     return this.penInsertOnPath !== null;
   }
 
+  /** Target path id while insert-on-path drag is active (for overlay mapping in root user space). */
+  get penInsertOnPathPathId(): string | null {
+    return this.penInsertOnPath?.pathId ?? null;
+  }
+
+  /** Fixed on-curve point where the node is planted (path-local space, same as `d`). */
+  get penInsertOnPathPlantedAnchorSvg(): { x: number; y: number } | null {
+    return this.penInsertOnPath?.dragStartSvg ?? null;
+  }
+
   get penInsertOnPathPreviewPathD(): string | null {
     if (!this.penInsertOnPath) return null;
     const st = this.penInsertOnPath;

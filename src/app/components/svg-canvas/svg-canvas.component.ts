@@ -615,6 +615,51 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return this.penTool.penInsertOnPathPreviewPathD;
   }
 
+  /**
+   * While dragging to shape a pen insert on an existing path, draw node-edit–style handles and a
+   * planted anchor dot for the vertex being edited (same colors/sizes as path node overlays).
+   */
+  get penInsertOnPathNodeAffordanceOverlay(): {
+    lines: { x1: number; y1: number; x2: number; y2: number }[];
+    knobs: { cx: number; cy: number }[];
+    plantedAnchor: { cx: number; cy: number };
+  } | null {
+    if (!this.penTool.isPenInsertOnPathDragActive) return null;
+    const pathId = this.penTool.penInsertOnPathPathId;
+    const d = this.penInsertOnPathPreviewPathD;
+    const planted = this.penTool.penInsertOnPathPlantedAnchorSvg;
+    if (!pathId || !d || !planted) return null;
+    const plantedPt = this.pathNodeLocalPointToOverlay(pathId, planted.x, planted.y);
+    const plantedAnchor = { cx: plantedPt.x, cy: plantedPt.y };
+    const parsed = this.parsePathDataForNodeEditing(d);
+    if (!parsed) {
+      return { lines: [], knobs: [], plantedAnchor };
+    }
+    const handles = this.collectPathControlHandles(parsed);
+    const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
+    const knobs: { cx: number; cy: number }[] = [];
+    for (const h of handles) {
+      if (
+        penSvgDistanceSq({ x: h.anchorX, y: h.anchorY }, planted) > PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ
+      ) {
+        continue;
+      }
+      if (
+        penSvgDistanceSq(
+          { x: h.anchorX, y: h.anchorY },
+          { x: h.controlX, y: h.controlY }
+        ) < PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ
+      ) {
+        continue;
+      }
+      const a = this.pathNodeLocalPointToOverlay(pathId, h.anchorX, h.anchorY);
+      const c = this.pathNodeLocalPointToOverlay(pathId, h.controlX, h.controlY);
+      lines.push({ x1: a.x, y1: a.y, x2: c.x, y2: c.y });
+      knobs.push({ cx: c.x, cy: c.y });
+    }
+    return { lines, knobs, plantedAnchor };
+  }
+
   get penCurvePreviewPathD(): string | null {
     return this.penTool.penCurvePreviewPathD;
   }
@@ -2725,10 +2770,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     const g = svg.group().id('pen-post-insert-anchor-overlay').attr('pointer-events', 'none');
     for (const anchor of anchors) {
       const m = this.svgManipulation.mapPathLocalToRootUser(pathId, anchor.x, anchor.y);
-      g.circle(6)
+      // Match `path-node-anchor` in the selection overlay (white fill, blue stroke).
+      g.circle(4)
         .center(m.x, m.y)
-        .addClass('pen-post-insert-anchor')
-        .attr({ fill: '#2196f3', stroke: '#ffffff', 'stroke-width': 1, 'vector-effect': 'non-scaling-stroke' });
+        .attr({
+          fill: '#ffffff',
+          stroke: '#1E88E5',
+          'stroke-width': 2,
+          'vector-effect': 'non-scaling-stroke'
+        });
     }
     svg.add(g);
   }

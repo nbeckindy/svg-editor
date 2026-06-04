@@ -80,6 +80,9 @@ export class SvgCanvasEditorChromeFacade {
   get penInsertOnPathPreviewPathD(): string | null {
     return this.root.penInsertOnPathPreviewPathD;
   }
+  get penInsertOnPathNodeAffordanceOverlay() {
+    return this.root.penInsertOnPathNodeAffordanceOverlay;
+  }
   get penSessionPreviewPathD(): string | null {
     return this.root.penSessionPreviewPathD;
   }
