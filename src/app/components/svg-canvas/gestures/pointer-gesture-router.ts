@@ -179,6 +179,11 @@ export class PointerGestureRouter {
       return;
     }
     if (host.getCurrentTool() === 'pen') {
+      const target = event.target as Element;
+      if (host.hasPathNodeEditState() && host.tryStartPathNodeDrag(target, event)) {
+        event.preventDefault();
+        return;
+      }
       if (host.onCanvasPenPrimaryMouseDown(event)) {
         event.preventDefault();
       }

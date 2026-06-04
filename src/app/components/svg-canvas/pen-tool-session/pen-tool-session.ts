@@ -88,8 +88,10 @@ export interface PenToolSessionPorts {
   getPenPathInsertToleranceSvg(): number;
   getPathDForId(pathId: string): string | null;
   /** Apply committed insert edit (history, selection, overlays). */
-  commitPenInsertOnExistingPath(pathId: string, oldD: string, newD: string): void;
+  commitPenInsertOnExistingPath(pathId: string, oldD: string, newD: string, insertedMoveSegIndex?: number): void;
   clearPenPostInsertAnchorOverlay(): void;
+  /** Idle pen: user starts a new stroke on empty canvas — clear prior selection so path topology follows. */
+  clearSelectionForPenBackgroundStroke(): void;
   /** True when SVG content is present and the canvas view is ready for pen input. */
   isCanvasReadyForPenInput(): boolean;
 }
@@ -1274,6 +1276,7 @@ export class PenToolSession {
       this.penPendingShiftAngleSnap = false;
       if (this.penSession.getSegments().length === 0) {
         this.ports.clearPenPostInsertAnchorOverlay();
+        this.ports.clearSelectionForPenBackgroundStroke();
         this.penSession.beginPath(pt.x, pt.y);
         this.penPointerSvg = { x: pt.x, y: pt.y };
         this.ports.markForCheck();
@@ -1293,6 +1296,7 @@ export class PenToolSession {
         return;
       }
       this.ports.clearPenPostInsertAnchorOverlay();
+      this.ports.clearSelectionForPenBackgroundStroke();
       this.penSession.beginPath(pt.x, pt.y);
       this.penPointerSvg = { x: pt.x, y: pt.y };
       this.ports.markForCheck();
@@ -1613,7 +1617,7 @@ export class PenToolSession {
       this.ports.markForCheck();
       return;
     }
-    this.ports.commitPenInsertOnExistingPath(st.pathId, st.originalD, newD);
+    this.ports.commitPenInsertOnExistingPath(st.pathId, st.originalD, newD, st.insertMoveSegIndex);
     this.ports.markForCheck();
   }
 

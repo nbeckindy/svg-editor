@@ -696,11 +696,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
   get showPathNodeEditOverlays(): boolean {
     return (
       this.isPathNodeEditModeActive &&
+      !this.isPenToolWithActiveSession() &&
       !this.isDraggingShape &&
       !this.isResizingSelection &&
       !this.isRotatingSelection &&
       !this.isSkewingSelection
     );
+  }
+
+  /** Blue bbox / union highlight: off during path node edit and whenever Pen is active (insert + idle). */
+  get hideSelectionHighlightOverlay(): boolean {
+    return this.isPathNodeEditModeActive || this.editorTool.getCurrentTool() === 'pen';
   }
 
   get pathNodeAnchorOverlays(): { cx: number; cy: number; selected: boolean; pathId: string; anchorIndex: number }[] {
@@ -929,7 +935,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
   private duplicateInvocationCount = 0;
   private duplicateSelectionKey = '';
 
-  /** Last path that received a successful pen insert; anchors-only overlay (Pen-owned). */
+  /**
+   * Legacy fallback: pen insert on a path **without** shared `pathNodeEditState` drew anchors in-root via
+   * {@link syncPenPostInsertAnchorOverlayDom}. When overlays already cover the path, this stays null.
+   */
   private penPostInsertAnchorPathId: string | null = null;
   private penInsertCursorRaf = 0;
   private pendingPenInsertHoverClient: { x: number; y: number } | null = null;
@@ -1530,7 +1539,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       if (currentTool !== 'pen') {
         this.penTool.clearDrawingState();
       }
-      if (!this.isSelectorInteractionTool(currentTool)) {
+      if (!this.toolKeepsOrBuildsPathNodeTopology(currentTool)) {
         this.exitPathNodeEditMode();
       }
     });
@@ -1606,7 +1615,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     effect(() => {
       const currentTool = this.editorTool.currentTool();
       const shapes = this.shapeSelection.selectedShapes();
-      if (!this.isNodeEditSelectorTool(currentTool)) return;
+      if (!this.isNodeEditSelectorTool(currentTool) && currentTool !== 'pen') return;
       const pathIds = shapes
         .map((shape) => shape.id)
         .filter((id) => this.isPathElementId(id));
@@ -1683,9 +1692,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
         const d = svg?.findOne(`#${pathId}`)?.attr('d');
         return typeof d === 'string' ? d : null;
       },
-      commitPenInsertOnExistingPath: (pathId, oldD, newD) =>
-        this.commitPenInsertOnExistingPath(pathId, oldD, newD),
+      commitPenInsertOnExistingPath: (pathId, oldD, newD, insertedMoveSegIndex) =>
+        this.commitPenInsertOnExistingPath(pathId, oldD, newD, insertedMoveSegIndex),
       clearPenPostInsertAnchorOverlay: () => this.clearPenPostInsertAnchorOverlay(),
+      clearSelectionForPenBackgroundStroke: () => {
+        this.shapeSelection.clearSelection();
+        this.svgManipulation.clearHighlight();
+        this.drilledIntoGroupId = null;
+      },
       isCanvasReadyForPenInput: () => !!(this.svgContent() && this.canvasView.isInitialized())
     };
   }
@@ -2038,7 +2052,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     if (this.rotate.consumeJustEnded()) return;
     if (this.creation.consumeJustEnded()) return;
     if (this.pathNodeEditState && !this.isPathNodeEditTarget(clickTarget)) {
-      this.exitPathNodeEditMode();
+      if (this.editorTool.getCurrentTool() !== 'pen') {
+        this.exitPathNodeEditMode();
+      }
     }
     if (this.editorTool.getCurrentTool() === 'pan') {
       return;
@@ -2708,8 +2724,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
 
   /**
    * Commit pen insert-on-path from {@link PenToolSession} (mousedown→mouseup / micro-drag).
+   * @param insertedMoveSegIndex move-segment index of the inserted vertex (for `selectedPathNode` parity with node-edit).
    */
-  private commitPenInsertOnExistingPath(pathId: string, oldD: string, newD: string): void {
+  private commitPenInsertOnExistingPath(pathId: string, oldD: string, newD: string, insertedMoveSegIndex?: number): void {
     if (newD === oldD || !this.isValidNodeEditSerializedPath(newD)) return;
     const svg = this.svgManipulation.getSVGInstance();
     const pathNode = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
@@ -2736,13 +2753,25 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
           state.pathId === pathId ? refreshed.state! : state
         );
         this.pathNodeEditState.activePathId = pathId;
-        this.selectedPathNode = null;
+        if (
+          insertedMoveSegIndex !== undefined &&
+          refreshed.state.anchors.some((a) => a.moveSegmentIndex === insertedMoveSegIndex)
+        ) {
+          this.selectedPathNode = { pathId, moveSegmentIndex: insertedMoveSegIndex };
+        } else {
+          this.selectedPathNode = null;
+        }
       } else {
         this.exitPathNodeEditMode();
       }
     }
 
-    this.penPostInsertAnchorPathId = pathId;
+    // Legacy single-path anchor ring: only when shared path-node overlays are not driving this path.
+    if (this.pathNodeEditState?.paths.some((state) => state.pathId === pathId)) {
+      this.penPostInsertAnchorPathId = null;
+    } else {
+      this.penPostInsertAnchorPathId = pathId;
+    }
     this.syncPenPostInsertAnchorOverlayDom();
     this.cdr.markForCheck();
   }
@@ -3396,6 +3425,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
 
   isSelectorInteractionTool(tool: EditorTool): boolean {
     return tool === 'selector' || tool === 'node-edit-selector';
+  }
+
+  /** Tools that keep `pathNodeEditState` on switch and may rebuild it from path selection (with node-edit). */
+  private toolKeepsOrBuildsPathNodeTopology(tool: EditorTool): boolean {
+    return tool === 'selector' || tool === 'node-edit-selector' || tool === 'pen';
   }
 
   private isNodeEditSelectorTool(tool: EditorTool): boolean {

@@ -336,4 +336,27 @@ describe('PointerGestureRouter', () => {
     router.onCanvasMouseDownPrimary(host, ev);
     expect(rotate.start).toHaveBeenCalledWith(emptyRt, ev);
   });
+
+  it('onCanvasMouseDownPrimary with pen tries path node drag before pen mousedown', () => {
+    const tryStartPathNodeDrag = vi.fn(() => true);
+    const onCanvasPenPrimaryMouseDown = vi.fn(() => false);
+    const host = makeHost({
+      getCurrentTool: () => 'pen',
+      hasPathNodeEditState: () => true,
+      tryStartPathNodeDrag,
+      onCanvasPenPrimaryMouseDown
+    });
+    const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    anchor.setAttribute('data-path-node-anchor-index', '0');
+    anchor.setAttribute('data-path-node-path-id', 'path-a');
+    const ev = {
+      button: 0,
+      target: anchor,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    router.onCanvasMouseDownPrimary(host, ev);
+    expect(tryStartPathNodeDrag).toHaveBeenCalledWith(anchor, ev);
+    expect(onCanvasPenPrimaryMouseDown).not.toHaveBeenCalled();
+    expect(ev.preventDefault).toHaveBeenCalled();
+  });
 });

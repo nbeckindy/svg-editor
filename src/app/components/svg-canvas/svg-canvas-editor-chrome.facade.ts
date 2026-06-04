@@ -56,6 +56,9 @@ export class SvgCanvasEditorChromeFacade {
   get isPathNodeEditModeActive(): boolean {
     return this.root.isPathNodeEditModeActive;
   }
+  get hideSelectionHighlightOverlay(): boolean {
+    return this.root.hideSelectionHighlightOverlay;
+  }
   get highlightRect() {
     return this.root.highlightRect;
   }

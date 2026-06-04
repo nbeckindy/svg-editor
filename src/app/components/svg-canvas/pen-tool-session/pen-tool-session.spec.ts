@@ -38,6 +38,7 @@ function minimalPorts(overrides: Partial<PenToolSessionPorts> = {}): PenToolSess
     getPathDForId: () => null,
     commitPenInsertOnExistingPath: vi.fn(),
     clearPenPostInsertAnchorOverlay: vi.fn(),
+    clearSelectionForPenBackgroundStroke: vi.fn(),
     isCanvasReadyForPenInput: () => true,
     ...overrides
   };
@@ -111,5 +112,18 @@ describe('PenToolSession', () => {
     expect(setShapeVisibility).toHaveBeenCalledWith('p1', false);
     session.cancelPenInsertOnPathDrag();
     expect(setShapeVisibility).toHaveBeenCalledWith('p1', true);
+  });
+
+  it('calls clearSelectionForPenBackgroundStroke when idle pen starts a new stroke on empty canvas', () => {
+    const clearSelectionForPenBackgroundStroke = vi.fn();
+    const ports = minimalPorts({
+      clearSelectionForPenBackgroundStroke,
+      isEditorContentShapeTarget: () => false
+    });
+    const session = new PenToolSession(ports);
+    const ev = new MouseEvent('mousedown', { clientX: 5, clientY: 5, button: 0, detail: 1 });
+    session.onCanvasPenPrimaryMouseDown(ev, () => ({ x: 1, y: 1 }));
+    expect(clearSelectionForPenBackgroundStroke).toHaveBeenCalled();
+    expect(session.isPenSessionActive).toBe(true);
   });
 });

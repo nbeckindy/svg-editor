@@ -3014,6 +3014,120 @@ describe('SvgCanvasComponent', () => {
       expect(fixture.nativeElement.querySelector('.highlight-overlay rect[stroke="#2196F3"]')).toBeFalsy();
     });
 
+    it('hides blue selection rect when pen is active (even without path node topology)', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><rect id="rect-pen" x="10" y="10" width="20" height="20" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'rect-pen',
+        type: 'rect',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      editorToolService.setTool('pen');
+      fixture.detectChanges();
+      expect(component.hideSelectionHighlightOverlay).toBe(true);
+      expect(fixture.nativeElement.querySelector('.highlight-overlay rect[stroke="#2196F3"]')).toBeFalsy();
+    });
+
+    it('shows path node overlays under pen when a parseable path is selected', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-pen-overlay" d="M 10 10 L 60 50" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-pen-overlay',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      editorToolService.setTool('pen');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+      expect(component.isPathNodeEditModeActive).toBe(true);
+      expect(component.showPathNodeEditOverlays).toBe(true);
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBeGreaterThan(0);
+    });
+
+    it('dismisses path node edit on Escape when pen tool is active', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-pen-esc" d="M 10 10 L 20 20" /></svg>');
+      shapeSelectionService.selectShape({
+        id: 'path-pen-esc',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      editorToolService.setTool('pen');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+      expect(component.isPathNodeEditModeActive).toBe(true);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+      expect(component.isPathNodeEditModeActive).toBe(false);
+    });
+
+    it('commitPenInsertOnExistingPath selects inserted vertex when insertMoveSegIndex matches an anchor', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="pcommit" d="M 0 0 L 100 0" /></svg>');
+      shapeSelectionService.selectShape({
+        id: 'pcommit',
+        type: 'path',
+        fill: 'none',
+        stroke: '#000',
+        strokeWidth: 1,
+        opacity: 1
+      });
+      editorToolService.setTool('pen');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+      const commit = (component as unknown as { commitPenInsertOnExistingPath(a: string, b: string, c: string, i?: number): void }).commitPenInsertOnExistingPath.bind(component);
+      commit('pcommit', 'M 0 0 L 100 0', 'M 0 0 L 50 0 L 100 0', 1);
+      fixture.detectChanges();
+      expect(component.pathNodeAnchorOverlays.some((a) => a.selected)).toBe(true);
+    });
+
+    it('hides path node overlays while pen session is active (new stroke authoring)', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-pen-hide" d="M 10 10 L 60 50" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-pen-hide',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      editorToolService.setTool('pen');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+      expect(component.showPathNodeEditOverlays).toBe(true);
+
+      const svgRoot = component.svgContainer()?.nativeElement?.querySelector('svg') as SVGSVGElement | null;
+      expect(svgRoot).toBeTruthy();
+      stubEditorSvgScreenMapping(component);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 2,
+        clientY: 2,
+        detail: 1,
+        target: svgRoot,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+      expect(component.isPenSessionActive).toBe(true);
+      expect(component.showPathNodeEditOverlays).toBe(false);
+    });
+
     it('hides path node overlays while dragging selection (translate)', async () => {
       await loadSvgForSelector(
         '<svg viewBox="0 0 100 100"><path id="path-a" d="M 10 10 L 60 50" /></svg>'
