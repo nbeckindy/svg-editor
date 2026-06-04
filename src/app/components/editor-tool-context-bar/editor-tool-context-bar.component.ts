@@ -10,13 +10,13 @@ import { EditorToolService } from '../../services/editor-tool.service';
 export class EditorToolContextBarComponent {
   readonly editorTool = inject(EditorToolService);
 
-  /** Shown when Pen tool is active (h76: discoverable alternate Q/S/T mode). */
+  /** Shown when Pen tool is active (h76: discoverable alternate smooth S/T mode; Q after M/L temporarily cubic). */
   readonly penCurveModeHint = computed(() => {
     if (this.editorTool.currentTool() !== 'pen') return '';
     if (this.editorTool.penAltCurveMode()) {
-      return 'Alternate curve on (Q after M/L, smooth S after C, smooth T after Q). Turn off for cubic (C) only.';
+      return 'Alternate curve on (smooth S after C, smooth T after Q). Quadratic Q after M/L is temporarily off — new segments use cubic C.';
     }
-    return 'Default: cubic (C). Hold Control while dragging a new point, or turn on Alt curve. (⌘/Ctrl still bypasses snap.)';
+    return 'Default: cubic (C). Turn on Alt curve for smooth S/T after existing curves. (⌘/Ctrl still bypasses snap.)';
   });
 
   togglePenAltCurveMode(): void {

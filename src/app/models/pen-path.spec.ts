@@ -60,13 +60,13 @@ describe('penDragCurveAuthoringKind', () => {
   it('selects authoring mode based on Ctrl and last segment', () => {
     const mOnly = [{ type: 'M' as const, x: 0, y: 0 }];
     expect(penDragCurveAuthoringKind(false, mOnly)).toBe('cubic');
-    expect(penDragCurveAuthoringKind(true, mOnly)).toBe('quadratic');
+    expect(penDragCurveAuthoringKind(true, mOnly)).toBe('cubic');
 
     const afterL = [
       ...mOnly,
       { type: 'L' as const, x: 1, y: 1 }
     ];
-    expect(penDragCurveAuthoringKind(true, afterL)).toBe('quadratic');
+    expect(penDragCurveAuthoringKind(true, afterL)).toBe('cubic');
 
     const afterC = [...afterL, { type: 'C' as const, x1: 0, y1: 0, x2: 1, y2: 1, x: 2, y: 2 }];
     expect(penDragCurveAuthoringKind(true, afterC)).toBe('smoothCubic');
@@ -110,8 +110,23 @@ describe('placementIllustratorStyleCubicControlPoints', () => {
     );
     expect(c.x1).toBeCloseTo(13.333333, 4);
     expect(c.y1).toBeCloseTo(13.333333, 4);
-    expect(c.x2).toBeCloseTo(12.218483, 3);
-    expect(c.y2).toBeCloseTo(17.406161, 3);
+    expect(c.x2).toBeCloseTo(11.75, 5);
+    expect(c.y2).toBeCloseTo(17.25, 5);
+  });
+
+  it('incoming handle length exceeds old chord cap when drag is long', () => {
+    const p0 = { x: 0, y: 0 };
+    const p3 = { x: 100, y: 0 };
+    const dragStart = { x: 100, y: 0 };
+    const dragCurrent = { x: 100, y: 200 };
+    const c = placementIllustratorStyleCubicControlPoints(p0, p3, dragStart, dragCurrent);
+    const chordLen = 100;
+    const oldCap = chordLen * 0.58;
+    const dragLen = 200;
+    const k = dragLen * 0.55;
+    expect(k).toBeGreaterThan(oldCap);
+    const incomingLen = Math.hypot(p3.x - c.x2, p3.y - c.y2);
+    expect(incomingLen).toBeCloseTo(k, 5);
   });
 
   it('falls back to symmetric chord thirds when drag length is ~0', () => {

@@ -245,28 +245,16 @@ export class PenToolSession {
     switch (kind) {
       case 'cubic': {
         const altEndOnly = this.penPendingCubicAltEndHandleOnly();
-        const segsForP1 = this.penSession.getSegments();
-        const isFirstSeg = !altEndOnly && penPathOnlyMoveto(segsForP1);
-        const raw = altEndOnly
-          ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
-          : placementIllustratorStyleCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
-        let adjusted: CubicControlPoints;
-        if (isFirstSeg) {
-          adjusted = { ...raw, x1: anchor.x, y1: anchor.y };
-        } else if (!altEndOnly) {
-          const st = penReflectStateAfterCommitted(segsForP1);
-          adjusted = st?.canReflectCubic
-            ? { ...raw, x1: 2 * anchor.x - st.cubicCp2X, y1: 2 * anchor.y - st.cubicCp2Y }
-            : raw;
-        } else {
-          adjusted = raw;
-        }
-        let { x1, y1, x2, y2 } = this.snapPenPendingCubicControls(anchor, end, adjusted, altEndOnly);
-        const p2 = toOverlay(x2, y2);
-        if (isFirstSeg) {
-          return [{ cx: p2.x, cy: p2.y }];
-        }
+        const { x1, y1, x2, y2 } = this.penPendingCubicAdjustedSnappedControls(
+          anchor,
+          end,
+          dragCurrent,
+          pending.startSvg,
+          this.penSession.getSegments(),
+          altEndOnly
+        );
         const p1 = toOverlay(x1, y1);
+        const p2 = toOverlay(x2, y2);
         return [
           { cx: p1.x, cy: p1.y },
           { cx: p2.x, cy: p2.y }
@@ -366,12 +354,12 @@ export class PenToolSession {
   }
 
   /**
-   * Dashed guide from the pending segment’s end anchor to the end-side handle (j24.9), matching
-   * {@link penOutgoingHandleGuideOverlay} readability while click-dragging a new curve.
+   * Green dashed handle guides while click-dragging a pending curve (incoming + outgoing where applicable),
+   * aligned with {@link penCurveHandleOverlays} geometry.
    */
-  get penPendingCurveHandleGuideOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
+  get penPendingCurveHandleGuideOverlays(): { x1: number; y1: number; x2: number; y2: number }[] {
     if (!this.penCurvePreviewPathD || !this.penPendingSegment || this.ports.getCurrentTool() !== 'pen') {
-      return null;
+      return [];
     }
     const pending = this.penPendingSegment;
     const end = this.penPendingCurvePreviewEndSvg(pending);
@@ -380,19 +368,27 @@ export class PenToolSession {
     const segs = this.penSession.getSegments();
     const anchor = pending.anchor;
 
-    let hx: number;
-    let hy: number;
+    const line = (x1s: number, y1s: number, x2s: number, y2s: number) => {
+      const p1 = this.ports.svgBboxToOverlayPixels({ x: x1s, y: y1s, width: 0, height: 0 });
+      const p2 = this.ports.svgBboxToOverlayPixels({ x: x2s, y: y2s, width: 0, height: 0 });
+      return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+    };
 
     switch (kind) {
       case 'cubic': {
         const altEndOnly = this.penPendingCubicAltEndHandleOnly();
-        const raw = altEndOnly
-          ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
-          : placementIllustratorStyleCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
-        const c = this.snapPenPendingCubicControls(anchor, end, raw, altEndOnly);
-        hx = c.x2;
-        hy = c.y2;
-        break;
+        const c = this.penPendingCubicAdjustedSnappedControls(
+          anchor,
+          end,
+          dragCurrent,
+          pending.startSvg,
+          segs,
+          altEndOnly
+        );
+        return [
+          line(anchor.x, anchor.y, c.x1, c.y1),
+          line(end.x, end.y, c.x2, c.y2)
+        ];
       }
       case 'quadratic': {
         let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
@@ -400,19 +396,24 @@ export class PenToolSession {
           const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
           qc = { x1: s.x, y1: s.y };
         }
-        hx = qc.x1;
-        hy = qc.y1;
-        break;
+        return [line(anchor.x, anchor.y, qc.x1, qc.y1)];
       }
       case 'smoothCubic': {
-        hx = dragCurrent.x;
-        hy = dragCurrent.y;
+        const st = penReflectStateAfterCommitted(segs);
+        if (!st) return [];
+        const sx1 = st.canReflectCubic ? 2 * anchor.x - st.cubicCp2X : anchor.x;
+        const sy1 = st.canReflectCubic ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
+        let hx = dragCurrent.x;
+        let hy = dragCurrent.y;
         if (this.penPendingShiftAngleSnap) {
           const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
           hx = s.x;
           hy = s.y;
         }
-        break;
+        return [
+          line(anchor.x, anchor.y, sx1, sy1),
+          line(end.x, end.y, hx, hy)
+        ];
       }
       default: {
         if (this.penPendingCurveAltChord) {
@@ -421,12 +422,10 @@ export class PenToolSession {
             const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
             qc = { x1: s.x, y1: s.y };
           }
-          hx = qc.x1;
-          hy = qc.y1;
-          break;
+          return [line(anchor.x, anchor.y, qc.x1, qc.y1)];
         }
         const st = penReflectStateAfterCommitted(segs);
-        if (!st) return null;
+        if (!st) return [];
         let ix = 2 * anchor.x - st.quadCpX;
         let iy = 2 * anchor.y - st.quadCpY;
         if (this.penPendingShiftAngleSnap) {
@@ -434,14 +433,9 @@ export class PenToolSession {
           ix = s.x;
           iy = s.y;
         }
-        hx = ix;
-        hy = iy;
+        return [line(anchor.x, anchor.y, ix, iy)];
       }
     }
-
-    const pEnd = this.ports.svgBboxToOverlayPixels({ x: end.x, y: end.y, width: 0, height: 0 });
-    const pH = this.ports.svgBboxToOverlayPixels({ x: hx, y: hy, width: 0, height: 0 });
-    return { x1: pEnd.x, y1: pEnd.y, x2: pH.x, y2: pH.y };
   }
 
   private penCommittedOutgoingHandleSvg(): {
@@ -771,6 +765,32 @@ export class PenToolSession {
     };
   }
 
+  /**
+   * Illustrator or Alt pointer placement, optional smooth-node reflection on P1, then Shift 45° snap.
+   */
+  private penPendingCubicAdjustedSnappedControls(
+    anchor: { x: number; y: number },
+    end: { x: number; y: number },
+    dragCurrent: { x: number; y: number },
+    dragStartSvg: { x: number; y: number },
+    segments: readonly PenPathSegment[],
+    altEndOnly: boolean
+  ): CubicControlPoints {
+    const raw = altEndOnly
+      ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
+      : placementIllustratorStyleCubicControlPoints(anchor, end, dragStartSvg, dragCurrent);
+    let adjusted: CubicControlPoints;
+    if (!altEndOnly) {
+      const st = penReflectStateAfterCommitted(segments);
+      adjusted = st?.canReflectCubic
+        ? { ...raw, x1: 2 * anchor.x - st.cubicCp2X, y1: 2 * anchor.y - st.cubicCp2Y }
+        : raw;
+    } else {
+      adjusted = raw;
+    }
+    return this.snapPenPendingCubicControls(anchor, end, adjusted, altEndOnly);
+  }
+
   /** Alt: use {@link placementPointerCubicControlPoints} (pointer on end handle only). */
   penPendingCubicAltEndHandleOnly(): boolean {
     return this.penPendingCurveAltChord;
@@ -788,22 +808,14 @@ export class PenToolSession {
     switch (kind) {
       case 'cubic': {
         const altEndOnly = this.penPendingCubicAltEndHandleOnly();
-        const isFirstSeg = !altEndOnly && penPathOnlyMoveto(segs);
-        const raw = altEndOnly
-          ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
-          : placementIllustratorStyleCubicControlPoints(anchor, end, pending.startSvg, dragCurrent);
-        let adjusted: CubicControlPoints;
-        if (isFirstSeg) {
-          adjusted = { ...raw, x1: anchor.x, y1: anchor.y };
-        } else if (!altEndOnly) {
-          const st = penReflectStateAfterCommitted(segs);
-          adjusted = st?.canReflectCubic
-            ? { ...raw, x1: 2 * anchor.x - st.cubicCp2X, y1: 2 * anchor.y - st.cubicCp2Y }
-            : raw;
-        } else {
-          adjusted = raw;
-        }
-        const controls = this.snapPenPendingCubicControls(anchor, end, adjusted, altEndOnly);
+        const controls = this.penPendingCubicAdjustedSnappedControls(
+          anchor,
+          end,
+          dragCurrent,
+          pending.startSvg,
+          segs,
+          altEndOnly
+        );
         return appendCubicToD(baseD, controls, end);
       }
       case 'quadratic': {
@@ -909,22 +921,14 @@ export class PenToolSession {
     switch (kind) {
       case 'cubic': {
         const altEndOnly = this.penPendingCubicAltEndHandleOnly();
-        const isFirstSeg = !altEndOnly && penPathOnlyMoveto(segs);
-        const raw = altEndOnly
-          ? placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
-          : placementIllustratorStyleCubicControlPoints(anchor, end, startSvg, dragCurrent);
-        let adjusted: CubicControlPoints;
-        if (isFirstSeg) {
-          adjusted = { ...raw, x1: anchor.x, y1: anchor.y };
-        } else if (!altEndOnly) {
-          const st = penReflectStateAfterCommitted(segs);
-          adjusted = st?.canReflectCubic
-            ? { ...raw, x1: 2 * anchor.x - st.cubicCp2X, y1: 2 * anchor.y - st.cubicCp2Y }
-            : raw;
-        } else {
-          adjusted = raw;
-        }
-        const c = this.snapPenPendingCubicControls(anchor, end, adjusted, altEndOnly);
+        const c = this.penPendingCubicAdjustedSnappedControls(
+          anchor,
+          end,
+          dragCurrent,
+          startSvg,
+          segs,
+          altEndOnly
+        );
         this.penSession.appendCubic(c.x1, c.y1, c.x2, c.y2, end.x, end.y);
         break;
       }
@@ -1309,7 +1313,8 @@ export class PenToolSession {
       anchor: { x: anchor.x, y: anchor.y },
       startClient: { x: event.clientX, y: event.clientY },
       startSvg: { x: pt.x, y: pt.y },
-      // Control (not ⌘ — ⌘ is snap bypass) or toolbar toggle: Q / S / T vs default cubic (h76).
+      // Control (not ⌘ — ⌘ is snap bypass) or toolbar toggle: alternate curve mode (h76).
+      // Q after M/L is temporarily mapped to cubic in penDragCurveAuthoringKind; S/T still apply after C/Q.
       ctrlCurve: this.ports.isPenAltCurveMode() || event.ctrlKey
     };
     this.penPendingLastClient = { x: event.clientX, y: event.clientY };

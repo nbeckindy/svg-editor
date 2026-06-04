@@ -95,8 +95,8 @@ export class SvgCanvasEditorChromeFacade {
   get penCurveHandleOverlays() {
     return this.root.penCurveHandleOverlays;
   }
-  get penPendingCurveHandleGuideOverlay() {
-    return this.root.penPendingCurveHandleGuideOverlay;
+  get penPendingCurveHandleGuideOverlays() {
+    return this.root.penPendingCurveHandleGuideOverlays;
   }
   get penRubberBandOverlay() {
     return this.root.penRubberBandOverlay;

@@ -35,7 +35,7 @@ Close path with curve uses `commitPenDraggedCurve(..., segmentEnd?: m)` when ins
    - root-SVG distance from `penPendingDragSvg` to `startSvg` (or to `m`) exceeds a **small epsilon** in **user units** (e.g. `1e-3` … `1e-2`), **or**
    - a dedicated smaller **screen** threshold for this mode only (document choice in code comment).
 
-   Centralize in one helper (e.g. `penPendingShowsCurvePreviewForClose`) to keep `penCurvePreviewPathD`, `penSessionPreviewPathD`, `penPendingCurveHandleGuideOverlay`, and `commitPenPendingSegment` in sync.
+   Centralize in one helper (e.g. `penPendingShowsCurvePreviewForClose`) to keep `penCurvePreviewPathD`, `penSessionPreviewPathD`, `penPendingCurveHandleGuideOverlays`, and `commitPenPendingSegment` in sync.
 
 2. **Hard-enforce close endpoint on commit**  
    For `closePath === true` when emitting the **user** closing cubic, set the segment’s **terminal point** to **`m` exactly** after computing controls (or pass `segmentEnd` through so `appendCubic` / `penSession.appendCubic` always receives `m` for the endpoint, never a snapped mouse point). Add a **unit** test on `PenToolSession` / pure helper if logic is extracted.

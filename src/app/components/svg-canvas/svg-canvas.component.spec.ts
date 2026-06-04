@@ -4328,7 +4328,7 @@ describe('SvgCanvasComponent', () => {
       expect(component.penSessionPreviewPathD).toContain('M 12 18');
     });
 
-    it('Control+drag after M authors quadratic Q segment (h76)', async () => {
+    it('Control+drag after M authors cubic while Q authoring is disabled (h76)', async () => {
       await loadEmptySvgAndPenMode();
       editorToolService.setGridSnapEnabled(false);
       editorToolService.setShapeSnapEnabled(false);
@@ -4356,10 +4356,10 @@ describe('SvgCanvasComponent', () => {
 
       const penSession = component.penTool;
       expect(penSession.getPenSessionSegments().length).toBe(2);
-      expect(penSession.getPenSessionSegments()[1].type).toBe('Q');
+      expect(penSession.getPenSessionSegments()[1].type).toBe('C');
     });
 
-    it('toolbar Alt curve mode authors quadratic Q without holding Control (h76)', async () => {
+    it('toolbar Alt curve mode authors cubic while Q authoring is disabled (h76)', async () => {
       await loadEmptySvgAndPenMode();
       editorToolService.setPenAltCurveMode(true);
       editorToolService.setGridSnapEnabled(false);
@@ -4387,7 +4387,7 @@ describe('SvgCanvasComponent', () => {
       fixture.detectChanges();
 
       const penSession = component.penTool;
-      expect(penSession.getPenSessionSegments()[1].type).toBe('Q');
+      expect(penSession.getPenSessionSegments()[1].type).toBe('C');
     });
 
     it('pen outgoing handle drag is undone with Ctrl+Z (provisional PenSegmentReplaceCommand)', async () => {
@@ -5627,9 +5627,9 @@ describe('SvgCanvasComponent', () => {
           ?.getAttribute('d') ?? '';
       expect(d).toContain('C');
       expect(d).toContain(' 20 20');
-      // First segment: P1 collapses to P0 (Illustrator-style — no outgoing handle on start anchor).
-      expect(d).toContain('C 10 10');
-      expect(d).toMatch(/12\.218\d+ 17\.406\d+ 20 20/);
+      // First curved segment uses chord-third P1 and drag-based P2 (same model as later anchors).
+      expect(d).toMatch(/C\s+13\.33/);
+      expect(d).toMatch(/11\.75\s+17\.25\s+20\s+20/);
     });
 
     it('second segment after L uses chord-third P1 (no reflectable handle from prior L)', async () => {
@@ -5696,8 +5696,7 @@ describe('SvgCanvasComponent', () => {
 
       // first anchor at (10,10)
       component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
-      // second anchor at (100,10) drag downward to (100,20) — commits C with P1=P0=(10,10), P2=(100,4.5)
-      // k = min(10*0.55, 90*0.58) = 5.5; P2 = (100-0*5.5, 10-1*5.5) = (100, 4.5)
+      // second anchor at (100,10) drag downward to (100,20) — first C uses chord-third P1; P2 from drag (k = 10*0.55)
       component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
       component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
@@ -5743,9 +5742,15 @@ describe('SvgCanvasComponent', () => {
       fixture.detectChanges();
 
       expect(component.penCurvePreviewPathD).toContain('C');
-      expect(
-        fixture.nativeElement.querySelector('[data-testid="canvas-pen-pending-curve-handle-guide"]')
-      ).toBeTruthy();
+      const guides = fixture.nativeElement.querySelectorAll(
+        '[data-testid^=\"canvas-pen-pending-curve-handle-guide-\"]'
+      );
+      expect(guides.length).toBe(2);
+      for (const g of Array.from(guides)) {
+        expect(g.getAttribute('stroke')).toBe('#43A047');
+        expect(g.getAttribute('stroke-dasharray')).toBe('3 2');
+        expect(g.getAttribute('stroke-width')).toBe('1.5');
+      }
     });
   });
 

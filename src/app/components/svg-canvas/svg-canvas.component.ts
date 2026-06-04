@@ -680,8 +680,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return this.penTool.penOutgoingHandleKnobOverlay;
   }
 
-  get penPendingCurveHandleGuideOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
-    return this.penTool.penPendingCurveHandleGuideOverlay;
+  get penPendingCurveHandleGuideOverlays(): { x1: number; y1: number; x2: number; y2: number }[] {
+    return this.penTool.penPendingCurveHandleGuideOverlays;
   }
 
   get penCloseTargetHoverOverlay(): { cx: number; cy: number } | null {
@@ -3039,7 +3039,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     const tool = this.editorTool.getCurrentTool();
     const vpEl = this.canvasViewport()?.nativeElement;
     const hitTarget =
-      typeof document !== 'undefined' ? (document.elementFromPoint(clientX, clientY) as Element | null) : null;
+      typeof document !== 'undefined' && typeof document.elementFromPoint === 'function'
+        ? (document.elementFromPoint(clientX, clientY) as Element | null)
+        : null;
     const overCanvas = !!(hitTarget && vpEl && typeof vpEl.contains === 'function' && vpEl.contains(hitTarget));
 
     const lines: string[] = [`tool=${tool}`];

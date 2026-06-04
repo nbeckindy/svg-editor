@@ -140,17 +140,24 @@ export function penReflectStateAfterCommitted(segments: readonly PenPathSegment[
   return pathSvgReflectStateAfter(segments);
 }
 
-/** Alternate pen curve mode (Control held or toolbar toggle): Q after `M`/`L`, S after `C`/`S`, T after `Q`/`T`. */
+/**
+ * Alternate pen curve mode (Control held or toolbar toggle):
+ * normally Q after `M`/`L`, S after `C`/`S`, T after `Q`/`T`.
+ *
+ * Quadratic (`Q`) authoring after `M`/`L` is temporarily disabled so pen work focuses on
+ * cubic; alternate mode still yields cubic there until re-enabled.
+ */
 export function penDragCurveAuthoringKind(
   ctrlKey: boolean,
   segments: readonly PenPathSegment[]
 ): 'cubic' | 'quadratic' | 'smoothCubic' | 'smoothQuadratic' {
   if (!ctrlKey) return 'cubic';
   const last = segments[segments.length - 1];
-  if (!last || last.type === 'M') return 'quadratic';
+  if (!last || last.type === 'M') return 'cubic';
   if (last.type === 'C' || last.type === 'S') return 'smoothCubic';
   if (last.type === 'Q' || last.type === 'T') return 'smoothQuadratic';
-  return 'quadratic';
+  // Was `quadratic` (Q after L, etc.); temporarily cubic-only — see docblock above.
+  return 'cubic';
 }
 
 /** Build a single `d` string from segments (explicit `M`/`L`/`C`/`Q`/`S`/`T`, no implicit commands). */
@@ -329,15 +336,14 @@ export function placementPointerCubicControlPoints(
 
 /** Length scale from drag distance → incoming handle length (Illustrator-like pen). */
 const ILLUSTRATOR_PEN_INCOMING_FROM_DRAG = 0.55;
-/** Cap incoming handle length as a fraction of chord (keeps handles from overshooting). */
-const ILLUSTRATOR_PEN_INCOMING_CAP_CHORD = 0.58;
+/** Previously: `chordLen * 0.58` cap on incoming handle; removed so long drags scale with drag only. */
+// const ILLUSTRATOR_PEN_INCOMING_CAP_CHORD = 0.58;
 
 /**
  * Illustrator / Inkscape–style pen click-drag for a cubic `P0→P3`:
  * - `P1` stays at the **chord-third** from `p0` (corner-like outgoing from the previous anchor).
  * - Drag from the new anchor (`dragStart` ≈ `p3`) sets the **incoming tangent at `p3`**:
- *   `P2` lies on the ray from `p3` opposite the drag direction, with length derived from drag length
- *   (capped relative to chord length).
+ *   `P2` lies on the ray from `p3` opposite the drag direction, with length `dragLen *` {@link ILLUSTRATOR_PEN_INCOMING_FROM_DRAG}.
  * - When `‖dragCurrent − dragStart‖` is ~0, falls back to symmetric chord-thirds.
  */
 export function placementIllustratorStyleCubicControlPoints(
@@ -363,10 +369,7 @@ export function placementIllustratorStyleCubicControlPoints(
 
   const ux = ddx / dragLen;
   const uy = ddy / dragLen;
-  const k = Math.min(
-    dragLen * ILLUSTRATOR_PEN_INCOMING_FROM_DRAG,
-    chordLen * ILLUSTRATOR_PEN_INCOMING_CAP_CHORD
-  );
+  const k = dragLen * ILLUSTRATOR_PEN_INCOMING_FROM_DRAG;
   return {
     x1: base.x1,
     y1: base.y1,
