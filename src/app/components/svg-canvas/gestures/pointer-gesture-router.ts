@@ -22,6 +22,10 @@ export interface SvgCanvasPointerGestureHost {
   readonly isCreatingShape: boolean;
   getPathNodeDragSession(): unknown | null;
   updatePathNodeDrag(clientX: number, clientY: number): void;
+  /**
+   * True when the pen session has at least a moveto (`[M]`). Includes first-segment handle-draft
+   * state where committed segments are still `M`-only — document `mousemove`/`mouseup` must keep routing.
+   */
   isPenToolWithActiveSession(): boolean;
   /** True while pen insert-on-path mousedown→mouseup is in progress (no committed pen session). */
   isPenInsertOnPathDragActive(): boolean;

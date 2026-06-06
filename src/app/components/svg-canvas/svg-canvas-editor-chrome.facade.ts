@@ -92,6 +92,9 @@ export class SvgCanvasEditorChromeFacade {
   get penCurvePreviewPathD(): string | null {
     return this.root.penCurvePreviewPathD;
   }
+  get penFirstAnchorMirroredHandleDragActive(): boolean {
+    return this.root.penFirstAnchorMirroredHandleDragActive;
+  }
   get penCurveHandleOverlays() {
     return this.root.penCurveHandleOverlays;
   }

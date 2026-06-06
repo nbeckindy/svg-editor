@@ -664,6 +664,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return this.penTool.penCurvePreviewPathD;
   }
 
+  /** True while first-anchor drag shows mirrored P1/P2 without a provisional P3 curve path. */
+  get penFirstAnchorMirroredHandleDragActive(): boolean {
+    return this.penTool.penFirstAnchorMirroredHandleDragActive;
+  }
+
   get penCurveHandleOverlays(): { cx: number; cy: number }[] {
     return this.penTool.penCurveHandleOverlays;
   }
