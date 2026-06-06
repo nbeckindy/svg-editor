@@ -95,6 +95,9 @@ export class SvgCanvasEditorChromeFacade {
   get penFirstAnchorMirroredHandleDragActive(): boolean {
     return this.root.penFirstAnchorMirroredHandleDragActive;
   }
+  get penColocatedTipMirroredHandleDragActive(): boolean {
+    return this.root.penColocatedTipMirroredHandleDragActive;
+  }
   get penCurveHandleOverlays() {
     return this.root.penCurveHandleOverlays;
   }
