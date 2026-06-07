@@ -6,7 +6,7 @@ import {
   dragBendCubicControlPoints,
   dragBendQuadraticControlPoint,
   dragBendSmoothCubicSecondControl,
-  placementIllustratorStyleCubicControlPoints,
+  placementCornerAnchorDragCubicControlPoints,
   placementPointerCubicControlPoints,
   placementPointerQuadraticControlPoint,
   placementZeroChordCubicControlPointsFromDrag,
@@ -117,7 +117,7 @@ describe('penCubicSmoothReflectP1Usable', () => {
 });
 
 describe('penAdjustedCubicControlsForPendingLikeDrag', () => {
-  it('skips smooth P1 reflection when prior segment has degenerate P2 at join (uses Illustrator placement)', () => {
+  it('skips smooth P1 reflection when prior segment has degenerate P2 at join (P1 on anchor, no outgoing)', () => {
     const segs = [
       { type: 'M' as const, x: 0, y: 0 },
       { type: 'C' as const, x1: 30, y1: 0, x2: 100, y2: 0, x: 100, y: 0 }
@@ -136,7 +136,8 @@ describe('penAdjustedCubicControlsForPendingLikeDrag', () => {
       false,
       false
     );
-    expect(Math.abs(c.x1 - anchor.x) + Math.abs(c.y1 - anchor.y)).toBeGreaterThan(1e-6);
+    expect(c.x1).toBeCloseTo(anchor.x, 6);
+    expect(c.y1).toBeCloseTo(anchor.y, 6);
   });
 });
 
@@ -197,16 +198,16 @@ describe('pathSvgReflectStateAfter', () => {
   });
 });
 
-describe('placementIllustratorStyleCubicControlPoints', () => {
-  it('puts P1 on chord thirds and P2 back along drag from the new anchor', () => {
-    const c = placementIllustratorStyleCubicControlPoints(
+describe('placementCornerAnchorDragCubicControlPoints', () => {
+  it('puts P1 on the anchor and P2 back along drag from the new anchor', () => {
+    const c = placementCornerAnchorDragCubicControlPoints(
       { x: 10, y: 10 },
       { x: 20, y: 20 },
       { x: 20, y: 20 },
       { x: 35, y: 25 }
     );
-    expect(c.x1).toBeCloseTo(13.333333, 4);
-    expect(c.y1).toBeCloseTo(13.333333, 4);
+    expect(c.x1).toBe(10);
+    expect(c.y1).toBe(10);
     expect(c.x2).toBeCloseTo(11.75, 5);
     expect(c.y2).toBeCloseTo(17.25, 5);
   });
@@ -216,7 +217,7 @@ describe('placementIllustratorStyleCubicControlPoints', () => {
     const p3 = { x: 100, y: 0 };
     const dragStart = { x: 100, y: 0 };
     const dragCurrent = { x: 100, y: 200 };
-    const c = placementIllustratorStyleCubicControlPoints(p0, p3, dragStart, dragCurrent);
+    const c = placementCornerAnchorDragCubicControlPoints(p0, p3, dragStart, dragCurrent);
     const chordLen = 100;
     const oldCap = chordLen * 0.58;
     const dragLen = 200;
@@ -226,19 +227,19 @@ describe('placementIllustratorStyleCubicControlPoints', () => {
     expect(incomingLen).toBeCloseTo(k, 5);
   });
 
-  it('falls back to symmetric chord thirds when drag length is ~0', () => {
-    const c = placementIllustratorStyleCubicControlPoints(
+  it('falls back to P1 on anchor and symmetric P2 when drag length is ~0', () => {
+    const c = placementCornerAnchorDragCubicControlPoints(
       { x: 0, y: 0 },
       { x: 9, y: 0 },
       { x: 9, y: 0 },
       { x: 9, y: 0 }
     );
-    expect(c).toEqual({ x1: 3, y1: 0, x2: 6, y2: 0 });
+    expect(c).toEqual({ x1: 0, y1: 0, x2: 6, y2: 0 });
   });
 
   it('uses drag-based handles when chord length is ~0', () => {
     const anchor = { x: 10, y: 10 };
-    const c = placementIllustratorStyleCubicControlPoints(anchor, anchor, anchor, { x: 40, y: 10 });
+    const c = placementCornerAnchorDragCubicControlPoints(anchor, anchor, anchor, { x: 40, y: 10 });
     const dragLen = 30;
     expect(c.x1).toBeCloseTo(anchor.x + dragLen / 3, 6);
     expect(c.y1).toBeCloseTo(10, 6);

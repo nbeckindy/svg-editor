@@ -340,9 +340,9 @@ const ILLUSTRATOR_PEN_INCOMING_FROM_DRAG = 0.55;
 // const ILLUSTRATOR_PEN_INCOMING_CAP_CHORD = 0.58;
 
 /**
- * When `p0` and `p3` coincide (zero-length chord), Illustrator-style chord-thirds are degenerate.
+ * When `p0` and `p3` coincide (zero-length chord), symmetric chord-thirds are degenerate.
  * Use the drag vector from `dragStart`→`dragCurrent` to place outgoing `P1` and incoming `P2`
- * along that ray (same length ratios as {@link placementIllustratorStyleCubicControlPoints} for a non-degenerate chord).
+ * along that ray (same incoming length scale as {@link placementCornerAnchorDragCubicControlPoints}).
  */
 export function placementZeroChordCubicControlPointsFromDrag(
   anchor: { x: number; y: number },
@@ -368,20 +368,19 @@ export function placementZeroChordCubicControlPointsFromDrag(
 }
 
 /**
- * Illustrator / Inkscape–style pen click-drag for a cubic `P0→P3`:
- * - `P1` stays at the **chord-third** from `p0` (corner-like outgoing from the previous anchor).
- * - Drag from the new anchor (`dragStart` ≈ `p3`) sets the **incoming tangent at `p3`**:
- *   `P2` lies on the ray from `p3` opposite the drag direction, with length `dragLen *` {@link ILLUSTRATOR_PEN_INCOMING_FROM_DRAG}.
- * - When the chord has zero length, uses {@link placementZeroChordCubicControlPointsFromDrag}.
- * - When `‖dragCurrent − dragStart‖` is ~0 on a non-degenerate chord, falls back to symmetric chord-thirds.
+ * Pen click-drag from a **sharp** anchor (`P1` collapsed on `p0` — no outgoing handle):
+ * - `P1 = p0`.
+ * - Drag sets **incoming** `P2` toward `p3`: ray from `p3` opposite drag direction,
+ *   length `‖dragCurrent − dragStart‖ *` {@link ILLUSTRATOR_PEN_INCOMING_FROM_DRAG}.
+ * - Zero-length chord: {@link placementZeroChordCubicControlPointsFromDrag}.
+ * - ~Zero drag on a non-degenerate chord: `P2` at symmetric chord two-thirds (`symmetricCubicControlPoints`).
  */
-export function placementIllustratorStyleCubicControlPoints(
+export function placementCornerAnchorDragCubicControlPoints(
   p0: { x: number; y: number },
   p3: { x: number; y: number },
   dragStart: { x: number; y: number },
   dragCurrent: { x: number; y: number }
 ): CubicControlPoints {
-  const base = symmetricCubicControlPoints(p0, p3);
   const dx = p3.x - p0.x;
   const dy = p3.y - p0.y;
   const chordLen = Math.hypot(dx, dy);
@@ -393,15 +392,16 @@ export function placementIllustratorStyleCubicControlPoints(
   const ddy = dragCurrent.y - dragStart.y;
   const dragLen = Math.hypot(ddx, ddy);
   if (dragLen < 1e-9) {
-    return base;
+    const base = symmetricCubicControlPoints(p0, p3);
+    return { x1: p0.x, y1: p0.y, x2: base.x2, y2: base.y2 };
   }
 
   const ux = ddx / dragLen;
   const uy = ddy / dragLen;
   const k = dragLen * ILLUSTRATOR_PEN_INCOMING_FROM_DRAG;
   return {
-    x1: base.x1,
-    y1: base.y1,
+    x1: p0.x,
+    y1: p0.y,
     x2: p3.x - ux * k,
     y2: p3.y - uy * k
   };
@@ -513,8 +513,9 @@ function snapCubicControlsFromShiftAnchor(
 }
 
 /**
- * Illustrator / Alt cubic controls for pen pending preview/commit (matches
+ * Cubic controls for pen pending preview/commit (matches
  * {@link PenToolSession} `penPendingCubicAdjustedSnappedControls` behavior).
+ * Default placement uses {@link placementCornerAnchorDragCubicControlPoints}; Alt uses pointer placement.
  */
 export function penAdjustedCubicControlsForPendingLikeDrag(
   anchor: { x: number; y: number },
@@ -532,7 +533,7 @@ export function penAdjustedCubicControlsForPendingLikeDrag(
     ? degenerateChord
       ? { x1: anchor.x, y1: anchor.y, x2: dragCurrent.x, y2: dragCurrent.y }
       : placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
-    : placementIllustratorStyleCubicControlPoints(anchor, end, dragStartSvg, dragCurrent);
+    : placementCornerAnchorDragCubicControlPoints(anchor, end, dragStartSvg, dragCurrent);
   let adjusted: CubicControlPoints;
   if (!altEndOnly) {
     const st = penReflectStateAfterCommitted(segments);
@@ -749,7 +750,7 @@ export function penSvgDistanceSq(
 /**
  * Whether smooth cubic P1 reflection from the previous segment's `P2` is meaningful at `anchor`.
  * When the prior cubic's `P2` coincides with the vertex (zero incoming), `2*anchor − P2` collapses
- * to `anchor` and callers should use normal Illustrator-style placement instead.
+ * to `anchor` and callers should use {@link placementCornerAnchorDragCubicControlPoints} instead.
  */
 export function penCubicSmoothReflectP1Usable(
   st: PenSvgReflectState | null,

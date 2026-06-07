@@ -1,4 +1,4 @@
-import { placementIllustratorStyleCubicControlPoints, symmetricCubicControlPoints } from './pen-path';
+import { placementCornerAnchorDragCubicControlPoints, symmetricCubicControlPoints } from './pen-path';
 import { pathSegmentsToD, type PathSegment } from './path-d';
 import { applyPenPathInsert, pointBeforeSegmentIndex, type PenPathInsertHit } from './path-pen-insert';
 
@@ -33,8 +33,9 @@ export function penInsertHitAnchorSvg(
  * far end) stay exactly as produced by the split so neighbor tangents do not move. **Q–Q** keeps
  * the split controls (a single `Q` control cannot be bent off-drag without changing both ends).
  * **L–L** (straight split chord): drag replaces the two `L` segments with smooth **C–C** through `V`,
- * using chord-thirds handles at `p0` and the far end so tangents stay along the original line while
- * bend is introduced at `V`. Mixed **L–C** / **C–L** only adjust the cubic handle(s) at `V`.
+ * with chord-thirds handles toward `p0` and the far end, while **incoming `P2` at `V`** follows drag
+ * via {@link placementCornerAnchorDragCubicControlPoints} (same rule as pen from a sharp anchor).
+ * Mixed **L–C** / **C–L** only adjust the cubic handle(s) at `V`.
  */
 export function adjustSplitSegmentsForPenInsertDrag(
   segments: PathSegment[],
@@ -63,7 +64,7 @@ export function adjustSplitSegmentsForPenInsertDrag(
     }
     const symPV = symmetricCubicControlPoints(p0, V);
     const symVB = symmetricCubicControlPoints(V, B);
-    const cin = placementIllustratorStyleCubicControlPoints(p0, V, V, dragCurrent);
+    const cin = placementCornerAnchorDragCubicControlPoints(p0, V, V, dragCurrent);
     const cIn: Extract<PathSegment, { type: 'C' }> = {
       type: 'C',
       x1: symPV.x1,
@@ -88,7 +89,7 @@ export function adjustSplitSegmentsForPenInsertDrag(
   }
 
   if (segIn.type === 'C' && segOut.type === 'C') {
-    const cin = placementIllustratorStyleCubicControlPoints(p0, V, V, dragCurrent);
+    const cin = placementCornerAnchorDragCubicControlPoints(p0, V, V, dragCurrent);
     // Keep split handles at p0 and at the far anchor; only bend toward V (incoming x2y2).
     segIn.x2 = cin.x2;
     segIn.y2 = cin.y2;
@@ -112,14 +113,14 @@ export function adjustSplitSegmentsForPenInsertDrag(
     segIn.x = V.x;
     segIn.y = V.y;
     const p3right = { x: segOut.x, y: segOut.y };
-    const cout = placementIllustratorStyleCubicControlPoints(V, p3right, V, dragCurrent);
+    const cout = placementCornerAnchorDragCubicControlPoints(V, p3right, V, dragCurrent);
     segOut.x1 = cout.x1;
     segOut.y1 = cout.y1;
     return;
   }
 
   if (segIn.type === 'C' && segOut.type === 'L') {
-    const cin = placementIllustratorStyleCubicControlPoints(p0, V, V, dragCurrent);
+    const cin = placementCornerAnchorDragCubicControlPoints(p0, V, V, dragCurrent);
     segIn.x2 = cin.x2;
     segIn.y2 = cin.y2;
     segIn.x = V.x;

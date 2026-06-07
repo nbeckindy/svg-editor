@@ -1536,8 +1536,8 @@ export class PenToolSession {
   }
 
   /**
-   * After Shift angle snap: Alt end-handle-only mode updates only `(x2,y2)`; Illustrator-style keeps
-   * `(x1,y1)` on chord-thirds and snaps `(x2,y2)` toward 45° from `end`.
+   * After Shift angle snap: Alt end-handle-only mode updates only `(x2,y2)`; default mode mirrors
+   * `(x1,y1)` through `(anchor,end)` from snapped `(x2,y2)` (see {@link snapCubicControlsFromShiftAnchor}).
    */
   snapPenPendingCubicControls(
     anchor: { x: number; y: number },
@@ -1559,7 +1559,7 @@ export class PenToolSession {
   }
 
   /**
-   * Illustrator or Alt pointer placement, optional smooth-node reflection on P1, then Shift 45° snap.
+   * Corner-anchor cubic placement or Alt pointer placement, optional smooth-node reflection on P1, then Shift 45° snap.
    */
   private penPendingCubicAdjustedSnappedControls(
     anchor: { x: number; y: number },
