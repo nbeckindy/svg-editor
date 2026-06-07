@@ -1,9 +1,10 @@
 /**
  * Orchestrates in-progress pen path authoring (preview, pointer, keyboard, commit).
- * Logical inputs and document effects cross a narrow {@link PenToolSessionPorts} seam so the
- * canvas stays a DOM/view adapter and this module stays unit-testable without full TestBed.
+ * Logical inputs and document effects cross {@link PenToolSessionPorts} (see `pen-tool-session-ports.ts`)
+ * so the **Canvas adapter** stays a DOM/view adapter and this module stays unit-testable without full TestBed.
+ * Finish-to-document and insert-on-path helpers live in `pen-tool-session-finish.ts` and
+ * `pen-tool-session-insert-on-path.ts`.
  */
-import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import { rootSvgUserPointToScreenPoint } from '../../../utils/svg-screen-user';
 import {
@@ -32,22 +33,21 @@ import {
   type CubicControlPoints,
   type PenPathSegment
 } from '../../../models/pen-path';
-import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../../models/path-d';
+import { parsePathD, parsePathDForNodeEditing } from '../../../models/path-d';
+import { PenSegmentReplaceCommand } from '../../../models/editor-commands';
+import { applyPenFinishedPathDocumentEffects } from './pen-tool-session-finish';
 import {
-  applyPenPathInsert,
-  findPenPathInsertHit,
-  type PenPathInsertHit
-} from '../../../models/path-pen-insert';
-import {
-  buildPenInsertDragPreviewD,
-  penInsertHitAnchorSvg,
-  penInsertMoveSegmentIndexAfterSplit
-} from '../../../models/path-pen-insert-drag';
-import { AddPathCommand, EditPathNodesCommand, PenSegmentReplaceCommand } from '../../../models/editor-commands';
-import type { SvgManipulationService } from '../../../services/svg-manipulation.service';
-import type { ShapeSelectionService } from '../../../services/shape-selection.service';
-import type { EditorHistoryService } from '../../../services/editor-history.service';
-import type { EditorTool } from '../../../services/editor-tool.service';
+  computePenInsertOnPathPreviewPathD,
+  computePenInsertOnPathReleaseD,
+  createPenInsertOnPathDragState,
+  evaluatePenInsertOnPathAt as evaluatePenInsertOnPathAtImpl,
+  restorePenInsertPathVisibility,
+  type PenInsertOnPathDragState,
+  type PenInsertOnPathEvaluateResult
+} from './pen-tool-session-insert-on-path';
+import type { PenDiscardReason, PenToolSessionPorts } from './pen-tool-session-ports';
+
+export type { PenDiscardReason, PenToolSessionPorts } from './pen-tool-session-ports';
 
 const PEN_FINISH_FEEDBACK_DURATION_MS = 1200;
 const PEN_SINGLE_CLICK_CLOSE_RADIUS_PX = 8;
@@ -60,43 +60,6 @@ const PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SCREEN_PX = 2;
 const PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SVG_DRAG_SQ = 1e-6;
 /** When finishing closed paths: absorb CTM / float mismatch vs session `M` without a mirrored closing `C`. */
 const PEN_CLOSE_MOVETO_REWRITE_MAX_SQ = 1e-8;
-
-export type PenDiscardReason = 'tool switch' | 'document replace/load';
-
-export interface PenToolSessionPorts {
-  markForCheck(): void;
-  getCurrentTool(): EditorTool;
-  isPenAltCurveMode(): boolean;
-  setPenAltCurveMode(enabled: boolean): void;
-  setTool(tool: EditorTool): void;
-  clientToEditorSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null;
-  svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): {
-    x: number;
-    y: number;
-    width: number;
-    height: number;
-  };
-  parseOverlayViewBox(): { vbMinX: number; vbMinY: number; vbW: number; vbH: number } | null;
-  getMainSvgElement(): SVGSVGElement | null;
-  /** `window.confirm` for discarding in-progress pen path. */
-  confirmDiscardInProgressPath(reason: PenDiscardReason): boolean;
-  svgManipulation: SvgManipulationService;
-  shapeSelection: ShapeSelectionService;
-  editorHistory: EditorHistoryService;
-  penBackspaceShortcutShouldDefer(): boolean;
-  setLastBbox(bbox: { x: number; y: number; width: number; height: number } | null): void;
-  clearHighlightRectCache(): void;
-  isEditorContentShapeTarget(target: Element | null): boolean;
-  getPenPathInsertToleranceSvg(): number;
-  getPathDForId(pathId: string): string | null;
-  /** Apply committed insert edit (history, selection, overlays). */
-  commitPenInsertOnExistingPath(pathId: string, oldD: string, newD: string, insertedMoveSegIndex?: number): void;
-  clearPenPostInsertAnchorOverlay(): void;
-  /** Idle pen: user starts a new stroke on empty canvas — clear prior selection so path topology follows. */
-  clearSelectionForPenBackgroundStroke(): void;
-  /** True when SVG content is present and the canvas view is ready for pen input. */
-  isCanvasReadyForPenInput(): boolean;
-}
 
 export class PenToolSession {
   penFinishFeedbackMessage: string | null = null;
@@ -137,16 +100,7 @@ export class PenToolSession {
   private penOutgoingHandleDrag: { segmentIndex: number; before: PenPathSegment } | null = null;
 
   /** Mousedown→drag→mouseup insert on an existing path (idle pen session). */
-  private penInsertOnPath: {
-    pathId: string;
-    originalD: string;
-    parsedBefore: PathSegment[];
-    hit: PenPathInsertHit;
-    insertMoveSegIndex: number;
-    splitBaseline: PathSegment[];
-    dragStartSvg: { x: number; y: number };
-    startClient: { x: number; y: number };
-  } | null = null;
+  private penInsertOnPath: PenInsertOnPathDragState | null = null;
   private penInsertOnPathLastClient: { x: number; y: number } | null = null;
   private penInsertOnPathPointerSvg: { x: number; y: number } | null = null;
 
@@ -2263,83 +2217,16 @@ export class PenToolSession {
     // Tiny endpoint drift vs `M` is absorbed via {@link penRewriteLastSegmentEndToMatchMoveto} before `finishPath`.
     let finalClosed = closePath ? `${d} Z` : d;
 
-    const cont = this.penContinuingPathRewrite;
-    if (cont) {
-      this.ports.svgManipulation.updatePathData(cont.pathId, finalClosed);
-      const cmd = new EditPathNodesCommand(this.ports.svgManipulation, cont.pathId, cont.originalD, finalClosed, true);
-      this.ports.editorHistory.pushAndExecute(cmd);
-      const svgSel = this.ports.svgManipulation.getSVGInstance();
-      const mergedEl = svgSel?.findOne(`#${cont.pathId}`) as SvgJsElement | undefined;
-      if (mergedEl) {
-        this.ports.shapeSelection.selectShape(this.ports.svgManipulation.getShapeProperties(mergedEl));
-      }
-      const shapeBboxContinue = this.ports.svgManipulation.getShapeBBox(cont.pathId);
-      if (shapeBboxContinue) {
-        this.ports.setLastBbox(shapeBboxContinue);
-        this.ports.clearHighlightRectCache();
-      }
-      this.clearDrawingState();
-      this.ports.setTool('selector');
-      this.ports.markForCheck();
-      return;
-    }
-
-    const joinHit = penPathSegmentsAreValid(finishingSegsSnapshot)
-      ? this.findPenOpenPathFinishJoin(finishingSegsSnapshot)
-      : null;
-    if (joinHit) {
-      const mergedSegments =
-        joinHit.stitch === 'appendToExistingTail'
-          ? this.combinePenContinuationSegments(joinHit.existing, finishingSegsSnapshot)
-          : this.combinePenContinuationSegments(finishingSegsSnapshot, joinHit.existing);
-      if (mergedSegments) {
-        finalClosed = closePath ? `${penPathSegmentsToD(mergedSegments)} Z` : penPathSegmentsToD(mergedSegments);
-        this.ports.svgManipulation.updatePathData(joinHit.pathId, finalClosed);
-        const joinCmd = new EditPathNodesCommand(
-          this.ports.svgManipulation,
-          joinHit.pathId,
-          joinHit.originalD,
-          finalClosed,
-          true
-        );
-        this.ports.editorHistory.pushAndExecute(joinCmd);
-        const svgJoin = this.ports.svgManipulation.getSVGInstance();
-        const joinedEl = svgJoin?.findOne(`#${joinHit.pathId}`) as SvgJsElement | undefined;
-        if (joinedEl) {
-          this.ports.shapeSelection.selectShape(this.ports.svgManipulation.getShapeProperties(joinedEl));
-        }
-        const jb = this.ports.svgManipulation.getShapeBBox(joinHit.pathId);
-        if (jb) {
-          this.ports.setLastBbox(jb);
-          this.ports.clearHighlightRectCache();
-        }
-        this.clearDrawingState();
-        this.ports.setTool('selector');
-        this.ports.markForCheck();
-        return;
-      }
-    }
-
-    const id = this.ports.svgManipulation.insertPathIntoContentGroup(finalClosed, undefined, { closedPath: closePath });
-    if (!id) {
-      this.clearDrawingState();
-      return;
-    }
-    const svg = this.ports.svgManipulation.getSVGInstance();
-    const el = svg?.findOne(`#${id}`) as SvgJsElement | undefined;
-    if (el) {
-      this.ports.shapeSelection.selectShape(this.ports.svgManipulation.getShapeProperties(el));
-    }
-    const cmd = new AddPathCommand(this.ports.svgManipulation, id, this.ports.shapeSelection);
-    this.ports.editorHistory.pushAndExecute(cmd);
-    const shapeBbox = this.ports.svgManipulation.getShapeBBox(id);
-    if (shapeBbox) {
-      this.ports.setLastBbox(shapeBbox);
-      this.ports.clearHighlightRectCache();
-    }
-    this.clearDrawingState();
-    this.ports.setTool('selector');
-    this.ports.markForCheck();
+    applyPenFinishedPathDocumentEffects(this.ports, {
+      finalClosed,
+      closePath,
+      finishingSegsSnapshot,
+      continuingPathRewrite: this.penContinuingPathRewrite,
+      findPenOpenPathFinishJoin: (segs) =>
+        penPathSegmentsAreValid(segs) ? this.findPenOpenPathFinishJoin(segs) : null,
+      combinePenContinuationSegments: (a, b) => this.combinePenContinuationSegments(a, b),
+      clearDrawingState: () => this.clearDrawingState()
+    });
   }
 
   handlePenCanvasMouseDown(event: MouseEvent, pt: { x: number; y: number }): void {
@@ -2604,7 +2491,7 @@ export class PenToolSession {
     this.penInsertOnPathLastClient = null;
     this.penInsertOnPathPointerSvg = null;
     if (pathId) {
-      this.ports.svgManipulation.setShapeVisibility(pathId, true);
+      restorePenInsertPathVisibility(this.ports, pathId);
     }
   }
 
@@ -2630,15 +2517,11 @@ export class PenToolSession {
 
   get penInsertOnPathPreviewPathD(): string | null {
     if (!this.penInsertOnPath) return null;
-    const st = this.penInsertOnPath;
-    const lc = this.penInsertOnPathLastClient ?? st.startClient;
-    const screenDist = Math.hypot(lc.x - st.startClient.x, lc.y - st.startClient.y);
-    if (screenDist < MARQUEE_MIN_DRAG_PX) {
-      return pathSegmentsToD(st.splitBaseline);
-    }
-    const cur = this.penInsertOnPathPointerSvg ?? st.dragStartSvg;
-    const base = st.splitBaseline.map((seg) => ({ ...seg })) as PathSegment[];
-    return buildPenInsertDragPreviewD(base, st.insertMoveSegIndex, st.dragStartSvg, cur);
+    return computePenInsertOnPathPreviewPathD(
+      this.penInsertOnPath,
+      this.penInsertOnPathLastClient,
+      this.penInsertOnPathPointerSvg
+    );
   }
 
   /**
@@ -2648,40 +2531,8 @@ export class PenToolSession {
     penTarget: Element,
     clientX: number,
     clientY: number
-  ):
-    | { ok: false; reason: string }
-    | {
-        ok: true;
-        pathId: string;
-        oldD: string;
-        parsed: PathSegment[];
-        hit: PenPathInsertHit;
-        split: PathSegment[];
-        pt: { x: number; y: number };
-      } {
-    if (penTarget.tagName?.toLowerCase() !== 'path' || !penTarget.id) {
-      return { ok: false, reason: 'target is not <path id=…>' };
-    }
-    const pathId = penTarget.id;
-    const oldD = this.ports.getPathDForId(pathId)?.trim() ?? '';
-    if (!oldD) return { ok: false, reason: 'empty path d' };
-    const parsed = parsePathDForNodeEditing(oldD);
-    if (!parsed) return { ok: false, reason: 'path d not parseable for node editing' };
-    const pt = this.ports.clientToEditorSvgPoint(clientX, clientY);
-    if (!pt) return { ok: false, reason: 'client→SVG mapping failed' };
-    const tol = this.ports.getPenPathInsertToleranceSvg();
-    const maxDistSq = tol * tol;
-    const hit = findPenPathInsertHit(parsed, pt.x, pt.y, maxDistSq);
-    if (!hit) return { ok: false, reason: `no segment within insert tolerance (~${tol.toFixed(2)} svg u)` };
-    const split = applyPenPathInsert(parsed, hit);
-    if (!split) return { ok: false, reason: 'applyPenPathInsert rejected' };
-    const baselineD = pathSegmentsToD(split);
-    if (baselineD === oldD) return { ok: false, reason: 'insert would not change d' };
-    const reparsed = parsePathD(baselineD);
-    if (reparsed.errors.length > 0 || reparsed.segments.length === 0 || reparsed.segments[0].type !== 'M') {
-      return { ok: false, reason: 'split baseline invalid for commit' };
-    }
-    return { ok: true, pathId, oldD, parsed, hit, split, pt };
+  ): PenInsertOnPathEvaluateResult {
+    return evaluatePenInsertOnPathAtImpl(this.ports, penTarget, clientX, clientY);
   }
 
   /**
@@ -2741,17 +2592,7 @@ export class PenToolSession {
     if (event.detail !== 1) return false;
     const ev = this.evaluatePenInsertOnPathAt(penTarget, event.clientX, event.clientY);
     if (!ev.ok) return false;
-    const dragStartSvg = penInsertHitAnchorSvg(ev.parsed, ev.hit) ?? ev.pt;
-    this.penInsertOnPath = {
-      pathId: ev.pathId,
-      originalD: ev.oldD,
-      parsedBefore: ev.parsed,
-      hit: ev.hit,
-      insertMoveSegIndex: penInsertMoveSegmentIndexAfterSplit(ev.hit),
-      splitBaseline: ev.split.map((s) => ({ ...s })) as PathSegment[],
-      dragStartSvg,
-      startClient: { x: event.clientX, y: event.clientY }
-    };
+    this.penInsertOnPath = createPenInsertOnPathDragState(ev, event);
     this.penInsertOnPathLastClient = { x: event.clientX, y: event.clientY };
     this.penInsertOnPathPointerSvg = { x: ev.pt.x, y: ev.pt.y };
     this.ports.svgManipulation.setShapeVisibility(ev.pathId, false);
@@ -2762,17 +2603,14 @@ export class PenToolSession {
   private finishPenInsertOnPathDrag(event: MouseEvent): void {
     const st = this.penInsertOnPath;
     if (!st) return;
-    const release = this.ports.clientToEditorSvgPoint(event.clientX, event.clientY);
-    const lc = this.penInsertOnPathLastClient ?? st.startClient;
-    const screenDist = Math.hypot(lc.x - st.startClient.x, lc.y - st.startClient.y);
-    let newD: string;
-    if (screenDist < MARQUEE_MIN_DRAG_PX) {
-      newD = pathSegmentsToD(st.splitBaseline);
-    } else {
-      const cur = release ?? this.penInsertOnPathPointerSvg ?? st.dragStartSvg;
-      const base = st.splitBaseline.map((seg) => ({ ...seg })) as PathSegment[];
-      newD = buildPenInsertDragPreviewD(base, st.insertMoveSegIndex, st.dragStartSvg, cur) ?? pathSegmentsToD(st.splitBaseline);
-    }
+    const newD = computePenInsertOnPathReleaseD(
+      this.ports,
+      st,
+      this.penInsertOnPathLastClient,
+      this.penInsertOnPathPointerSvg,
+      event.clientX,
+      event.clientY
+    );
     this.clearPenInsertOnPathDragState();
     if (newD === st.originalD) {
       this.ports.markForCheck();
