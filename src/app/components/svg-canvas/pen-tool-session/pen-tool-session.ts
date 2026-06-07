@@ -725,9 +725,17 @@ export class PenToolSession {
           const y1 = p3d.frozenOutgoingP1Svg?.y ?? c.y1;
           const p1 = toOverlayP3(x1, y1);
           const p2 = toOverlayP3(c.x2, c.y2);
+          if (altEndOnly) {
+            return [
+              { cx: p1.x, cy: p1.y },
+              { cx: p2.x, cy: p2.y }
+            ];
+          }
+          const pOut = toOverlayP3(dragCurrent.x, dragCurrent.y);
           return [
             { cx: p1.x, cy: p1.y },
-            { cx: p2.x, cy: p2.y }
+            { cx: p2.x, cy: p2.y },
+            { cx: pOut.x, cy: pOut.y }
           ];
         }
         default:
@@ -756,9 +764,16 @@ export class PenToolSession {
         );
         const p1 = toOverlay(x1, y1);
         const p2 = toOverlay(x2, y2);
+        if (altEndOnly) {
+          return [
+            { cx: p1.x, cy: p1.y },
+            { cx: p2.x, cy: p2.y }
+          ];
+        }
+        const pOut = toOverlay(dragCurrent.x, dragCurrent.y);
         return [
-          { cx: p1.x, cy: p1.y },
-          { cx: p2.x, cy: p2.y }
+          { cx: p2.x, cy: p2.y },
+          { cx: pOut.x, cy: pOut.y }
         ];
       }
       case 'quadratic': {
@@ -864,7 +879,8 @@ export class PenToolSession {
   }
 
   /**
-   * Green dashed handle guides while click-dragging a pending curve (incoming + outgoing where applicable),
+   * Green dashed handle guides while click-dragging a pending curve (incoming `P2` leg, and
+   * pointer-to-`P3` leg as **outgoing preview** when not in Alt end-handle-only mode),
    * aligned with {@link penCurveHandleOverlays} geometry.
    */
   get penPendingCurveHandleGuideOverlays(): { x1: number; y1: number; x2: number; y2: number }[] {
@@ -1089,10 +1105,14 @@ export class PenToolSession {
         );
         const x1 = p3d.frozenOutgoingP1Svg?.x ?? c.x1;
         const y1 = p3d.frozenOutgoingP1Svg?.y ?? c.y1;
-        return [
+        const linesP3: { x1: number; y1: number; x2: number; y2: number }[] = [
           lineP3(anchorMv.x, anchorMv.y, x1, y1),
           lineP3(endP3.x, endP3.y, c.x2, c.y2)
         ];
+        if (!altEndOnly) {
+          linesP3.push(lineP3(endP3.x, endP3.y, dragCurrentP3.x, dragCurrentP3.y));
+        }
+        return linesP3;
       }
       return [];
     }
@@ -1121,10 +1141,14 @@ export class PenToolSession {
           segs,
           altEndOnly
         );
-        return [
+        const lines: { x1: number; y1: number; x2: number; y2: number }[] = [
           line(anchor.x, anchor.y, c.x1, c.y1),
           line(end.x, end.y, c.x2, c.y2)
         ];
+        if (!altEndOnly) {
+          lines.push(line(end.x, end.y, dragCurrent.x, dragCurrent.y));
+        }
+        return lines;
       }
       case 'quadratic': {
         let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);

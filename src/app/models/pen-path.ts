@@ -342,7 +342,7 @@ const ILLUSTRATOR_PEN_INCOMING_FROM_DRAG = 0.55;
 /**
  * When `p0` and `p3` coincide (zero-length chord), symmetric chord-thirds are degenerate.
  * Use the drag vector from `dragStart`→`dragCurrent` to place outgoing `P1` and incoming `P2`
- * along that ray (same incoming length scale as {@link placementCornerAnchorDragCubicControlPoints}).
+ * along that ray (same incoming length scale as {@link placementCornerAnchorDragCubicControlPoints} for a non-degenerate chord).
  */
 export function placementZeroChordCubicControlPointsFromDrag(
   anchor: { x: number; y: number },
@@ -370,8 +370,9 @@ export function placementZeroChordCubicControlPointsFromDrag(
 /**
  * Pen click-drag from a **sharp** anchor (`P1` collapsed on `p0` — no outgoing handle):
  * - `P1 = p0`.
- * - Drag sets **incoming** `P2` toward `p3`: ray from `p3` opposite drag direction,
- *   length `‖dragCurrent − dragStart‖ *` {@link ILLUSTRATOR_PEN_INCOMING_FROM_DRAG}.
+ * - **Incoming `P2`**: from `p3` opposite the drag vector `dragStart→dragCurrent`, at distance
+ *   `‖dragCurrent − dragStart‖` (same magnitude as the drag segment; matches pointer distance from `p3`
+ *   when `dragStart` is at `p3`).
  * - Zero-length chord: {@link placementZeroChordCubicControlPointsFromDrag}.
  * - ~Zero drag on a non-degenerate chord: `P2` at symmetric chord two-thirds (`symmetricCubicControlPoints`).
  */
@@ -398,7 +399,7 @@ export function placementCornerAnchorDragCubicControlPoints(
 
   const ux = ddx / dragLen;
   const uy = ddy / dragLen;
-  const k = dragLen * ILLUSTRATOR_PEN_INCOMING_FROM_DRAG;
+  const k = dragLen;
   return {
     x1: p0.x,
     y1: p0.y,

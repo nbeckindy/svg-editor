@@ -199,7 +199,7 @@ describe('pathSvgReflectStateAfter', () => {
 });
 
 describe('placementCornerAnchorDragCubicControlPoints', () => {
-  it('puts P1 on the anchor and P2 back along drag from the new anchor', () => {
+  it('puts P1 on the anchor and P2 opposite the drag at the same length as the drag vector', () => {
     const c = placementCornerAnchorDragCubicControlPoints(
       { x: 10, y: 10 },
       { x: 20, y: 20 },
@@ -208,23 +208,21 @@ describe('placementCornerAnchorDragCubicControlPoints', () => {
     );
     expect(c.x1).toBe(10);
     expect(c.y1).toBe(10);
-    expect(c.x2).toBeCloseTo(11.75, 5);
-    expect(c.y2).toBeCloseTo(17.25, 5);
+    expect(c.x2).toBe(5);
+    expect(c.y2).toBe(15);
   });
 
-  it('incoming handle length exceeds old chord cap when drag is long', () => {
+  it('incoming handle distance from P3 equals drag length (matches pointer leg when drag starts at P3)', () => {
     const p0 = { x: 0, y: 0 };
     const p3 = { x: 100, y: 0 };
     const dragStart = { x: 100, y: 0 };
     const dragCurrent = { x: 100, y: 200 };
     const c = placementCornerAnchorDragCubicControlPoints(p0, p3, dragStart, dragCurrent);
-    const chordLen = 100;
-    const oldCap = chordLen * 0.58;
     const dragLen = 200;
-    const k = dragLen * 0.55;
-    expect(k).toBeGreaterThan(oldCap);
     const incomingLen = Math.hypot(p3.x - c.x2, p3.y - c.y2);
-    expect(incomingLen).toBeCloseTo(k, 5);
+    expect(incomingLen).toBeCloseTo(dragLen, 5);
+    const pointerLen = Math.hypot(dragCurrent.x - p3.x, dragCurrent.y - p3.y);
+    expect(pointerLen).toBeCloseTo(dragLen, 5);
   });
 
   it('falls back to P1 on anchor and symmetric P2 when drag length is ~0', () => {

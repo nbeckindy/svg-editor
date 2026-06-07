@@ -33,8 +33,8 @@ export function penInsertHitAnchorSvg(
  * far end) stay exactly as produced by the split so neighbor tangents do not move. **Q–Q** keeps
  * the split controls (a single `Q` control cannot be bent off-drag without changing both ends).
  * **L–L** (straight split chord): drag replaces the two `L` segments with smooth **C–C** through `V`,
- * with chord-thirds handles toward `p0` and the far end, while **incoming `P2` at `V`** follows drag
- * via {@link placementCornerAnchorDragCubicControlPoints} (same rule as pen from a sharp anchor).
+ * with chord-thirds handles toward `p0` and the far end, while **incoming `P2` at `V`** follows the
+ * corner-anchor drag rule in {@link placementCornerAnchorDragCubicControlPoints} (incoming length matches drag length from `V` when drag starts at `V`).
  * Mixed **L–C** / **C–L** only adjust the cubic handle(s) at `V`.
  */
 export function adjustSplitSegmentsForPenInsertDrag(
