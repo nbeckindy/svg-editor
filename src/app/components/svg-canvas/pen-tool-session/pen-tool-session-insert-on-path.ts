@@ -33,7 +33,7 @@ export type PenInsertOnPathEvaluateResult =
     };
 
 /**
- * Read-only insert-on-path eligibility (shared with {@link PenToolSession.tryBeginPenInsertOnPath} for debug HUD).
+ * Read-only insert-on-path eligibility (shared with {@link tryBeginPenInsertOnPathDrag} for debug HUD).
  */
 export function evaluatePenInsertOnPathAt(
   ports: Pick<PenToolSessionPorts, 'getPathDForId' | 'clientToEditorSvgPoint' | 'getPenPathInsertToleranceSvg'>,
@@ -125,4 +125,84 @@ export function restorePenInsertPathVisibility(
   pathId: string
 ): void {
   ports.svgManipulation.setShapeVisibility(pathId, true);
+}
+
+/** Live insert-on-path drag fields owned by {@link PenToolSession} (mutable bag). */
+export type PenInsertOnPathDragMutable = {
+  drag: PenInsertOnPathDragState | null;
+  lastClient: { x: number; y: number } | null;
+  pointerSvg: { x: number; y: number } | null;
+};
+
+export function tryBeginPenInsertOnPathDrag(
+  ports: PenToolSessionPorts,
+  mutable: PenInsertOnPathDragMutable,
+  penTarget: Element,
+  event: MouseEvent
+): boolean {
+  if (event.detail !== 1) return false;
+  const ev = evaluatePenInsertOnPathAt(ports, penTarget, event.clientX, event.clientY);
+  if (!ev.ok) return false;
+  mutable.drag = createPenInsertOnPathDragState(ev, event);
+  mutable.lastClient = { x: event.clientX, y: event.clientY };
+  mutable.pointerSvg = { x: ev.pt.x, y: ev.pt.y };
+  ports.svgManipulation.setShapeVisibility(ev.pathId, false);
+  ports.markForCheck();
+  return true;
+}
+
+export function finishPenInsertOnPathDragFlow(
+  ports: PenToolSessionPorts,
+  mutable: PenInsertOnPathDragMutable,
+  event: MouseEvent
+): void {
+  const st = mutable.drag;
+  if (!st) return;
+  const newD = computePenInsertOnPathReleaseD(
+    ports,
+    st,
+    mutable.lastClient,
+    mutable.pointerSvg,
+    event.clientX,
+    event.clientY
+  );
+  clearPenInsertOnPathDragMutable(ports, mutable);
+  if (newD === st.originalD) {
+    ports.markForCheck();
+    return;
+  }
+  const reparsed = parsePathD(newD);
+  if (reparsed.errors.length > 0) {
+    ports.markForCheck();
+    return;
+  }
+  ports.commitPenInsertOnExistingPath(st.pathId, st.originalD, newD, st.insertMoveSegIndex);
+  ports.markForCheck();
+}
+
+export function updatePenInsertOnPathDragPointer(
+  ports: Pick<PenToolSessionPorts, 'clientToEditorSvgPoint' | 'markForCheck'>,
+  mutable: PenInsertOnPathDragMutable,
+  event: MouseEvent
+): void {
+  if (!mutable.drag) return;
+  mutable.lastClient = { x: event.clientX, y: event.clientY };
+  const raw = ports.clientToEditorSvgPoint(event.clientX, event.clientY);
+  if (raw) {
+    mutable.pointerSvg = { x: raw.x, y: raw.y };
+  }
+  ports.markForCheck();
+}
+
+export function clearPenInsertOnPathDragMutable(
+  ports: Pick<PenToolSessionPorts, 'svgManipulation' | 'markForCheck'>,
+  mutable: PenInsertOnPathDragMutable
+): void {
+  const pathId = mutable.drag?.pathId;
+  mutable.drag = null;
+  mutable.lastClient = null;
+  mutable.pointerSvg = null;
+  if (pathId) {
+    restorePenInsertPathVisibility(ports, pathId);
+  }
 }
