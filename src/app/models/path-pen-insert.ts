@@ -3,6 +3,13 @@ import { parsePathD, pathSegmentsToD, type PathSegment } from './path-d';
 
 const DEFAULT_MIN_T = 0.02;
 const DEFAULT_MAX_T = 0.98;
+/**
+ * Straight segments (`L`, closing `Z` edge) only need to avoid `t` exactly 0/1 (duplicate vertices).
+ * Using the curve window ({@link DEFAULT_MIN_T} / {@link DEFAULT_MAX_T}) made many valid line hits
+ * miss (especially near endpoints / short edges), so pen insert fell through and users started new strokes.
+ */
+const LINE_INSERT_MIN_T = 1e-6;
+const LINE_INSERT_MAX_T = 1 - 1e-6;
 const QUADRATIC_SEARCH_STEPS = 80;
 const CUBIC_SEARCH_STEPS = 96;
 
@@ -201,6 +208,15 @@ export function findPenPathInsertHit(
     }
   };
 
+  const considerLinear = (hit: PenPathInsertHit, distSq: number, t: number) => {
+    if (t < LINE_INSERT_MIN_T || t > LINE_INSERT_MAX_T) return;
+    if (distSq > maxDistSq) return;
+    if (distSq < bestDistSq) {
+      bestDistSq = distSq;
+      bestHit = hit;
+    }
+  };
+
   for (let i = 0; i < segments.length; i++) {
     const seg = segments[i];
     if (seg.type === 'M') {
@@ -214,7 +230,7 @@ export function findPenPathInsertHit(
 
     if (seg.type === 'Z') {
       const cp = closestPointOnSegment(cx, cy, subpathStart.x, subpathStart.y, px, py);
-      consider({ kind: 'Z', segmentIndex: i, x: cp.x, y: cp.y }, cp.distSq, cp.t);
+      considerLinear({ kind: 'Z', segmentIndex: i, x: cp.x, y: cp.y }, cp.distSq, cp.t);
       cx = subpathStart.x;
       cy = subpathStart.y;
       continue;
@@ -227,7 +243,7 @@ export function findPenPathInsertHit(
 
     if (seg.type === 'L') {
       const cp = closestPointOnSegment(sx, sy, seg.x, seg.y, px, py);
-      consider({ kind: 'L', segmentIndex: i, x: cp.x, y: cp.y }, cp.distSq, cp.t);
+      considerLinear({ kind: 'L', segmentIndex: i, x: cp.x, y: cp.y }, cp.distSq, cp.t);
       cx = seg.x;
       cy = seg.y;
     } else if (seg.type === 'Q') {

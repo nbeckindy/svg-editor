@@ -14,6 +14,20 @@ describe('path-pen-insert', () => {
     }
   });
 
+  it('findPenPathInsertHit returns L hit near segment ends (not only interior 2–98% t)', () => {
+    const segments = parsePathD('M 0 0 L 100 0').segments;
+    const nearStart = findPenPathInsertHit(segments, 0.5, 0, 100);
+    expect(nearStart?.kind).toBe('L');
+    if (nearStart?.kind === 'L') {
+      expect(nearStart.x).toBeCloseTo(0.5, 5);
+    }
+    const nearEnd = findPenPathInsertHit(segments, 99.2, 0, 100);
+    expect(nearEnd?.kind).toBe('L');
+    if (nearEnd?.kind === 'L') {
+      expect(nearEnd.x).toBeCloseTo(99.2, 5);
+    }
+  });
+
   it('insertPenNodeOnParsedPath splits a line segment', () => {
     const segments = parsePathD('M 0 0 L 100 0').segments;
     const next = insertPenNodeOnParsedPath(segments, 25, 0, 400);
