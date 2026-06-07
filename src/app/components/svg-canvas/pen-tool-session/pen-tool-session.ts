@@ -3,7 +3,8 @@
  * Logical inputs and document effects cross {@link PenToolSessionPorts} (see `pen-tool-session-ports.ts`)
  * so the **Canvas adapter** stays a DOM/view adapter and this module stays unit-testable without full TestBed.
  * Finish-to-document and insert-on-path helpers live in `pen-tool-session-finish.ts` and
- * `pen-tool-session-insert-on-path.ts`.
+ * `pen-tool-session-insert-on-path.ts`; SVG user → **Editor chrome** overlay mapping helpers in
+ * `pen-tool-session-overlay.ts`.
  */
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import { rootSvgUserPointToScreenPoint } from '../../../utils/svg-screen-user';
@@ -46,6 +47,7 @@ import {
   type PenInsertOnPathEvaluateResult
 } from './pen-tool-session-insert-on-path';
 import type { PenDiscardReason, PenToolSessionPorts } from './pen-tool-session-ports';
+import { penSvgUserPointToOverlayPixel, penSvgUserSegmentToOverlayLine } from './pen-tool-session-overlay';
 
 export type { PenDiscardReason, PenToolSessionPorts } from './pen-tool-session-ports';
 
@@ -481,7 +483,7 @@ export class PenToolSession {
         this.penPendingShiftAngleSnap
       );
       const toOverlay = (x: number, y: number) =>
-        this.ports.svgBboxToOverlayPixels({ x, y, width: 0, height: 0 });
+        penSvgUserPointToOverlayPixel(this.ports, x, y);
       const p1 = toOverlay(c.x1, c.y1);
       const p2 = toOverlay(c.x2, c.y2);
       return [
@@ -503,7 +505,7 @@ export class PenToolSession {
       const dragCurrent = draft.dragCommitSvg;
       const kind = penDragCurveAuthoringKind(draft.ctrlCurve, segs);
       const toOverlay = (x: number, y: number) =>
-        this.ports.svgBboxToOverlayPixels({ x, y, width: 0, height: 0 });
+        penSvgUserPointToOverlayPixel(this.ports, x, y);
       switch (kind) {
         case 'cubic': {
           const altEndOnly = draft.curveAltChord;
@@ -586,7 +588,7 @@ export class PenToolSession {
       const dragCurrent = draft.dragCommitSvg;
       const kind = penDragCurveAuthoringKind(draft.ctrlCurve, segs);
       const toOverlay = (x: number, y: number) =>
-        this.ports.svgBboxToOverlayPixels({ x, y, width: 0, height: 0 });
+        penSvgUserPointToOverlayPixel(this.ports, x, y);
       switch (kind) {
         case 'cubic': {
           const altEndOnly = draft.curveAltChord;
@@ -672,8 +674,6 @@ export class PenToolSession {
       const end = this.penPendingCurvePreviewEndSvg(pending);
       const dragCurrent = this.penPendingDragSampleSvg(pending);
       const kind = penDragCurveAuthoringKind(pending.ctrlCurve, segs);
-      const toOverlayP3 = (x: number, y: number) =>
-        this.ports.svgBboxToOverlayPixels({ x, y, width: 0, height: 0 });
       switch (kind) {
         case 'cubic': {
           const altEndOnly = this.penPendingCubicAltEndHandleOnly();
@@ -689,15 +689,15 @@ export class PenToolSession {
           );
           const x1 = p3d.frozenOutgoingP1Svg?.x ?? c.x1;
           const y1 = p3d.frozenOutgoingP1Svg?.y ?? c.y1;
-          const p1 = toOverlayP3(x1, y1);
-          const p2 = toOverlayP3(c.x2, c.y2);
+          const p1 = penSvgUserPointToOverlayPixel(this.ports, x1, y1);
+          const p2 = penSvgUserPointToOverlayPixel(this.ports, c.x2, c.y2);
           if (altEndOnly) {
             return [
               { cx: p1.x, cy: p1.y },
               { cx: p2.x, cy: p2.y }
             ];
           }
-          const pOut = toOverlayP3(dragCurrent.x, dragCurrent.y);
+          const pOut = penSvgUserPointToOverlayPixel(this.ports, dragCurrent.x, dragCurrent.y);
           return [
             { cx: p1.x, cy: p1.y },
             { cx: p2.x, cy: p2.y },
@@ -715,7 +715,7 @@ export class PenToolSession {
     const dragCurrent = this.penPendingDragSampleSvg(pending);
     const kind = penDragCurveAuthoringKind(pending.ctrlCurve, this.penSession.getSegments());
     const toOverlay = (x: number, y: number) =>
-      this.ports.svgBboxToOverlayPixels({ x, y, width: 0, height: 0 });
+      penSvgUserPointToOverlayPixel(this.ports, x, y);
 
     switch (kind) {
       case 'cubic': {
@@ -821,29 +821,26 @@ export class PenToolSession {
     }
     const anchor = lastCommittedVertex(this.penSession.getSegments());
     if (!anchor) return null;
-    const p1 = this.ports.svgBboxToOverlayPixels({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
-    const p2 = this.ports.svgBboxToOverlayPixels({
-      x: this.penPointerSvg.x,
-      y: this.penPointerSvg.y,
-      width: 0,
-      height: 0
-    });
-    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+    return penSvgUserSegmentToOverlayLine(
+      this.ports,
+      anchor.x,
+      anchor.y,
+      this.penPointerSvg.x,
+      this.penPointerSvg.y
+    );
   }
 
   /** Dashed guide from last vertex to outgoing handle while rubber-banding the next segment. */
   get penOutgoingHandleGuideOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
     const h = this.penCommittedOutgoingHandleSvg();
     if (!h) return null;
-    const p1 = this.ports.svgBboxToOverlayPixels({ x: h.anchorX, y: h.anchorY, width: 0, height: 0 });
-    const p2 = this.ports.svgBboxToOverlayPixels({ x: h.hx, y: h.hy, width: 0, height: 0 });
-    return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
+    return penSvgUserSegmentToOverlayLine(this.ports, h.anchorX, h.anchorY, h.hx, h.hy);
   }
 
   get penOutgoingHandleKnobOverlay(): { cx: number; cy: number } | null {
     const h = this.penCommittedOutgoingHandleSvg();
     if (!h) return null;
-    const p2 = this.ports.svgBboxToOverlayPixels({ x: h.hx, y: h.hy, width: 0, height: 0 });
+    const p2 = penSvgUserPointToOverlayPixel(this.ports, h.hx, h.hy);
     return { cx: p2.x, cy: p2.y };
   }
 
@@ -869,11 +866,8 @@ export class PenToolSession {
         this.penPointerSvg,
         this.penPendingShiftAngleSnap
       );
-      const line = (x1s: number, y1s: number, x2s: number, y2s: number) => {
-        const p1 = this.ports.svgBboxToOverlayPixels({ x: x1s, y: y1s, width: 0, height: 0 });
-        const p2 = this.ports.svgBboxToOverlayPixels({ x: x2s, y: y2s, width: 0, height: 0 });
-        return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
-      };
+      const line = (x1s: number, y1s: number, x2s: number, y2s: number) =>
+        penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
       return [line(anchor.x, anchor.y, c.x1, c.y1), line(anchor.x, anchor.y, c.x2, c.y2)];
     }
     if (
@@ -889,11 +883,8 @@ export class PenToolSession {
       const end = this.penPointerSvg!;
       const dragCurrent = draft.dragCommitSvg;
       const kind = penDragCurveAuthoringKind(draft.ctrlCurve, segs);
-      const line = (x1s: number, y1s: number, x2s: number, y2s: number) => {
-        const p1 = this.ports.svgBboxToOverlayPixels({ x: x1s, y: y1s, width: 0, height: 0 });
-        const p2 = this.ports.svgBboxToOverlayPixels({ x: x2s, y: y2s, width: 0, height: 0 });
-        return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
-      };
+      const line = (x1s: number, y1s: number, x2s: number, y2s: number) =>
+        penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
       switch (kind) {
         case 'cubic': {
           const altEndOnly = draft.curveAltChord;
@@ -971,11 +962,8 @@ export class PenToolSession {
       const draft = this.penFirstAnchorP3Draft;
       const dragCurrent = draft.dragCommitSvg;
       const kind = penDragCurveAuthoringKind(draft.ctrlCurve, segs);
-      const line = (x1s: number, y1s: number, x2s: number, y2s: number) => {
-        const p1 = this.ports.svgBboxToOverlayPixels({ x: x1s, y: y1s, width: 0, height: 0 });
-        const p2 = this.ports.svgBboxToOverlayPixels({ x: x2s, y: y2s, width: 0, height: 0 });
-        return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
-      };
+      const line = (x1s: number, y1s: number, x2s: number, y2s: number) =>
+        penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
       switch (kind) {
         case 'cubic': {
           const altEndOnly = draft.curveAltChord;
@@ -1055,11 +1043,8 @@ export class PenToolSession {
       const endP3 = this.penPendingCurvePreviewEndSvg(pending);
       const dragCurrentP3 = this.penPendingDragSampleSvg(pending);
       const kindP3 = penDragCurveAuthoringKind(pending.ctrlCurve, segsP3);
-      const lineP3 = (x1s: number, y1s: number, x2s: number, y2s: number) => {
-        const p1 = this.ports.svgBboxToOverlayPixels({ x: x1s, y: y1s, width: 0, height: 0 });
-        const p2 = this.ports.svgBboxToOverlayPixels({ x: x2s, y: y2s, width: 0, height: 0 });
-        return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
-      };
+      const lineP3 = (x1s: number, y1s: number, x2s: number, y2s: number) =>
+        penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
       if (kindP3 === 'cubic') {
         const altEndOnly = this.penPendingCubicAltEndHandleOnly();
         const c = this.penPendingCubicAdjustedSnappedControls(
@@ -1093,11 +1078,8 @@ export class PenToolSession {
     const segs = this.penSession.getSegments();
     const anchor = pending.anchor;
 
-    const line = (x1s: number, y1s: number, x2s: number, y2s: number) => {
-      const p1 = this.ports.svgBboxToOverlayPixels({ x: x1s, y: y1s, width: 0, height: 0 });
-      const p2 = this.ports.svgBboxToOverlayPixels({ x: x2s, y: y2s, width: 0, height: 0 });
-      return { x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y };
-    };
+    const line = (x1s: number, y1s: number, x2s: number, y2s: number) =>
+      penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
 
     switch (kind) {
       case 'cubic': {
@@ -1192,7 +1174,7 @@ export class PenToolSession {
     if (first.type !== 'M') return null;
     if (!this.penCommittedPathHasVertexBeyondMoveto()) return null;
     if (!this.isPenPointerWithinCloseRadius(this.penHoverClientPx.x, this.penHoverClientPx.y)) return null;
-    const o = this.ports.svgBboxToOverlayPixels({ x: first.x, y: first.y, width: 0, height: 0 });
+    const o = penSvgUserPointToOverlayPixel(this.ports, first.x, first.y);
     return { cx: o.x, cy: o.y };
   }
   confirmDiscardPenSessionIfNeeded(reason: PenDiscardReason): boolean {
