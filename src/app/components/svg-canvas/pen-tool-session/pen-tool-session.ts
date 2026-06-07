@@ -6,7 +6,9 @@
  * `pen-tool-session-insert-on-path.ts`; SVG user → **Editor chrome** overlay mapping helpers in
  * `pen-tool-session-overlay.ts`. Shared pen thresholds and pending-segment preview math in
  * `pen-tool-session-constants.ts` and `pen-tool-session-pending-preview.ts`. In-progress path `d` strings
- * for templates live in `pen-tool-session-preview-path-d.ts`.
+ * for templates live in `pen-tool-session-preview-path-d.ts`. Rubber-band / close-target / outgoing-handle
+ * **Editor chrome** helpers in `pen-tool-session-preview-overlays.ts`. Pending curve handle chrome in
+ * `pen-tool-session-curve-handle-overlays.ts`.
  */
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import { rootSvgUserPointToScreenPoint } from '../../../utils/svg-screen-user';
@@ -63,6 +65,15 @@ import {
   computePenCurvePreviewPathD,
   computePenSessionPreviewPathD
 } from './pen-tool-session-preview-path-d';
+import {
+  computePenCloseTargetHoverOverlay,
+  computePenCommittedOutgoingHandleSvg,
+  computePenRubberBandOverlay
+} from './pen-tool-session-preview-overlays';
+import {
+  computePenCurveHandleOverlays,
+  computePenPendingCurveHandleGuideOverlays
+} from './pen-tool-session-curve-handle-overlays';
 
 export type { PenDiscardReason, PenToolSessionPorts } from './pen-tool-session-ports';
 
@@ -335,372 +346,64 @@ export class PenToolSession {
   /** Control handle centers (overlay px) while dragging a curved segment preview. */
   get penCurveHandleOverlays(): { cx: number; cy: number }[] {
     if (!this.penPointerSvg) return [];
-    if (this.penFirstAnchorMirroredHandleDragActive || this.penColocatedTipMirroredHandleDragActive) {
-      const pending = this.penPendingSegment!;
-      if (this.penPendingCubicAltEndHandleOnly()) return [];
-      const anchor = pending.anchor;
-      const c = penFirstAnchorMirroredHandleControlsFromDrag(
-        anchor,
-        this.penPointerSvg,
-        this.penPendingShiftAngleSnap
-      );
-      const toOverlay = (x: number, y: number) =>
-        penSvgUserPointToOverlayPixel(this.ports, x, y);
-      const p1 = toOverlay(c.x1, c.y1);
-      const p2 = toOverlay(c.x2, c.y2);
-      return [
-        { cx: p1.x, cy: p1.y },
-        { cx: p2.x, cy: p2.y }
-      ];
-    }
-    if (
-      this.penAwaitingColocatedSegmentEndpointAfterDraft &&
-      this.penColocatedSegmentEndpointDraft &&
-      !penPathOnlyMoveto(this.penSession.getSegments())
-    ) {
-      const segs = this.penSession.getSegments();
-      const tip = lastCommittedVertex(segs);
-      const draft = this.penColocatedSegmentEndpointDraft;
-      if (!tip || !draft) return [];
-      const anchor = tip;
-      const end = this.penPointerSvg;
-      const dragCurrent = draft.dragCommitSvg;
-      const kind = penDragCurveAuthoringKind(draft.ctrlCurve, segs);
-      const toOverlay = (x: number, y: number) =>
-        penSvgUserPointToOverlayPixel(this.ports, x, y);
-      switch (kind) {
-        case 'cubic': {
-          const altEndOnly = draft.curveAltChord;
-          const c = this.penPendingCubicAdjustedSnappedControls(
-            anchor,
-            end,
-            dragCurrent,
-            draft.placementDragStartSvg,
-            segs,
-            altEndOnly,
-            draft.shiftAngleSnap,
-            true
-          );
-          const x1 = draft.frozenOutgoingP1Svg?.x ?? c.x1;
-          const y1 = draft.frozenOutgoingP1Svg?.y ?? c.y1;
-          const p1 = toOverlay(x1, y1);
-          return [{ cx: p1.x, cy: p1.y }];
-        }
-        case 'quadratic': {
-          let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-            qc = { x1: s.x, y1: s.y };
-          }
-          const p = toOverlay(qc.x1, qc.y1);
-          return [{ cx: p.x, cy: p.y }];
-        }
-        case 'smoothCubic': {
-          const st = penReflectStateAfterCommitted(segs);
-          if (!st) return [];
-          const useReflect = penCubicSmoothReflectP1Usable(st, anchor);
-          const sx1 = useReflect ? 2 * anchor.x - st.cubicCp2X : anchor.x;
-          const sy1 = useReflect ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-          let hx = dragCurrent.x;
-          let hy = dragCurrent.y;
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
-            hx = s.x;
-            hy = s.y;
-          }
-          const p1 = toOverlay(sx1, sy1);
-          const p2 = toOverlay(hx, hy);
-          return [
-            { cx: p1.x, cy: p1.y },
-            { cx: p2.x, cy: p2.y }
-          ];
-        }
-        default: {
-          const st = penReflectStateAfterCommitted(segs);
-          if (!st) return [];
-          if (draft.curveAltChord) {
-            let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-            if (draft.shiftAngleSnap) {
-              const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-              qc = { x1: s.x, y1: s.y };
-            }
-            const p = toOverlay(qc.x1, qc.y1);
-            return [{ cx: p.x, cy: p.y }];
-          }
-          let ix = 2 * anchor.x - st.quadCpX;
-          let iy = 2 * anchor.y - st.quadCpY;
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
-            ix = s.x;
-            iy = s.y;
-          }
-          const p = toOverlay(ix, iy);
-          return [{ cx: p.x, cy: p.y }];
-        }
-      }
-    }
-    if (!this.penCurvePreviewPathD) return [];
-    if (this.penAwaitingFirstSegmentP3AfterDraft && this.penFirstAnchorP3Draft) {
-      const segs = this.penSession.getSegments();
-      const m = segs[0];
-      if (m.type !== 'M') return [];
-      const anchor = { x: m.x, y: m.y };
-      const end = this.penPointerSvg;
-      const draft = this.penFirstAnchorP3Draft;
-      const dragCurrent = draft.dragCommitSvg;
-      const kind = penDragCurveAuthoringKind(draft.ctrlCurve, segs);
-      const toOverlay = (x: number, y: number) =>
-        penSvgUserPointToOverlayPixel(this.ports, x, y);
-      switch (kind) {
-        case 'cubic': {
-          const altEndOnly = draft.curveAltChord;
-          const c = this.penPendingCubicAdjustedSnappedControls(
-            anchor,
-            end,
-            dragCurrent,
-            draft.placementDragStartSvg,
-            segs,
-            altEndOnly,
-            draft.shiftAngleSnap,
-            true
-          );
-          const x1 = draft.frozenOutgoingP1Svg?.x ?? c.x1;
-          const y1 = draft.frozenOutgoingP1Svg?.y ?? c.y1;
-          const p1 = toOverlay(x1, y1);
-          return [{ cx: p1.x, cy: p1.y }];
-        }
-        case 'quadratic': {
-          let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-            qc = { x1: s.x, y1: s.y };
-          }
-          const p = toOverlay(qc.x1, qc.y1);
-          return [{ cx: p.x, cy: p.y }];
-        }
-        case 'smoothCubic': {
-          const st = penReflectStateAfterCommitted(segs);
-          if (!st) return [];
-          const useReflect = penCubicSmoothReflectP1Usable(st, anchor);
-          const sx1 = useReflect ? 2 * anchor.x - st.cubicCp2X : anchor.x;
-          const sy1 = useReflect ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-          let hx = dragCurrent.x;
-          let hy = dragCurrent.y;
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
-            hx = s.x;
-            hy = s.y;
-          }
-          const p1 = toOverlay(sx1, sy1);
-          const p2 = toOverlay(hx, hy);
-          return [
-            { cx: p1.x, cy: p1.y },
-            { cx: p2.x, cy: p2.y }
-          ];
-        }
-        default: {
-          const st = penReflectStateAfterCommitted(segs);
-          if (!st) return [];
-          if (draft.curveAltChord) {
-            let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-            if (draft.shiftAngleSnap) {
-              const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-              qc = { x1: s.x, y1: s.y };
-            }
-            const p = toOverlay(qc.x1, qc.y1);
-            return [{ cx: p.x, cy: p.y }];
-          }
-          let ix = 2 * anchor.x - st.quadCpX;
-          let iy = 2 * anchor.y - st.quadCpY;
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
-            ix = s.x;
-            iy = s.y;
-          }
-          const p = toOverlay(ix, iy);
-          return [{ cx: p.x, cy: p.y }];
-        }
-      }
-    }
-    if (
-      this.penCommittedFirstSegmentP3Draft &&
-      this.penPendingSegment &&
-      penPathOnlyMoveto(this.penSession.getSegments())
-    ) {
-      const p3d = this.penCommittedFirstSegmentP3Draft;
-      const pending = this.penPendingSegment;
-      const segs = this.penSession.getSegments();
-      const m = segs[0];
-      if (m.type !== 'M') return [];
-      const anchorMv = { x: m.x, y: m.y };
-      const end = this.penPendingCurvePreviewEndSvg(pending);
-      const dragCurrent = this.penPendingDragSampleSvg(pending);
-      const kind = penDragCurveAuthoringKind(pending.ctrlCurve, segs);
-      switch (kind) {
-        case 'cubic': {
-          const altEndOnly = this.penPendingCubicAltEndHandleOnly();
-          const c = this.penPendingCubicAdjustedSnappedControls(
-            anchorMv,
-            end,
-            dragCurrent,
-            p3d.placementDragStartSvg,
-            segs,
-            altEndOnly,
-            this.penPendingShiftAngleSnap,
-            false
-          );
-          const x1 = p3d.frozenOutgoingP1Svg?.x ?? c.x1;
-          const y1 = p3d.frozenOutgoingP1Svg?.y ?? c.y1;
-          const p1 = penSvgUserPointToOverlayPixel(this.ports, x1, y1);
-          const p2 = penSvgUserPointToOverlayPixel(this.ports, c.x2, c.y2);
-          if (altEndOnly) {
-            return [
-              { cx: p1.x, cy: p1.y },
-              { cx: p2.x, cy: p2.y }
-            ];
-          }
-          const pOut = penSvgUserPointToOverlayPixel(this.ports, dragCurrent.x, dragCurrent.y);
-          return [
-            { cx: p1.x, cy: p1.y },
-            { cx: p2.x, cy: p2.y },
-            { cx: pOut.x, cy: pOut.y }
-          ];
-        }
-        default:
-          return [];
-      }
-    }
-    if (!this.penPendingSegment) return [];
-    const pending = this.penPendingSegment;
-    const anchor = pending.anchor;
-    const end = this.penPendingCurveGeometryEndSvg(pending);
-    const dragCurrent = this.penPendingDragSampleSvg(pending);
-    const kind = penDragCurveAuthoringKind(pending.ctrlCurve, this.penSession.getSegments());
-    const toOverlay = (x: number, y: number) =>
-      penSvgUserPointToOverlayPixel(this.ports, x, y);
-
-    switch (kind) {
-      case 'cubic': {
-        const altEndOnly = this.penPendingCubicAltEndHandleOnly();
-        const { x1, y1, x2, y2 } = this.penPendingCubicAdjustedSnappedControls(
-          anchor,
-          end,
-          dragCurrent,
-          pending.startSvg,
-          this.penSession.getSegments(),
-          altEndOnly
-        );
-        const p1 = toOverlay(x1, y1);
-        const p2 = toOverlay(x2, y2);
-        if (altEndOnly) {
-          return [
-            { cx: p1.x, cy: p1.y },
-            { cx: p2.x, cy: p2.y }
-          ];
-        }
-        const pOut = toOverlay(dragCurrent.x, dragCurrent.y);
-        return [
-          { cx: p2.x, cy: p2.y },
-          { cx: pOut.x, cy: pOut.y }
-        ];
-      }
-      case 'quadratic': {
-        let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-        if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-          qc = { x1: s.x, y1: s.y };
-        }
-        const p = toOverlay(qc.x1, qc.y1);
-        return [{ cx: p.x, cy: p.y }];
-      }
-      case 'smoothCubic': {
-        const st = penReflectStateAfterCommitted(this.penSession.getSegments());
-        if (!st) return [];
-        const useReflect = penCubicSmoothReflectP1Usable(st, anchor);
-        const sx1 = useReflect ? 2 * anchor.x - st.cubicCp2X : anchor.x;
-        const sy1 = useReflect ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-        let hx = dragCurrent.x;
-        let hy = dragCurrent.y;
-        if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
-          hx = s.x;
-          hy = s.y;
-        }
-        const p1 = toOverlay(sx1, sy1);
-        const p2 = toOverlay(hx, hy);
-        return [
-          { cx: p1.x, cy: p1.y },
-          { cx: p2.x, cy: p2.y }
-        ];
-      }
-      default: {
-        const st = penReflectStateAfterCommitted(this.penSession.getSegments());
-        if (!st) return [];
-        if (this.penPendingCurveAltChord) {
-          let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-          if (this.penPendingShiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-            qc = { x1: s.x, y1: s.y };
-          }
-          const p = toOverlay(qc.x1, qc.y1);
-          return [{ cx: p.x, cy: p.y }];
-        }
-        let ix = 2 * anchor.x - st.quadCpX;
-        let iy = 2 * anchor.y - st.quadCpY;
-        if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
-          ix = s.x;
-          iy = s.y;
-        }
-        const p = toOverlay(ix, iy);
-        return [{ cx: p.x, cy: p.y }];
-      }
-    }
+    return computePenCurveHandleOverlays({
+      ports: this.ports,
+      penPointerSvg: this.penPointerSvg,
+      penMirroredHandleChromeActive:
+        this.penFirstAnchorMirroredHandleDragActive || this.penColocatedTipMirroredHandleDragActive,
+      penPendingSegment: this.penPendingSegment,
+      penPendingCurveAltChord: this.penPendingCurveAltChord,
+      penPendingShiftAngleSnap: this.penPendingShiftAngleSnap,
+      penAwaitingColocatedSegmentEndpointAfterDraft: this.penAwaitingColocatedSegmentEndpointAfterDraft,
+      penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
+      segments: this.penSession.getSegments(),
+      penCurvePreviewPathD: this.penCurvePreviewPathD,
+      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
+      penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
+      penCommittedFirstSegmentP3Draft: this.penCommittedFirstSegmentP3Draft,
+      pendingDragSampleSvg: (pend) => this.penPendingDragSampleSvg(pend),
+      pendingCurvePreviewEndSvg: (pend) => this.penPendingCurvePreviewEndSvg(pend),
+      pendingCurveGeometryEndSvg: (pend) => this.penPendingCurveGeometryEndSvg(pend)
+    });
   }
 
+
+
   get penRubberBandOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
-    if (!this.isPenSessionActive || !this.penPointerSvg || this.ports.getCurrentTool() !== 'pen') {
-      return null;
-    }
-    if (this.penPendingShowsCurvePreview) return null;
-    if (this.penPendingSegment && this.penPendingIsFirstSegmentFromMovetoGesture()) {
-      return null;
-    }
-    if (this.penPendingSegment && this.penPendingChordColocated()) {
-      return null;
-    }
-    // No straight anchor→pointer chord while a segment endpoint is planted (committed path on session
-    // preview + curve stroke on {@link penCurvePreviewPathD} after the drag threshold).
-    if (this.penPendingSegment) {
-      return null;
-    }
-    // Suppress the straight rubber-band when we're already showing a smooth-departure curve preview.
-    {
-      const segs = this.penSession.getSegments();
-      const lvRb = lastCommittedVertex(segs);
-      const stRb = penReflectStateAfterCommitted(segs);
-      if (lvRb && penCubicSmoothReflectP1Usable(stRb, lvRb)) return null;
-    }
-    const anchor = lastCommittedVertex(this.penSession.getSegments());
-    if (!anchor) return null;
-    return penSvgUserSegmentToOverlayLine(
-      this.ports,
-      anchor.x,
-      anchor.y,
-      this.penPointerSvg.x,
-      this.penPointerSvg.y
-    );
+    return computePenRubberBandOverlay({
+      ports: this.ports,
+      currentToolIsPen: this.ports.getCurrentTool() === 'pen',
+      isPenSessionActive: this.isPenSessionActive,
+      penPointerSvg: this.penPointerSvg,
+      penPendingShowsCurvePreview: this.penPendingShowsCurvePreview,
+      hasPendingSegment: this.penPendingSegment !== null,
+      penPendingIsFirstSegmentFromMovetoGesture: this.penPendingIsFirstSegmentFromMovetoGesture(),
+      penPendingChordColocated: this.penPendingChordColocated(),
+      segments: this.penSession.getSegments()
+    });
   }
 
   /** Dashed guide from last vertex to outgoing handle while rubber-banding the next segment. */
   get penOutgoingHandleGuideOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
-    const h = this.penCommittedOutgoingHandleSvg();
+    const h = computePenCommittedOutgoingHandleSvg({
+      currentToolIsPen: this.ports.getCurrentTool() === 'pen',
+      isPenSessionActive: this.isPenSessionActive,
+      penPointerSvg: this.penPointerSvg,
+      penPendingShowsCurvePreview: this.penPendingShowsCurvePreview,
+      segments: this.penSession.getSegments()
+    });
     if (!h) return null;
     return penSvgUserSegmentToOverlayLine(this.ports, h.anchorX, h.anchorY, h.hx, h.hy);
   }
 
   get penOutgoingHandleKnobOverlay(): { cx: number; cy: number } | null {
-    const h = this.penCommittedOutgoingHandleSvg();
+    const h = computePenCommittedOutgoingHandleSvg({
+      currentToolIsPen: this.ports.getCurrentTool() === 'pen',
+      isPenSessionActive: this.isPenSessionActive,
+      penPointerSvg: this.penPointerSvg,
+      penPendingShowsCurvePreview: this.penPendingShowsCurvePreview,
+      segments: this.penSession.getSegments()
+    });
     if (!h) return null;
     const p2 = penSvgUserPointToOverlayPixel(this.ports, h.hx, h.hy);
     return { cx: p2.x, cy: p2.y };
@@ -712,334 +415,45 @@ export class PenToolSession {
    * aligned with {@link penCurveHandleOverlays} geometry.
    */
   get penPendingCurveHandleGuideOverlays(): { x1: number; y1: number; x2: number; y2: number }[] {
-    if (this.ports.getCurrentTool() !== 'pen') {
-      return [];
-    }
-    if (
-      (this.penFirstAnchorMirroredHandleDragActive || this.penColocatedTipMirroredHandleDragActive) &&
-      this.penPointerSvg &&
-      this.penPendingSegment
-    ) {
-      const pending = this.penPendingSegment;
-      if (this.penPendingCubicAltEndHandleOnly()) return [];
-      const anchor = pending.anchor;
-      const c = penFirstAnchorMirroredHandleControlsFromDrag(
-        anchor,
-        this.penPointerSvg,
-        this.penPendingShiftAngleSnap
-      );
-      const line = (x1s: number, y1s: number, x2s: number, y2s: number) =>
-        penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
-      return [line(anchor.x, anchor.y, c.x1, c.y1), line(anchor.x, anchor.y, c.x2, c.y2)];
-    }
-    if (
-      this.penAwaitingColocatedSegmentEndpointAfterDraft &&
-      this.penColocatedSegmentEndpointDraft &&
-      !penPathOnlyMoveto(this.penSession.getSegments())
-    ) {
-      const segs = this.penSession.getSegments();
-      const tip = lastCommittedVertex(segs);
-      const draft = this.penColocatedSegmentEndpointDraft;
-      if (!tip || !draft) return [];
-      const anchor = tip;
-      const end = this.penPointerSvg!;
-      const dragCurrent = draft.dragCommitSvg;
-      const kind = penDragCurveAuthoringKind(draft.ctrlCurve, segs);
-      const line = (x1s: number, y1s: number, x2s: number, y2s: number) =>
-        penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
-      switch (kind) {
-        case 'cubic': {
-          const altEndOnly = draft.curveAltChord;
-          const c = this.penPendingCubicAdjustedSnappedControls(
-            anchor,
-            end,
-            dragCurrent,
-            draft.placementDragStartSvg,
-            segs,
-            altEndOnly,
-            draft.shiftAngleSnap,
-            true
-          );
-          const x1 = draft.frozenOutgoingP1Svg?.x ?? c.x1;
-          const y1 = draft.frozenOutgoingP1Svg?.y ?? c.y1;
-          return [line(anchor.x, anchor.y, x1, y1)];
-        }
-        case 'quadratic': {
-          let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-            qc = { x1: s.x, y1: s.y };
-          }
-          return [line(anchor.x, anchor.y, qc.x1, qc.y1)];
-        }
-        case 'smoothCubic': {
-          const st = penReflectStateAfterCommitted(segs);
-          if (!st) return [];
-          const useReflect = penCubicSmoothReflectP1Usable(st, anchor);
-          const sx1 = useReflect ? 2 * anchor.x - st.cubicCp2X : anchor.x;
-          const sy1 = useReflect ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-          let hx = dragCurrent.x;
-          let hy = dragCurrent.y;
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
-            hx = s.x;
-            hy = s.y;
-          }
-          return [
-            line(anchor.x, anchor.y, sx1, sy1),
-            line(end.x, end.y, hx, hy)
-          ];
-        }
-        default: {
-          if (draft.curveAltChord) {
-            let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-            if (draft.shiftAngleSnap) {
-              const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-              qc = { x1: s.x, y1: s.y };
-            }
-            return [line(anchor.x, anchor.y, qc.x1, qc.y1)];
-          }
-          const st = penReflectStateAfterCommitted(segs);
-          if (!st) return [];
-          let ix = 2 * anchor.x - st.quadCpX;
-          let iy = 2 * anchor.y - st.quadCpY;
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
-            ix = s.x;
-            iy = s.y;
-          }
-          return [line(anchor.x, anchor.y, ix, iy)];
-        }
-      }
-    }
-    if (!this.penCurvePreviewPathD) {
-      return [];
-    }
-    if (this.penAwaitingFirstSegmentP3AfterDraft && this.penFirstAnchorP3Draft) {
-      const segs = this.penSession.getSegments();
-      const m = segs[0];
-      if (m.type !== 'M') return [];
-      const anchor = { x: m.x, y: m.y };
-      const end = this.penPointerSvg!;
-      const draft = this.penFirstAnchorP3Draft;
-      const dragCurrent = draft.dragCommitSvg;
-      const kind = penDragCurveAuthoringKind(draft.ctrlCurve, segs);
-      const line = (x1s: number, y1s: number, x2s: number, y2s: number) =>
-        penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
-      switch (kind) {
-        case 'cubic': {
-          const altEndOnly = draft.curveAltChord;
-          const c = this.penPendingCubicAdjustedSnappedControls(
-            anchor,
-            end,
-            dragCurrent,
-            draft.placementDragStartSvg,
-            segs,
-            altEndOnly,
-            draft.shiftAngleSnap,
-            true
-          );
-          const x1 = draft.frozenOutgoingP1Svg?.x ?? c.x1;
-          const y1 = draft.frozenOutgoingP1Svg?.y ?? c.y1;
-          return [line(anchor.x, anchor.y, x1, y1)];
-        }
-        case 'quadratic': {
-          let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-            qc = { x1: s.x, y1: s.y };
-          }
-          return [line(anchor.x, anchor.y, qc.x1, qc.y1)];
-        }
-        case 'smoothCubic': {
-          const st = penReflectStateAfterCommitted(segs);
-          if (!st) return [];
-          const useReflect = penCubicSmoothReflectP1Usable(st, anchor);
-          const sx1 = useReflect ? 2 * anchor.x - st.cubicCp2X : anchor.x;
-          const sy1 = useReflect ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-          let hx = dragCurrent.x;
-          let hy = dragCurrent.y;
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
-            hx = s.x;
-            hy = s.y;
-          }
-          return [
-            line(anchor.x, anchor.y, sx1, sy1),
-            line(end.x, end.y, hx, hy)
-          ];
-        }
-        default: {
-          if (draft.curveAltChord) {
-            let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-            if (draft.shiftAngleSnap) {
-              const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-              qc = { x1: s.x, y1: s.y };
-            }
-            return [line(anchor.x, anchor.y, qc.x1, qc.y1)];
-          }
-          const st = penReflectStateAfterCommitted(segs);
-          if (!st) return [];
-          let ix = 2 * anchor.x - st.quadCpX;
-          let iy = 2 * anchor.y - st.quadCpY;
-          if (draft.shiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
-            ix = s.x;
-            iy = s.y;
-          }
-          return [line(anchor.x, anchor.y, ix, iy)];
-        }
-      }
-    }
-    if (
-      this.penCommittedFirstSegmentP3Draft &&
-      this.penPendingSegment &&
-      penPathOnlyMoveto(this.penSession.getSegments())
-    ) {
-      const p3d = this.penCommittedFirstSegmentP3Draft;
-      const pending = this.penPendingSegment;
-      const segsP3 = this.penSession.getSegments();
-      const m = segsP3[0];
-      if (m.type !== 'M') return [];
-      const anchorMv = { x: m.x, y: m.y };
-      const endP3 = this.penPendingCurvePreviewEndSvg(pending);
-      const dragCurrentP3 = this.penPendingDragSampleSvg(pending);
-      const kindP3 = penDragCurveAuthoringKind(pending.ctrlCurve, segsP3);
-      const lineP3 = (x1s: number, y1s: number, x2s: number, y2s: number) =>
-        penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
-      if (kindP3 === 'cubic') {
-        const altEndOnly = this.penPendingCubicAltEndHandleOnly();
-        const c = this.penPendingCubicAdjustedSnappedControls(
-          anchorMv,
-          endP3,
-          dragCurrentP3,
-          p3d.placementDragStartSvg,
-          segsP3,
-          altEndOnly,
-          this.penPendingShiftAngleSnap,
-          false
-        );
-        const x1 = p3d.frozenOutgoingP1Svg?.x ?? c.x1;
-        const y1 = p3d.frozenOutgoingP1Svg?.y ?? c.y1;
-        const linesP3: { x1: number; y1: number; x2: number; y2: number }[] = [
-          lineP3(anchorMv.x, anchorMv.y, x1, y1),
-          lineP3(endP3.x, endP3.y, c.x2, c.y2)
-        ];
-        if (!altEndOnly) {
-          linesP3.push(lineP3(endP3.x, endP3.y, dragCurrentP3.x, dragCurrentP3.y));
-        }
-        return linesP3;
-      }
-      return [];
-    }
-    if (!this.penPendingSegment) return [];
-    const pending = this.penPendingSegment;
-    const end = this.penPendingCurveGeometryEndSvg(pending);
-    const dragCurrent = this.penPendingDragSampleSvg(pending);
-    const kind = penDragCurveAuthoringKind(pending.ctrlCurve, this.penSession.getSegments());
-    const segs = this.penSession.getSegments();
-    const anchor = pending.anchor;
-
-    const line = (x1s: number, y1s: number, x2s: number, y2s: number) =>
-      penSvgUserSegmentToOverlayLine(this.ports, x1s, y1s, x2s, y2s);
-
-    switch (kind) {
-      case 'cubic': {
-        const altEndOnly = this.penPendingCubicAltEndHandleOnly();
-        const c = this.penPendingCubicAdjustedSnappedControls(
-          anchor,
-          end,
-          dragCurrent,
-          pending.startSvg,
-          segs,
-          altEndOnly
-        );
-        const lines: { x1: number; y1: number; x2: number; y2: number }[] = [
-          line(anchor.x, anchor.y, c.x1, c.y1),
-          line(end.x, end.y, c.x2, c.y2)
-        ];
-        if (!altEndOnly) {
-          lines.push(line(end.x, end.y, dragCurrent.x, dragCurrent.y));
-        }
-        return lines;
-      }
-      case 'quadratic': {
-        let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-        if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-          qc = { x1: s.x, y1: s.y };
-        }
-        return [line(anchor.x, anchor.y, qc.x1, qc.y1)];
-      }
-      case 'smoothCubic': {
-        const st = penReflectStateAfterCommitted(segs);
-        if (!st) return [];
-        const useReflect = penCubicSmoothReflectP1Usable(st, anchor);
-        const sx1 = useReflect ? 2 * anchor.x - st.cubicCp2X : anchor.x;
-        const sy1 = useReflect ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
-        let hx = dragCurrent.x;
-        let hy = dragCurrent.y;
-        if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
-          hx = s.x;
-          hy = s.y;
-        }
-        return [
-          line(anchor.x, anchor.y, sx1, sy1),
-          line(end.x, end.y, hx, hy)
-        ];
-      }
-      default: {
-        if (this.penPendingCurveAltChord) {
-          let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
-          if (this.penPendingShiftAngleSnap) {
-            const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
-            qc = { x1: s.x, y1: s.y };
-          }
-          return [line(anchor.x, anchor.y, qc.x1, qc.y1)];
-        }
-        const st = penReflectStateAfterCommitted(segs);
-        if (!st) return [];
-        let ix = 2 * anchor.x - st.quadCpX;
-        let iy = 2 * anchor.y - st.quadCpY;
-        if (this.penPendingShiftAngleSnap) {
-          const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
-          ix = s.x;
-          iy = s.y;
-        }
-        return [line(anchor.x, anchor.y, ix, iy)];
-      }
-    }
+    return computePenPendingCurveHandleGuideOverlays({
+      ports: this.ports,
+      currentToolIsPen: this.ports.getCurrentTool() === 'pen',
+      penMirroredHandleChromeActive:
+        this.penFirstAnchorMirroredHandleDragActive || this.penColocatedTipMirroredHandleDragActive,
+      penPointerSvg: this.penPointerSvg,
+      penPendingSegment: this.penPendingSegment,
+      penPendingCurveAltChord: this.penPendingCurveAltChord,
+      penPendingShiftAngleSnap: this.penPendingShiftAngleSnap,
+      penAwaitingColocatedSegmentEndpointAfterDraft: this.penAwaitingColocatedSegmentEndpointAfterDraft,
+      penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
+      segments: this.penSession.getSegments(),
+      penCurvePreviewPathD: this.penCurvePreviewPathD,
+      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
+      penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
+      penCommittedFirstSegmentP3Draft: this.penCommittedFirstSegmentP3Draft,
+      pendingDragSampleSvg: (pend) => this.penPendingDragSampleSvg(pend),
+      pendingCurvePreviewEndSvg: (pend) => this.penPendingCurvePreviewEndSvg(pend),
+      pendingCurveGeometryEndSvg: (pend) => this.penPendingCurveGeometryEndSvg(pend)
+    });
   }
 
-  private penCommittedOutgoingHandleSvg(): {
-    anchorX: number;
-    anchorY: number;
-    hx: number;
-    hy: number;
-  } | null {
-    if (this.ports.getCurrentTool() !== 'pen' || !this.isPenSessionActive || !this.penPointerSvg) {
-      return null;
-    }
-    if (this.penPendingShowsCurvePreview) return null;
-    return penLastOutgoingHandleSvg(this.penSession.getSegments());
-  }
+
 
   /** First-anchor close target when pointer is inside single-click-close radius — overlay px (cx/cy). */
   get penCloseTargetHoverOverlay(): { cx: number; cy: number } | null {
-    if (this.ports.getCurrentTool() !== 'pen' || !this.isPenSessionActive || !this.penHoverClientPx) {
-      return null;
-    }
-    const segs = this.penSession.getSegments();
-    if (!penPathSegmentsAreValid(segs)) return null;
-    const first = segs[0];
-    if (first.type !== 'M') return null;
-    if (!this.penCommittedPathHasVertexBeyondMoveto()) return null;
-    if (!this.isPenPointerWithinCloseRadius(this.penHoverClientPx.x, this.penHoverClientPx.y)) return null;
-    const o = penSvgUserPointToOverlayPixel(this.ports, first.x, first.y);
-    return { cx: o.x, cy: o.y };
+    return computePenCloseTargetHoverOverlay({
+      ports: this.ports,
+      currentToolIsPen: this.ports.getCurrentTool() === 'pen',
+      isPenSessionActive: this.isPenSessionActive,
+      penHoverClientPx: this.penHoverClientPx,
+      segments: this.penSession.getSegments(),
+      penCommittedPathHasVertexBeyondMoveto: this.penCommittedPathHasVertexBeyondMoveto(),
+      isPenPointerWithinCloseRadius: (clientX, clientY) =>
+        this.isPenPointerWithinCloseRadius(clientX, clientY)
+    });
   }
-  confirmDiscardPenSessionIfNeeded(reason: PenDiscardReason): boolean {
+
+    confirmDiscardPenSessionIfNeeded(reason: PenDiscardReason): boolean {
     if (!this.isPenSessionActive) return true;
     if (!this.ports.confirmDiscardInProgressPath(reason)) return false;
     this.clearDrawingState();
