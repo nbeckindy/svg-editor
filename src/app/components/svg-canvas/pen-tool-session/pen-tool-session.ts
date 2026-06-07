@@ -4,7 +4,8 @@
  * so the **Canvas adapter** stays a DOM/view adapter and this module stays unit-testable without full TestBed.
  * Finish-to-document and insert-on-path helpers live in `pen-tool-session-finish.ts` and
  * `pen-tool-session-insert-on-path.ts`; SVG user → **Editor chrome** overlay mapping helpers in
- * `pen-tool-session-overlay.ts`.
+ * `pen-tool-session-overlay.ts`. Shared pen thresholds and pending-segment preview math in
+ * `pen-tool-session-constants.ts` and `pen-tool-session-pending-preview.ts`.
  */
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import { rootSvgUserPointToScreenPoint } from '../../../utils/svg-screen-user';
@@ -48,32 +49,27 @@ import {
 } from './pen-tool-session-insert-on-path';
 import type { PenDiscardReason, PenToolSessionPorts } from './pen-tool-session-ports';
 import { penSvgUserPointToOverlayPixel, penSvgUserSegmentToOverlayLine } from './pen-tool-session-overlay';
+import {
+  PEN_FINISH_FEEDBACK_DURATION_MS,
+  PEN_SINGLE_CLICK_CLOSE_RADIUS_PX,
+  PEN_CLOSE_MOVETO_REWRITE_MAX_SQ
+} from './pen-tool-session-constants';
+import {
+  computePenPendingShowsCurvePreviewForClose,
+  penPendingCurvePreviewEndSvg as penPendingCurvePreviewEndUserSvg,
+  penPendingDragSampleSvg as samplePenPendingDragSvg,
+  penPendingStartNearPathMoveto as computePenPendingStartNearPathMoveto,
+  type PenPendingSegmentForPreview
+} from './pen-tool-session-pending-preview';
 
 export type { PenDiscardReason, PenToolSessionPorts } from './pen-tool-session-ports';
-
-const PEN_FINISH_FEEDBACK_DURATION_MS = 1200;
-const PEN_SINGLE_CLICK_CLOSE_RADIUS_PX = 8;
-/**
- * Close-from-start: mousedown is on a small hit target (~{@link PEN_SINGLE_CLICK_CLOSE_RADIUS_PX} px).
- * {@link MARQUEE_MIN_DRAG_PX} is intentionally not lowered globally; this threshold applies only when
- * {@link penPendingStartNearPathMoveto} is true (see plans/bugs/pen-close-from-start-preview-and-endpoint.md).
- */
-const PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SCREEN_PX = 2;
-const PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SVG_DRAG_SQ = 1e-6;
-/** When finishing closed paths: absorb CTM / float mismatch vs session `M` without a mirrored closing `C`. */
-const PEN_CLOSE_MOVETO_REWRITE_MAX_SQ = 1e-8;
 
 export class PenToolSession {
   penFinishFeedbackMessage: string | null = null;
   private penFinishFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
   private readonly penSession = new PenSession();
   private penPointerSvg: { x: number; y: number } | null = null;
-  private penPendingSegment: {
-    anchor: { x: number; y: number };
-    startClient: { x: number; y: number };
-    startSvg: { x: number; y: number };
-    ctrlCurve: boolean;
-  } | null = null;
+  private penPendingSegment: PenPendingSegmentForPreview | null = null;
   private penPendingLastClient: { x: number; y: number } | null = null;
   private penPendingDragSvg: { x: number; y: number } | null = null;
   private penPendingCurveAltChord = false;
@@ -176,25 +172,9 @@ export class PenToolSession {
     this.penColocatedSegmentEndpointDraft = null;
   }
 
-  /**
-   * Pending segment end `P3` for preview / chord geometry: the mousedown-planted `startSvg` (second anchor).
-   * For the first segment from empty canvas (single gesture), `P3` stays on the first node; drag only
-   * shapes handles — see {@link penPendingDragSampleSvg}.
-   */
-  private penPendingEffectiveEndSvg(pending: {
-    anchor: { x: number; y: number };
-    startSvg: { x: number; y: number };
-  }): { x: number; y: number } {
-    return { x: pending.startSvg.x, y: pending.startSvg.y };
-  }
-
-  /** Live pointer sample (snapped) for pending handle placement; chord end uses {@link penPendingEffectiveEndSvg}. */
-  private penPendingDragSampleSvg(pending: { startSvg: { x: number; y: number } }): { x: number; y: number } {
-    const p =
-      this.penPendingDragSvg ??
-      this.penPointerSvg ??
-      ({ x: pending.startSvg.x, y: pending.startSvg.y } as const);
-    return { x: p.x, y: p.y };
+  /** Live pointer sample (snapped) for pending handle placement. */
+  private penPendingDragSampleSvg(pending: Pick<PenPendingSegmentForPreview, 'startSvg'>): { x: number; y: number } {
+    return samplePenPendingDragSvg(pending, this.penPendingDragSvg, this.penPointerSvg);
   }
 
   /**
@@ -225,67 +205,43 @@ export class PenToolSession {
    * Enables a scoped curve-preview rule without changing global marquee thresholds.
    */
   private penPendingStartNearPathMoveto(): boolean {
-    const pending = this.penPendingSegment;
-    const m = this.penPathStartMv();
-    if (!pending || !m) return false;
-    if (!this.penCommittedPathHasVertexBeyondMoveto()) return false;
-    return this.penEndpointsWithinJoinTolerance(pending.startSvg.x, pending.startSvg.y, m.x, m.y);
+    return computePenPendingStartNearPathMoveto(
+      this.penPendingSegment,
+      this.penPathStartMv(),
+      this.penCommittedPathHasVertexBeyondMoveto(),
+      (ax, ay, bx, by) => this.penEndpointsWithinJoinTolerance(ax, ay, bx, by)
+    );
   }
 
   /** Pending curve preview end vertex: exact `M` when closing from start, else effective segment end. */
-  private penPendingCurvePreviewEndSvg(pending: {
-    anchor: { x: number; y: number };
-    startClient: { x: number; y: number };
-    startSvg: { x: number; y: number };
-    ctrlCurve: boolean;
-  }): { x: number; y: number } {
-    const m = this.penPathStartMv();
-    if (
-      m &&
-      this.penCommittedPathHasVertexBeyondMoveto() &&
-      this.penEndpointsWithinJoinTolerance(pending.startSvg.x, pending.startSvg.y, m.x, m.y)
-    ) {
-      return { x: m.x, y: m.y };
-    }
-    return this.penPendingEffectiveEndSvg(pending);
+  private penPendingCurvePreviewEndSvg(pending: PenPendingSegmentForPreview): { x: number; y: number } {
+    return penPendingCurvePreviewEndUserSvg(
+      pending,
+      this.penPathStartMv(),
+      this.penCommittedPathHasVertexBeyondMoveto(),
+      (ax, ay, bx, by) => this.penEndpointsWithinJoinTolerance(ax, ay, bx, by)
+    );
   }
 
   /**
    * Whether the pending segment should show curve-authoring chrome (Bézier `penCurvePreviewPathD` and/or
-   * first-anchor mirrored handles). Uses {@link MARQUEE_MIN_DRAG_PX} for normal drags; when closing from start,
+   * first-anchor mirrored handles). Uses marquee minimum drag for normal drags; when closing from start,
    * also allows a smaller screen threshold or a tiny root-SVG drag so users can shape the closing segment without leaving the start ring.
    */
   private penPendingShowsCurvePreviewForClose(): boolean {
-    if (this.penAwaitingFirstSegmentP3AfterDraft && this.penFirstAnchorP3Draft) return true;
-    if (this.penAwaitingColocatedSegmentEndpointAfterDraft && this.penColocatedSegmentEndpointDraft) return true;
-    if (!this.penPendingSegment || !this.penPendingLastClient) return false;
-    const { startClient, startSvg } = this.penPendingSegment;
-    const lc = this.penPendingLastClient;
-    const screenHyp = Math.hypot(lc.x - startClient.x, lc.y - startClient.y);
-    // First segment from empty: show mirrored handle chrome as soon as the pointer moves slightly
-    // (same small threshold as close-from-start), not only after full marquee distance.
-    if (
-      this.penPendingIsFirstSegmentFromMovetoGesture() &&
-      screenHyp >= PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SCREEN_PX
-    ) {
-      return true;
-    }
-    if (
-      this.penPendingChordColocated() &&
-      screenHyp >= PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SCREEN_PX
-    ) {
-      return true;
-    }
-    if (screenHyp >= MARQUEE_MIN_DRAG_PX) return true;
-    if (!this.penPendingStartNearPathMoveto()) return false;
-    if (screenHyp >= PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SCREEN_PX) return true;
-    const dragSvg = this.penPendingDragSvg;
-    const m = this.penPathStartMv();
-    if (dragSvg) {
-      if (penSvgDistanceSq(dragSvg, startSvg) > PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SVG_DRAG_SQ) return true;
-      if (m && penSvgDistanceSq(dragSvg, m) > PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SVG_DRAG_SQ) return true;
-    }
-    return false;
+    return computePenPendingShowsCurvePreviewForClose({
+      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
+      penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
+      penAwaitingColocatedSegmentEndpointAfterDraft: this.penAwaitingColocatedSegmentEndpointAfterDraft,
+      penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
+      penPendingSegment: this.penPendingSegment,
+      penPendingLastClient: this.penPendingLastClient,
+      penPendingDragSvg: this.penPendingDragSvg,
+      penPendingIsFirstSegmentFromMovetoGesture: this.penPendingIsFirstSegmentFromMovetoGesture(),
+      penPendingChordColocated: this.penPendingChordColocated(),
+      penPendingStartNearPathMoveto: this.penPendingStartNearPathMoveto(),
+      penPathStartMv: this.penPathStartMv()
+    });
   }
 
   get penPendingShowsCurvePreview(): boolean {
