@@ -5449,7 +5449,7 @@ describe('SvgCanvasComponent', () => {
       }
     });
 
-    it('shows rubber-band line in overlay after first point and pointer move', async () => {
+    it('does not show rubber-band to pointer on first-segment pending (no P3 hint)', async () => {
       await loadEmptySvgAndPenMode();
 
       component.onCanvasMouseDown({
@@ -5459,13 +5459,107 @@ describe('SvgCanvasComponent', () => {
         detail: 1,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      component.onDocumentMouseMove({ clientX: 70, clientY: 60 } as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 21, clientY: 20 } as MouseEvent);
       fixture.detectChanges();
 
-      const band = fixture.nativeElement.querySelector('[data-testid="canvas-pen-rubber-band"]');
-      expect(band).toBeTruthy();
-      expect(band?.getAttribute('x1')).toBeTruthy();
-      expect(band?.getAttribute('x2')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-pen-rubber-band"]')).toBeFalsy();
+    });
+
+    it('pen: single press-drag from empty stays M until P3; second down+up commits C', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      const bend = MARQUEE_MIN_DRAG_PX + 8;
+      component.onDocumentMouseMove({ clientX: 10 + bend, clientY: 10 + bend } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 10 + bend, clientY: 10 + bend } as MouseEvent);
+      fixture.detectChanges();
+
+      let segs = component.penTool.getPenSessionSegments();
+      expect(segs.length).toBe(1);
+      expect(segs[0].type).toBe('M');
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 100,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      segs = component.penTool.getPenSessionSegments();
+      expect(segs.length).toBe(1);
+
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+
+      segs = component.penTool.getPenSessionSegments();
+      expect(segs[0].type).toBe('M');
+      expect(segs[1].type).toBe('C');
+      const m = segs[0] as { type: 'M'; x: number; y: number };
+      const c = segs[1] as { type: 'C'; x: number; y: number; x2: number; y2: number };
+      expect(c.x).toBeCloseTo(100, 5);
+      expect(c.y).toBeCloseTo(10, 5);
+      expect(c.x2).toBeCloseTo(c.x, 5);
+      expect(c.y2).toBeCloseTo(c.y, 5);
+      expect(Math.abs(c.x1 - m.x) + Math.abs(c.y1 - m.y)).toBeGreaterThan(1e-3);
+    });
+
+    it('pen: no close-target hover ring during first-segment pending (single-gesture)', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 12, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-pen-close-hover"]')).toBeFalsy();
+    });
+
+    it('pen: two-click second anchor in close ring does not finish path until segment is committed', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 12,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseMove({ clientX: 50, clientY: 40 } as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 50, clientY: 40 } as MouseEvent);
+      fixture.detectChanges();
+
+      expect(editorToolService.getCurrentTool()).toBe('pen');
+      const segs = component.penTool.getPenSessionSegments();
+      expect(segs.length).toBe(2);
+      expect(segs[1].type).toMatch(/L|C/);
     });
 
     it('shows full in-progress path preview (committed segments + current segment)', async () => {
@@ -5519,15 +5613,16 @@ describe('SvgCanvasComponent', () => {
         expect(previewWhileBand?.getAttribute('stroke')).toBe(drawingDefaults.stroke());
         expect(previewWhileBand?.getAttribute('stroke-width')).toBe(String(drawingDefaults.strokeWidth()));
 
-        const band = fixture.nativeElement.querySelector('[data-testid="canvas-pen-rubber-band"]') as SVGLineElement | null;
-        expect(band?.getAttribute('stroke')).toBe(drawingDefaults.stroke());
+        const curvePreviewPhase1 = fixture.nativeElement.querySelector(
+          '[data-testid="canvas-pen-curve-preview"]'
+        ) as SVGPathElement | null;
+        expect(curvePreviewPhase1).toBeNull();
 
         drawingDefaults.updateDefaults({ stroke: '#abc123', strokeWidth: 3.25 });
         fixture.detectChanges();
 
         expect(previewWhileBand?.getAttribute('stroke')).toBe('#abc123');
         expect(previewWhileBand?.getAttribute('stroke-width')).toBe('3.25');
-        expect(band?.getAttribute('stroke')).toBe('#abc123');
 
         component.onCanvasMouseDown({
           button: 0,

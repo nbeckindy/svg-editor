@@ -160,7 +160,7 @@
               vector-effect="non-scaling-stroke"
               filter="url(#editor-artboard-boundary-shadow)" />
           }
-          @if (!editorChrome.isPathNodeEditModeActive && editorChrome.highlightRect; as hr) {
+          @if (!editorChrome.hideSelectionHighlightOverlay && editorChrome.highlightRect; as hr) {
             @if (editorChrome.isRotatingSelection) {
               <g [attr.transform]="editorChrome.selectionRotateHighlightTransform(hr)">
                 <rect
@@ -250,6 +250,43 @@
               [attr.stroke]="drawingDefaults.stroke()"
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
+            @if (editorChrome.penInsertOnPathNodeAffordanceOverlay; as insAff) {
+              @for (ln of insAff.lines; track $index) {
+                <line
+                  class="path-node-control-line pen-insert-on-path-affordance"
+                  data-testid="canvas-pen-insert-on-path-control-line"
+                  [attr.x1]="ln.x1"
+                  [attr.y1]="ln.y1"
+                  [attr.x2]="ln.x2"
+                  [attr.y2]="ln.y2"
+                  stroke="#43A047"
+                  stroke-width="1.5"
+                  stroke-dasharray="3 2"
+                  vector-effect="non-scaling-stroke"/>
+              }
+              @for (kn of insAff.knobs; track $index) {
+                <circle
+                  class="path-node-control-handle pen-insert-on-path-affordance"
+                  data-testid="canvas-pen-insert-on-path-control-handle"
+                  [attr.cx]="kn.cx"
+                  [attr.cy]="kn.cy"
+                  r="3.5"
+                  fill="#ffffff"
+                  stroke="#43A047"
+                  stroke-width="1.5"
+                  vector-effect="non-scaling-stroke"/>
+              }
+              <circle
+                class="path-node-anchor path-node-anchor-selected pen-insert-on-path-affordance"
+                data-testid="canvas-pen-insert-on-path-planted-anchor"
+                [attr.cx]="insAff.plantedAnchor.cx"
+                [attr.cy]="insAff.plantedAnchor.cy"
+                r="4"
+                fill="#ffffff"
+                stroke="#1E88E5"
+                stroke-width="2"
+                vector-effect="non-scaling-stroke"/>
+            }
           }
           @if (editorChrome.penSessionPreviewPathD; as pfull) {
             <path
@@ -270,6 +307,8 @@
               [attr.stroke]="drawingDefaults.stroke()"
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
+          }
+          @if (editorChrome.penCurvePreviewPathD || editorChrome.penFirstAnchorMirroredHandleDragActive || editorChrome.penColocatedTipMirroredHandleDragActive) {
             @for (h of editorChrome.penCurveHandleOverlays; track h.cx + ',' + h.cy) {
               <circle
                 class="pen-curve-handle"
@@ -282,17 +321,17 @@
                 stroke-width="1.5"
                 vector-effect="non-scaling-stroke"/>
             }
-            @if (editorChrome.penPendingCurveHandleGuideOverlay; as pcg) {
+            @for (ln of editorChrome.penPendingCurveHandleGuideOverlays; track $index; let idx = $index) {
               <line
-                class="pen-outgoing-handle-guide"
-                data-testid="canvas-pen-pending-curve-handle-guide"
-                [attr.x1]="pcg.x1"
-                [attr.y1]="pcg.y1"
-                [attr.x2]="pcg.x2"
-                [attr.y2]="pcg.y2"
-                stroke="#2196f3"
-                stroke-width="1.25"
-                stroke-dasharray="4 3"
+                class="path-node-control-line pen-insert-on-path-affordance"
+                [attr.data-testid]="'canvas-pen-pending-curve-handle-guide-' + idx"
+                [attr.x1]="ln.x1"
+                [attr.y1]="ln.y1"
+                [attr.x2]="ln.x2"
+                [attr.y2]="ln.y2"
+                stroke="#43A047"
+                stroke-width="1.5"
+                stroke-dasharray="3 2"
                 vector-effect="non-scaling-stroke"/>
             }
           }

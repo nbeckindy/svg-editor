@@ -340,11 +340,40 @@ const ILLUSTRATOR_PEN_INCOMING_FROM_DRAG = 0.55;
 // const ILLUSTRATOR_PEN_INCOMING_CAP_CHORD = 0.58;
 
 /**
+ * When `p0` and `p3` coincide (zero-length chord), Illustrator-style chord-thirds are degenerate.
+ * Use the drag vector from `dragStart`→`dragCurrent` to place outgoing `P1` and incoming `P2`
+ * along that ray (same length ratios as {@link placementIllustratorStyleCubicControlPoints} for a non-degenerate chord).
+ */
+export function placementZeroChordCubicControlPointsFromDrag(
+  anchor: { x: number; y: number },
+  dragStart: { x: number; y: number },
+  dragCurrent: { x: number; y: number }
+): CubicControlPoints {
+  const ddx = dragCurrent.x - dragStart.x;
+  const ddy = dragCurrent.y - dragStart.y;
+  const dragLen = Math.hypot(ddx, ddy);
+  if (dragLen < 1e-12) {
+    return { x1: anchor.x, y1: anchor.y, x2: anchor.x, y2: anchor.y };
+  }
+  const ux = ddx / dragLen;
+  const uy = ddy / dragLen;
+  const outgoing = dragLen / 3;
+  const incoming = dragLen * ILLUSTRATOR_PEN_INCOMING_FROM_DRAG;
+  return {
+    x1: anchor.x + ux * outgoing,
+    y1: anchor.y + uy * outgoing,
+    x2: anchor.x - ux * incoming,
+    y2: anchor.y - uy * incoming
+  };
+}
+
+/**
  * Illustrator / Inkscape–style pen click-drag for a cubic `P0→P3`:
  * - `P1` stays at the **chord-third** from `p0` (corner-like outgoing from the previous anchor).
  * - Drag from the new anchor (`dragStart` ≈ `p3`) sets the **incoming tangent at `p3`**:
  *   `P2` lies on the ray from `p3` opposite the drag direction, with length `dragLen *` {@link ILLUSTRATOR_PEN_INCOMING_FROM_DRAG}.
- * - When `‖dragCurrent − dragStart‖` is ~0, falls back to symmetric chord-thirds.
+ * - When the chord has zero length, uses {@link placementZeroChordCubicControlPointsFromDrag}.
+ * - When `‖dragCurrent − dragStart‖` is ~0 on a non-degenerate chord, falls back to symmetric chord-thirds.
  */
 export function placementIllustratorStyleCubicControlPoints(
   p0: { x: number; y: number },
@@ -357,7 +386,7 @@ export function placementIllustratorStyleCubicControlPoints(
   const dy = p3.y - p0.y;
   const chordLen = Math.hypot(dx, dy);
   if (chordLen < 1e-9) {
-    return base;
+    return placementZeroChordCubicControlPointsFromDrag(p0, dragStart, dragCurrent);
   }
 
   const ddx = dragCurrent.x - dragStart.x;
@@ -450,6 +479,263 @@ export function appendSmoothQuadraticToD(baseD: string, x: number, y: number): s
   return baseD ? `${baseD} ${tail}` : tail;
 }
 
+/** Frozen handle intent after first-segment meaningful drag; `P3` is planted on the next primary down. */
+export type PenFirstAnchorP3Draft = {
+  placementDragStartSvg: { x: number; y: number };
+  /** Pointer SVG at meaningful mouseup (incoming handle / Alt placement sample). */
+  dragCommitSvg: { x: number; y: number };
+  ctrlCurve: boolean;
+  curveAltChord: boolean;
+  shiftAngleSnap: boolean;
+  /**
+   * Outgoing cubic `P1` from step-one mirrored drag (not serializable until `P3` exists).
+   * Used for awaiting-`P3` preview and commit so `P1` matches the handle the user set.
+   */
+  frozenOutgoingP1Svg?: { x: number; y: number };
+};
+
+function snapCubicControlsFromShiftAnchor(
+  anchor: { x: number; y: number },
+  end: { x: number; y: number },
+  controls: CubicControlPoints,
+  altEndHandleOnlyPlacement: boolean
+): CubicControlPoints {
+  const s = snapVectorTo45DegFrom(end, { x: controls.x2, y: controls.y2 });
+  if (altEndHandleOnlyPlacement) {
+    return { ...controls, x2: s.x, y2: s.y };
+  }
+  return {
+    x1: anchor.x + end.x - s.x,
+    y1: anchor.y + end.y - s.y,
+    x2: s.x,
+    y2: s.y
+  };
+}
+
+/**
+ * Illustrator / Alt cubic controls for pen pending preview/commit (matches
+ * {@link PenToolSession} `penPendingCubicAdjustedSnappedControls` behavior).
+ */
+export function penAdjustedCubicControlsForPendingLikeDrag(
+  anchor: { x: number; y: number },
+  end: { x: number; y: number },
+  dragCurrent: { x: number; y: number },
+  dragStartSvg: { x: number; y: number },
+  segments: readonly PenPathSegment[],
+  altEndOnly: boolean,
+  shiftAngleSnap: boolean,
+  /** First-anchor awaiting `P3`: preview endpoint has no incoming handle (`P2 === P3`). */
+  zeroIncomingAtEnd = false
+): CubicControlPoints {
+  const degenerateChord = penSvgDistanceSq(anchor, end) < 1e-12;
+  const raw = altEndOnly
+    ? degenerateChord
+      ? { x1: anchor.x, y1: anchor.y, x2: dragCurrent.x, y2: dragCurrent.y }
+      : placementPointerCubicControlPoints(anchor, end, dragCurrent, true)
+    : placementIllustratorStyleCubicControlPoints(anchor, end, dragStartSvg, dragCurrent);
+  let adjusted: CubicControlPoints;
+  if (!altEndOnly) {
+    const st = penReflectStateAfterCommitted(segments);
+    if (penCubicSmoothReflectP1Usable(st, anchor) && st) {
+      adjusted = { ...raw, x1: 2 * anchor.x - st.cubicCp2X, y1: 2 * anchor.y - st.cubicCp2Y };
+    } else {
+      adjusted = raw;
+    }
+  } else {
+    adjusted = raw;
+  }
+  if (shiftAngleSnap) {
+    adjusted = snapCubicControlsFromShiftAnchor(anchor, end, adjusted, altEndOnly);
+  }
+  if (zeroIncomingAtEnd) {
+    adjusted = { ...adjusted, x2: end.x, y2: end.y };
+  }
+  return adjusted;
+}
+
+/**
+ * First-vertex click-drag (Illustrator-style): `P1` and `P2` are mirrored through `anchor` along the
+ * drag vector (`dragPt − anchor`), each arm length = ‖drag‖/3. No provisional segment endpoint (P3).
+ */
+export function penFirstAnchorMirroredHandleControlsFromDrag(
+  anchor: { x: number; y: number },
+  dragPt: { x: number; y: number },
+  shiftAngleSnap: boolean
+): CubicControlPoints {
+  const snapped = shiftAngleSnap ? snapVectorTo45DegFrom(anchor, dragPt) : dragPt;
+  const dx = snapped.x - anchor.x;
+  const dy = snapped.y - anchor.y;
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-12) {
+    return { x1: anchor.x, y1: anchor.y, x2: anchor.x, y2: anchor.y };
+  }
+  const f = 1 / 3;
+  return {
+    x1: anchor.x + dx * f,
+    y1: anchor.y + dy * f,
+    x2: anchor.x - dx * f,
+    y2: anchor.y - dy * f
+  };
+}
+
+/**
+ * Append one pending-style curve segment to `baseD` (explicit `M`/`L`/`C`/… commands).
+ * Shared by {@link PenToolSession} preview/commit paths and first-anchor `M`-only draft preview.
+ */
+export function penCurveStyledAppendToD(
+  baseD: string,
+  opts: {
+    anchor: { x: number; y: number };
+    end: { x: number; y: number };
+    dragCurrent: { x: number; y: number };
+    placementDragStartSvg: { x: number; y: number };
+    ctrlCurve: boolean;
+    curveAltChord: boolean;
+    shiftAngleSnap: boolean;
+    segments: readonly PenPathSegment[];
+    /** After first-anchor draft mouseup: provisional `P3` shows no incoming handle in preview. */
+    zeroIncomingAtSegmentEnd?: boolean;
+    /** Outgoing `P1` locked from step-one mirrored drag (awaiting-`P3` preview + commit). */
+    frozenOutgoingP1?: { x: number; y: number };
+  }
+): string {
+  const {
+    anchor,
+    end,
+    dragCurrent,
+    placementDragStartSvg,
+    ctrlCurve,
+    curveAltChord,
+    shiftAngleSnap,
+    segments,
+    zeroIncomingAtSegmentEnd = false,
+    frozenOutgoingP1
+  } = opts;
+  const kind = penDragCurveAuthoringKind(ctrlCurve, segments);
+  const altEndOnly = curveAltChord;
+
+  switch (kind) {
+    case 'cubic': {
+      let controls = penAdjustedCubicControlsForPendingLikeDrag(
+        anchor,
+        end,
+        dragCurrent,
+        placementDragStartSvg,
+        segments,
+        altEndOnly,
+        shiftAngleSnap,
+        zeroIncomingAtSegmentEnd
+      );
+      if (frozenOutgoingP1 && !altEndOnly) {
+        controls = { ...controls, x1: frozenOutgoingP1.x, y1: frozenOutgoingP1.y };
+      }
+      return appendCubicToD(baseD, controls, end);
+    }
+    case 'quadratic': {
+      let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
+      if (shiftAngleSnap) {
+        const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
+        qc = { x1: s.x, y1: s.y };
+      }
+      return appendQuadraticToD(baseD, qc.x1, qc.y1, end.x, end.y);
+    }
+    case 'smoothCubic': {
+      if (curveAltChord) {
+        const st = penReflectStateAfterCommitted(segments);
+        if (!st) {
+          let hx = dragCurrent.x;
+          let hy = dragCurrent.y;
+          if (shiftAngleSnap) {
+            const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+            hx = s.x;
+            hy = s.y;
+          }
+          return appendSmoothCubicToD(baseD, hx, hy, end.x, end.y);
+        }
+        const useReflect = penCubicSmoothReflectP1Usable(st, anchor);
+        const x1 = useReflect ? 2 * anchor.x - st.cubicCp2X : anchor.x;
+        const y1 = useReflect ? 2 * anchor.y - st.cubicCp2Y : anchor.y;
+        let hx = dragCurrent.x;
+        let hy = dragCurrent.y;
+        if (shiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+          hx = s.x;
+          hy = s.y;
+        }
+        return appendCubicToD(baseD, { x1, y1, x2: hx, y2: hy }, end);
+      }
+      let hx = dragCurrent.x;
+      let hy = dragCurrent.y;
+      if (shiftAngleSnap) {
+        const s = snapVectorTo45DegFrom(end, { x: hx, y: hy });
+        hx = s.x;
+        hy = s.y;
+      }
+      return appendSmoothCubicToD(baseD, hx, hy, end.x, end.y);
+    }
+    default: {
+      if (curveAltChord) {
+        let qc = placementPointerQuadraticControlPoint(anchor, end, dragCurrent);
+        if (shiftAngleSnap) {
+          const s = snapVectorTo45DegFrom(end, { x: qc.x1, y: qc.y1 });
+          qc = { x1: s.x, y1: s.y };
+        }
+        return appendQuadraticToD(baseD, qc.x1, qc.y1, end.x, end.y);
+      }
+      if (shiftAngleSnap) {
+        const st = penReflectStateAfterCommitted(segments);
+        if (st) {
+          let ix = 2 * anchor.x - st.quadCpX;
+          let iy = 2 * anchor.y - st.quadCpY;
+          const s = snapVectorTo45DegFrom(end, { x: ix, y: iy });
+          return appendQuadraticToD(baseD, s.x, s.y, end.x, end.y);
+        }
+      }
+      return appendSmoothQuadraticToD(baseD, end.x, end.y);
+    }
+  }
+}
+
+/**
+ * Preview `d` for moveto-only segments plus first-anchor draft: `provisionalEnd` is usually the live pointer;
+ * `dragSample` is live while dragging, then frozen from {@link PenFirstAnchorP3Draft}.
+ * When `draft` is set (awaiting `P3` after mouseup), the cubic preview uses **no incoming handle** at the
+ * provisional endpoint (`P2 === P3`), matching Illustrator-style rubber-band before the next click.
+ * If {@link PenFirstAnchorP3Draft.frozenOutgoingP1Svg} is set, it fixes **P1** to the step-one mirrored handle.
+ */
+export function penDraftFirstSegmentPreviewD(
+  segments: readonly PenPathSegment[],
+  draft: PenFirstAnchorP3Draft | null,
+  anchor: { x: number; y: number },
+  provisionalEnd: { x: number; y: number },
+  /** Live drag while pointer down; after mouseup use `draft.dragCommitSvg`. */
+  dragSample: { x: number; y: number },
+  pendingPlacementDragStartSvg: { x: number; y: number },
+  ctrlCurve: boolean,
+  curveAltChord: boolean,
+  shiftAngleSnap: boolean
+): string {
+  const base = penPathSegmentsToD(segments);
+  const placement = draft?.placementDragStartSvg ?? pendingPlacementDragStartSvg;
+  const dragCurrent = draft ? draft.dragCommitSvg : dragSample;
+  const cc = draft?.ctrlCurve ?? ctrlCurve;
+  const alt = draft?.curveAltChord ?? curveAltChord;
+  const sh = draft?.shiftAngleSnap ?? shiftAngleSnap;
+  return penCurveStyledAppendToD(base, {
+    anchor,
+    end: provisionalEnd,
+    dragCurrent,
+    placementDragStartSvg: placement,
+    ctrlCurve: cc,
+    curveAltChord: alt,
+    shiftAngleSnap: sh,
+    segments,
+    /** Frozen draft = awaiting `P3`; Illustrator-style preview shows endpoint without incoming handle. */
+    zeroIncomingAtSegmentEnd: draft != null,
+    frozenOutgoingP1: draft?.frozenOutgoingP1Svg
+  });
+}
+
 /** Squared distance in SVG user space (cheap degenerate test). */
 export function penSvgDistanceSq(
   a: { x: number; y: number },
@@ -458,6 +744,19 @@ export function penSvgDistanceSq(
   const dx = b.x - a.x;
   const dy = b.y - a.y;
   return dx * dx + dy * dy;
+}
+
+/**
+ * Whether smooth cubic P1 reflection from the previous segment's `P2` is meaningful at `anchor`.
+ * When the prior cubic's `P2` coincides with the vertex (zero incoming), `2*anchor − P2` collapses
+ * to `anchor` and callers should use normal Illustrator-style placement instead.
+ */
+export function penCubicSmoothReflectP1Usable(
+  st: PenSvgReflectState | null,
+  anchor: { x: number; y: number }
+): boolean {
+  if (!st?.canReflectCubic) return false;
+  return penSvgDistanceSq({ x: st.cubicCp2X, y: st.cubicCp2Y }, anchor) >= 1e-10;
 }
 
 /**

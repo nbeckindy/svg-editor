@@ -146,6 +146,18 @@ describe('PointerGestureRouter', () => {
     expect(selectionMarquee.move).not.toHaveBeenCalled();
   });
 
+  it('onDocumentMouseMove routes pen when active session is moveto-only (first-segment pending)', () => {
+    const onPenDocumentMouseMove = vi.fn();
+    const host = makeHost({
+      getCurrentTool: () => 'pen',
+      isPenToolWithActiveSession: () => true,
+      isPenInsertOnPathDragActive: () => false,
+      onPenDocumentMouseMove
+    });
+    router.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
+    expect(onPenDocumentMouseMove).toHaveBeenCalled();
+  });
+
   it('onDocumentMouseMove prefers pen session over selection marquee', () => {
     const host = makeHost({
       getCurrentTool: () => 'pen',

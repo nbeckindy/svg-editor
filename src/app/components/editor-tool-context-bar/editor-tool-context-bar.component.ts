@@ -16,7 +16,7 @@ export class EditorToolContextBarComponent {
     if (this.editorTool.penAltCurveMode()) {
       return 'Alternate curve on (smooth S after C, smooth T after Q). Quadratic Q after M/L is temporarily off — new segments use cubic C.';
     }
-    return 'Default: cubic (C). Turn on Alt curve for smooth S/T after existing curves. (⌘/Ctrl still bypasses snap.)';
+    return 'Default: cubic (C). First segment: press–drag from empty canvas (then click to place the end anchor), or click a second point then drag. Turn on Alt curve for smooth S/T after existing curves. (⌘/Ctrl still bypasses snap.)';
   });
 
   togglePenAltCurveMode(): void {

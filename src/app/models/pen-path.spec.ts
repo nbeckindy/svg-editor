@@ -9,6 +9,7 @@ import {
   placementIllustratorStyleCubicControlPoints,
   placementPointerCubicControlPoints,
   placementPointerQuadraticControlPoint,
+  placementZeroChordCubicControlPointsFromDrag,
   lastCommittedVertex,
   movePenLastOutgoingHandleTo,
   pathSvgReflectStateAfter,
@@ -18,7 +19,12 @@ import {
   penPathSegmentsAreValid,
   penPathSegmentsToD,
   snapVectorTo45DegFrom,
-  symmetricCubicControlPoints
+  symmetricCubicControlPoints,
+  penDraftFirstSegmentPreviewD,
+  penFirstAnchorMirroredHandleControlsFromDrag,
+  penReflectStateAfterCommitted,
+  penCubicSmoothReflectP1Usable,
+  penAdjustedCubicControlsForPendingLikeDrag
 } from './pen-path';
 import { parsePathD } from './path-d';
 
@@ -40,6 +46,97 @@ describe('appendCubicToD', () => {
   it('appends explicit cubic controls to base d', () => {
     const d = appendCubicToD('M 0 0', { x1: 2, y1: 4, x2: 6, y2: 8 }, { x: 9, y: 9 });
     expect(d).toBe('M 0 0 C 2 4 6 8 9 9');
+  });
+});
+
+describe('penDraftFirstSegmentPreviewD', () => {
+  it('builds M + C preview with frozen draft; provisional P3 has no incoming handle (P2 === P3)', () => {
+    const segments = [{ type: 'M' as const, x: 0, y: 0 }];
+    const draft = {
+      placementDragStartSvg: { x: 0, y: 0 },
+      dragCommitSvg: { x: 40, y: 25 },
+      ctrlCurve: false,
+      curveAltChord: false,
+      shiftAngleSnap: false,
+      frozenOutgoingP1Svg: { x: 17, y: 8 }
+    };
+    const d = penDraftFirstSegmentPreviewD(
+      segments,
+      draft,
+      { x: 0, y: 0 },
+      { x: 100, y: 0 },
+      { x: 0, y: 0 },
+      { x: 0, y: 0 },
+      false,
+      false,
+      false
+    );
+    expect(d.startsWith('M 0 0 C')).toBe(true);
+    const tail = d.replace(/^M 0 0 C\s*/, '');
+    const parts = tail.trim().split(/\s+/).map(Number);
+    expect(parts.length).toBe(6);
+    const [x1, y1, x2, y2, x, y] = parts;
+    expect(x1).toBe(17);
+    expect(y1).toBe(8);
+    expect(x2).toBe(x);
+    expect(y2).toBe(y);
+    expect(x).toBe(100);
+    expect(y).toBe(0);
+  });
+});
+
+describe('penFirstAnchorMirroredHandleControlsFromDrag', () => {
+  it('mirrors P1/P2 through anchor along drag; each arm is one-third of drag vector', () => {
+    const c = penFirstAnchorMirroredHandleControlsFromDrag(
+      { x: 0, y: 0 },
+      { x: 9, y: 9 },
+      false
+    );
+    expect(c).toEqual({ x1: 3, y1: 3, x2: -3, y2: -3 });
+  });
+});
+
+describe('penCubicSmoothReflectP1Usable', () => {
+  it('is false when prior cubic P2 coincides with the join (zero incoming)', () => {
+    const segs = [
+      { type: 'M' as const, x: 0, y: 0 },
+      { type: 'C' as const, x1: 20, y1: 0, x2: 100, y2: 0, x: 100, y: 0 }
+    ];
+    const st = penReflectStateAfterCommitted(segs)!;
+    expect(penCubicSmoothReflectP1Usable(st, { x: 100, y: 0 })).toBe(false);
+  });
+
+  it('is true when prior C has P2 off the join', () => {
+    const segs = [
+      { type: 'M' as const, x: 0, y: 0 },
+      { type: 'C' as const, x1: 20, y1: 0, x2: 80, y2: 30, x: 100, y: 0 }
+    ];
+    const st = penReflectStateAfterCommitted(segs)!;
+    expect(penCubicSmoothReflectP1Usable(st, { x: 100, y: 0 })).toBe(true);
+  });
+});
+
+describe('penAdjustedCubicControlsForPendingLikeDrag', () => {
+  it('skips smooth P1 reflection when prior segment has degenerate P2 at join (uses Illustrator placement)', () => {
+    const segs = [
+      { type: 'M' as const, x: 0, y: 0 },
+      { type: 'C' as const, x1: 30, y1: 0, x2: 100, y2: 0, x: 100, y: 0 }
+    ];
+    const anchor = { x: 100, y: 0 };
+    const end = { x: 200, y: 0 };
+    const dragStart = { x: 150, y: 0 };
+    const dragCurrent = { x: 180, y: 40 };
+    const c = penAdjustedCubicControlsForPendingLikeDrag(
+      anchor,
+      end,
+      dragCurrent,
+      dragStart,
+      segs,
+      false,
+      false,
+      false
+    );
+    expect(Math.abs(c.x1 - anchor.x) + Math.abs(c.y1 - anchor.y)).toBeGreaterThan(1e-6);
   });
 });
 
@@ -137,6 +234,27 @@ describe('placementIllustratorStyleCubicControlPoints', () => {
       { x: 9, y: 0 }
     );
     expect(c).toEqual({ x1: 3, y1: 0, x2: 6, y2: 0 });
+  });
+
+  it('uses drag-based handles when chord length is ~0', () => {
+    const anchor = { x: 10, y: 10 };
+    const c = placementIllustratorStyleCubicControlPoints(anchor, anchor, anchor, { x: 40, y: 10 });
+    const dragLen = 30;
+    expect(c.x1).toBeCloseTo(anchor.x + dragLen / 3, 6);
+    expect(c.y1).toBeCloseTo(10, 6);
+    expect(c.x2).toBeCloseTo(anchor.x - dragLen * 0.55, 6);
+    expect(c.y2).toBeCloseTo(10, 6);
+  });
+});
+
+describe('placementZeroChordCubicControlPointsFromDrag', () => {
+  it('places P1 forward and P2 back along drag when anchor equals chord end', () => {
+    const a = { x: 0, y: 0 };
+    const c = placementZeroChordCubicControlPointsFromDrag(a, a, { x: 30, y: 0 });
+    expect(c.x1).toBeCloseTo(10, 6);
+    expect(c.y1).toBe(0);
+    expect(c.x2).toBeCloseTo(-16.5, 6);
+    expect(c.y2).toBe(0);
   });
 });
 
