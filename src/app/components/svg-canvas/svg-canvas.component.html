@@ -298,6 +298,43 @@
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
           }
+          @if (editorChrome.penSessionPathNodeOverlays; as penNodes) {
+            @for (handle of penNodes.handles; track $index) {
+              <line
+                class="path-node-control-line pen-session-path-node-affordance"
+                data-testid="canvas-pen-session-path-node-control-line"
+                [attr.x1]="handle.x1"
+                [attr.y1]="handle.y1"
+                [attr.x2]="handle.x2"
+                [attr.y2]="handle.y2"
+                stroke="#43A047"
+                stroke-width="1.5"
+                stroke-dasharray="3 2"
+                vector-effect="non-scaling-stroke"/>
+              <circle
+                class="path-node-control-handle pen-session-path-node-affordance"
+                data-testid="canvas-pen-session-path-node-control-handle"
+                [attr.cx]="handle.cx"
+                [attr.cy]="handle.cy"
+                r="3.5"
+                fill="#ffffff"
+                stroke="#43A047"
+                stroke-width="1.5"
+                vector-effect="non-scaling-stroke"/>
+            }
+            @for (pt of penNodes.anchors; track $index) {
+              <circle
+                class="path-node-anchor pen-session-path-node-affordance"
+                data-testid="canvas-pen-session-path-node-anchor"
+                [attr.cx]="pt.cx"
+                [attr.cy]="pt.cy"
+                r="4"
+                fill="#ffffff"
+                stroke="#1E88E5"
+                stroke-width="2"
+                vector-effect="non-scaling-stroke"/>
+            }
+          }
           @if (editorChrome.penCurvePreviewPathD; as pcurve) {
             <path
               class="creation-ghost-shape"

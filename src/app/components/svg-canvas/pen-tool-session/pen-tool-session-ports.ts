@@ -42,4 +42,11 @@ export interface PenToolSessionPorts {
   clearSelectionForPenBackgroundStroke(): void;
   /** True when SVG content is present and the canvas view is ready for pen input. */
   isCanvasReadyForPenInput(): boolean;
+  /**
+   * After pen closes into `node-edit-selector`, the gesture still delivers a primary `click` that
+   * often targets the root `<svg>` (no `id`); the canvas treats that as an empty hit and clears
+   * selection and would exit path-node edit. Call once when committing a closed path so both are
+   * suppressed briefly.
+   */
+  armPenClosePostNodeEditEmptyClickSelectionGuard(): void;
 }

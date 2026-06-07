@@ -697,6 +697,54 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return this.penTool.penCloseTargetHoverOverlay;
   }
 
+  /**
+   * While authoring a pen path, node-edit–style anchors and Bézier handles for the current preview
+   * `d` (same geometry as {@link penSessionPreviewPathD}). `null` when inactive or not parseable.
+   * Visual only — template uses class `pen-session-path-node-affordance` so pointer hits pass through.
+   */
+  get penSessionPathNodeOverlays(): {
+    anchors: { cx: number; cy: number }[];
+    handles: { x1: number; y1: number; x2: number; y2: number; cx: number; cy: number }[];
+  } | null {
+    if (!this.isPenToolWithActiveSession()) return null;
+    const d = this.penTool.penSessionPreviewPathD;
+    if (!d?.trim()) return null;
+    const parsed = this.parsePathDataForNodeEditing(d);
+    if (!parsed) return null;
+    const anchorsRaw = this.collectPathNodeAnchors(parsed);
+    if (anchorsRaw.length === 0) return null;
+    const anchors = anchorsRaw.map((a) => {
+      const o = this.penRootUserPointToOverlay(a.x, a.y);
+      return { cx: o.x, cy: o.y };
+    });
+    const handles = this.collectPathControlHandles(parsed)
+      .filter(
+        (h) =>
+          penSvgDistanceSq(
+            { x: h.anchorX, y: h.anchorY },
+            { x: h.controlX, y: h.controlY }
+          ) >= PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ
+      )
+      .map((h) => {
+        const anchor = this.penRootUserPointToOverlay(h.anchorX, h.anchorY);
+        const control = this.penRootUserPointToOverlay(h.controlX, h.controlY);
+        return {
+          x1: anchor.x,
+          y1: anchor.y,
+          x2: control.x,
+          y2: control.y,
+          cx: control.x,
+          cy: control.y
+        };
+      });
+    return { anchors, handles };
+  }
+
+  private penRootUserPointToOverlay(rx: number, ry: number): { x: number; y: number } {
+    const o = this.svgBboxToOverlayPixels({ x: rx, y: ry, width: 0, height: 0 });
+    return { x: o.x, y: o.y };
+  }
+
   get isPathNodeEditModeActive(): boolean {
     return this.pathNodeEditState !== null;
   }
@@ -951,6 +999,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
   private penPostInsertAnchorPathId: string | null = null;
   private penInsertCursorRaf = 0;
   private pendingPenInsertHoverClient: { x: number; y: number } | null = null;
+  /**
+   * After pen close → `node-edit-selector`, a trailing primary `click` often targets the root `<svg>`
+   * (no `id`); `onCanvasClick` would clear selection and exit path-node edit. Pen finish calls
+   * `armPenClosePostNodeEditEmptyClickSelectionGuard` to raise this deadline so both are skipped briefly.
+   */
+  private penClosePostNodeEditEmptyClickClearUntilMs = 0;
 
   /** Last pointer position in root SVG user space while the text tool is active (placement preview). */
   private textToolPreviewLastPoint: { x: number; y: number } | null = null;
@@ -1668,6 +1722,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     }
   }
 
+  private armPenClosePostNodeEditEmptyClickSelectionGuard(): void {
+    const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
+    // Cover trailing primary `click` / `dblclick` after close (mousedown-only double-close, slow frames).
+    this.penClosePostNodeEditEmptyClickClearUntilMs = now + 320;
+  }
+
   private createPenToolSessionPorts(): PenToolSessionPorts {
     return {
       markForCheck: () => this.cdr.markForCheck(),
@@ -1709,7 +1769,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
         this.svgManipulation.clearHighlight();
         this.drilledIntoGroupId = null;
       },
-      isCanvasReadyForPenInput: () => !!(this.svgContent() && this.canvasView.isInitialized())
+      isCanvasReadyForPenInput: () => !!(this.svgContent() && this.canvasView.isInitialized()),
+      armPenClosePostNodeEditEmptyClickSelectionGuard: () =>
+        this.armPenClosePostNodeEditEmptyClickSelectionGuard()
     };
   }
 
@@ -2060,9 +2122,22 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     if (this.skew.consumeJustEnded()) return;
     if (this.rotate.consumeJustEnded()) return;
     if (this.creation.consumeJustEnded()) return;
+    const svgInstanceForClick = this.svgManipulation.getSVGInstance();
+    const clickedContentShapeEl =
+      clickTarget.id && (svgInstanceForClick?.findOne(`#${clickTarget.id}`) as SVGElement);
+    const emptyHitNoResolvedShape = !clickedContentShapeEl;
     if (this.pathNodeEditState && !this.isPathNodeEditTarget(clickTarget)) {
       if (this.editorTool.getCurrentTool() !== 'pen') {
-        this.exitPathNodeEditMode();
+        const nowForPenCloseGuard =
+          typeof performance !== 'undefined' && typeof performance.now === 'function'
+            ? performance.now()
+            : Date.now();
+        const skipExitForTrailingPenCloseClick =
+          nowForPenCloseGuard < this.penClosePostNodeEditEmptyClickClearUntilMs &&
+          emptyHitNoResolvedShape;
+        if (!skipExitForTrailingPenCloseClick) {
+          this.exitPathNodeEditMode();
+        }
       }
     }
     if (this.editorTool.getCurrentTool() === 'pan') {
@@ -2108,9 +2183,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       return;
     }
 
-    const svgInstance = this.svgManipulation.getSVGInstance();
-    const svgElement =
-      clickTarget.id && (svgInstance?.findOne(`#${clickTarget.id}`) as SVGElement);
+    const svgInstance = svgInstanceForClick;
+    const svgElement = clickedContentShapeEl;
     if (svgElement) {
       const additive = event.shiftKey || event.ctrlKey || event.metaKey;
       const nearestGroupId = this.svgManipulation.getNearestGroupAncestorId(clickTarget.id);
@@ -2145,7 +2219,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
         }
       }
     } else {
-      this.shapeSelection.clearSelection();
+      // Pen may finish on mousedown/mouseup; the following primary `click` can target the root SVG
+      // (no `id`) and would clear selection — see `pen-tool-session-finish.ts` + guard below.
+      const now =
+        typeof performance !== 'undefined' && typeof performance.now === 'function'
+          ? performance.now()
+          : Date.now();
+      if (now < this.penClosePostNodeEditEmptyClickClearUntilMs) {
+        // Skip clearSelection only; still drop drill/highlight parity with empty hit.
+      } else {
+        this.shapeSelection.clearSelection();
+      }
       this.svgManipulation.clearHighlight();
       this.drilledIntoGroupId = null;
     }

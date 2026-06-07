@@ -4593,7 +4593,7 @@ describe('SvgCanvasComponent', () => {
         ?.querySelector('path');
       expect(path).toBeTruthy();
       expect((path?.getAttribute('d') ?? '').trim().endsWith('Z'));
-      expect(editorToolService.getCurrentTool()).toBe('selector');
+      expect(editorToolService.getCurrentTool()).toBe('node-edit-selector');
     });
 
     it('closes path when mousedown was on start but mouseup left close radius (drag-close release)', async () => {
@@ -4618,7 +4618,7 @@ describe('SvgCanvasComponent', () => {
           ?.querySelector('path')
           ?.getAttribute('d') ?? '';
       expect(d.replace(/\s+/g, ' ').trim().endsWith('Z')).toBe(true);
-      expect(editorToolService.getCurrentTool()).toBe('selector');
+      expect(editorToolService.getCurrentTool()).toBe('node-edit-selector');
     });
 
     it('does not close when only mouseup is on start (mousedown was not in close radius)', async () => {
@@ -4671,7 +4671,7 @@ describe('SvgCanvasComponent', () => {
       expect(sp).toMatch(/10 10 Z$/);
       // Legacy tryFinishPenPath appended a mirrored corrective C (P2 collapsed to start); policy is illustrator-style close to exact `M` instead.
       expect(d).not.toContain('C 100 15.5 10 10 10 10 Z');
-      expect(editorToolService.getCurrentTool()).toBe('selector');
+      expect(editorToolService.getCurrentTool()).toBe('node-edit-selector');
     });
 
     it('closing pen path with drag near start commits a user-shaped closing cubic before Z', async () => {
@@ -4699,7 +4699,7 @@ describe('SvgCanvasComponent', () => {
       expect(d.trim().endsWith('Z')).toBe(true);
       // Plain smooth close is always … 10 10 10 10 Z (P2 collapsed onto start). Drag-close must differ.
       expect(d).not.toMatch(/10 10 10 10 Z$/);
-      expect(editorToolService.getCurrentTool()).toBe('selector');
+      expect(editorToolService.getCurrentTool()).toBe('node-edit-selector');
     });
 
     it('pen: committed segment list is unchanged during pending cubic drag (only preview moves)', async () => {
@@ -5192,7 +5192,21 @@ describe('SvgCanvasComponent', () => {
       expect(path).toBeTruthy();
       const d = path?.getAttribute('d') ?? '';
       expect(d.trim().endsWith('Z')).toBe(true);
-      expect(editorToolService.getCurrentTool()).toBe('selector');
+      expect(editorToolService.getCurrentTool()).toBe('node-edit-selector');
+      await new Promise<void>((r) => setTimeout(r, 40));
+      fixture.detectChanges();
+      expect(shapeSelectionService.getSelectedShapes().length).toBe(1);
+      expect(shapeSelectionService.getSelectedShapes()[0].type).toBe('path');
+      expect(shapeSelectionService.getSelectedShapes()[0].id).toBe(path?.getAttribute('id'));
+      expect(component.isPathNodeEditModeActive).toBe(true);
+      expect(component.hideSelectionHighlightOverlay).toBe(true);
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBeGreaterThan(0);
+
+      const emptyHitTarget = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
+      component.onCanvasClick({ target: emptyHitTarget, button: 0 } as unknown as MouseEvent);
+      fixture.detectChanges();
+      expect(component.isPathNodeEditModeActive).toBe(true);
+      expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBeGreaterThan(0);
     });
 
     it('right-click finishes an open path without closing', async () => {
@@ -5722,9 +5736,8 @@ describe('SvgCanvasComponent', () => {
           ?.getAttribute('d') ?? '';
       expect(d).toContain('C');
       expect(d).toContain(' 20 20');
-      // First curved segment uses chord-third P1 and drag-based P2 (same model as later anchors).
-      expect(d).toMatch(/C\s+13\.33/);
-      expect(d).toMatch(/11\.75\s+17\.25\s+20\s+20/);
+      // Corner-anchor cubic: outgoing P1 on anchor; P2 from drag bend toward pointer.
+      expect(d).toMatch(/C\s+10\s+10\s+5\s+15\s+20\s+20/);
     });
 
     it('second segment after L uses chord-third P1 (no reflectable handle from prior L)', async () => {
@@ -5738,7 +5751,7 @@ describe('SvgCanvasComponent', () => {
       // second anchor (plain click — commits an L, so canReflectCubic stays false)
       component.onCanvasMouseDown({ button: 0, clientX: 40, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: 40, clientY: 10 } as MouseEvent);
-      // third anchor with drag — prior segment is L, so P1 = chord-third from (40,10) toward (70,10) = (50,10)
+      // third anchor with drag — prior segment is L (no smooth P1); corner-anchor P1 stays on (40,10).
       component.onCanvasMouseDown({ button: 0, clientX: 70, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
       component.onDocumentMouseMove({ clientX: 70, clientY: 25 } as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: 70, clientY: 25 } as MouseEvent);
@@ -5751,7 +5764,7 @@ describe('SvgCanvasComponent', () => {
           .querySelector('[data-editor-content-group]')
           ?.querySelector('path')
           ?.getAttribute('d') ?? '';
-      expect(d).toMatch(/C 50 10/);
+      expect(d).toMatch(/C 40 10 70 -5 70 10/);
     });
 
     it('plain click after dragged C emits C with reflected P1 and P2=endpoint (smooth departure)', async () => {
@@ -5778,9 +5791,9 @@ describe('SvgCanvasComponent', () => {
           .querySelector('[data-editor-content-group]')
           ?.querySelector('path')
           ?.getAttribute('d') ?? '';
-      // Segment 2 must be a C (not L) with reflected P1=(100,15.5) and P2=endpoint=(190,10)
+      // Segment 2: smooth P1 reflects prior P2=(100,0) across (100,10) → (100,20); plain click → P2=P3.
       expect(d).not.toContain('L 190 10');
-      expect(d).toContain('C 100 15.5 190 10 190 10');
+      expect(d).toContain('C 100 20 190 10 190 10');
     });
 
     it('second segment after dragged C uses reflected P1 (smooth node)', async () => {
@@ -5791,7 +5804,7 @@ describe('SvgCanvasComponent', () => {
 
       // first anchor at (10,10)
       component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
-      // second anchor at (100,10) drag downward to (100,20) — first C uses chord-third P1; P2 from drag (k = 10*0.55)
+      // second anchor at (100,10) drag downward — first C uses corner P1 on (10,10); P2 from drag
       component.onCanvasMouseDown({ button: 0, clientX: 100, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
       component.onDocumentMouseMove({ clientX: 100, clientY: 20 } as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 20 } as MouseEvent);
@@ -5808,8 +5821,8 @@ describe('SvgCanvasComponent', () => {
           .querySelector('[data-editor-content-group]')
           ?.querySelector('path')
           ?.getAttribute('d') ?? '';
-      // Second segment: P1 reflected from committed P2=(100,4.5) across anchor=(100,10) → (100,15.5)
-      expect(d).toContain('C 100 15.5');
+      // Second segment: P1 reflects prior P2=(100,0) across (100,10) → (100,20); P2 from drag at third anchor.
+      expect(d).toContain('C 100 20 190 0 190 10');
     });
 
     it('renders dashed pending-curve handle guide while dragging past curve threshold (j24.9)', async () => {
@@ -5840,7 +5853,8 @@ describe('SvgCanvasComponent', () => {
       const guides = fixture.nativeElement.querySelectorAll(
         '[data-testid^=\"canvas-pen-pending-curve-handle-guide-\"]'
       );
-      expect(guides.length).toBe(2);
+      // Anchor→P1, end→P2, and end→pointer (incoming drag affordance).
+      expect(guides.length).toBe(3);
       for (const g of Array.from(guides)) {
         expect(g.getAttribute('stroke')).toBe('#43A047');
         expect(g.getAttribute('stroke-dasharray')).toBe('3 2');

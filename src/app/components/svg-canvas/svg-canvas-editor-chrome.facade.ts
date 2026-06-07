@@ -116,6 +116,9 @@ export class SvgCanvasEditorChromeFacade {
   get penCloseTargetHoverOverlay() {
     return this.root.penCloseTargetHoverOverlay;
   }
+  get penSessionPathNodeOverlays() {
+    return this.root.penSessionPathNodeOverlays;
+  }
   get showPathNodeEditOverlays(): boolean {
     return this.root.showPathNodeEditOverlays;
   }

@@ -41,6 +41,7 @@ function minimalPorts(overrides: Partial<PenToolSessionPorts> = {}): PenToolSess
     clearPenPostInsertAnchorOverlay: vi.fn(),
     clearSelectionForPenBackgroundStroke: vi.fn(),
     isCanvasReadyForPenInput: () => true,
+    armPenClosePostNodeEditEmptyClickSelectionGuard: vi.fn(),
     ...overrides
   };
 }
