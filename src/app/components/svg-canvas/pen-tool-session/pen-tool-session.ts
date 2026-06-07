@@ -5,14 +5,13 @@
  * Finish-to-document and insert-on-path helpers live in `pen-tool-session-finish.ts` and
  * `pen-tool-session-insert-on-path.ts`; SVG user → **Editor chrome** overlay mapping helpers in
  * `pen-tool-session-overlay.ts`. Shared pen thresholds and pending-segment preview math in
- * `pen-tool-session-constants.ts` and `pen-tool-session-pending-preview.ts`.
+ * `pen-tool-session-constants.ts` and `pen-tool-session-pending-preview.ts`. In-progress path `d` strings
+ * for templates live in `pen-tool-session-preview-path-d.ts`.
  */
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import { rootSvgUserPointToScreenPoint } from '../../../utils/svg-screen-user';
 import {
   PenSession,
-  appendCubicToD,
-  appendLineToD,
   lastCommittedVertex,
   penDragCurveAuthoringKind,
   penPathOnlyMoveto,
@@ -25,8 +24,6 @@ import {
   penLastOutgoingHandleSvg,
   movePenLastOutgoingHandleTo,
   snapVectorTo45DegFrom,
-  penCurveStyledAppendToD,
-  penDraftFirstSegmentPreviewD,
   penAdjustedCubicControlsForPendingLikeDrag,
   penFirstAnchorMirroredHandleControlsFromDrag,
   placementPointerCubicControlPoints,
@@ -61,6 +58,11 @@ import {
   penPendingStartNearPathMoveto as computePenPendingStartNearPathMoveto,
   type PenPendingSegmentForPreview
 } from './pen-tool-session-pending-preview';
+import {
+  buildPenPendingCurveAppendedBaseD,
+  computePenCurvePreviewPathD,
+  computePenSessionPreviewPathD
+} from './pen-tool-session-preview-path-d';
 
 export type { PenDiscardReason, PenToolSessionPorts } from './pen-tool-session-ports';
 
@@ -253,137 +255,41 @@ export class PenToolSession {
    * pending segment to pointer. This keeps the whole path visible during authoring.
    */
   get penSessionPreviewPathD(): string | null {
-    if (this.penInsertOnPath) return null;
-    if (this.ports.getCurrentTool() !== 'pen' || !this.isPenSessionActive) return null;
-    const base = penPathSegmentsToD(this.penSession.getSegments());
-    if (!base || !this.penPointerSvg) return base || null;
-    const segs = this.penSession.getSegments();
-    const anchor = this.penPendingSegment?.anchor ?? lastCommittedVertex(segs);
-    if (!anchor) return base;
-
-    if (this.penAwaitingFirstSegmentP3AfterDraft && this.penFirstAnchorP3Draft && penPathOnlyMoveto(segs)) {
-      const m = segs[0];
-      if (m.type !== 'M') return base;
-      const a = { x: m.x, y: m.y };
-      return penDraftFirstSegmentPreviewD(
-        segs,
-        this.penFirstAnchorP3Draft,
-        a,
-        this.penPointerSvg,
-        this.penPointerSvg,
-        a,
-        false,
-        false,
-        false
-      );
-    }
-    if (
-      this.penAwaitingColocatedSegmentEndpointAfterDraft &&
-      this.penColocatedSegmentEndpointDraft &&
-      !penPathOnlyMoveto(segs)
-    ) {
-      const tip = lastCommittedVertex(segs);
-      const d = this.penColocatedSegmentEndpointDraft;
-      if (!tip || !d) return base;
-      return penDraftFirstSegmentPreviewD(
-        segs,
-        d,
-        tip,
-        this.penPointerSvg,
-        this.penPointerSvg,
-        tip,
-        d.ctrlCurve,
-        d.curveAltChord,
-        d.shiftAngleSnap
-      );
-    }
-
-    if (this.penPendingSegment && this.penPendingIsFirstSegmentFromMovetoGesture()) {
-      return base;
-    }
-    if (this.penPendingSegment && this.penPendingChordColocated()) {
-      return base;
-    }
-    const st = penReflectStateAfterCommitted(segs);
-    if (this.penPendingSegment && this.penPendingShowsCurvePreview) {
-      return this.appendPenPendingCurveToBaseD(base);
-    }
-    // Mousedown … drag threshold: show continuation preview — smooth cubic when the last node supports
-    // it, otherwise straight `L` (no misleading `L` on top of a smooth cubic; that case is above).
-    if (this.penPendingSegment && !this.penPendingShowsCurvePreview) {
-      if (penCubicSmoothReflectP1Usable(st, anchor) && st) {
-        const ptr = this.penPointerSvg;
-        return appendCubicToD(
-          base,
-          { x1: 2 * anchor.x - st.cubicCp2X, y1: 2 * anchor.y - st.cubicCp2Y, x2: ptr.x, y2: ptr.y },
-          ptr
-        );
-      }
-      return appendLineToD(base, this.penPointerSvg.x, this.penPointerSvg.y);
-    }
-    if (penCubicSmoothReflectP1Usable(st, anchor) && st) {
-      const ptr = this.penPointerSvg;
-      return appendCubicToD(
-        base,
-        { x1: 2 * anchor.x - st.cubicCp2X, y1: 2 * anchor.y - st.cubicCp2Y, x2: ptr.x, y2: ptr.y },
-        ptr
-      );
-    }
-    return appendLineToD(base, this.penPointerSvg.x, this.penPointerSvg.y);
+    return computePenSessionPreviewPathD({
+      penInsertOnPath: this.penInsertOnPath !== null,
+      currentToolIsPen: this.ports.getCurrentTool() === 'pen',
+      isPenSessionActive: this.isPenSessionActive,
+      segments: this.penSession.getSegments(),
+      penPointerSvg: this.penPointerSvg,
+      penPendingSegment: this.penPendingSegment,
+      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
+      penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
+      penAwaitingColocatedSegmentEndpointAfterDraft: this.penAwaitingColocatedSegmentEndpointAfterDraft,
+      penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
+      penPendingIsFirstSegmentFromMovetoGesture: this.penPendingIsFirstSegmentFromMovetoGesture(),
+      penPendingChordColocated: this.penPendingChordColocated(),
+      penPendingShowsCurvePreview: this.penPendingShowsCurvePreview,
+      appendPenPendingCurveToBaseD: (baseD) => this.appendPenPendingCurveToBaseD(baseD)
+    });
   }
 
   /** Live Bézier preview `d` (committed segments + pending segment: default `C`, Ctrl+drag `Q` / `S` / `T`). */
   get penCurvePreviewPathD(): string | null {
-    if (this.penInsertOnPath) return null;
-    if (this.ports.getCurrentTool() !== 'pen' || !this.penPointerSvg || !this.penPendingShowsCurvePreview) {
-      return null;
-    }
-    const segs = this.penSession.getSegments();
-    const base = penPathSegmentsToD(segs);
-    if (this.penAwaitingFirstSegmentP3AfterDraft && this.penFirstAnchorP3Draft && penPathOnlyMoveto(segs)) {
-      const m = segs[0];
-      if (m.type !== 'M') return null;
-      const a = { x: m.x, y: m.y };
-      return penDraftFirstSegmentPreviewD(
-        segs,
-        this.penFirstAnchorP3Draft,
-        a,
-        this.penPointerSvg,
-        this.penPointerSvg,
-        a,
-        false,
-        false,
-        false
-      );
-    }
-    if (
-      this.penAwaitingColocatedSegmentEndpointAfterDraft &&
-      this.penColocatedSegmentEndpointDraft &&
-      !penPathOnlyMoveto(segs)
-    ) {
-      const tip = lastCommittedVertex(segs);
-      const d = this.penColocatedSegmentEndpointDraft;
-      if (!tip || !d) return null;
-      return penDraftFirstSegmentPreviewD(
-        segs,
-        d,
-        tip,
-        this.penPointerSvg,
-        this.penPointerSvg,
-        tip,
-        d.ctrlCurve,
-        d.curveAltChord,
-        d.shiftAngleSnap
-      );
-    }
-    if (this.penPendingSegment && this.penPendingIsFirstSegmentFromMovetoGesture()) {
-      return null;
-    }
-    if (this.penPendingSegment && this.penPendingChordColocated()) {
-      return null;
-    }
-    if (!this.penPendingSegment) return null;
-    return this.appendPenPendingCurveToBaseD(base);
+    return computePenCurvePreviewPathD({
+      penInsertOnPath: this.penInsertOnPath !== null,
+      currentToolIsPen: this.ports.getCurrentTool() === 'pen',
+      penPointerSvg: this.penPointerSvg,
+      penPendingShowsCurvePreview: this.penPendingShowsCurvePreview,
+      segments: this.penSession.getSegments(),
+      penPendingSegment: this.penPendingSegment,
+      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
+      penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
+      penAwaitingColocatedSegmentEndpointAfterDraft: this.penAwaitingColocatedSegmentEndpointAfterDraft,
+      penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
+      penPendingIsFirstSegmentFromMovetoGesture: this.penPendingIsFirstSegmentFromMovetoGesture(),
+      penPendingChordColocated: this.penPendingChordColocated(),
+      appendPenPendingCurveToBaseD: (baseD) => this.appendPenPendingCurveToBaseD(baseD)
+    });
   }
 
   /**
@@ -1524,25 +1430,18 @@ export class PenToolSession {
   appendPenPendingCurveToBaseD(baseD: string): string {
     const pending = this.penPendingSegment;
     if (!pending) return baseD;
-    const segs = this.penSession.getSegments();
-    const p3Snap = this.penCommittedFirstSegmentP3Draft;
-    const end =
-      this.penPendingIsFirstSegmentFromMovetoGesture() && this.penPointerSvg
-        ? this.penPointerSvg
-        : this.penPendingChordColocated() && this.penPointerSvg
-          ? this.penPointerSvg
-          : this.penPendingCurvePreviewEndSvg(pending);
-    const dragCurrent = this.penPendingDragSampleSvg(pending);
-    return penCurveStyledAppendToD(baseD, {
-      anchor: pending.anchor,
-      end,
-      dragCurrent,
-      placementDragStartSvg: p3Snap ? p3Snap.placementDragStartSvg : pending.startSvg,
-      ctrlCurve: pending.ctrlCurve,
-      curveAltChord: this.penPendingCurveAltChord,
-      shiftAngleSnap: this.penPendingShiftAngleSnap,
-      segments: segs,
-      frozenOutgoingP1: p3Snap?.frozenOutgoingP1Svg
+    return buildPenPendingCurveAppendedBaseD({
+      baseD,
+      pending,
+      segments: this.penSession.getSegments(),
+      penCommittedFirstSegmentP3Draft: this.penCommittedFirstSegmentP3Draft,
+      penPointerSvg: this.penPointerSvg,
+      penPendingIsFirstSegmentFromMovetoGesture: this.penPendingIsFirstSegmentFromMovetoGesture(),
+      penPendingChordColocated: this.penPendingChordColocated(),
+      curvePreviewEndUserSvg: (pen) => this.penPendingCurvePreviewEndSvg(pen),
+      dragSampleSvg: (pen) => this.penPendingDragSampleSvg(pen),
+      penPendingCurveAltChord: this.penPendingCurveAltChord,
+      penPendingShiftAngleSnap: this.penPendingShiftAngleSnap
     });
   }
 
