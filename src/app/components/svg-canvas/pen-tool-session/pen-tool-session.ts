@@ -392,11 +392,23 @@ export class PenToolSession {
     if (this.penPendingSegment && this.penPendingChordColocated()) {
       return base;
     }
+    const st = penReflectStateAfterCommitted(segs);
     if (this.penPendingSegment && this.penPendingShowsCurvePreview) {
       return this.appendPenPendingCurveToBaseD(base);
     }
-    // When the last committed node has a reflectable handle, preview the smooth-departure curve.
-    const st = penReflectStateAfterCommitted(segs);
+    // Mousedown … drag threshold: show continuation preview — smooth cubic when the last node supports
+    // it, otherwise straight `L` (no misleading `L` on top of a smooth cubic; that case is above).
+    if (this.penPendingSegment && !this.penPendingShowsCurvePreview) {
+      if (penCubicSmoothReflectP1Usable(st, anchor) && st) {
+        const ptr = this.penPointerSvg;
+        return appendCubicToD(
+          base,
+          { x1: 2 * anchor.x - st.cubicCp2X, y1: 2 * anchor.y - st.cubicCp2Y, x2: ptr.x, y2: ptr.y },
+          ptr
+        );
+      }
+      return appendLineToD(base, this.penPointerSvg.x, this.penPointerSvg.y);
+    }
     if (penCubicSmoothReflectP1Usable(st, anchor) && st) {
       const ptr = this.penPointerSvg;
       return appendCubicToD(
@@ -841,16 +853,19 @@ export class PenToolSession {
     if (this.penPendingSegment && this.penPendingChordColocated()) {
       return null;
     }
+    // No straight anchor→pointer chord while a segment endpoint is planted (committed path on session
+    // preview + curve stroke on {@link penCurvePreviewPathD} after the drag threshold).
+    if (this.penPendingSegment) {
+      return null;
+    }
     // Suppress the straight rubber-band when we're already showing a smooth-departure curve preview.
-    if (!this.penPendingSegment) {
+    {
       const segs = this.penSession.getSegments();
       const lvRb = lastCommittedVertex(segs);
       const stRb = penReflectStateAfterCommitted(segs);
       if (lvRb && penCubicSmoothReflectP1Usable(stRb, lvRb)) return null;
     }
-    const anchor = this.penPendingSegment
-      ? this.penPendingSegment.anchor
-      : lastCommittedVertex(this.penSession.getSegments());
+    const anchor = lastCommittedVertex(this.penSession.getSegments());
     if (!anchor) return null;
     const p1 = this.ports.svgBboxToOverlayPixels({ x: anchor.x, y: anchor.y, width: 0, height: 0 });
     const p2 = this.ports.svgBboxToOverlayPixels({
