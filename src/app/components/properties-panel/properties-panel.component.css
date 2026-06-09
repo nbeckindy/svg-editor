@@ -28,6 +28,38 @@
   color: #333;
 }
 
+.path-node-anchor-group {
+  flex-shrink: 0;
+  padding: 12px 16px;
+  background: #fff;
+  border-bottom: 1px solid #ddd;
+}
+
+.path-node-anchor-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.path-node-anchor-btn {
+  padding: 6px 10px;
+  font-size: 13px;
+  border: 1px solid #ccc;
+  border-radius: 4px;
+  background: #fafafa;
+  cursor: pointer;
+}
+
+.path-node-anchor-btn:hover:not(:disabled) {
+  background: #eee;
+}
+
+.path-node-anchor-btn:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
 .panel-scroll {
   flex: 1;
   min-height: 0;

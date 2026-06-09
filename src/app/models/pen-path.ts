@@ -225,6 +225,101 @@ export function symmetricCubicControlPoints(
   };
 }
 
+function penSvgUnit2d(dx: number, dy: number): { x: number; y: number } | null {
+  const len = Math.hypot(dx, dy);
+  if (len < 1e-12) return null;
+  return { x: dx / len, y: dy / len };
+}
+
+function penSvgCross2(ax: number, ay: number, bx: number, by: number): number {
+  return ax * by - ay * bx;
+}
+
+/**
+ * Converts a sharp **L–L** corner at `V` into **C–C** with mirrored handles at `V` so the path
+ * actually bends (unlike {@link symmetricCubicControlPoints} alone, which leaves controls on the
+ * chords and draws straight lines).
+ *
+ * - Handle axis aligns with the neighbor chord **p0 → B** (the line through the anchors on
+ *   either side of `V`), matching node-edit “mirror cubic” expectations.
+ * - Handle length defaults to `thirdFactor * min(|p0V|, |VB|)` (same scale as chord-thirds).
+ * - Keeps the pen split pattern: incoming `x1/y1` and outgoing `x2/y2` stay on chord thirds toward
+ *   the far anchors; only the two controls at `V` are offset along the neighbor axis and mirrored.
+ */
+export function mirrorCornerCubicsFromStraightLL(
+  p0: { x: number; y: number },
+  V: { x: number; y: number },
+  B: { x: number; y: number },
+  thirdFactor = 1 / 3
+): { incoming: CubicControlPoints; outgoing: CubicControlPoints } | null {
+  const chordIn = Math.hypot(V.x - p0.x, V.y - p0.y);
+  const chordOut = Math.hypot(B.x - V.x, B.y - V.y);
+  if (chordIn < 1e-9 || chordOut < 1e-9) return null;
+
+  const h = Math.min(chordIn, chordOut) * thirdFactor;
+
+  const e0 = penSvgUnit2d(p0.x - V.x, p0.y - V.y);
+  const e1 = penSvgUnit2d(B.x - V.x, B.y - V.y);
+  if (!e0 || !e1) return null;
+
+  const tin = penSvgUnit2d(e0.x + e1.x, e0.y + e1.y);
+  if (!tin) {
+    return {
+      incoming: symmetricCubicControlPoints(p0, V),
+      outgoing: symmetricCubicControlPoints(V, B)
+    };
+  }
+
+  let u = penSvgUnit2d(B.x - p0.x, B.y - p0.y);
+  if (!u) {
+    u = tin;
+  }
+
+  const vpx = V.x - p0.x;
+  const vpy = V.y - p0.y;
+  const interiorHintX = V.x + tin.x * 1e-3;
+  const interiorHintY = V.y + tin.y * 1e-3;
+  const targetSign =
+    Math.sign(penSvgCross2(vpx, vpy, interiorHintX - p0.x, interiorHintY - p0.y)) || 1;
+
+  let c2x = V.x - h * u.x;
+  let c2y = V.y - h * u.y;
+  let s0 = Math.sign(penSvgCross2(vpx, vpy, c2x - p0.x, c2y - p0.y));
+  if (s0 === 0 || s0 !== targetSign) {
+    c2x = V.x + h * u.x;
+    c2y = V.y + h * u.y;
+  }
+
+  // Joint tangent (incoming end) is 3(V − c2); it must align with stroke continuation toward B
+  // or the curve folds back on itself (hourglass). Flip 180° along the handle axis when needed.
+  const bvx = B.x - V.x;
+  const bvy = B.y - V.y;
+  const tdx = V.x - c2x;
+  const tdy = V.y - c2y;
+  if (tdx * bvx + tdy * bvy <= 0) {
+    c2x = 2 * V.x - c2x;
+    c2y = 2 * V.y - c2y;
+  }
+
+  const symPV = symmetricCubicControlPoints(p0, V);
+  const symVB = symmetricCubicControlPoints(V, B);
+
+  const incoming: CubicControlPoints = {
+    x1: symPV.x1,
+    y1: symPV.y1,
+    x2: c2x,
+    y2: c2y
+  };
+  const outgoing: CubicControlPoints = {
+    x1: 2 * V.x - c2x,
+    y1: 2 * V.y - c2y,
+    x2: symVB.x2,
+    y2: symVB.y2
+  };
+
+  return { incoming, outgoing };
+}
+
 /**
  * Cubic controls that preserve the endpoint chord while adding bend from drag direction.
  *

@@ -60,6 +60,13 @@ import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createSvgCanvasPointerStack } from './svg-canvas-pointer-stack.factory';
 import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
+import {
+  convertPathAnchorAtMoveSegmentIndexToCorner,
+  convertPathAnchorAtMoveSegmentIndexToMirrorCubic,
+  getMirrorCubicJointUiState,
+  PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK,
+  resolvePathNodeConversionLegs
+} from '../../models/path-node-anchor-convert';
 import { applySymmetricCubicControlDragInPlace } from '../../models/path-node-cubic-handle-mirror';
 import { findPenPathInsertHit } from '../../models/path-pen-insert';
 import { ClipboardService } from '../../services/clipboard.service';
@@ -70,6 +77,7 @@ import {
   TEXT_TOOL_PREVIEW_DATA_ATTR
 } from '../../utils/text-typography-from-defaults';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
+import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-command-bridge.service';
 import {
   EditorPointerIntentDebugService,
   type EditorPointerIntentSnapshot
@@ -1533,7 +1541,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     private editorHistory: EditorHistoryService,
     private clipboard: ClipboardService,
     protected drawingDefaults: DrawingStyleDefaultsService,
-    private chromeEditorApply: ChromeEditorApplyService
+    private chromeEditorApply: ChromeEditorApplyService,
+    private pathNodeEditBridge: PathNodeEditCommandBridgeService
   ) {
     const pointerStack = createSvgCanvasPointerStack({
       cdr: this.cdr,
@@ -1701,6 +1710,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
         setTimeout(() => this.initializeSVG(acceptedSvgContent), 0);
       }
     });
+    this.pathNodeEditBridge.register({
+      convertSelectedAnchorToCorner: () =>
+        this.tryApplyPathNodeAnchorCornerFromBridge() ? { ok: true } : { ok: false },
+      convertSelectedAnchorToMirrorCubic: () =>
+        this.tryApplyPathNodeMirrorCubicFromBridge() ? { ok: true } : { ok: false }
+    });
+    effect(() => {
+      void this.editorTool.currentTool();
+      void this.shapeSelection.selectedShapes();
+      void this.editorHistory.revision();
+      this.syncPathNodeEditBridgeChrome();
+    });
   }
 
   private boundOnWheel = this.onWheel.bind(this);
@@ -1716,6 +1737,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     this.clearPenPostInsertAnchorOverlay();
     this.penTool.dispose();
     this.clearPathNodeEditFeedback();
+    this.pathNodeEditBridge.register(null);
     const el = this.canvasViewport()?.nativeElement;
     if (el) {
       el.removeEventListener('wheel', this.boundOnWheel);
@@ -2424,6 +2446,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       } else {
         this.clearPathNodeEditFeedback();
       }
+      this.syncPathNodeEditBridgeChrome();
       this.cdr.markForCheck();
       return;
     }
@@ -2435,6 +2458,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     this.drilledIntoGroupId = null;
     this.clearPathNodeEditFeedback();
     this.syncPenPostInsertAnchorOverlayDom();
+    this.syncPathNodeEditBridgeChrome();
     this.cdr.markForCheck();
   }
 
@@ -2446,6 +2470,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     this.pathNodeDragJustEnded = false;
     this.clearPathNodeEditFeedback();
     this.syncPenPostInsertAnchorOverlayDom();
+    this.syncPathNodeEditBridgeChrome();
     this.cdr.markForCheck();
     return true;
   }
@@ -2494,6 +2519,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       };
       this.pathNodeDragJustEnded = false;
       this.updatePathNodeDrag(event.clientX, event.clientY);
+      this.syncPathNodeEditBridgeChrome();
       return true;
     }
 
@@ -2508,6 +2534,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     };
     this.pathNodeDragJustEnded = false;
     this.updatePathNodeDrag(event.clientX, event.clientY);
+    this.syncPathNodeEditBridgeChrome();
     return true;
   }
 
@@ -2574,6 +2601,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       ? { pathId: targetPathState.pathId, moveSegmentIndex: fallbackAnchor.moveSegmentIndex }
       : null;
     this.clearPathNodeEditFeedback();
+    this.syncPathNodeEditBridgeChrome();
     this.cdr.markForCheck();
     return true;
   }
@@ -2606,6 +2634,208 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
 
     nextSegments.splice(moveSegmentIndex, 1);
     return nextSegments;
+  }
+
+  private syncPathNodeEditBridgeChrome(): void {
+    const toolIsNodeEdit = this.editorTool.getCurrentTool() === 'node-edit-selector';
+    if (!toolIsNodeEdit || !this.pathNodeEditState || !this.selectedPathNode) {
+      this.pathNodeEditBridge.setChrome({
+        toolIsNodeEdit,
+        hasSelectedPathNode: false,
+        pathLocked: false,
+        cornerEnabled: false,
+        mirrorCubicEnabled: false
+      });
+      return;
+    }
+    const pathId = this.selectedPathNode.pathId;
+    const locked = this.svgManipulation.isElementOrAncestorLocked(pathId);
+    const svg = this.svgManipulation.getSVGInstance();
+    const pathEl = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
+    const d = pathEl?.getAttribute('d') ?? '';
+    const parsed = parsePathDForNodeEditing(d);
+    if (!parsed) {
+      this.pathNodeEditBridge.setChrome({
+        toolIsNodeEdit: true,
+        hasSelectedPathNode: true,
+        pathLocked: locked,
+        cornerEnabled: false,
+        mirrorCubicEnabled: false
+      });
+      return;
+    }
+    const mi = this.selectedPathNode.moveSegmentIndex;
+    const legs = resolvePathNodeConversionLegs(parsed, mi);
+    let cornerEnabled =
+      !locked && !!legs && (legs.incoming !== null || legs.outgoing !== null);
+    if (cornerEnabled && legs) {
+      const idxs = [legs.incoming, legs.outgoing].filter((i): i is number => i !== null);
+      for (const i of idxs) {
+        const ty = parsed[i]?.type;
+        if (ty === 'Q' || ty === 'T' || ty === 'S') {
+          cornerEnabled = false;
+          break;
+        }
+      }
+    }
+    const mirrorState = getMirrorCubicJointUiState(parsed, mi);
+    const mirrorCubicEnabled = !locked && mirrorState.kind === 'applicable';
+    this.pathNodeEditBridge.setChrome({
+      toolIsNodeEdit: true,
+      hasSelectedPathNode: true,
+      pathLocked: locked,
+      cornerEnabled: !!cornerEnabled,
+      mirrorCubicEnabled
+    });
+  }
+
+  private tryApplyPathNodeAnchorCornerFromBridge(): boolean {
+    if (!this.pathNodeEditState || !this.selectedPathNode) {
+      this.showPathNodeEditFeedback('Select a path node first.');
+      return false;
+    }
+    const pathId = this.selectedPathNode.pathId;
+    if (this.svgManipulation.isElementOrAncestorLocked(pathId)) {
+      this.showPathNodeEditFeedback('That path is locked.');
+      return false;
+    }
+    if (!this.pathNodeEditState.paths.some((s) => s.pathId === pathId)) return false;
+    const svg = this.svgManipulation.getSVGInstance();
+    const pathEl = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
+    if (!pathEl) return false;
+    const oldD = pathEl.getAttribute('d') ?? '';
+    const parsed = this.parsePathDataForNodeEditing(oldD);
+    if (!parsed) {
+      this.showPathNodeEditFeedback('Unable to read that path.');
+      return false;
+    }
+
+    const moveIdx = this.selectedPathNode.moveSegmentIndex;
+    const outcome = convertPathAnchorAtMoveSegmentIndexToCorner(parsed, moveIdx);
+    if (!outcome.ok) {
+      if (outcome.feedback) {
+        this.showPathNodeEditFeedback(outcome.feedback);
+      }
+      return false;
+    }
+
+    const newD = pathSegmentsToD(outcome.segments);
+    if (newD === oldD) {
+      this.clearPathNodeEditFeedback();
+      this.syncPathNodeEditBridgeChrome();
+      return true;
+    }
+    if (!this.isValidNodeEditSerializedPath(newD)) {
+      this.showPathNodeEditFeedback('Unable to apply corner anchor for this path.');
+      return false;
+    }
+
+    pathEl.setAttribute('d', newD);
+    const cmd = new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true);
+    this.editorHistory.pushAndExecute(cmd);
+
+    const refreshed = this.buildPathNodeEditState(pathId);
+    if (!refreshed.state) {
+      this.exitPathNodeEditMode();
+      return true;
+    }
+    this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
+      state.pathId === pathId ? refreshed.state! : state
+    );
+    this.pathNodeEditState.activePathId = pathId;
+    const preserve = moveIdx;
+    if (refreshed.state.anchors.some((a) => a.moveSegmentIndex === preserve)) {
+      this.selectedPathNode = { pathId, moveSegmentIndex: preserve };
+    } else {
+      this.selectedPathNode = null;
+    }
+    this.clearPathNodeEditFeedback();
+    this.syncPathNodeEditBridgeChrome();
+    this.cdr.markForCheck();
+    return true;
+  }
+
+  private tryApplyPathNodeMirrorCubicFromBridge(): boolean {
+    if (!this.pathNodeEditState || !this.selectedPathNode) {
+      this.showPathNodeEditFeedback('Select a path node first.');
+      return false;
+    }
+    const pathId = this.selectedPathNode.pathId;
+    if (this.svgManipulation.isElementOrAncestorLocked(pathId)) {
+      this.showPathNodeEditFeedback('That path is locked.');
+      return false;
+    }
+    if (!this.pathNodeEditState.paths.some((s) => s.pathId === pathId)) return false;
+    const svg = this.svgManipulation.getSVGInstance();
+    const pathEl = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
+    if (!pathEl) return false;
+    const oldD = pathEl.getAttribute('d') ?? '';
+    const parsed = this.parsePathDataForNodeEditing(oldD);
+    if (!parsed) {
+      this.showPathNodeEditFeedback('Unable to read that path.');
+      return false;
+    }
+
+    const moveIdx = this.selectedPathNode.moveSegmentIndex;
+    const joint = getMirrorCubicJointUiState(parsed, moveIdx);
+    if (joint.kind === 'already-cubic-noop') {
+      this.clearPathNodeEditFeedback();
+      this.syncPathNodeEditBridgeChrome();
+      return true;
+    }
+    if (joint.kind !== 'applicable') {
+      const msg =
+        joint.kind === 'rejects-quadratic'
+          ? PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK
+          : joint.kind === 'needs-two-lines'
+            ? 'Mirror cubic needs two straight edges meeting at this node.'
+            : 'Unable to apply mirror cubic at this node.';
+      this.showPathNodeEditFeedback(msg);
+      return false;
+    }
+
+    const outcome = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(parsed, moveIdx);
+    if (!outcome.ok) {
+      if (outcome.feedback) {
+        this.showPathNodeEditFeedback(outcome.feedback);
+      }
+      return false;
+    }
+
+    const newD = pathSegmentsToD(outcome.segments);
+    if (newD === oldD) {
+      this.clearPathNodeEditFeedback();
+      this.syncPathNodeEditBridgeChrome();
+      return true;
+    }
+    if (!this.isValidNodeEditSerializedPath(newD)) {
+      this.showPathNodeEditFeedback('Unable to apply mirror cubic for this path.');
+      return false;
+    }
+
+    pathEl.setAttribute('d', newD);
+    const cmd = new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true);
+    this.editorHistory.pushAndExecute(cmd);
+
+    const refreshed = this.buildPathNodeEditState(pathId);
+    if (!refreshed.state) {
+      this.exitPathNodeEditMode();
+      return true;
+    }
+    this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
+      state.pathId === pathId ? refreshed.state! : state
+    );
+    this.pathNodeEditState.activePathId = pathId;
+    const preserve = moveIdx;
+    if (refreshed.state.anchors.some((a) => a.moveSegmentIndex === preserve)) {
+      this.selectedPathNode = { pathId, moveSegmentIndex: preserve };
+    } else {
+      this.selectedPathNode = null;
+    }
+    this.clearPathNodeEditFeedback();
+    this.syncPathNodeEditBridgeChrome();
+    this.cdr.markForCheck();
+    return true;
   }
 
   updatePathNodeDrag(clientX: number, clientY: number): void {
@@ -2664,6 +2894,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       );
       this.editorHistory.pushAndExecute(cmd);
     }
+    this.syncPathNodeEditBridgeChrome();
     this.cdr.markForCheck();
   }
 
@@ -2866,6 +3097,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       this.penPostInsertAnchorPathId = pathId;
     }
     this.syncPenPostInsertAnchorOverlayDom();
+    this.syncPathNodeEditBridgeChrome();
     this.cdr.markForCheck();
   }
 

@@ -1,0 +1,55 @@
+import { Injectable, signal } from '@angular/core';
+
+/** Snapshot for properties panel + path-node chrome (driven from svg-canvas). */
+export interface PathNodeEditBridgeChrome {
+  toolIsNodeEdit: boolean;
+  hasSelectedPathNode: boolean;
+  pathLocked: boolean;
+  cornerEnabled: boolean;
+  mirrorCubicEnabled: boolean;
+}
+
+const DEFAULT_CHROME: PathNodeEditBridgeChrome = {
+  toolIsNodeEdit: false,
+  hasSelectedPathNode: false,
+  pathLocked: false,
+  cornerEnabled: false,
+  mirrorCubicEnabled: false
+};
+
+export type PathNodeAnchorCommandResult = { ok: true } | { ok: false };
+
+export interface PathNodeEditCommandBridgeHandlers {
+  convertSelectedAnchorToCorner(): PathNodeAnchorCommandResult;
+  convertSelectedAnchorToMirrorCubic(): PathNodeAnchorCommandResult;
+}
+
+/**
+ * Bridges path node-edit commands from chrome (e.g. properties panel) to the canvas.
+ * {@link SvgCanvasComponent} registers handlers in its constructor and clears them on destroy.
+ */
+@Injectable({ providedIn: 'root' })
+export class PathNodeEditCommandBridgeService {
+  private handlers: PathNodeEditCommandBridgeHandlers | null = null;
+
+  readonly chrome = signal<PathNodeEditBridgeChrome>({ ...DEFAULT_CHROME });
+
+  register(handlers: PathNodeEditCommandBridgeHandlers | null): void {
+    this.handlers = handlers;
+    if (!handlers) {
+      this.chrome.set({ ...DEFAULT_CHROME });
+    }
+  }
+
+  setChrome(next: PathNodeEditBridgeChrome): void {
+    this.chrome.set(next);
+  }
+
+  convertSelectedAnchorToCorner(): PathNodeAnchorCommandResult {
+    return this.handlers?.convertSelectedAnchorToCorner() ?? { ok: false };
+  }
+
+  convertSelectedAnchorToMirrorCubic(): PathNodeAnchorCommandResult {
+    return this.handlers?.convertSelectedAnchorToMirrorCubic() ?? { ok: false };
+  }
+}
