@@ -87,13 +87,13 @@ describe('penDraftFirstSegmentPreviewD', () => {
 });
 
 describe('penFirstAnchorMirroredHandleControlsFromDrag', () => {
-  it('mirrors P1/P2 through anchor along drag; each arm is one-third of drag vector', () => {
+  it('places P1 on the pointer and P2 as the reflection of P1 through the anchor', () => {
     const c = penFirstAnchorMirroredHandleControlsFromDrag(
       { x: 0, y: 0 },
       { x: 9, y: 9 },
       false
     );
-    expect(c).toEqual({ x1: 3, y1: 3, x2: -3, y2: -3 });
+    expect(c).toEqual({ x1: 9, y1: 9, x2: -9, y2: -9 });
   });
 });
 

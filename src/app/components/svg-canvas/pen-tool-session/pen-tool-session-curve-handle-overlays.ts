@@ -64,9 +64,10 @@ export function computePenCurveHandleOverlays(p: PenCurveHandleOverlaysParams): 
       const pending = p.penPendingSegment!;
       if (p.penPendingCurveAltChord) return [];
       const anchor = pending.anchor;
+      const dragPt = p.pendingDragSampleSvg(pending);
       const c = penFirstAnchorMirroredHandleControlsFromDrag(
         anchor,
-        p.penPointerSvg,
+        dragPt,
         p.penPendingShiftAngleSnap
       );
       const toOverlay = (x: number, y: number) =>
@@ -164,13 +165,14 @@ export function computePenCurveHandleOverlays(p: PenCurveHandleOverlaysParams): 
         }
       }
     }
-    if (!p.penCurvePreviewPathD) return [];
     if (p.penAwaitingFirstSegmentP3AfterDraft && p.penFirstAnchorP3Draft) {
       const segs = p.segments;
       const m = segs[0];
       if (m.type !== 'M') return [];
+      const ptr = p.penPointerSvg;
+      if (!ptr) return [];
       const anchor = { x: m.x, y: m.y };
-      const end = p.penPointerSvg;
+      const end = ptr;
       const draft = p.penFirstAnchorP3Draft;
       const dragCurrent = draft.dragCommitSvg;
       const kind = penDragCurveAuthoringKind(draft.ctrlCurve, segs);
@@ -295,6 +297,7 @@ export function computePenCurveHandleOverlays(p: PenCurveHandleOverlaysParams): 
           return [];
       }
     }
+    if (!p.penCurvePreviewPathD) return [];
     if (!p.penPendingSegment) return [];
     const pending = p.penPendingSegment;
     const anchor = pending.anchor;
@@ -409,13 +412,14 @@ export function computePenPendingCurveHandleGuideOverlays(
   if (!p.currentToolIsPen) {
     return [];
   }
-  if (p.penMirroredHandleChromeActive && p.penPointerSvg && p.penPendingSegment) {
+  if (p.penMirroredHandleChromeActive && p.penPendingSegment) {
     const pending = p.penPendingSegment;
     if (p.penPendingCurveAltChord) return [];
     const anchor = pending.anchor;
+    const dragPt = p.pendingDragSampleSvg(pending);
     const c = penFirstAnchorMirroredHandleControlsFromDrag(
       anchor,
-      p.penPointerSvg,
+      dragPt,
       p.penPendingShiftAngleSnap
     );
     const line = (x1s: number, y1s: number, x2s: number, y2s: number) =>
@@ -501,9 +505,6 @@ export function computePenPendingCurveHandleGuideOverlays(
         return [line(anchor.x, anchor.y, ix, iy)];
       }
     }
-  }
-  if (!p.penCurvePreviewPathD) {
-    return [];
   }
   if (p.penAwaitingFirstSegmentP3AfterDraft && p.penFirstAnchorP3Draft) {
     const segs = p.segments;
@@ -620,6 +621,9 @@ export function computePenPendingCurveHandleGuideOverlays(
       }
       return linesP3;
     }
+    return [];
+  }
+  if (!p.penCurvePreviewPathD) {
     return [];
   }
   if (!p.penPendingSegment) return [];

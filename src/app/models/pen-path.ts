@@ -662,8 +662,9 @@ export function penAdjustedCubicControlsForPendingLikeDrag(
 }
 
 /**
- * First-vertex click-drag (Illustrator-style): `P1` and `P2` are mirrored through `anchor` along the
- * drag vector (`dragPt − anchor`), each arm length = ‖drag‖/3. No provisional segment endpoint (P3).
+ * First-vertex click-drag: **P1** sits on the pointer sample (`dragPt`, optionally Shift-snapped);
+ * **P2** is the reflection of **P1** through `anchor` so the join at the moveto stays symmetric
+ * (`P2 = 2·anchor − P1`). Matches “handle tracks cursor 1:1” while keeping a single degree of freedom.
  */
 export function penFirstAnchorMirroredHandleControlsFromDrag(
   anchor: { x: number; y: number },
@@ -677,12 +678,13 @@ export function penFirstAnchorMirroredHandleControlsFromDrag(
   if (len < 1e-12) {
     return { x1: anchor.x, y1: anchor.y, x2: anchor.x, y2: anchor.y };
   }
-  const f = 1 / 3;
+  const x1 = snapped.x;
+  const y1 = snapped.y;
   return {
-    x1: anchor.x + dx * f,
-    y1: anchor.y + dy * f,
-    x2: anchor.x - dx * f,
-    y2: anchor.y - dy * f
+    x1,
+    y1,
+    x2: 2 * anchor.x - x1,
+    y2: 2 * anchor.y - y1
   };
 }
 
