@@ -6,6 +6,7 @@ import {
   penFirstAnchorMirroredHandleControlsFromDrag,
   penPathSegmentsAreValid,
   penReflectStateAfterCommitted,
+  penStartingLegIsCubic,
   penSvgDistanceSq,
   type PenFirstAnchorP3Draft,
   type PenPathSegment
@@ -118,7 +119,12 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       v.pendingShiftAngleSnap = false;
       const { anchor, startSvg } = pending;
       if (penSvgDistanceSq(anchor, m) > 1e-12) {
-        v.commitDraggedCurve(anchor, startSvg, releaseSvg, pending.ctrlCurve, m);
+        const committed = v.penSession.getSegments();
+        if (penStartingLegIsCubic(committed)) {
+          v.commitDraggedCurve(anchor, startSvg, releaseSvg, pending.ctrlCurve, m);
+        } else {
+          v.penSession.addLinePoint(m.x, m.y);
+        }
       }
       v.tryFinishPath(true);
       return;

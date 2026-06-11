@@ -28,6 +28,7 @@ import {
   penLastOutgoingHandleSvg,
   snapVectorTo45DegFrom,
   penAdjustedCubicControlsForPendingLikeDrag,
+  penStartingLegIsCubic,
   placementPointerCubicControlPoints,
   type PenFirstAnchorP3Draft,
   type CubicControlPoints,
@@ -740,7 +741,8 @@ export class PenToolSession {
       penPendingIsFirstSegmentFromMovetoGesture: this.penPendingIsFirstSegmentFromMovetoGesture(),
       penPendingChordColocated: this.penPendingChordColocated(),
       penPendingStartNearPathMoveto: this.penPendingStartNearPathMoveto(),
-      penPathStartMv: this.penPathStartMv()
+      penPathStartMv: this.penPathStartMv(),
+      allowRelaxedCloseRingCurvePreview: penStartingLegIsCubic(this.penSession.getSegments())
     });
   }
 

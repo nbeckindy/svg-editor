@@ -160,6 +160,17 @@ export function penDragCurveAuthoringKind(
   return 'cubic';
 }
 
+/**
+ * True when the first drawable segment after the leading `M` is cubic (`C`) or smooth cubic (`S`).
+ * Used for pen close-from-start: without meaningful drag, append `L` to the moveto unless the path
+ * began with a cubic leg (then {@link commitPenDraggedCurveOnSession} keeps a shaped closing curve).
+ */
+export function penStartingLegIsCubic(segments: readonly PenPathSegment[]): boolean {
+  if (segments.length < 2) return false;
+  const first = segments[1];
+  return first.type === 'C' || first.type === 'S';
+}
+
 /** Build a single `d` string from segments (explicit `M`/`L`/`C`/`Q`/`S`/`T`, no implicit commands). */
 export function penPathSegmentsToD(segments: readonly PenPathSegment[]): string {
   const parts: string[] = [];

@@ -4596,6 +4596,59 @@ describe('SvgCanvasComponent', () => {
       expect(editorToolService.getCurrentTool()).toBe('node-edit-selector');
     });
 
+    it('pen: close-from-start without drag uses L to moveto when path began with lines only', async () => {
+      await loadEmptySvgAndPenMode();
+      editorToolService.setGridSnapEnabled(false);
+      editorToolService.setShapeSnapEnabled(false);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 100,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 10 } as MouseEvent);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 100,
+        clientY: 100,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 100, clientY: 100 } as MouseEvent);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 12,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 12, clientY: 10 } as MouseEvent);
+      fixture.detectChanges();
+
+      const d =
+        fixture.nativeElement
+          .querySelector('[data-editor-content-group]')
+          ?.querySelector('path')
+          ?.getAttribute('d') ?? '';
+      const sp = d.replace(/\s+/g, ' ').trim();
+      expect(sp.endsWith('Z')).toBe(true);
+      expect(sp).toMatch(/ L [\d.]+\s+[\d.]+\s*Z$/);
+      expect(sp.includes(' C ')).toBe(false);
+      expect(editorToolService.getCurrentTool()).toBe('node-edit-selector');
+    });
+
     it('closes path when mousedown was on start but mouseup left close radius (drag-close release)', async () => {
       await loadEmptySvgAndPenMode();
       editorToolService.setGridSnapEnabled(false);

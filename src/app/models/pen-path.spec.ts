@@ -18,6 +18,7 @@ import {
   penPathOnlyMoveto,
   penPathSegmentsAreValid,
   penPathSegmentsToD,
+  penStartingLegIsCubic,
   snapVectorTo45DegFrom,
   symmetricCubicControlPoints,
   penDraftFirstSegmentPreviewD,
@@ -180,6 +181,36 @@ describe('penDragCurveAuthoringKind', () => {
       { type: 'Q' as const, x1: 1, y1: 2, x: 3, y: 0 }
     ];
     expect(penDragCurveAuthoringKind(true, afterQ)).toBe('smoothQuadratic');
+  });
+});
+
+describe('penStartingLegIsCubic', () => {
+  it('is true only when the first segment after M is C or S', () => {
+    expect(penStartingLegIsCubic([{ type: 'M', x: 0, y: 0 }])).toBe(false);
+    expect(
+      penStartingLegIsCubic([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 1, y: 1 }
+      ])
+    ).toBe(false);
+    expect(
+      penStartingLegIsCubic([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'Q', x1: 0, y1: 0, x: 1, y: 1 }
+      ])
+    ).toBe(false);
+    expect(
+      penStartingLegIsCubic([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'C', x1: 0, y1: 0, x2: 0, y2: 0, x: 1, y: 1 }
+      ])
+    ).toBe(true);
+    expect(
+      penStartingLegIsCubic([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'S', x2: 1, y2: 1, x: 2, y: 2 }
+      ])
+    ).toBe(true);
   });
 });
 

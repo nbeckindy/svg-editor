@@ -82,6 +82,12 @@ export function computePenPendingShowsCurvePreviewForClose(args: {
   penPendingChordColocated: boolean;
   penPendingStartNearPathMoveto: boolean;
   penPathStartMv: { x: number; y: number } | null;
+  /**
+   * When the pending chord began on the close ring, allow the small screen / micro-SVG thresholds so
+   * users can shape a closing curve without leaving the ring. Disabled when the path did not start
+   * with a cubic leg — then only {@link MARQUEE_MIN_DRAG_PX} (checked above) enables curve preview.
+   */
+  allowRelaxedCloseRingCurvePreview: boolean;
 }): boolean {
   const {
     penAwaitingFirstSegmentP3AfterDraft,
@@ -94,7 +100,8 @@ export function computePenPendingShowsCurvePreviewForClose(args: {
     penPendingIsFirstSegmentFromMovetoGesture,
     penPendingChordColocated,
     penPendingStartNearPathMoveto,
-    penPathStartMv
+    penPathStartMv,
+    allowRelaxedCloseRingCurvePreview
   } = args;
 
   if (penAwaitingFirstSegmentP3AfterDraft && penFirstAnchorP3Draft) return true;
@@ -111,6 +118,7 @@ export function computePenPendingShowsCurvePreviewForClose(args: {
   }
   if (screenHyp >= MARQUEE_MIN_DRAG_PX) return true;
   if (!penPendingStartNearPathMoveto) return false;
+  if (!allowRelaxedCloseRingCurvePreview) return false;
   if (screenHyp >= PEN_CLOSE_PENDING_CURVE_PREVIEW_MIN_SCREEN_PX) return true;
   const dragSvg = penPendingDragSvg;
   const m = penPathStartMv;
