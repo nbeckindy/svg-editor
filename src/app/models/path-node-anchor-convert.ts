@@ -5,6 +5,9 @@ import type { PathSegment } from './path-d';
 /** Match `PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ` in svg-canvas (squared distance in user space). */
 const PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ = 1e-6;
 
+/** Squared distance threshold: handle considered “at” the anchor (corner-like). */
+export const PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ = 1e-6;
+
 export interface PathNodeAnchorPointModel {
   x: number;
   y: number;
@@ -227,14 +230,122 @@ function segmentAtJointUnsupportedForNodeAnchorOps(seg: PathSegment | undefined)
   return seg.type === 'Q' || seg.type === 'T' || seg.type === 'S';
 }
 
-function collapseSegmentToLineToEnd(seg: PathSegment): Extract<PathSegment, { type: 'L' }> | null {
-  if (seg.type === 'L') {
-    return { type: 'L', x: seg.x, y: seg.y };
+/** Drawable segment end point (`M` / `L` / `C` / `Q` / `S` / `T`); not valid for `Z`. */
+function pathSegmentEndXY(seg: PathSegment): { x: number; y: number } {
+  switch (seg.type) {
+    case 'M':
+    case 'L':
+      return { x: seg.x, y: seg.y };
+    case 'C':
+    case 'Q':
+    case 'S':
+    case 'T':
+      return { x: seg.x, y: seg.y };
+    case 'Z':
+      throw new Error('pathSegmentEndXY: Z has no end point');
+    default: {
+      const _exhaustive: never = seg;
+      return _exhaustive;
+    }
   }
-  if (seg.type === 'C' || seg.type === 'Q') {
-    return { type: 'L', x: seg.x, y: seg.y };
+}
+
+/** Incoming leg is “straight into” `V` (line, or cubic with second control at `V`). */
+export function isPathNodeIncomingCornerLikeAtVertex(
+  seg: PathSegment,
+  V: { x: number; y: number }
+): boolean {
+  if (seg.type === 'L') return true;
+  if (seg.type === 'C') {
+    return penSvgDistanceSq({ x: seg.x2, y: seg.y2 }, V) < PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
+  }
+  return false;
+}
+
+/** Outgoing leg is “straight out of” `V` (line, or cubic with first control at `V`). */
+export function isPathNodeOutgoingCornerLikeAtVertex(
+  seg: PathSegment,
+  V: { x: number; y: number }
+): boolean {
+  if (seg.type === 'L') return true;
+  if (seg.type === 'C') {
+    return penSvgDistanceSq({ x: seg.x1, y: seg.y1 }, V) < PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
+  }
+  return false;
+}
+
+/**
+ * True when every leg at this anchor is already corner-like (L or C with handle collapsed onto `V`).
+ * Used to disable “Corner anchor” and to treat the node as a corner for mirror-cubic eligibility.
+ */
+export function isPathNodeCornerAnchorAlreadyApplied(
+  segments: readonly PathSegment[],
+  moveSegmentIndex: number
+): boolean {
+  const legs = resolvePathNodeConversionLegs(segments, moveSegmentIndex);
+  if (!legs) return false;
+  const V = legs.vertex;
+  if (legs.incoming !== null) {
+    const s = segments[legs.incoming];
+    if (segmentAtJointUnsupportedForNodeAnchorOps(s)) return false;
+    if (!isPathNodeIncomingCornerLikeAtVertex(s, V)) return false;
+  }
+  if (legs.outgoing !== null) {
+    const s = segments[legs.outgoing];
+    if (segmentAtJointUnsupportedForNodeAnchorOps(s)) return false;
+    if (!isPathNodeOutgoingCornerLikeAtVertex(s, V)) return false;
+  }
+  return true;
+}
+
+const PATH_ANCHOR_VERTEX_MATCH_EPS_SQ = 1e-8;
+
+function findMoveSegmentIndexForAnchorPoint(
+  segments: readonly PathSegment[],
+  pt: { x: number; y: number }
+): number | null {
+  for (const a of collectPathNodeAnchorsForPathNodeConversion(segments)) {
+    if (penSvgDistanceSq({ x: a.x, y: a.y }, pt) < PATH_ANCHOR_VERTEX_MATCH_EPS_SQ) {
+      return a.moveSegmentIndex;
+    }
   }
   return null;
+}
+
+/**
+ * After mirror at `V`, if the previous / next anchors **were** corner-like before this edit,
+ * pin their joint-side handles onto those vertices so adjacent corners stay visually sharp.
+ * Uses `prevSegments` for corner detection because geometry at `V` may change leg shape in `next`.
+ */
+function snapAdjacentCornerHandlesAtVertices(
+  prevSegments: readonly PathSegment[],
+  next: PathSegment[],
+  legs: PathNodeConversionLegs
+): void {
+  const incIdx = legs.incoming;
+  const outIdx = legs.outgoing;
+  if (incIdx === null || outIdx === null) return;
+
+  const p0 = pointBeforeSegmentIndex(next, incIdx);
+  if (p0) {
+    const idxP0 = findMoveSegmentIndexForAnchorPoint(prevSegments, p0);
+    if (idxP0 !== null && isPathNodeCornerAnchorAlreadyApplied(prevSegments, idxP0)) {
+      const s = next[incIdx];
+      if (s.type === 'C') {
+        next[incIdx] = { ...s, x1: p0.x, y1: p0.y };
+      }
+    }
+  }
+
+  const outSeg = next[outIdx];
+  const B = pathSegmentEndXY(outSeg);
+  const idxB = findMoveSegmentIndexForAnchorPoint(prevSegments, B);
+  if (idxB !== null && isPathNodeCornerAnchorAlreadyApplied(prevSegments, idxB)) {
+    const s = next[outIdx];
+    if (s.type === 'C') {
+      next[outIdx] = { ...s, x2: B.x, y2: B.y };
+    }
+  }
 }
 
 export const PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK =
@@ -260,13 +371,32 @@ export function convertPathAnchorAtMoveSegmentIndexToCorner(
     }
   }
 
+  const V = legs.vertex;
   const next = segments.map((s) => ({ ...s }));
-  for (const idx of legIndices) {
-    const collapsed = collapseSegmentToLineToEnd(next[idx]);
-    if (!collapsed) {
-      return { ok: false, feedback: 'Unable to straighten that segment.' };
+  let changed = false;
+
+  /**
+   * Corner at `V` on a cubic: collapse the handle **at** `V` onto the vertex (same as an `L` end),
+   * without changing segment type or the far control.
+   */
+  if (legs.incoming !== null) {
+    const seg = next[legs.incoming];
+    if (seg.type === 'C') {
+      next[legs.incoming] = { ...seg, x2: V.x, y2: V.y };
+      changed = true;
     }
-    next[idx] = collapsed;
+  }
+
+  if (legs.outgoing !== null) {
+    const seg = next[legs.outgoing];
+    if (seg.type === 'C') {
+      next[legs.outgoing] = { ...seg, x1: V.x, y1: V.y };
+      changed = true;
+    }
+  }
+
+  if (!changed) {
+    return { ok: true, segments: next };
   }
 
   return { ok: true, segments: next };
@@ -287,13 +417,57 @@ export function getMirrorCubicJointUiState(
   if (segmentAtJointUnsupportedForNodeAnchorOps(a) || segmentAtJointUnsupportedForNodeAnchorOps(b)) {
     return { kind: 'rejects-quadratic' };
   }
+  const V = legs.vertex;
+  const incOff =
+    a.type === 'C' &&
+    penSvgDistanceSq({ x: a.x2, y: a.y2 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
+  const outOff =
+    b.type === 'C' &&
+    penSvgDistanceSq({ x: b.x1, y: b.y1 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
+
   if (a.type === 'C' && b.type === 'C') {
-    return { kind: 'already-cubic-noop' };
+    if (incOff && outOff) {
+      return { kind: 'already-cubic-noop' };
+    }
+    return { kind: 'applicable' };
   }
-  if (a.type === 'L' && b.type === 'L') {
+
+  const incStraight = a.type === 'L' || (a.type === 'C' && !incOff);
+  const outStraight = b.type === 'L' || (b.type === 'C' && !outOff);
+  if (incStraight && outStraight) {
     return { kind: 'applicable' };
   }
   return { kind: 'needs-two-lines' };
+}
+
+/**
+ * When mirror promotes `L`→`C`, the non-`V` endpoint of that leg should keep a **corner** look:
+ * collapse the far control onto that anchor (`x1` at start of incoming, `x2` at end of outgoing).
+ */
+function pinFarHandlesWhenLineBecameCubic(
+  next: PathSegment[],
+  legs: PathNodeConversionLegs,
+  incBefore: PathSegment,
+  outBefore: PathSegment
+): void {
+  const incIdx = legs.incoming;
+  const outIdx = legs.outgoing;
+  if (incIdx === null || outIdx === null) return;
+
+  if (incBefore.type === 'L') {
+    const p0pt = pointBeforeSegmentIndex(next, incIdx);
+    const s = next[incIdx];
+    if (p0pt && s.type === 'C') {
+      next[incIdx] = { ...s, x1: p0pt.x, y1: p0pt.y };
+    }
+  }
+  if (outBefore.type === 'L') {
+    const s = next[outIdx];
+    if (s.type === 'C') {
+      const end = pathSegmentEndXY(outBefore);
+      next[outIdx] = { ...s, x2: end.x, y2: end.y };
+    }
+  }
 }
 
 export function convertPathAnchorAtMoveSegmentIndexToMirrorCubic(
@@ -317,15 +491,27 @@ export function convertPathAnchorAtMoveSegmentIndexToMirrorCubic(
     return { ok: false, feedback: PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK };
   }
 
-  if (inc.type === 'C' && out.type === 'C') {
-    return { ok: false };
-  }
+  const V = legs.vertex;
+  const incOff =
+    inc.type === 'C' &&
+    penSvgDistanceSq({ x: inc.x2, y: inc.y2 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
+  const outOff =
+    out.type === 'C' &&
+    penSvgDistanceSq({ x: out.x1, y: out.y1 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
 
-  if (inc.type !== 'L' || out.type !== 'L') {
-    return {
-      ok: false,
-      feedback: 'Mirror cubic needs two straight line segments at this joint.'
-    };
+  if (inc.type === 'C' && out.type === 'C') {
+    if (incOff && outOff) {
+      return { ok: false };
+    }
+  } else {
+    const incStraight = inc.type === 'L' || (inc.type === 'C' && !incOff);
+    const outStraight = out.type === 'L' || (out.type === 'C' && !outOff);
+    if (!incStraight || !outStraight) {
+      return {
+        ok: false,
+        feedback: 'Mirror cubic needs two straight edges meeting at this node.'
+      };
+    }
   }
 
   const p0 = pointBeforeSegmentIndex(segments, legs.incoming);
@@ -333,34 +519,58 @@ export function convertPathAnchorAtMoveSegmentIndexToMirrorCubic(
     return { ok: false, feedback: 'Unable to resolve geometry for mirror cubic.' };
   }
 
-  const V = { x: inc.x, y: inc.y };
-  const B = { x: out.x, y: out.y };
+  const Vpt = V;
+  const B = pathSegmentEndXY(out);
 
-  const pair = mirrorCornerCubicsFromStraightLL(p0, V, B);
+  const next = segments.map((s) => ({ ...s }));
+
+  /** Always use {@link mirrorCornerCubicsFromStraightLL} so joint controls satisfy C1 mirror at `V`. */
+  const pair = mirrorCornerCubicsFromStraightLL(p0, Vpt, B);
   if (!pair) {
     return { ok: false, feedback: 'Unable to resolve geometry for mirror cubic.' };
   }
 
-  const next = segments.map((s) => ({ ...s }));
+  if (inc.type === 'L') {
+    next[legs.incoming] = {
+      type: 'C',
+      x1: pair.incoming.x1,
+      y1: pair.incoming.y1,
+      x2: pair.incoming.x2,
+      y2: pair.incoming.y2,
+      x: Vpt.x,
+      y: Vpt.y
+    };
+  } else {
+    const c = inc as Extract<PathSegment, { type: 'C' }>;
+    next[legs.incoming] = {
+      ...c,
+      x2: pair.incoming.x2,
+      y2: pair.incoming.y2
+    };
+  }
 
-  next[legs.incoming] = {
-    type: 'C',
-    x1: pair.incoming.x1,
-    y1: pair.incoming.y1,
-    x2: pair.incoming.x2,
-    y2: pair.incoming.y2,
-    x: V.x,
-    y: V.y
-  };
-  next[legs.outgoing] = {
-    type: 'C',
-    x1: pair.outgoing.x1,
-    y1: pair.outgoing.y1,
-    x2: pair.outgoing.x2,
-    y2: pair.outgoing.y2,
-    x: B.x,
-    y: B.y
-  };
+  if (out.type === 'L') {
+    next[legs.outgoing] = {
+      type: 'C',
+      x1: pair.outgoing.x1,
+      y1: pair.outgoing.y1,
+      x2: pair.outgoing.x2,
+      y2: pair.outgoing.y2,
+      x: B.x,
+      y: B.y
+    };
+  } else {
+    const c = out as Extract<PathSegment, { type: 'C' }>;
+    next[legs.outgoing] = {
+      ...c,
+      x1: pair.outgoing.x1,
+      y1: pair.outgoing.y1
+    };
+  }
+
+  pinFarHandlesWhenLineBecameCubic(next, legs, inc, out);
+
+  snapAdjacentCornerHandlesAtVertices(segments, next, legs);
 
   return { ok: true, segments: next };
 }

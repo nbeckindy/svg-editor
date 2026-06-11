@@ -1,14 +1,33 @@
 import { describe, it, expect } from 'vitest';
 import type { PathSegment } from './path-d';
-import { symmetricCubicControlPoints } from './pen-path';
+import { mirrorCornerCubicsFromStraightLL, symmetricCubicControlPoints } from './pen-path';
 import {
   collectPathNodeAnchorsForPathNodeConversion,
   convertPathAnchorAtMoveSegmentIndexToCorner,
   convertPathAnchorAtMoveSegmentIndexToMirrorCubic,
   getMirrorCubicJointUiState,
+  isPathNodeCornerAnchorAlreadyApplied,
   PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK,
   resolvePathNodeConversionLegs
 } from './path-node-anchor-convert';
+
+/**
+ * Mirror cubic at `V`: incoming cubic ends with `(inc.x2, inc.y2)` and outgoing starts with
+ * `(out.x1, out.y1)`. For a true 180° mirror (equal-length opposing arms, C1 joint), SVG cubic
+ * end/start tangents align: `V − inc.x2 === out.x1 − V` (equivalently `inc.x2 + out.x1 === 2V`).
+ */
+function expectCubicJointMirror180AtVertex(
+  inc: Extract<PathSegment, { type: 'C' }>,
+  out: Extract<PathSegment, { type: 'C' }>,
+  V: { x: number; y: number }
+): void {
+  const tanInX = V.x - inc.x2;
+  const tanInY = V.y - inc.y2;
+  const tanOutX = out.x1 - V.x;
+  const tanOutY = out.y1 - V.y;
+  expect(tanOutX).toBeCloseTo(tanInX, 6);
+  expect(tanOutY).toBeCloseTo(tanInY, 6);
+}
 
 describe('resolvePathNodeConversionLegs', () => {
   it('open path M: outgoing only (first segment after M)', () => {
@@ -65,7 +84,7 @@ describe('resolvePathNodeConversionLegs', () => {
 });
 
 describe('convertPathAnchorAtMoveSegmentIndexToCorner', () => {
-  it('flattens C–C joint to L–L', () => {
+  it('breaks smoothness at the joint without replacing cubics with lines (only handles at V)', () => {
     const segments: PathSegment[] = [
       { type: 'M', x: 0, y: 0 },
       { type: 'C', x1: 1, y1: 0, x2: 4, y2: 0, x: 5, y: 0 },
@@ -74,8 +93,73 @@ describe('convertPathAnchorAtMoveSegmentIndexToCorner', () => {
     const r = convertPathAnchorAtMoveSegmentIndexToCorner(segments, 1);
     expect(r.ok).toBe(true);
     if (!r.ok) return;
+    const a = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const b = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expect(a.type).toBe('C');
+    expect(b.type).toBe('C');
+    expect(a.x1).toBe(1);
+    expect(a.y1).toBe(0);
+    expect(a.x2).toBe(5);
+    expect(a.y2).toBe(0);
+    expect(b.x1).toBe(5);
+    expect(b.y1).toBe(0);
+    expect(b.x2).toBe(9);
+    expect(b.y2).toBe(0);
+  });
+
+  it('only adjusts outgoing cubic when incoming leg is L', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 5, y: 0 },
+      { type: 'C', x1: 6, y1: 0, x2: 8, y2: 2, x: 10, y: 0 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToCorner(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
     expect(r.segments[1]).toEqual({ type: 'L', x: 5, y: 0 });
+    const c = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expect(c.x1).toBe(5);
+    expect(c.y1).toBe(0);
+    expect(c.x2).toBe(8);
+    expect(c.y2).toBe(2);
+  });
+
+  it('only adjusts incoming cubic when outgoing leg is L', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 0, x2: 4, y2: 1, x: 5, y: 0 },
+      { type: 'L', x: 10, y: 0 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToCorner(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const c = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    expect(c.x1).toBe(1);
+    expect(c.y1).toBe(0);
+    expect(c.x2).toBe(5);
+    expect(c.y2).toBe(0);
     expect(r.segments[2]).toEqual({ type: 'L', x: 10, y: 0 });
+  });
+
+  it('succeeds with no cubic edits when both legs are already lines', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 5, y: 0 },
+      { type: 'L', x: 10, y: 0 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToCorner(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    expect(r.segments).toEqual(segments);
+  });
+
+  it('reports corner already applied when cubic handles sit on the vertex', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 0, x2: 5, y2: 0, x: 5, y: 0 },
+      { type: 'C', x1: 5, y1: 0, x2: 9, y2: 0, x: 10, y: 0 }
+    ];
+    expect(isPathNodeCornerAnchorAlreadyApplied(segments, 1)).toBe(true);
   });
 
   it('rejects Q at joint', () => {
@@ -92,7 +176,7 @@ describe('convertPathAnchorAtMoveSegmentIndexToCorner', () => {
 });
 
 describe('convertPathAnchorAtMoveSegmentIndexToMirrorCubic', () => {
-  it('converts L–L to C–C with mirrored handles off the chords (visible bend)', () => {
+  it('converts corner L–L to C–C using mirrorCornerCubicsFromStraightLL (C1 mirror at V)', () => {
     const segments: PathSegment[] = [
       { type: 'M', x: 0, y: 0 },
       { type: 'L', x: 10, y: 0 },
@@ -105,48 +189,45 @@ describe('convertPathAnchorAtMoveSegmentIndexToMirrorCubic', () => {
     const p0 = { x: 0, y: 0 };
     const V = { x: 10, y: 0 };
     const B = { x: 10, y: 10 };
-    const symIn = symmetricCubicControlPoints(p0, V);
-    const symOut = symmetricCubicControlPoints(V, B);
+    const pair = mirrorCornerCubicsFromStraightLL(p0, V, B);
+    if (!pair) throw new Error('expected pair');
 
     const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
     const out = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
 
     expect(inc.type).toBe('C');
-    expect(inc.x1).toBeCloseTo(symIn.x1, 5);
-    expect(inc.y1).toBeCloseTo(symIn.y1, 5);
+    // Start anchor (0,0) is corner-like: snap pins far-side handle onto M.
+    expect(inc.x1).toBe(0);
+    expect(inc.y1).toBe(0);
+    expect(inc.x2).toBeCloseTo(pair.incoming.x2, 6);
+    expect(inc.y2).toBeCloseTo(pair.incoming.y2, 6);
     expect(inc.x).toBe(V.x);
     expect(inc.y).toBe(V.y);
 
-    // Second incoming control should not sit on the straight chord P0→V (otherwise zero bend).
-    const crossChord =
-      (inc.x2 - p0.x) * (V.y - p0.y) - (inc.y2 - p0.y) * (V.x - p0.x);
-    expect(Math.abs(crossChord)).toBeGreaterThan(1e-3);
-
-    // Incoming end tangent 3(V − c2) must point toward B (avoids inverted handles / hourglass fold).
-    const tdx = V.x - inc.x2;
-    const tdy = V.y - inc.y2;
-    expect(tdx * (B.x - V.x) + tdy * (B.y - V.y)).toBeGreaterThan(1e-6);
-
-    expect(out.x2).toBeCloseTo(symOut.x2, 5);
-    expect(out.y2).toBeCloseTo(symOut.y2, 5);
+    expect(out.type).toBe('C');
+    expect(out.x1).toBeCloseTo(pair.outgoing.x1, 6);
+    expect(out.y1).toBeCloseTo(pair.outgoing.y1, 6);
+    // Outgoing was L→C: far handle pinned onto end anchor (corner look).
+    expect(out.x2).toBe(B.x);
+    expect(out.y2).toBe(B.y);
     expect(out.x).toBe(B.x);
     expect(out.y).toBe(B.y);
 
-    // Mirrored through V (same pattern as pen L+L insert drag).
-    expect(out.x1).toBeCloseTo(2 * V.x - inc.x2, 5);
-    expect(out.y1).toBeCloseTo(2 * V.y - inc.y2, 5);
+    expectCubicJointMirror180AtVertex(inc, out, V);
+  });
 
-    // Handle axis should align with neighbor chord p0→B.
-    const ux = B.x - p0.x;
-    const uy = B.y - p0.y;
-    const ulen = Math.hypot(ux, uy);
-    const vx = inc.x2 - V.x;
-    const vy = inc.y2 - V.y;
-    const vlen = Math.hypot(vx, vy);
-    expect(ulen).toBeGreaterThan(1e-6);
-    expect(vlen).toBeGreaterThan(1e-6);
-    const dot = Math.abs((vx * ux + vy * uy) / (vlen * ulen));
-    expect(dot).toBeGreaterThan(1 - 1e-5);
+  it('after corner L–L mirror, pins incoming x1 to M when that anchor stays corner-like', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 5, y: 0 },
+      { type: 'L', x: 10, y: 0 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    expect(inc.x1).toBe(0);
+    expect(inc.y1).toBe(0);
   });
 
   it('returns not-ok without feedback for already C–C joint', () => {
@@ -159,6 +240,30 @@ describe('convertPathAnchorAtMoveSegmentIndexToMirrorCubic', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.feedback).toBeUndefined();
+  });
+
+  it('mirror cubic from corner-like C–C only moves handles at V; keeps far controls', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 0, x2: 5, y2: 0, x: 5, y: 0 },
+      { type: 'C', x1: 5, y1: 0, x2: 9, y2: 0, x: 10, y: 0 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const out = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expect(inc.x1).toBe(1);
+    expect(inc.y1).toBe(0);
+    expect(out.x2).toBe(9);
+    expect(out.y2).toBe(0);
+    const V = { x: 5, y: 0 };
+    const symIn = symmetricCubicControlPoints({ x: 0, y: 0 }, V);
+    const symOut = symmetricCubicControlPoints(V, { x: 10, y: 0 });
+    expect(inc.x2).toBeCloseTo(symIn.x2, 5);
+    expect(inc.y2).toBeCloseTo(symIn.y2, 5);
+    expect(out.x1).toBeCloseTo(symOut.x1, 5);
+    expect(out.y1).toBeCloseTo(symOut.y1, 5);
   });
 
   it('rejects Q at joint for mirror cubic', () => {
@@ -174,6 +279,68 @@ describe('convertPathAnchorAtMoveSegmentIndexToMirrorCubic', () => {
   });
 });
 
+describe('convertPathAnchorAtMoveSegmentIndexToMirrorCubic — joint tangent mirror (180° at V)', () => {
+  it('L–L corner: joint handles mirror 180° through V (non-collinear neighbors)', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 10, y: 0 },
+      { type: 'L', x: 10, y: 10 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const V = { x: 10, y: 0 };
+    const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const out = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expectCubicJointMirror180AtVertex(inc, out, V);
+  });
+
+  it('L–C corner: joint handles mirror 180° through V', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 10, y: 0 },
+      { type: 'C', x1: 10, y1: 0, x2: 12, y2: 8, x: 20, y: 10 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const V = { x: 10, y: 0 };
+    const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const out = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expectCubicJointMirror180AtVertex(inc, out, V);
+  });
+
+  it('C–C corner-like: joint handles mirror 180° through V (non-collinear)', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 1, x2: 10, y2: 0, x: 10, y: 0 },
+      { type: 'C', x1: 10, y1: 0, x2: 14, y2: 4, x: 18, y: 8 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const V = { x: 10, y: 0 };
+    const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const out = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expectCubicJointMirror180AtVertex(inc, out, V);
+  });
+
+  it('collinear neighbors: chord-thirds already give matching tangents at V', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 5, y: 0 },
+      { type: 'L', x: 10, y: 0 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const V = { x: 5, y: 0 };
+    const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const out = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expectCubicJointMirror180AtVertex(inc, out, V);
+  });
+});
+
 describe('getMirrorCubicJointUiState', () => {
   it('detects already-cubic joint', () => {
     const segments: PathSegment[] = [
@@ -182,6 +349,15 @@ describe('getMirrorCubicJointUiState', () => {
       { type: 'C', x1: 6, y1: 0, x2: 9, y2: 0, x: 10, y: 0 }
     ];
     expect(getMirrorCubicJointUiState(segments, 1).kind).toBe('already-cubic-noop');
+  });
+
+  it('treats C–C with handles collapsed on vertex as applicable (corner-like)', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 0, x2: 5, y2: 0, x: 5, y: 0 },
+      { type: 'C', x1: 5, y1: 0, x2: 9, y2: 0, x: 10, y: 0 }
+    ];
+    expect(getMirrorCubicJointUiState(segments, 1).kind).toBe('applicable');
   });
 
   it('requires two lines for open M (outgoing L only)', () => {

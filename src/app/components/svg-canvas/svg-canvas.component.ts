@@ -64,6 +64,7 @@ import {
   convertPathAnchorAtMoveSegmentIndexToCorner,
   convertPathAnchorAtMoveSegmentIndexToMirrorCubic,
   getMirrorCubicJointUiState,
+  isPathNodeCornerAnchorAlreadyApplied,
   PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK,
   resolvePathNodeConversionLegs
 } from '../../models/path-node-anchor-convert';
@@ -2677,6 +2678,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
           break;
         }
       }
+    }
+    if (cornerEnabled && isPathNodeCornerAnchorAlreadyApplied(parsed, mi)) {
+      cornerEnabled = false;
     }
     const mirrorState = getMirrorCubicJointUiState(parsed, mi);
     const mirrorCubicEnabled = !locked && mirrorState.kind === 'applicable';
