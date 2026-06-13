@@ -6,6 +6,7 @@ import {
   penCubicSmoothReflectP1Usable,
   penFirstAnchorMirroredHandleControlsFromDrag,
   penCloseNoPreviewDragCurrentForOpenExplicitC,
+  penLastIncomingSegmentIsCubicCurved,
   penPathSegmentsAreValid,
   penReflectStateAfterCommitted,
   penStartingLegIsCubic,
@@ -130,8 +131,11 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       const { anchor, startSvg } = pending;
       if (penSvgDistanceSq(anchor, m) > 1e-12) {
         const committed = v.penSession.getSegments();
-        if (penStartingLegIsCubic(committed)) {
-          const dragClose = penCloseNoPreviewDragCurrentForOpenExplicitC(committed, m, releaseSvg);
+        if (penStartingLegIsCubic(committed) || penLastIncomingSegmentIsCubicCurved(committed)) {
+          const dragClose =
+            committed.length >= 2 && committed[1]!.type === 'C'
+              ? penCloseNoPreviewDragCurrentForOpenExplicitC(committed, m, releaseSvg)
+              : releaseSvg;
           v.commitDraggedCurve(anchor, startSvg, dragClose, pending.ctrlCurve, m);
         } else {
           v.penSession.addLinePoint(m.x, m.y);

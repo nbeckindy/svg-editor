@@ -19,6 +19,7 @@ import {
   penPathSegmentsAreValid,
   penPathSegmentsToD,
   penCloseNoPreviewDragCurrentForOpenExplicitC,
+  penLastIncomingSegmentIsCubicCurved,
   penStartingLegIsCubic,
   snapVectorTo45DegFrom,
   symmetricCubicControlPoints,
@@ -252,6 +253,35 @@ describe('penStartingLegIsCubic', () => {
         { type: 'S', x2: 1, y2: 1, x: 2, y: 2 }
       ])
     ).toBe(true);
+  });
+});
+
+describe('penLastIncomingSegmentIsCubicCurved', () => {
+  it('is true when the last drawable segment is C or S', () => {
+    expect(
+      penLastIncomingSegmentIsCubicCurved([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 1, y: 1 },
+        { type: 'C', x1: 0, y1: 0, x2: 0, y2: 0, x: 2, y: 2 }
+      ])
+    ).toBe(true);
+    expect(
+      penLastIncomingSegmentIsCubicCurved([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'C', x1: 0, y1: 0, x2: 0, y2: 0, x: 1, y: 1 },
+        { type: 'S', x2: 1, y2: 1, x: 2, y: 2 }
+      ])
+    ).toBe(true);
+  });
+
+  it('is false when the last segment is L or only M', () => {
+    expect(penLastIncomingSegmentIsCubicCurved([{ type: 'M', x: 0, y: 0 }])).toBe(false);
+    expect(
+      penLastIncomingSegmentIsCubicCurved([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 1, y: 1 }
+      ])
+    ).toBe(false);
   });
 });
 

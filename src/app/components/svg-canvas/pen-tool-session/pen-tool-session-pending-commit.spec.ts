@@ -183,6 +183,38 @@ describe('commitPenPendingSegmentForView — click close on start (close radius)
     expect(trace.segmentsAfter).toEqual(baseSegs);
   });
 
+  it('no curve preview + first leg L + incoming segment C: commitDraggedCurve (not addLine)', () => {
+    const lineThenC: PenPathSegment[] = [
+      { type: 'M', x: m.x, y: m.y },
+      { type: 'L', x: 50, y: 10 },
+      {
+        type: 'C',
+        x1: 50,
+        y1: 10,
+        x2: 80,
+        y2: 50,
+        x: 100,
+        y: 100
+      }
+    ];
+    const trace = runCloseClickScenario({
+      segments: lineThenC,
+      anchor: { x: 100, y: 100 },
+      startSvg: m,
+      moveto: m,
+      pendingShowsCurvePreview: false,
+      pendingMousedownInCloseRadius: true
+    });
+
+    expect(trace.branch).toBe('no_preview_close');
+    expect(trace.commitDraggedCurveCalls).toHaveLength(1);
+    expect(trace.appendCubicCalls).toHaveLength(0);
+    const call = trace.commitDraggedCurveCalls[0] as unknown[];
+    expect(call[2]).toEqual(m);
+    expect(call[3]).toBe(false);
+    expect(call[4]).toEqual(m);
+  });
+
   it('no curve preview + first leg L: appends L to moveto (no closing C)', () => {
     const lineFirst: PenPathSegment[] = [
       { type: 'M', x: m.x, y: m.y },

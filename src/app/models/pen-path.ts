@@ -162,16 +162,28 @@ export function penDragCurveAuthoringKind(
 
 /**
  * True when the first drawable segment after the leading `M` is cubic (`C`) or smooth cubic (`S`).
- * Used for pen close-from-start: append `L` to the moveto unless the path began with a cubic leg —
- * then the session commits a closing curve via `commitDraggedCurve` with `segmentEnd` at the moveto.
- * When that first leg is an explicit `C`, {@link penCloseNoPreviewDragCurrentForOpenExplicitC} supplies
- * the virtual pointer sample so a release collapsed near `M` (no preview, or curve preview within
- * the session constant `PEN_CLOSE_CURVE_PREVIEW_RELEASE_NEAR_MOVETO_MAX_SQ`) does not collapse the closing handle.
+ * Used with {@link penLastIncomingSegmentIsCubicCurved} for pen close-from-start: append `L` to the
+ * moveto only when neither applies; otherwise commit a closing curve via `commitDraggedCurve` with
+ * `segmentEnd` at the moveto. When the first leg is an explicit `C`,
+ * {@link penCloseNoPreviewDragCurrentForOpenExplicitC} supplies the virtual pointer sample so a release
+ * collapsed near `M` (no preview, or curve preview within
+ * `PEN_CLOSE_CURVE_PREVIEW_RELEASE_NEAR_MOVETO_MAX_SQ`) does not collapse the closing handle.
  */
 export function penStartingLegIsCubic(segments: readonly PenPathSegment[]): boolean {
   if (segments.length < 2) return false;
   const first = segments[1];
   return first.type === 'C' || first.type === 'S';
+}
+
+/**
+ * True when the last committed drawable segment (the edge into the current pen tip) is cubic
+ * (`C` or `S`). Then a short click to the next anchor uses curve authoring, not a bare `L`; the
+ * same applies when closing to the moveto.
+ */
+export function penLastIncomingSegmentIsCubicCurved(segments: readonly PenPathSegment[]): boolean {
+  if (segments.length < 2) return false;
+  const last = segments[segments.length - 1];
+  return last.type === 'C' || last.type === 'S';
 }
 
 /**
