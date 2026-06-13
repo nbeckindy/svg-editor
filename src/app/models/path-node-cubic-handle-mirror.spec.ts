@@ -87,6 +87,41 @@ describe('applySymmetricCubicControlDragInPlace', () => {
     expect(segments[1].type === 'C' && segments[1].y2).toBe(0);
   });
 
+  it('does not mirror closing C x2 onto first C x1 when an L follows M (first C anchored at next vertex)', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 209.5, y: 124.609375 },
+      { type: 'L', x: 438.5, y: 119.609375 },
+      {
+        type: 'C',
+        x1: 438.5,
+        y1: 119.609375,
+        x2: 441.5,
+        y2: 245.609375,
+        x: 310.5,
+        y: 244.609375
+      },
+      {
+        type: 'C',
+        x1: 179.5,
+        y1: 243.609375,
+        x2: 210.5,
+        y2: 120.609375,
+        x: 209.5,
+        y: 124.609375
+      },
+      { type: 'Z' }
+    ];
+    const x1Before = segments[2].type === 'C' ? segments[2].x1 : 0;
+    const y1Before = segments[2].type === 'C' ? segments[2].y1 : 0;
+
+    const mirrored = applySymmetricCubicControlDragInPlace(segments, 3, 'x2y2', 200, 130);
+    expect(mirrored).toBe(false);
+    expect(segments[3].type === 'C' && segments[3].x2).toBe(200);
+    expect(segments[3].type === 'C' && segments[3].y2).toBe(130);
+    expect(segments[2].type === 'C' && segments[2].x1).toBe(x1Before);
+    expect(segments[2].type === 'C' && segments[2].y1).toBe(y1Before);
+  });
+
   it('does not mirror a single C closed loop onto itself', () => {
     const segments: PathSegment[] = [
       { type: 'M', x: 0, y: 0 },

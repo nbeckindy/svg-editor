@@ -64,6 +64,10 @@ function lastCubicIndexInRange(
  *
  * Mutates `segments` in place. **C–C only:** if the neighbor segment is not `C`, only the dragged
  * control changes. Does not mirror a handle onto the same segment (single `C` closed loop).
+ * Across `Z`, mirroring from the closing cubic’s incoming handle to the “first” cubic only runs when
+ * the moveto is immediately followed by a `C`; if an `L` (or other non-`C`) sits between `M` and
+ * the first `C`, the first `C`’s `x1`/`y1` are anchored at the next vertex, not at `M`, so mirroring
+ * there would move the wrong joint.
  *
  * @returns `true` when a mirrored opposite handle was written, else `false`.
  */
@@ -131,6 +135,11 @@ export function applySymmetricCubicControlDragInPlace(
     const mIndex = findMovetoIndexForSegment(segments, segmentIndex);
     const zIndex = findCloseZIndexAfterM(segments, mIndex);
     if (zIndex === null) return false;
+
+    const firstIdxAfterM = mIndex + 1;
+    if (firstIdxAfterM >= zIndex || segments[firstIdxAfterM]?.type !== 'C') {
+      return false;
+    }
 
     const firstC = firstCubicIndexInRange(segments, mIndex, zIndex);
     if (firstC < 0 || firstC === segmentIndex) return false;
