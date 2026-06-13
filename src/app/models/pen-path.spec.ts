@@ -18,6 +18,7 @@ import {
   penPathOnlyMoveto,
   penPathSegmentsAreValid,
   penPathSegmentsToD,
+  penCloseNoPreviewDragCurrentForOpenExplicitC,
   penStartingLegIsCubic,
   snapVectorTo45DegFrom,
   symmetricCubicControlPoints,
@@ -251,6 +252,49 @@ describe('penStartingLegIsCubic', () => {
         { type: 'S', x2: 1, y2: 1, x: 2, y: 2 }
       ])
     ).toBe(true);
+  });
+});
+
+describe('penCloseNoPreviewDragCurrentForOpenExplicitC', () => {
+  const m = { x: 244.5, y: 128.609375 };
+  const openP1 = { x: 329.5, y: 58.609375 };
+  const segs = [
+    { type: 'M' as const, x: m.x, y: m.y },
+    {
+      type: 'C' as const,
+      x1: openP1.x,
+      y1: openP1.y,
+      x2: 348.5,
+      y2: 252.609375,
+      x: 240.5,
+      y: 247.609375
+    }
+  ] as const;
+
+  it('returns opening P1 so closing P2 = 2M − P1 (Illustrator-style mirror through M)', () => {
+    const releaseNearM = { x: m.x + 1, y: m.y - 1 };
+    expect(penCloseNoPreviewDragCurrentForOpenExplicitC([...segs], m, releaseNearM)).toEqual(openP1);
+  });
+
+  it('returns releaseSvg when first segment is not explicit C', () => {
+    const lineFirst = [{ type: 'M' as const, x: m.x, y: m.y }, { type: 'L' as const, x: 1, y: 2 }];
+    const r = { x: 9, y: 9 };
+    expect(penCloseNoPreviewDragCurrentForOpenExplicitC(lineFirst, m, r)).toBe(r);
+  });
+
+  it('returns releaseSvg when moveto does not match segment M', () => {
+    const r = { x: 1, y: 2 };
+    expect(penCloseNoPreviewDragCurrentForOpenExplicitC([...segs], { x: 0, y: 0 }, r)).toBe(r);
+  });
+
+  it('with maxSq: substitutes only when release is near moveto', () => {
+    const maxSq = 25;
+    expect(
+      penCloseNoPreviewDragCurrentForOpenExplicitC([...segs], m, { x: m.x + 2, y: m.y - 2 }, maxSq)
+    ).toEqual(openP1);
+    expect(
+      penCloseNoPreviewDragCurrentForOpenExplicitC([...segs], m, { x: m.x + 50, y: m.y }, maxSq)
+    ).toEqual({ x: m.x + 50, y: m.y });
   });
 });
 

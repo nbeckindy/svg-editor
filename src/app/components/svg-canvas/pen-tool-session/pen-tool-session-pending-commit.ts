@@ -1,9 +1,11 @@
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
+import { PEN_CLOSE_CURVE_PREVIEW_RELEASE_NEAR_MOVETO_MAX_SQ } from './pen-tool-session-constants';
 import {
   PenSession,
   lastCommittedVertex,
   penCubicSmoothReflectP1Usable,
   penFirstAnchorMirroredHandleControlsFromDrag,
+  penCloseNoPreviewDragCurrentForOpenExplicitC,
   penPathSegmentsAreValid,
   penReflectStateAfterCommitted,
   penStartingLegIsCubic,
@@ -102,7 +104,17 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       v.pendingDragSvg = null;
       v.pendingCurveAltChord = false;
       v.pendingShiftAngleSnap = false;
-      v.commitDraggedCurve(pending.anchor, pending.startSvg, releaseSvg, pending.ctrlCurve, m);
+      const committed = v.penSession.getSegments();
+      const dragClose =
+        committed.length >= 2 && committed[1]!.type === 'C'
+          ? penCloseNoPreviewDragCurrentForOpenExplicitC(
+              committed,
+              m,
+              releaseSvg,
+              PEN_CLOSE_CURVE_PREVIEW_RELEASE_NEAR_MOVETO_MAX_SQ
+            )
+          : releaseSvg;
+      v.commitDraggedCurve(pending.anchor, pending.startSvg, dragClose, pending.ctrlCurve, m);
       v.tryFinishPath(true);
       return;
     }
@@ -119,7 +131,8 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       if (penSvgDistanceSq(anchor, m) > 1e-12) {
         const committed = v.penSession.getSegments();
         if (penStartingLegIsCubic(committed)) {
-          v.commitDraggedCurve(anchor, startSvg, releaseSvg, pending.ctrlCurve, m);
+          const dragClose = penCloseNoPreviewDragCurrentForOpenExplicitC(committed, m, releaseSvg);
+          v.commitDraggedCurve(anchor, startSvg, dragClose, pending.ctrlCurve, m);
         } else {
           v.penSession.addLinePoint(m.x, m.y);
         }

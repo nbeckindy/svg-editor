@@ -162,13 +162,50 @@ export function penDragCurveAuthoringKind(
 
 /**
  * True when the first drawable segment after the leading `M` is cubic (`C`) or smooth cubic (`S`).
- * Used for pen close-from-start: without meaningful drag, append `L` to the moveto unless the path
- * began with a cubic leg (then {@link commitPenDraggedCurveOnSession} keeps a shaped closing curve).
+ * Used for pen close-from-start: append `L` to the moveto unless the path began with a cubic leg —
+ * then the session commits a closing curve via `commitDraggedCurve` with `segmentEnd` at the moveto.
+ * When that first leg is an explicit `C`, {@link penCloseNoPreviewDragCurrentForOpenExplicitC} supplies
+ * the virtual pointer sample so a release collapsed near `M` (no preview, or curve preview within
+ * the session constant `PEN_CLOSE_CURVE_PREVIEW_RELEASE_NEAR_MOVETO_MAX_SQ`) does not collapse the closing handle.
  */
 export function penStartingLegIsCubic(segments: readonly PenPathSegment[]): boolean {
   if (segments.length < 2) return false;
   const first = segments[1];
   return first.type === 'C' || first.type === 'S';
+}
+
+/**
+ * Close-from-start when the path begins with `M` then explicit `C` and `moveto` matches segment `M`:
+ * return that opening **`P1`** as the virtual `dragCurrent` for
+ * {@link placementCornerAnchorDragCubicControlPoints} (with `dragStart = M` from
+ * `commitPenDraggedCurveOnSession`). Then **P2_close = 2·M − P1_open**, mirroring the opening corner
+ * through the moveto instead of using a release sample collapsed near `M`.
+ *
+ * @param releaseNearMovetoMaxSq When **omitted**, always substitute opening `P1` (no curve preview /
+ *   click-close). When **set** (curve-preview close), substitute only if
+ *   `‖release − moveto‖² ≤ releaseNearMovetoMaxSq`; otherwise return `releaseSvg` so a deliberate
+ *   drag away from `M` still shapes the closing handle.
+ *
+ * For `S` first legs or mismatched moveto, returns `releaseSvg` unchanged.
+ */
+export function penCloseNoPreviewDragCurrentForOpenExplicitC(
+  segments: readonly PenPathSegment[],
+  moveto: { x: number; y: number },
+  releaseSvg: { x: number; y: number },
+  releaseNearMovetoMaxSq?: number
+): { x: number; y: number } {
+  if (segments.length < 2) return releaseSvg;
+  const m0 = segments[0];
+  const first = segments[1];
+  if (m0.type !== 'M' || first.type !== 'C') return releaseSvg;
+  if (penSvgDistanceSq({ x: m0.x, y: m0.y }, moveto) >= 1e-10) return releaseSvg;
+  if (
+    releaseNearMovetoMaxSq !== undefined &&
+    penSvgDistanceSq(releaseSvg, moveto) > releaseNearMovetoMaxSq
+  ) {
+    return releaseSvg;
+  }
+  return { x: first.x1, y: first.y1 };
 }
 
 /** Build a single `d` string from segments (explicit `M`/`L`/`C`/`Q`/`S`/`T`, no implicit commands). */
