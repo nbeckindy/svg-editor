@@ -138,8 +138,11 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       if (penSvgDistanceSq(anchor, m) > 1e-12) {
         if (closeClickWithoutDrag) {
           if (penLastDrawableOutgoingCubicHandlePresentAtTip(committed)) {
-            /** Zero drag at `M`: {@link placementCornerAnchorDragCubicControlPoints} uses symmetric chord controls with `P1` on the tip (no spurious bend from a near-`M` release sample). */
-            v.commitDraggedCurve(anchor, startSvg, m, pending.ctrlCurve, m);
+            /**
+             * `P2 === M` so the closing segment’s incoming handle sits on the start vertex (not a
+             * symmetric chord-third interior point from zero drag at `M`).
+             */
+            v.commitDraggedCurve(anchor, startSvg, m, pending.ctrlCurve, m, undefined, undefined, true);
           } else {
             v.penSession.addLinePoint(m.x, m.y);
           }

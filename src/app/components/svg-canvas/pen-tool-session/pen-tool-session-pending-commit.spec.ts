@@ -185,6 +185,7 @@ describe('commitPenPendingSegmentForView — click close on start (close radius)
     expect(call[2]).toEqual(m);
     expect(call[3]).toBe(false);
     expect(call[4]).toEqual(m);
+    expect(call[7]).toBe(true);
 
     expect(trace.segmentsAfter).toEqual(baseSegs);
   });
@@ -205,6 +206,7 @@ describe('commitPenPendingSegmentForView — click close on start (close radius)
     expect(trace.commitDraggedCurveCalls).toHaveLength(1);
     const call = trace.commitDraggedCurveCalls[0] as unknown[];
     expect(call[2]).toEqual({ x: firstC.x1, y: firstC.y1 });
+    expect(call[7]).not.toBe(true);
   });
 
   it('no curve preview + first leg L + incoming segment C: commitDraggedCurve (not addLine)', () => {
@@ -237,6 +239,7 @@ describe('commitPenPendingSegmentForView — click close on start (close radius)
     expect(call[2]).toEqual(m);
     expect(call[3]).toBe(false);
     expect(call[4]).toEqual(m);
+    expect(call[7]).toBe(true);
   });
 
   it('no curve preview + incoming C with P2 on tip: closing is L (no closing C)', () => {
