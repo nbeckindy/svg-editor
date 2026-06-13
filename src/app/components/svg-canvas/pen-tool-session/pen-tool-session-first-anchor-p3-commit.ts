@@ -78,7 +78,8 @@ export function tryCommitPenFirstSegmentCurveFromPendingDraftForView(
     dragCurrent,
     pendingSeg.ctrlCurve,
     undefined,
-    draft.placementDragStartSvg,
+    /** Corner incoming handle uses drag from planted `P3` (same as {@link chordEndSvg}), not step-one draft origin. */
+    resolvedEnd,
     draft.frozenOutgoingP1Svg,
     zeroIn
   );

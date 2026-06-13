@@ -110,7 +110,10 @@ export function computePenPendingShowsCurvePreviewForClose(args: {
   /** Between first-handle mouseup and `P3` mousedown: path is still `M` only; draft is not on `pendingSegment` yet. */
   if (!penPendingSegment && penFirstAnchorP3Draft) return true;
   if (penAwaitingColocatedSegmentEndpointAfterDraft && penColocatedSegmentEndpointDraft) return true;
-  if (!penPendingSegment || !penPendingLastClient) return false;
+  if (!penPendingSegment) return false;
+  /** First `C` from `M` with frozen outgoing handle: always use Bézier preview (not the straight-chord fallback before marquee). */
+  if (penPendingSegment.firstSegmentCurveDraft) return true;
+  if (!penPendingLastClient) return false;
   const { startClient, startSvg } = penPendingSegment;
   const lc = penPendingLastClient;
   const screenHyp = Math.hypot(lc.x - startClient.x, lc.y - startClient.y);

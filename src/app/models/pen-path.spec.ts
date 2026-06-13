@@ -140,6 +140,46 @@ describe('penAdjustedCubicControlsForPendingLikeDrag', () => {
     expect(c.x1).toBeCloseTo(anchor.x, 6);
     expect(c.y1).toBeCloseTo(anchor.y, 6);
   });
+
+  it('corner placement at P3: dragStart must be the segment end so P2 reflects through end to dragCurrent', () => {
+    const segs = [{ type: 'M' as const, x: 0, y: 0 }];
+    const anchor = { x: 0, y: 0 };
+    const end = { x: 100, y: 0 };
+    const dragCurrent = { x: 100, y: 50 };
+    const c = penAdjustedCubicControlsForPendingLikeDrag(
+      anchor,
+      end,
+      dragCurrent,
+      end,
+      segs,
+      false,
+      false,
+      false
+    );
+    expect(2 * end.x - c.x2).toBeCloseTo(dragCurrent.x, 6);
+    expect(2 * end.y - c.y2).toBeCloseTo(dragCurrent.y, 6);
+  });
+
+  it('corner placement with dragStart at moveto (wrong for second-node) does not mirror P2 through end to dragCurrent', () => {
+    const segs = [{ type: 'M' as const, x: 0, y: 0 }];
+    const anchor = { x: 0, y: 0 };
+    const end = { x: 100, y: 10 };
+    const dragCurrent = { x: 130, y: 40 };
+    const wrongStart = { x: 0, y: 0 };
+    const c = penAdjustedCubicControlsForPendingLikeDrag(
+      anchor,
+      end,
+      dragCurrent,
+      wrongStart,
+      segs,
+      false,
+      false,
+      false
+    );
+    const mirrorDx = 2 * end.x - c.x2 - dragCurrent.x;
+    const mirrorDy = 2 * end.y - c.y2 - dragCurrent.y;
+    expect(Math.hypot(mirrorDx, mirrorDy)).toBeGreaterThan(5);
+  });
 });
 
 describe('dragBendQuadraticControlPoint', () => {

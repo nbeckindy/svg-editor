@@ -12,9 +12,24 @@ import {
   type PenFirstAnchorP3Draft,
   type PenPathSegment
 } from '../../../models/pen-path';
+import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import type { PenOverlayPorts } from './pen-tool-session-overlay';
 import { penSvgUserPointToOverlayPixel, penSvgUserSegmentToOverlayLine } from './pen-tool-session-overlay';
 import type { PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
+
+/** Matches {@link buildPenPendingCurveAppendedBaseD} / first-segment curve commit marquee. */
+function penFirstSegmentCurveDraftZeroIncomingMarquee(
+  pending: Pick<PenPendingSegmentForPreview, 'firstSegmentCurveDraft' | 'startClient'>,
+  penPendingLastClient: { x: number; y: number } | null
+): boolean {
+  if (!pending.firstSegmentCurveDraft || !penPendingLastClient) return false;
+  return (
+    Math.hypot(
+      penPendingLastClient.x - pending.startClient.x,
+      penPendingLastClient.y - pending.startClient.y
+    ) < MARQUEE_MIN_DRAG_PX
+  );
+}
 
 function cubicAdjustedForOverlay(
   defaultShiftSnap: boolean,
@@ -56,6 +71,7 @@ export type PenCurveHandleOverlaysParams = {
   pendingDragSampleSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
   pendingCurvePreviewEndSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
   pendingCurveGeometryEndSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
+  penPendingLastClient: { x: number; y: number } | null;
 };
 
 export function computePenCurveHandleOverlays(p: PenCurveHandleOverlaysParams): { cx: number; cy: number }[] {
@@ -268,11 +284,11 @@ export function computePenCurveHandleOverlays(p: PenCurveHandleOverlaysParams): 
             anchorMv,
             end,
             dragCurrent,
-            p3d.placementDragStartSvg,
+            end,
             segs,
             altEndOnly,
             p.penPendingShiftAngleSnap,
-            false
+            penFirstSegmentCurveDraftZeroIncomingMarquee(pending, p.penPendingLastClient)
           );
           const x1 = p3d.frozenOutgoingP1Svg?.x ?? c.x1;
           const y1 = p3d.frozenOutgoingP1Svg?.y ?? c.y1;
@@ -401,6 +417,7 @@ export type PenPendingCurveHandleGuideOverlaysParams = {
   pendingDragSampleSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
   pendingCurvePreviewEndSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
   pendingCurveGeometryEndSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
+  penPendingLastClient: { x: number; y: number } | null;
 };
 
 export function computePenPendingCurveHandleGuideOverlays(
@@ -600,11 +617,11 @@ export function computePenPendingCurveHandleGuideOverlays(
         anchorMv,
         endP3,
         dragCurrentP3,
-        p3d.placementDragStartSvg,
+        endP3,
         segsP3,
         altEndOnly,
         p.penPendingShiftAngleSnap,
-        false
+        penFirstSegmentCurveDraftZeroIncomingMarquee(pending, p.penPendingLastClient)
       );
       const x1 = p3d.frozenOutgoingP1Svg?.x ?? c.x1;
       const y1 = p3d.frozenOutgoingP1Svg?.y ?? c.y1;

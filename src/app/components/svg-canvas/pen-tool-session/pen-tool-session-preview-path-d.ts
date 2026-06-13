@@ -1,3 +1,4 @@
+import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import {
   appendCubicToD,
   appendLineToD,
@@ -161,6 +162,8 @@ export type AppendPenPendingCurveToBaseDInput = {
   dragSampleSvg: (pending: Pick<PenPendingSegmentForPreview, 'startSvg'>) => { x: number; y: number };
   penPendingCurveAltChord: boolean;
   penPendingShiftAngleSnap: boolean;
+  /** Client-space; used with {@link PenPendingSegmentForPreview.startClient} for first-`C`-from-`M` draft marquee parity. */
+  penPendingLastClient: { x: number; y: number } | null;
 };
 
 /** Append pending curve segment to `baseD` using the same rules as **Pen authoring session** preview commit. */
@@ -175,15 +178,22 @@ export function buildPenPendingCurveAppendedBaseD(p: AppendPenPendingCurveToBase
         : p.curvePreviewEndUserSvg(pending);
   const dragCurrent = p.dragSampleSvg(pending);
   const draft = pending.firstSegmentCurveDraft;
+  const lc = p.penPendingLastClient;
+  const zeroIncomingAtSegmentEnd =
+    !!draft &&
+    !!lc &&
+    Math.hypot(lc.x - pending.startClient.x, lc.y - pending.startClient.y) < MARQUEE_MIN_DRAG_PX;
   return penCurveStyledAppendToD(p.baseD, {
     anchor: pending.anchor,
     end,
     dragCurrent,
-    placementDragStartSvg: draft ? draft.placementDragStartSvg : pending.startSvg,
+    /** Second-gesture corner drag: vector from `end` (`P3`), not {@link PenFirstAnchorP3Draft.placementDragStartSvg} (moveto press). */
+    placementDragStartSvg: draft ? end : pending.startSvg,
     ctrlCurve: pending.ctrlCurve,
     curveAltChord: p.penPendingCurveAltChord,
     shiftAngleSnap: p.penPendingShiftAngleSnap,
     segments: p.segments,
+    zeroIncomingAtSegmentEnd,
     frozenOutgoingP1: draft?.frozenOutgoingP1Svg
   });
 }

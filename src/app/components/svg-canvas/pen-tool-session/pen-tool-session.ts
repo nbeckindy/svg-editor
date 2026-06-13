@@ -789,7 +789,8 @@ export class PenToolSession {
       penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
       pendingDragSampleSvg: (pend) => this.penPendingDragSampleSvg(pend),
       pendingCurvePreviewEndSvg: (pend) => this.penPendingCurvePreviewEndSvg(pend),
-      pendingCurveGeometryEndSvg: (pend) => this.penPendingCurveGeometryEndSvg(pend)
+      pendingCurveGeometryEndSvg: (pend) => this.penPendingCurveGeometryEndSvg(pend),
+      penPendingLastClient: this.penPendingLastClient
     });
   }
 
@@ -858,7 +859,8 @@ export class PenToolSession {
       penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
       pendingDragSampleSvg: (pend) => this.penPendingDragSampleSvg(pend),
       pendingCurvePreviewEndSvg: (pend) => this.penPendingCurvePreviewEndSvg(pend),
-      pendingCurveGeometryEndSvg: (pend) => this.penPendingCurveGeometryEndSvg(pend)
+      pendingCurveGeometryEndSvg: (pend) => this.penPendingCurveGeometryEndSvg(pend),
+      penPendingLastClient: this.penPendingLastClient
     });
   }
 
@@ -1070,7 +1072,8 @@ export class PenToolSession {
       curvePreviewEndUserSvg: (pen) => this.penPendingCurvePreviewEndSvg(pen),
       dragSampleSvg: (pen) => this.penPendingDragSampleSvg(pen),
       penPendingCurveAltChord: this.penPendingCurveAltChord,
-      penPendingShiftAngleSnap: this.penPendingShiftAngleSnap
+      penPendingShiftAngleSnap: this.penPendingShiftAngleSnap,
+      penPendingLastClient: this.penPendingLastClient
     });
   }
 

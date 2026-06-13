@@ -211,6 +211,11 @@ describe('PenToolSession', () => {
       new MouseEvent('mouseup', { clientX: 200, clientY: 30, button: 0 })
     );
     expect(session.getPenSessionSegments().length).toBe(2);
+    session.onCanvasPenPrimaryMouseDown(
+      new MouseEvent('mousedown', { clientX: 200, clientY: 30, button: 0, detail: 1 }),
+      () => ({ x: 200, y: 30 })
+    );
+    expect(session.getPenSessionSegments().length).toBe(2);
     session.onDocumentMouseMovePen(
       new MouseEvent('mousemove', { clientX: 250, clientY: 55, button: 0 }),
       () => ({ x: 250, y: 55 })

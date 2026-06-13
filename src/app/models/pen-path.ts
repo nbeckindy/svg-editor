@@ -588,6 +588,11 @@ export function appendSmoothQuadraticToD(baseD: string, x: number, y: number): s
 
 /** Frozen handle intent after first-segment meaningful drag; `P3` is planted on the next primary down. */
 export type PenFirstAnchorP3Draft = {
+  /**
+   * Drag origin for the **first** (mirrored-handle) gesture on `M` only; used while awaiting `P3` in
+   * {@link penDraftFirstSegmentPreviewD}. For the **second** gesture (first `C` from `M` with draft on the
+   * pending segment), corner incoming `P2` uses drag from planted `P3` (= preview/commit chord end), not this field.
+   */
   placementDragStartSvg: { x: number; y: number };
   /** Pointer SVG at meaningful mouseup (incoming handle / Alt placement sample). */
   dragCommitSvg: { x: number; y: number };
