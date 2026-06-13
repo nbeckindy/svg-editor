@@ -36,6 +36,8 @@ function runCloseClickScenario(opts: {
   anchorEqualsM?: boolean;
   /** SVG point returned on mouseup (`clientToEditorSvgPoint`); defaults to `startSvg`. */
   mouseupEditorSvg?: { x: number; y: number };
+  /** Viewport coords on mouseup; default matches `startClient` (no screen drag). */
+  mouseupClient?: { x: number; y: number };
 }): CloseClickTrace {
   const session = new PenSession();
   session.restoreDrawableSegments(opts.segments);
@@ -123,7 +125,11 @@ function runCloseClickScenario(opts: {
     markForCheck: vi.fn()
   } as unknown as PenPendingCommitView;
 
-  const event = new MouseEvent('mouseup', { clientX: 10, clientY: 10, button: 0 });
+  const event = new MouseEvent('mouseup', {
+    clientX: opts.mouseupClient?.x ?? 10,
+    clientY: opts.mouseupClient?.y ?? 10,
+    button: 0
+  });
 
   if (opts.pendingMousedownInCloseRadius) {
     if (opts.pendingShowsCurvePreview) {
@@ -176,11 +182,29 @@ describe('commitPenPendingSegmentForView — click close on start (close radius)
     const call = trace.commitDraggedCurveCalls[0] as unknown[];
     expect(call[0]).toEqual(last);
     expect(call[1]).toEqual(m);
-    expect(call[2]).toEqual({ x: firstC.x1, y: firstC.y1 });
+    expect(call[2]).toEqual(m);
     expect(call[3]).toBe(false);
     expect(call[4]).toEqual(m);
 
     expect(trace.segmentsAfter).toEqual(baseSegs);
+  });
+
+  it('no curve preview + first leg C + meaningful screen drag on close: uses opening P1 as drag sample', () => {
+    const last = { x: 100, y: 100 };
+    const trace = runCloseClickScenario({
+      segments: baseSegs,
+      anchor: last,
+      startSvg: m,
+      moveto: m,
+      pendingShowsCurvePreview: false,
+      pendingMousedownInCloseRadius: true,
+      mouseupClient: { x: 500, y: 10 }
+    });
+
+    expect(trace.branch).toBe('no_preview_close');
+    expect(trace.commitDraggedCurveCalls).toHaveLength(1);
+    const call = trace.commitDraggedCurveCalls[0] as unknown[];
+    expect(call[2]).toEqual({ x: firstC.x1, y: firstC.y1 });
   });
 
   it('no curve preview + first leg L + incoming segment C: commitDraggedCurve (not addLine)', () => {
@@ -213,6 +237,34 @@ describe('commitPenPendingSegmentForView — click close on start (close radius)
     expect(call[2]).toEqual(m);
     expect(call[3]).toBe(false);
     expect(call[4]).toEqual(m);
+  });
+
+  it('no curve preview + incoming C with P2 on tip: closing is L (no closing C)', () => {
+    const degenerateP2AtTip: PenPathSegment[] = [
+      { type: 'M', x: m.x, y: m.y },
+      { type: 'L', x: 50, y: 10 },
+      {
+        type: 'C',
+        x1: 50,
+        y1: 10,
+        x2: 100,
+        y2: 100,
+        x: 100,
+        y: 100
+      }
+    ];
+    const trace = runCloseClickScenario({
+      segments: degenerateP2AtTip,
+      anchor: { x: 100, y: 100 },
+      startSvg: m,
+      moveto: m,
+      pendingShowsCurvePreview: false,
+      pendingMousedownInCloseRadius: true
+    });
+
+    expect(trace.commitDraggedCurveCalls).toHaveLength(0);
+    expect(trace.appendCubicCalls).toHaveLength(0);
+    expect(trace.segmentsAfter[trace.segmentsAfter.length - 1]).toEqual({ type: 'L', x: m.x, y: m.y });
   });
 
   it('no curve preview + first leg L: appends L to moveto (no closing C)', () => {

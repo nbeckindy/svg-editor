@@ -6,6 +6,7 @@ import {
   penCubicSmoothReflectP1Usable,
   penFirstAnchorMirroredHandleControlsFromDrag,
   penCloseNoPreviewDragCurrentForOpenExplicitC,
+  penLastDrawableOutgoingCubicHandlePresentAtTip,
   penLastIncomingSegmentIsCubicCurved,
   penPathSegmentsAreValid,
   penReflectStateAfterCommitted,
@@ -123,15 +124,26 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       const pending = v.pendingSegment;
       const releaseSvg =
         v.ports.clientToEditorSvgPoint(event.clientX, event.clientY) ?? v.pendingDragSvg ?? pending.startSvg;
+      const { anchor, startClient, startSvg } = pending;
+      const committed = v.penSession.getSegments();
+      const closeClickWithoutDrag =
+        Math.hypot(event.clientX - startClient.x, event.clientY - startClient.y) < MARQUEE_MIN_DRAG_PX;
+
       v.pendingSegment = null;
       v.pendingLastClient = null;
       v.pendingDragSvg = null;
       v.pendingCurveAltChord = false;
       v.pendingShiftAngleSnap = false;
-      const { anchor, startSvg } = pending;
+
       if (penSvgDistanceSq(anchor, m) > 1e-12) {
-        const committed = v.penSession.getSegments();
-        if (penStartingLegIsCubic(committed) || penLastIncomingSegmentIsCubicCurved(committed)) {
+        if (closeClickWithoutDrag) {
+          if (penLastDrawableOutgoingCubicHandlePresentAtTip(committed)) {
+            /** Zero drag at `M`: {@link placementCornerAnchorDragCubicControlPoints} uses symmetric chord controls with `P1` on the tip (no spurious bend from a near-`M` release sample). */
+            v.commitDraggedCurve(anchor, startSvg, m, pending.ctrlCurve, m);
+          } else {
+            v.penSession.addLinePoint(m.x, m.y);
+          }
+        } else if (penStartingLegIsCubic(committed) || penLastIncomingSegmentIsCubicCurved(committed)) {
           const dragClose =
             committed.length >= 2 && committed[1]!.type === 'C'
               ? penCloseNoPreviewDragCurrentForOpenExplicitC(committed, m, releaseSvg)

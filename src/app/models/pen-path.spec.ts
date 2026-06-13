@@ -19,6 +19,7 @@ import {
   penPathSegmentsAreValid,
   penPathSegmentsToD,
   penCloseNoPreviewDragCurrentForOpenExplicitC,
+  penLastDrawableOutgoingCubicHandlePresentAtTip,
   penLastIncomingSegmentIsCubicCurved,
   penStartingLegIsCubic,
   snapVectorTo45DegFrom,
@@ -282,6 +283,42 @@ describe('penLastIncomingSegmentIsCubicCurved', () => {
         { type: 'L', x: 1, y: 1 }
       ])
     ).toBe(false);
+  });
+});
+
+describe('penLastDrawableOutgoingCubicHandlePresentAtTip', () => {
+  it('is false when last segment is L or C with P2 on the end vertex', () => {
+    expect(
+      penLastDrawableOutgoingCubicHandlePresentAtTip([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'L', x: 1, y: 1 }
+      ])
+    ).toBe(false);
+    expect(
+      penLastDrawableOutgoingCubicHandlePresentAtTip([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'C', x1: 0, y1: 0, x2: 2, y2: 2, x: 2, y: 2 }
+      ])
+    ).toBe(false);
+  });
+
+  it('is true when last C has P2 off the end vertex', () => {
+    expect(
+      penLastDrawableOutgoingCubicHandlePresentAtTip([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'C', x1: 0, y1: 0, x2: 1, y2: 2, x: 2, y: 2 }
+      ])
+    ).toBe(true);
+  });
+
+  it('is true when last segment is S', () => {
+    expect(
+      penLastDrawableOutgoingCubicHandlePresentAtTip([
+        { type: 'M', x: 0, y: 0 },
+        { type: 'C', x1: 0, y1: 0, x2: 0, y2: 0, x: 1, y: 1 },
+        { type: 'S', x2: 2, y2: 2, x: 3, y: 3 }
+      ])
+    ).toBe(true);
   });
 });
 

@@ -186,6 +186,29 @@ export function penLastIncomingSegmentIsCubicCurved(segments: readonly PenPathSe
   return last.type === 'C' || last.type === 'S';
 }
 
+/** Squared distance: `C` end handle treated as absent when `P2` coincides with the segment end. */
+export const PEN_TIP_CUBIC_OUTGOING_HANDLE_EPS_SQ = 1e-6;
+
+/**
+ * True when the last drawable segment ends with a **non-degenerate** cubic outgoing handle (`P2`
+ * not coincident with the curve end). No-drag close-to-start uses a closing `C` only when this is
+ * true; otherwise `L` (e.g. last segment `L`, or `C` with `P2` collapsed on the tip like pen short-drag
+ * corners).
+ */
+export function penLastDrawableOutgoingCubicHandlePresentAtTip(segments: readonly PenPathSegment[]): boolean {
+  if (segments.length < 2) return false;
+  const last = segments[segments.length - 1];
+  if (last.type === 'C') {
+    return (
+      penSvgDistanceSq({ x: last.x2, y: last.y2 }, { x: last.x, y: last.y }) >= PEN_TIP_CUBIC_OUTGOING_HANDLE_EPS_SQ
+    );
+  }
+  if (last.type === 'S') {
+    return true;
+  }
+  return false;
+}
+
 /**
  * Close-from-start when the path begins with `M` then explicit `C` and `moveto` matches segment `M`:
  * return that opening **`P1`** as the virtual `dragCurrent` for
