@@ -13,8 +13,7 @@ export interface PenDrawingStateClearView {
   isPenSessionActive(): boolean;
   get penPointerSvg(): { x: number; y: number } | null;
   get penPendingSegment(): PenPendingSegmentForPreview | null;
-  get penAwaitingFirstSegmentP3AfterDraft(): boolean;
-  get penCommittedFirstSegmentP3Draft(): PenFirstAnchorP3Draft | null;
+  get penFirstAnchorP3Draft(): PenFirstAnchorP3Draft | null;
   get penAwaitingColocatedSegmentEndpointAfterDraft(): boolean;
   get penPendingDragSvg(): { x: number; y: number } | null;
   get penHoverClientPx(): { x: number; y: number } | null;
@@ -35,7 +34,6 @@ export interface PenDrawingStateClearView {
 
   clearPenInsertOnPathDragState(): void;
   clearPenFirstAnchorAwaitingDraft(): void;
-  clearPenCommittedFirstSegmentP3Draft(): void;
   clearPenColocatedSegmentEndpointDraft(): void;
   purgeProvisionalPenSegmentHistory(): void;
   markForCheck(): void;
@@ -50,8 +48,7 @@ export function clearDrawingStateForView(v: PenDrawingStateClearView): void {
     v.isPenSessionActive() ||
     v.penPointerSvg !== null ||
     v.penPendingSegment !== null ||
-    v.penAwaitingFirstSegmentP3AfterDraft ||
-    v.penCommittedFirstSegmentP3Draft !== null ||
+    v.penFirstAnchorP3Draft !== null ||
     v.penAwaitingColocatedSegmentEndpointAfterDraft ||
     v.penPendingDragSvg !== null ||
     v.penHoverClientPx !== null ||
@@ -76,7 +73,6 @@ export function clearDrawingStateForView(v: PenDrawingStateClearView): void {
     v.penPendingShiftAngleSnap = false;
     v.ports.setPenAltCurveMode(false);
     v.clearPenFirstAnchorAwaitingDraft();
-    v.clearPenCommittedFirstSegmentP3Draft();
     v.clearPenColocatedSegmentEndpointDraft();
     v.purgeProvisionalPenSegmentHistory();
     v.penSession.reset();

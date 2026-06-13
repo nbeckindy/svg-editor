@@ -20,7 +20,6 @@ export type PenSessionPreviewPathDInput = {
   segments: readonly PenPathSegment[];
   penPointerSvg: { x: number; y: number } | null;
   penPendingSegment: PenPendingSegmentForPreview | null;
-  penAwaitingFirstSegmentP3AfterDraft: boolean;
   penFirstAnchorP3Draft: PenFirstAnchorP3Draft | null;
   penAwaitingColocatedSegmentEndpointAfterDraft: boolean;
   penColocatedSegmentEndpointDraft: PenFirstAnchorP3Draft | null;
@@ -44,7 +43,7 @@ export function computePenSessionPreviewPathD(p: PenSessionPreviewPathDInput): s
   const anchor = p.penPendingSegment?.anchor ?? lastCommittedVertex(segs);
   if (!anchor) return base;
 
-  if (p.penAwaitingFirstSegmentP3AfterDraft && p.penFirstAnchorP3Draft && penPathOnlyMoveto(segs)) {
+  if (!p.penPendingSegment && p.penFirstAnchorP3Draft && penPathOnlyMoveto(segs)) {
     const m = segs[0];
     if (m.type !== 'M') return base;
     const a = { x: m.x, y: m.y };
@@ -108,7 +107,6 @@ export type PenCurvePreviewPathDInput = {
   penPendingShowsCurvePreview: boolean;
   segments: readonly PenPathSegment[];
   penPendingSegment: PenPendingSegmentForPreview | null;
-  penAwaitingFirstSegmentP3AfterDraft: boolean;
   penFirstAnchorP3Draft: PenFirstAnchorP3Draft | null;
   penAwaitingColocatedSegmentEndpointAfterDraft: boolean;
   penColocatedSegmentEndpointDraft: PenFirstAnchorP3Draft | null;
@@ -126,7 +124,7 @@ export function computePenCurvePreviewPathD(p: PenCurvePreviewPathDInput): strin
   const segs = p.segments;
   const ptr = p.penPointerSvg;
   const base = penPathSegmentsToD(segs);
-  if (p.penAwaitingFirstSegmentP3AfterDraft && p.penFirstAnchorP3Draft && penPathOnlyMoveto(segs)) {
+  if (!p.penPendingSegment && p.penFirstAnchorP3Draft && penPathOnlyMoveto(segs)) {
     const m = segs[0];
     if (m.type !== 'M') return null;
     const a = { x: m.x, y: m.y };
@@ -156,7 +154,6 @@ export type AppendPenPendingCurveToBaseDInput = {
   baseD: string;
   pending: PenPendingSegmentForPreview;
   segments: readonly PenPathSegment[];
-  penCommittedFirstSegmentP3Draft: PenFirstAnchorP3Draft | null;
   penPointerSvg: { x: number; y: number } | null;
   penPendingIsFirstSegmentFromMovetoGesture: boolean;
   penPendingChordColocated: boolean;
@@ -177,17 +174,16 @@ export function buildPenPendingCurveAppendedBaseD(p: AppendPenPendingCurveToBase
         ? ptr
         : p.curvePreviewEndUserSvg(pending);
   const dragCurrent = p.dragSampleSvg(pending);
+  const draft = pending.firstSegmentCurveDraft;
   return penCurveStyledAppendToD(p.baseD, {
     anchor: pending.anchor,
     end,
     dragCurrent,
-    placementDragStartSvg: p.penCommittedFirstSegmentP3Draft
-      ? p.penCommittedFirstSegmentP3Draft.placementDragStartSvg
-      : pending.startSvg,
+    placementDragStartSvg: draft ? draft.placementDragStartSvg : pending.startSvg,
     ctrlCurve: pending.ctrlCurve,
     curveAltChord: p.penPendingCurveAltChord,
     shiftAngleSnap: p.penPendingShiftAngleSnap,
     segments: p.segments,
-    frozenOutgoingP1: p.penCommittedFirstSegmentP3Draft?.frozenOutgoingP1Svg
+    frozenOutgoingP1: draft?.frozenOutgoingP1Svg
   });
 }

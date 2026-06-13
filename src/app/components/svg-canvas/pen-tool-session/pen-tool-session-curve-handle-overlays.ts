@@ -51,9 +51,8 @@ export type PenCurveHandleOverlaysParams = {
   penColocatedSegmentEndpointDraft: PenFirstAnchorP3Draft | null;
   segments: readonly PenPathSegment[];
   penCurvePreviewPathD: string | null;
-  penAwaitingFirstSegmentP3AfterDraft: boolean;
+  penFirstAnchorGapP3Draft: boolean;
   penFirstAnchorP3Draft: PenFirstAnchorP3Draft | null;
-  penCommittedFirstSegmentP3Draft: PenFirstAnchorP3Draft | null;
   pendingDragSampleSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
   pendingCurvePreviewEndSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
   pendingCurveGeometryEndSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
@@ -165,7 +164,7 @@ export function computePenCurveHandleOverlays(p: PenCurveHandleOverlaysParams): 
         }
       }
     }
-    if (p.penAwaitingFirstSegmentP3AfterDraft && p.penFirstAnchorP3Draft) {
+    if (p.penFirstAnchorGapP3Draft && p.penFirstAnchorP3Draft) {
       const segs = p.segments;
       const m = segs[0];
       if (m.type !== 'M') return [];
@@ -250,11 +249,10 @@ export function computePenCurveHandleOverlays(p: PenCurveHandleOverlaysParams): 
       }
     }
     if (
-      p.penCommittedFirstSegmentP3Draft &&
-      p.penPendingSegment &&
+      p.penPendingSegment?.firstSegmentCurveDraft &&
       penPathOnlyMoveto(p.segments)
     ) {
-      const p3d = p.penCommittedFirstSegmentP3Draft;
+      const p3d = p.penPendingSegment.firstSegmentCurveDraft;
       const pending = p.penPendingSegment;
       const segs = p.segments;
       const m = segs[0];
@@ -398,9 +396,8 @@ export type PenPendingCurveHandleGuideOverlaysParams = {
   penColocatedSegmentEndpointDraft: PenFirstAnchorP3Draft | null;
   segments: readonly PenPathSegment[];
   penCurvePreviewPathD: string | null;
-  penAwaitingFirstSegmentP3AfterDraft: boolean;
+  penFirstAnchorGapP3Draft: boolean;
   penFirstAnchorP3Draft: PenFirstAnchorP3Draft | null;
-  penCommittedFirstSegmentP3Draft: PenFirstAnchorP3Draft | null;
   pendingDragSampleSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
   pendingCurvePreviewEndSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
   pendingCurveGeometryEndSvg: (pending: PenPendingSegmentForPreview) => { x: number; y: number };
@@ -506,7 +503,7 @@ export function computePenPendingCurveHandleGuideOverlays(
       }
     }
   }
-  if (p.penAwaitingFirstSegmentP3AfterDraft && p.penFirstAnchorP3Draft) {
+  if (p.penFirstAnchorGapP3Draft && p.penFirstAnchorP3Draft) {
     const segs = p.segments;
     const m = segs[0];
     if (m.type !== 'M') return [];
@@ -583,11 +580,10 @@ export function computePenPendingCurveHandleGuideOverlays(
     }
   }
   if (
-    p.penCommittedFirstSegmentP3Draft &&
-    p.penPendingSegment &&
+    p.penPendingSegment?.firstSegmentCurveDraft &&
     penPathOnlyMoveto(p.segments)
   ) {
-    const p3d = p.penCommittedFirstSegmentP3Draft;
+    const p3d = p.penPendingSegment.firstSegmentCurveDraft;
     const pending = p.penPendingSegment;
     const segsP3 = p.segments;
     const m = segsP3[0];

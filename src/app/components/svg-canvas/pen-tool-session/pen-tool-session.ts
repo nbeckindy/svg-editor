@@ -13,7 +13,8 @@
  * `pen-tool-session-pending-commit.ts`. Canvas primary + document pointer routing in
  * `pen-tool-session-canvas-input.ts`. Path continuation / join pickup in
  * `pen-tool-session-path-continuation.ts`. First committed-`P3` segment commit in
- * `pen-tool-session-first-anchor-p3-commit.ts`. Finish orchestration in
+ * `pen-tool-session-first-anchor-p3-commit.ts` (first `C` from `M` when {@link PenPendingSegmentForPreview.firstSegmentCurveDraft}
+ * is attached). Finish orchestration in
  * `pen-tool-session-try-finish-path.ts`. Session reset + backspace in
  * `pen-tool-session-lifecycle.ts` and `pen-tool-session-backspace.ts`.
  */
@@ -96,8 +97,8 @@ import {
   penSvgUserPointToApproxClient as penSvgUserPointToApproxClientForPorts
 } from './pen-tool-session-path-continuation';
 import {
-  commitPenCommittedFirstSegmentP3IfApplicableForView,
-  type PenCommittedFirstSegmentP3CommitView
+  tryCommitPenFirstSegmentCurveFromPendingDraftForView,
+  type PenFirstSegmentFromDraftCommitView
 } from './pen-tool-session-first-anchor-p3-commit';
 import { tryFinishPenPathForView, type TryFinishPenPathView } from './pen-tool-session-try-finish-path';
 import { clearDrawingStateForView, type PenDrawingStateClearView } from './pen-tool-session-lifecycle';
@@ -116,18 +117,11 @@ export class PenToolSession {
   private penPendingCurveAltChord = false;
   private penPendingShiftAngleSnap = false;
   /**
-   * After meaningful first-segment handle drag + mouseup (2A): segments stay `M` only until the next
-   * primary **down** plants `P3` (`startSvg`). Same-press drag + **mouseup** commit the first `C`
-   * (frozen outgoing `P1` from draft; incoming from second-gesture drag unless movement is tiny).
-   * {@link penCommittedFirstSegmentP3Draft} holds frozen first-drag samples until that commit.
+   * After meaningful first-segment handle drag + mouseup: path stays `M` only; this holds frozen
+   * outgoing-handle samples until the next primary **down** plants `P3` on {@link penPendingSegment}
+   * (then copied to {@link PenPendingSegmentForPreview.firstSegmentCurveDraft}).
    */
-  private penAwaitingFirstSegmentP3AfterDraft = false;
   private penFirstAnchorP3Draft: PenFirstAnchorP3Draft | null = null;
-  /**
-   * Snapshot of {@link penFirstAnchorP3Draft} after `P3` mousedown: {@link penPendingSegment} is
-   * `M`→planted endpoint while the user drag-shapes the curve until mouseup.
-   */
-  private penCommittedFirstSegmentP3Draft: PenFirstAnchorP3Draft | null = null;
   /**
    * After plant-at-tip (same press as last vertex) + handle drag + mouseup: next primary down plants the
    * segment endpoint and commits the cubic — mirrors first-segment `M`-only draft → `P3` flow.
@@ -146,7 +140,7 @@ export class PenToolSession {
   private penInsertOnPathDragBagCache: PenInsertOnPathDragMutable | null = null;
   private penPendingCommitViewCache: PenPendingCommitView | null = null;
   private penCanvasInputViewCache: PenCanvasInputView | null = null;
-  private penCommittedFirstSegmentP3CommitViewCache: PenCommittedFirstSegmentP3CommitView | null = null;
+  private penFirstSegmentFromDraftCommitViewCache: PenFirstSegmentFromDraftCommitView | null = null;
   private penTryFinishPenPathViewCache: TryFinishPenPathView | null = null;
   private penDrawingStateClearViewCache: PenDrawingStateClearView | null = null;
   private penBackspaceShortcutViewCache: PenBackspaceShortcutView | null = null;
@@ -253,14 +247,8 @@ export class PenToolSession {
         set firstAnchorP3Draft(v) {
           self.penFirstAnchorP3Draft = v;
         },
-        get awaitingFirstSegmentP3AfterDraft() {
-          return self.penAwaitingFirstSegmentP3AfterDraft;
-        },
-        set awaitingFirstSegmentP3AfterDraft(v) {
-          self.penAwaitingFirstSegmentP3AfterDraft = v;
-        },
-        commitFirstSegmentP3IfApplicable: (cx, cy, ck, ps, rs, sg) =>
-          commitPenCommittedFirstSegmentP3IfApplicableForView(self.committedFirstSegmentP3View(), cx, cy, ck, ps, rs, sg),
+        tryCommitFirstSegmentCurveFromPendingDraft: (cx, cy, ck, ps, rs, sg) =>
+          tryCommitPenFirstSegmentCurveFromPendingDraftForView(self.firstSegmentFromDraftCommitView(), cx, cy, ck, ps, rs, sg),
         commitDraggedCurve: (a, c, d, ctrl, se, pl, fr, z) =>
           self.commitPenDraggedCurve(a, c, d, ctrl, se, pl, fr, z),
         tryFinishPath: (close) => self.tryFinishPenPath(close),
@@ -338,16 +326,12 @@ export class PenToolSession {
           return self.penColocatedSegmentEndpointDraft;
         },
         get awaitingFirstP3() {
-          return self.penAwaitingFirstSegmentP3AfterDraft;
+          return self.penFirstAnchorP3Draft !== null && self.penPendingSegment === null;
         },
         get firstAnchorP3Draft() {
           return self.penFirstAnchorP3Draft;
         },
-        get committedFirstP3Draft() {
-          return self.penCommittedFirstSegmentP3Draft;
-        },
         clearFirstAnchorAwaitingDraft: () => self.clearPenFirstAnchorAwaitingDraft(),
-        clearCommittedFirstP3Draft: () => self.clearPenCommittedFirstSegmentP3Draft(),
         clearColocatedDraft: () => self.clearPenColocatedSegmentEndpointDraft(),
         setHoverClientPx: (x, y) => {
           self.penHoverClientPx = { x, y };
@@ -356,18 +340,6 @@ export class PenToolSession {
         tryFinishPenPath: (c) => self.tryFinishPenPath(c),
         commitDraggedCurve: (a, c, d, ctrl, se, pl, fr, z) =>
           self.commitPenDraggedCurve(a, c, d, ctrl, se, pl, fr, z),
-        setAwaitingFirstP3: (v) => {
-          self.penAwaitingFirstSegmentP3AfterDraft = v;
-        },
-        setFirstAnchorP3Draft: (v) => {
-          self.penFirstAnchorP3Draft = v;
-        },
-        setCommittedFirstP3Draft: (v) => {
-          self.penCommittedFirstSegmentP3Draft = v;
-        },
-        setAwaitingColocated: (v) => {
-          self.penAwaitingColocatedSegmentEndpointAfterDraft = v;
-        },
         setColocatedDraft: (v) => {
           self.penColocatedSegmentEndpointDraft = v;
         },
@@ -383,20 +355,16 @@ export class PenToolSession {
     return this.penCanvasInputViewCache;
   }
 
-  private committedFirstSegmentP3View(): PenCommittedFirstSegmentP3CommitView {
-    if (!this.penCommittedFirstSegmentP3CommitViewCache) {
+  private firstSegmentFromDraftCommitView(): PenFirstSegmentFromDraftCommitView {
+    if (!this.penFirstSegmentFromDraftCommitViewCache) {
       const self = this;
-      this.penCommittedFirstSegmentP3CommitViewCache = {
+      this.penFirstSegmentFromDraftCommitViewCache = {
         get ports() {
           return self.ports;
         },
         get penSession() {
           return self.penSession;
         },
-        get committedFirstP3Draft() {
-          return self.penCommittedFirstSegmentP3Draft;
-        },
-        clearCommittedFirstP3Draft: () => self.clearPenCommittedFirstSegmentP3Draft(),
         pendingResolvedEndForCommit: (p, r) => self.penPendingResolvedEndSvgForCommit(p, r),
         get pendingDragSvg() {
           return self.penPendingDragSvg;
@@ -412,15 +380,7 @@ export class PenToolSession {
         },
         commitDraggedCurve: (a, c, d, ctrl, se, pl, fr, z) =>
           self.commitPenDraggedCurve(a, c, d, ctrl, se, pl, fr, z),
-        plantPendingChordAfterFirstP3Commit: (clientX, clientY, ctrlKey, tip) => {
-          self.penPendingSegment = {
-            anchor: { x: tip.x, y: tip.y },
-            startClient: { x: clientX, y: clientY },
-            startSvg: { x: tip.x, y: tip.y },
-            ctrlCurve: self.ports.isPenAltCurveMode() || ctrlKey
-          };
-          self.penPendingLastClient = { x: clientX, y: clientY };
-          self.penPendingDragSvg = { x: tip.x, y: tip.y };
+        setPointerAfterFirstSegmentDraftCommit: (tip) => {
           self.penPointerSvg = { x: tip.x, y: tip.y };
         },
         clearPendingSegmentFields: () => {
@@ -431,7 +391,7 @@ export class PenToolSession {
         markForCheck: () => self.ports.markForCheck()
       };
     }
-    return this.penCommittedFirstSegmentP3CommitViewCache;
+    return this.penFirstSegmentFromDraftCommitViewCache;
   }
 
   private tryFinishPenPathView(): TryFinishPenPathView {
@@ -478,11 +438,8 @@ export class PenToolSession {
         get penPendingSegment() {
           return self.penPendingSegment;
         },
-        get penAwaitingFirstSegmentP3AfterDraft() {
-          return self.penAwaitingFirstSegmentP3AfterDraft;
-        },
-        get penCommittedFirstSegmentP3Draft() {
-          return self.penCommittedFirstSegmentP3Draft;
+        get penFirstAnchorP3Draft() {
+          return self.penFirstAnchorP3Draft;
         },
         get penAwaitingColocatedSegmentEndpointAfterDraft() {
           return self.penAwaitingColocatedSegmentEndpointAfterDraft;
@@ -531,7 +488,6 @@ export class PenToolSession {
         },
         clearPenInsertOnPathDragState: () => self.clearPenInsertOnPathDragState(),
         clearPenFirstAnchorAwaitingDraft: () => self.clearPenFirstAnchorAwaitingDraft(),
-        clearPenCommittedFirstSegmentP3Draft: () => self.clearPenCommittedFirstSegmentP3Draft(),
         clearPenColocatedSegmentEndpointDraft: () => self.clearPenColocatedSegmentEndpointDraft(),
         purgeProvisionalPenSegmentHistory: () => self.purgeProvisionalPenSegmentHistory(),
         markForCheck: () => self.ports.markForCheck(),
@@ -565,13 +521,9 @@ export class PenToolSession {
           return self.penAwaitingColocatedSegmentEndpointAfterDraft;
         },
         clearPenColocatedSegmentEndpointDraft: () => self.clearPenColocatedSegmentEndpointDraft(),
-        get penCommittedFirstSegmentP3Draft() {
-          return self.penCommittedFirstSegmentP3Draft;
-        },
         get penPendingSegment() {
           return self.penPendingSegment;
         },
-        clearPenCommittedFirstSegmentP3Draft: () => self.clearPenCommittedFirstSegmentP3Draft(),
         set penPendingSegment(v: PenPendingSegmentForPreview | null) {
           self.penPendingSegment = v;
         },
@@ -589,12 +541,6 @@ export class PenToolSession {
         },
         set penFirstAnchorP3Draft(v: PenFirstAnchorP3Draft | null) {
           self.penFirstAnchorP3Draft = v;
-        },
-        set penAwaitingFirstSegmentP3AfterDraft(v: boolean) {
-          self.penAwaitingFirstSegmentP3AfterDraft = v;
-        },
-        get penAwaitingFirstSegmentP3AfterDraft() {
-          return self.penAwaitingFirstSegmentP3AfterDraft;
         },
         clearPenFirstAnchorAwaitingDraft: () => self.clearPenFirstAnchorAwaitingDraft(),
         set penPointerSvg(v: { x: number; y: number } | null) {
@@ -647,11 +593,11 @@ export class PenToolSession {
     return penSvgDistanceSq(pending.anchor, pending.startSvg) < 1e-12;
   }
 
-  /** `M` only and first segment incomplete: active pending from empty, or handle draft waiting for `P3`. */
+  /** `M` only and first segment incomplete: gap draft, pending with attached first-segment draft, or colocated first press. */
   private penIncompleteFirstSegmentFromEmpty(): boolean {
     if (!penPathOnlyMoveto(this.penSession.getSegments())) return false;
-    if (this.penAwaitingFirstSegmentP3AfterDraft) return true;
-    if (this.penCommittedFirstSegmentP3Draft && this.penPendingSegment) return true;
+    if (this.penFirstAnchorP3Draft && !this.penPendingSegment) return true;
+    if (this.penPendingSegment?.firstSegmentCurveDraft) return true;
     return this.penPendingSegment !== null && this.penPendingIsFirstSegmentFromMovetoGesture();
   }
 
@@ -660,12 +606,7 @@ export class PenToolSession {
   }
 
   private clearPenFirstAnchorAwaitingDraft(): void {
-    this.penAwaitingFirstSegmentP3AfterDraft = false;
     this.penFirstAnchorP3Draft = null;
-  }
-
-  private clearPenCommittedFirstSegmentP3Draft(): void {
-    this.penCommittedFirstSegmentP3Draft = null;
   }
 
   private clearPenColocatedSegmentEndpointDraft(): void {
@@ -731,7 +672,6 @@ export class PenToolSession {
    */
   private penPendingShowsCurvePreviewForClose(): boolean {
     return computePenPendingShowsCurvePreviewForClose({
-      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
       penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
       penAwaitingColocatedSegmentEndpointAfterDraft: this.penAwaitingColocatedSegmentEndpointAfterDraft,
       penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
@@ -762,7 +702,6 @@ export class PenToolSession {
       segments: this.penSession.getSegments(),
       penPointerSvg: this.penPointerSvg,
       penPendingSegment: this.penPendingSegment,
-      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
       penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
       penAwaitingColocatedSegmentEndpointAfterDraft: this.penAwaitingColocatedSegmentEndpointAfterDraft,
       penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
@@ -782,7 +721,6 @@ export class PenToolSession {
       penPendingShowsCurvePreview: this.penPendingShowsCurvePreview,
       segments: this.penSession.getSegments(),
       penPendingSegment: this.penPendingSegment,
-      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
       penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
       penAwaitingColocatedSegmentEndpointAfterDraft: this.penAwaitingColocatedSegmentEndpointAfterDraft,
       penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
@@ -847,9 +785,8 @@ export class PenToolSession {
       penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
       segments: this.penSession.getSegments(),
       penCurvePreviewPathD: this.penCurvePreviewPathD,
-      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
+      penFirstAnchorGapP3Draft: this.penFirstAnchorP3Draft !== null && this.penPendingSegment === null,
       penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
-      penCommittedFirstSegmentP3Draft: this.penCommittedFirstSegmentP3Draft,
       pendingDragSampleSvg: (pend) => this.penPendingDragSampleSvg(pend),
       pendingCurvePreviewEndSvg: (pend) => this.penPendingCurvePreviewEndSvg(pend),
       pendingCurveGeometryEndSvg: (pend) => this.penPendingCurveGeometryEndSvg(pend)
@@ -917,9 +854,8 @@ export class PenToolSession {
       penColocatedSegmentEndpointDraft: this.penColocatedSegmentEndpointDraft,
       segments: this.penSession.getSegments(),
       penCurvePreviewPathD: this.penCurvePreviewPathD,
-      penAwaitingFirstSegmentP3AfterDraft: this.penAwaitingFirstSegmentP3AfterDraft,
+      penFirstAnchorGapP3Draft: this.penFirstAnchorP3Draft !== null && this.penPendingSegment === null,
       penFirstAnchorP3Draft: this.penFirstAnchorP3Draft,
-      penCommittedFirstSegmentP3Draft: this.penCommittedFirstSegmentP3Draft,
       pendingDragSampleSvg: (pend) => this.penPendingDragSampleSvg(pend),
       pendingCurvePreviewEndSvg: (pend) => this.penPendingCurvePreviewEndSvg(pend),
       pendingCurveGeometryEndSvg: (pend) => this.penPendingCurveGeometryEndSvg(pend)
@@ -1128,7 +1064,6 @@ export class PenToolSession {
       baseD,
       pending,
       segments: this.penSession.getSegments(),
-      penCommittedFirstSegmentP3Draft: this.penCommittedFirstSegmentP3Draft,
       penPointerSvg: this.penPointerSvg,
       penPendingIsFirstSegmentFromMovetoGesture: this.penPendingIsFirstSegmentFromMovetoGesture(),
       penPendingChordColocated: this.penPendingChordColocated(),
@@ -1374,7 +1309,6 @@ export class PenToolSession {
       this.clearPenInsertOnPathDragState();
     }
     this.clearPenFirstAnchorAwaitingDraft();
-    this.clearPenCommittedFirstSegmentP3Draft();
     this.clearPenColocatedSegmentEndpointDraft();
   }
 }

@@ -1,28 +1,24 @@
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
-import { lastCommittedVertex, penPathOnlyMoveto, penSvgDistanceSq, type PenPathSegment } from '../../../models/pen-path';
-import type { PenFirstAnchorP3Draft } from '../../../models/pen-path';
+import {
+  lastCommittedVertex,
+  penPathOnlyMoveto,
+  penSvgDistanceSq,
+  type PenFirstAnchorP3Draft,
+  type PenPathSegment
+} from '../../../models/pen-path';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
-
-export type PenCommittedP3PendingSeg = {
-  anchor: { x: number; y: number };
-  startClient: { x: number; y: number };
-  startSvg: { x: number; y: number };
-  ctrlCurve: boolean;
-};
+import type { PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
 
 /**
- * Mutable slice + delegates for {@link commitPenCommittedFirstSegmentP3IfApplicableForView}.
- * Built privately on {@link PenToolSession}.
+ * Mutable slice for {@link tryCommitPenFirstSegmentCurveFromPendingDraftForView}.
+ * Implemented privately on {@link PenToolSession}.
  */
-export interface PenCommittedFirstSegmentP3CommitView {
+export interface PenFirstSegmentFromDraftCommitView {
   readonly ports: PenToolSessionPorts;
   readonly penSession: { getSegments(): readonly PenPathSegment[] };
 
-  get committedFirstP3Draft(): PenFirstAnchorP3Draft | null;
-  clearCommittedFirstP3Draft(): void;
-
   pendingResolvedEndForCommit(
-    pending: PenCommittedP3PendingSeg,
+    pending: PenPendingSegmentForPreview,
     releaseSvg: { x: number; y: number } | null | undefined
   ): { x: number; y: number };
 
@@ -43,38 +39,32 @@ export interface PenCommittedFirstSegmentP3CommitView {
     zeroIncomingAtSegmentEnd?: boolean
   ): void;
 
-  /** After first `C` is committed from `M` + committed-P3 draft: start the next pending segment at `tip`. */
-  plantPendingChordAfterFirstP3Commit(
-    clientX: number,
-    clientY: number,
-    ctrlKey: boolean,
-    tip: { x: number; y: number }
-  ): void;
+  /** After first `C` from `M` + draft: match a normal segment commit — no pending until the next mousedown; pointer at path tip for rubber-band preview to the next vertex. */
+  setPointerAfterFirstSegmentDraftCommit(tip: { x: number; y: number }): void;
 
   clearPendingSegmentFields(): void;
   markForCheck(): void;
 }
 
 /**
- * When {@link PenCommittedFirstSegmentP3CommitView.committedFirstP3Draft} is set, commit the first `C` from `M`
+ * When {@link PenPendingSegmentForPreview.firstSegmentCurveDraft} is set, commit the first `C` from `M`
  * using frozen outgoing `P1` and second-gesture drag for incoming (unless movement is below marquee → zero incoming).
  */
-export function commitPenCommittedFirstSegmentP3IfApplicableForView(
-  v: PenCommittedFirstSegmentP3CommitView,
+export function tryCommitPenFirstSegmentCurveFromPendingDraftForView(
+  v: PenFirstSegmentFromDraftCommitView,
   clientX: number,
   clientY: number,
-  ctrlKey: boolean,
-  pendingSeg: PenCommittedP3PendingSeg,
+  _ctrlKey: boolean,
+  pendingSeg: PenPendingSegmentForPreview,
   releaseSvg: { x: number; y: number } | null | undefined,
   segs: readonly PenPathSegment[]
 ): boolean {
-  const draft = v.committedFirstP3Draft;
+  const draft = pendingSeg.firstSegmentCurveDraft;
   if (!draft || !penPathOnlyMoveto(segs) || segs[0]?.type !== 'M') return false;
   const m0 = segs[0];
   if (m0.type !== 'M') return false;
   if (penSvgDistanceSq(pendingSeg.anchor, { x: m0.x, y: m0.y }) >= 1e-12) return false;
 
-  v.clearCommittedFirstP3Draft();
   const resolvedEnd = v.pendingResolvedEndForCommit(pendingSeg, releaseSvg ?? undefined);
   const dragCurrent = releaseSvg ?? v.pendingDragSvg ?? v.pointerSvg ?? pendingSeg.startSvg;
   const screenDist = Math.hypot(clientX - pendingSeg.startClient.x, clientY - pendingSeg.startClient.y);
@@ -98,7 +88,7 @@ export function commitPenCommittedFirstSegmentP3IfApplicableForView(
   v.clearPendingSegmentFields();
 
   const tip = lastCommittedVertex(v.penSession.getSegments()) ?? resolvedEnd;
-  v.plantPendingChordAfterFirstP3Commit(clientX, clientY, ctrlKey, tip);
+  v.setPointerAfterFirstSegmentDraftCommit(tip);
   v.markForCheck();
   return true;
 }

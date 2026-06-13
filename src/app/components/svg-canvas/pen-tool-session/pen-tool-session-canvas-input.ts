@@ -4,6 +4,7 @@ import {
   penLastOutgoingHandleSvg,
   movePenLastOutgoingHandleTo,
   penPathOnlyMoveto,
+  penSvgDistanceSq,
   snapVectorTo45DegFrom,
   type PenFirstAnchorP3Draft,
   type PenPathSegment
@@ -52,10 +53,8 @@ export interface PenCanvasInputView {
   get colocatedDraft(): PenFirstAnchorP3Draft | null;
   get awaitingFirstP3(): boolean;
   get firstAnchorP3Draft(): PenFirstAnchorP3Draft | null;
-  get committedFirstP3Draft(): PenFirstAnchorP3Draft | null;
 
   clearFirstAnchorAwaitingDraft(): void;
-  clearCommittedFirstP3Draft(): void;
   clearColocatedDraft(): void;
 
   setHoverClientPx(x: number, y: number): void;
@@ -73,10 +72,6 @@ export interface PenCanvasInputView {
     zeroIncomingAtSegmentEnd?: boolean
   ): void;
 
-  setAwaitingFirstP3(v: boolean): void;
-  setFirstAnchorP3Draft(v: PenFirstAnchorP3Draft | null): void;
-  setCommittedFirstP3Draft(v: PenFirstAnchorP3Draft | null): void;
-  setAwaitingColocated(v: boolean): void;
   setColocatedDraft(v: PenFirstAnchorP3Draft | null): void;
 
   pendingIsFirstFromMoveto(): boolean;
@@ -97,7 +92,6 @@ export function handlePenCanvasMouseDownForView(v: PenCanvasInputView, event: Mo
     v.pendingCurveAltChord = false;
     v.pendingShiftAngleSnap = false;
     v.clearFirstAnchorAwaitingDraft();
-    v.clearCommittedFirstP3Draft();
     v.clearColocatedDraft();
     if (v.penSession.getSegments().length === 0) {
       v.ports.clearPenPostInsertAnchorOverlay();
@@ -164,28 +158,6 @@ export function handlePenCanvasMouseDownForView(v: PenCanvasInputView, event: Mo
     v.markForCheck();
     return;
   }
-  if (v.awaitingFirstP3 && penPathOnlyMoveto(segs) && event.detail < 2) {
-    const draft = v.firstAnchorP3Draft;
-    const m0 = segs[0];
-    if (draft && m0?.type === 'M') {
-      const frozen: PenFirstAnchorP3Draft = { ...draft };
-      v.clearFirstAnchorAwaitingDraft();
-      v.setCommittedFirstP3Draft(frozen);
-      v.pendingSegment = {
-        anchor: { x: m0.x, y: m0.y },
-        startClient: { x: event.clientX, y: event.clientY },
-        startSvg: { x: pt.x, y: pt.y },
-        ctrlCurve: v.ports.isPenAltCurveMode() || event.ctrlKey
-      };
-      v.pendingLastClient = { x: event.clientX, y: event.clientY };
-      v.pendingDragSvg = { x: pt.x, y: pt.y };
-      v.pointerSvg = { x: pt.x, y: pt.y };
-      v.markForCheck();
-      return;
-    }
-    v.clearFirstAnchorAwaitingDraft();
-    v.clearColocatedDraft();
-  }
   const anchor = lastCommittedVertex(segs);
   if (!anchor) return;
   v.ports.clearPenPostInsertAnchorOverlay();
@@ -195,6 +167,19 @@ export function handlePenCanvasMouseDownForView(v: PenCanvasInputView, event: Mo
     startSvg: { x: pt.x, y: pt.y },
     ctrlCurve: v.ports.isPenAltCurveMode() || event.ctrlKey
   };
+  if (penPathOnlyMoveto(segs) && v.firstAnchorP3Draft) {
+    const m0 = segs[0];
+    if (
+      m0?.type === 'M' &&
+      penSvgDistanceSq(anchor, { x: m0.x, y: m0.y }) < 1e-12
+    ) {
+      v.pendingSegment = {
+        ...v.pendingSegment!,
+        firstSegmentCurveDraft: { ...v.firstAnchorP3Draft }
+      };
+      v.clearFirstAnchorAwaitingDraft();
+    }
+  }
   v.pendingLastClient = { x: event.clientX, y: event.clientY };
   v.pendingDragSvg = { x: pt.x, y: pt.y };
   v.pointerSvg = { x: pt.x, y: pt.y };

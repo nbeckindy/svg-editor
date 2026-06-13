@@ -22,9 +22,7 @@ export interface PenBackspaceShortcutView {
   get penAwaitingColocatedSegmentEndpointAfterDraft(): boolean;
   clearPenColocatedSegmentEndpointDraft(): void;
 
-  get penCommittedFirstSegmentP3Draft(): PenFirstAnchorP3Draft | null;
   get penPendingSegment(): PenPendingSegmentForPreview | null;
-  clearPenCommittedFirstSegmentP3Draft(): void;
 
   set penPendingSegment(v: PenPendingSegmentForPreview | null);
   set penPendingLastClient(v: { x: number; y: number } | null);
@@ -33,9 +31,7 @@ export interface PenBackspaceShortcutView {
   set penPendingShiftAngleSnap(v: boolean);
 
   set penFirstAnchorP3Draft(v: PenFirstAnchorP3Draft | null);
-  set penAwaitingFirstSegmentP3AfterDraft(v: boolean);
 
-  get penAwaitingFirstSegmentP3AfterDraft(): boolean;
   clearPenFirstAnchorAwaitingDraft(): void;
 
   set penPointerSvg(v: { x: number; y: number } | null);
@@ -66,16 +62,15 @@ export function tryPenBackspaceShortcutForView(v: PenBackspaceShortcutView): boo
     return true;
   }
 
-  if (v.penCommittedFirstSegmentP3Draft && v.penPendingSegment && penPathOnlyMoveto(v.penSession.getSegments())) {
-    const d = v.penCommittedFirstSegmentP3Draft;
-    v.clearPenCommittedFirstSegmentP3Draft();
+  const pending = v.penPendingSegment;
+  if (pending?.firstSegmentCurveDraft && penPathOnlyMoveto(v.penSession.getSegments())) {
+    const d = pending.firstSegmentCurveDraft;
     v.penPendingSegment = null;
     v.penPendingLastClient = null;
     v.penPendingDragSvg = null;
     v.penPendingCurveAltChord = false;
     v.penPendingShiftAngleSnap = false;
     v.penFirstAnchorP3Draft = d;
-    v.penAwaitingFirstSegmentP3AfterDraft = true;
     const m0 = v.penSession.getSegments()[0];
     if (m0?.type === 'M') {
       v.penPointerSvg = { x: m0.x, y: m0.y };
@@ -84,7 +79,7 @@ export function tryPenBackspaceShortcutForView(v: PenBackspaceShortcutView): boo
     return true;
   }
 
-  if (v.penAwaitingFirstSegmentP3AfterDraft) {
+  if (v.penFirstAnchorP3Draft && !v.penPendingSegment) {
     v.clearPenFirstAnchorAwaitingDraft();
     if (penPathOnlyMoveto(v.penSession.getSegments())) {
       v.clearDrawingState();
@@ -98,8 +93,7 @@ export function tryPenBackspaceShortcutForView(v: PenBackspaceShortcutView): boo
     return true;
   }
 
-  if (v.penPendingSegment) {
-    v.clearPenCommittedFirstSegmentP3Draft();
+  if (pending) {
     v.penPendingSegment = null;
     v.penPendingLastClient = null;
     v.penPendingDragSvg = null;

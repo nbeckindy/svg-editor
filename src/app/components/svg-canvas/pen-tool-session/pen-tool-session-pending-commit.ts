@@ -61,10 +61,8 @@ export interface PenPendingCommitView {
 
   get firstAnchorP3Draft(): PenFirstAnchorP3Draft | null;
   set firstAnchorP3Draft(v: PenFirstAnchorP3Draft | null);
-  get awaitingFirstSegmentP3AfterDraft(): boolean;
-  set awaitingFirstSegmentP3AfterDraft(v: boolean);
 
-  commitFirstSegmentP3IfApplicable(
+  tryCommitFirstSegmentCurveFromPendingDraft(
     clientX: number,
     clientY: number,
     ctrlKey: boolean,
@@ -143,7 +141,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
   const releaseSvg = v.ports.clientToEditorSvgPoint(event.clientX, event.clientY);
   const segsForP3 = v.penSession.getSegments();
   if (
-    v.commitFirstSegmentP3IfApplicable(
+    v.tryCommitFirstSegmentCurveFromPendingDraft(
       event.clientX,
       event.clientY,
       event.ctrlKey,
@@ -233,7 +231,6 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       shiftAngleSnap: v.pendingShiftAngleSnap,
       frozenOutgoingP1Svg: v.pendingCubicAltEndOnly() ? undefined : { x: mirrored.x1, y: mirrored.y1 }
     };
-    v.awaitingFirstSegmentP3AfterDraft = true;
     v.pendingSegment = null;
     v.pendingLastClient = null;
     v.pendingDragSvg = null;
@@ -299,7 +296,7 @@ export function flushPenPendingAsCurrentPointerForView(v: PenPendingCommitView):
 
   const segsFlush = v.penSession.getSegments();
   const lcP3 = v.pendingLastClient ?? startClient;
-  if (v.commitFirstSegmentP3IfApplicable(lcP3.x, lcP3.y, false, pendingSeg, null, segsFlush)) {
+  if (v.tryCommitFirstSegmentCurveFromPendingDraft(lcP3.x, lcP3.y, false, pendingSeg, null, segsFlush)) {
     return;
   }
 

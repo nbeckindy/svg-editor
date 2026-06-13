@@ -11,6 +11,11 @@ export type PenPendingSegmentForPreview = {
   startClient: { x: number; y: number };
   startSvg: { x: number; y: number };
   ctrlCurve: boolean;
+  /**
+   * First `C` from `M` only: frozen handle drag from the initial anchor (not representable in `d` until
+   * this segment commits). Absent for all other pending chords.
+   */
+  firstSegmentCurveDraft?: PenFirstAnchorP3Draft | null;
 };
 
 /** Pending segment end `P3` for preview / chord geometry: the mousedown-planted `startSvg` (second anchor). */
@@ -71,7 +76,6 @@ export function penPendingCurvePreviewEndSvg(
  * also allows a smaller screen threshold or a tiny root-SVG drag so users can shape the closing segment without leaving the start ring.
  */
 export function computePenPendingShowsCurvePreviewForClose(args: {
-  penAwaitingFirstSegmentP3AfterDraft: boolean;
   penFirstAnchorP3Draft: PenFirstAnchorP3Draft | null;
   penAwaitingColocatedSegmentEndpointAfterDraft: boolean;
   penColocatedSegmentEndpointDraft: PenFirstAnchorP3Draft | null;
@@ -90,7 +94,6 @@ export function computePenPendingShowsCurvePreviewForClose(args: {
   allowRelaxedCloseRingCurvePreview: boolean;
 }): boolean {
   const {
-    penAwaitingFirstSegmentP3AfterDraft,
     penFirstAnchorP3Draft,
     penAwaitingColocatedSegmentEndpointAfterDraft,
     penColocatedSegmentEndpointDraft,
@@ -104,7 +107,8 @@ export function computePenPendingShowsCurvePreviewForClose(args: {
     allowRelaxedCloseRingCurvePreview
   } = args;
 
-  if (penAwaitingFirstSegmentP3AfterDraft && penFirstAnchorP3Draft) return true;
+  /** Between first-handle mouseup and `P3` mousedown: path is still `M` only; draft is not on `pendingSegment` yet. */
+  if (!penPendingSegment && penFirstAnchorP3Draft) return true;
   if (penAwaitingColocatedSegmentEndpointAfterDraft && penColocatedSegmentEndpointDraft) return true;
   if (!penPendingSegment || !penPendingLastClient) return false;
   const { startClient, startSvg } = penPendingSegment;
