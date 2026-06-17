@@ -5005,6 +5005,147 @@ describe('SvgCanvasComponent', () => {
       expect(dUndo).not.toMatch(/88/);
     });
 
+    it('shows continue hover ring on open path endpoint when pen is idle', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="open-a" d="M 10 10 L 50 40" fill="none" stroke="black"/></svg>'
+      );
+
+      expect(component.isPenSessionActive).toBe(false);
+      component.penTool.updateIdlePenHoverClient(50, 40);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-pen-continue-hover"]')).toBeTruthy();
+    });
+
+    it('picks up open path at head and prepends new stroke on finish', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="open-a" d="M 10 10 L 50 40" fill="none" stroke="black"/></svg>'
+      );
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        shiftKey: true,
+        preventDefault: vi.fn(),
+        target: svgRoot
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+      expect(component.isPenSessionActive).toBe(true);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 2,
+        clientY: 2,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 2,
+        clientY: 2
+      } as MouseEvent);
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const dAfter =
+        svgManipulationService.getSVGInstance()?.findOne('#open-a')?.attr('d')?.toString() ?? '';
+      expect(dAfter).toMatch(/2.*2/);
+      expect(dAfter).toMatch(/50.*40/);
+    });
+
+    it('closing at frozen-path tail after head continuation adds Z', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="open-a" d="M 10 10 L 50 40" fill="none" stroke="black"/></svg>'
+      );
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        shiftKey: true,
+        preventDefault: vi.fn(),
+        target: svgRoot
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 20,
+        clientY: 15,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 20,
+        clientY: 15
+      } as MouseEvent);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 40,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 50,
+        clientY: 40
+      } as MouseEvent);
+      fixture.detectChanges();
+
+      const dAfter =
+        svgManipulationService.getSVGInstance()?.findOne('#open-a')?.attr('d')?.toString() ?? '';
+      expect(dAfter.toUpperCase()).toMatch(/Z/);
+      expect(dAfter).toMatch(/20/);
+      expect(dAfter).not.toMatch(/20[\s\S]*20/);
+      expect((dAfter.match(/50/g) ?? []).length).toBe(1);
+    });
+
+    it('prepend close at tail without new nodes closes original open path', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 600 400"><path id="open-a" d="M 294.5 105.609375 L 264.5 213.609375 L 367.5 285.609375 L 502.5 109.609375" fill="none" stroke="black"/></svg>'
+      );
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 294.5,
+        clientY: 105.609375,
+        detail: 1,
+        shiftKey: true,
+        preventDefault: vi.fn(),
+        target: svgRoot
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 502.5,
+        clientY: 109.609375,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 502.5,
+        clientY: 109.609375
+      } as MouseEvent);
+      fixture.detectChanges();
+
+      const dAfter =
+        svgManipulationService.getSVGInstance()?.findOne('#open-a')?.attr('d')?.toString() ?? '';
+      expect(dAfter.toUpperCase()).toMatch(/Z/);
+      expect(dAfter).not.toMatch(/285\.609375[\s\S]*285\.609375/);
+      expect((dAfter.match(/502\.5/g) ?? []).length).toBe(1);
+    });
+
     it('joins finishing stroke into existing open path when end meets endpoint (tolerance)', async () => {
       await loadSvgAndPenMode(
         '<svg viewBox="0 0 100 100"><path id="join-b" d="M 0 0 L 18 22" fill="none" stroke="black"/></svg>'

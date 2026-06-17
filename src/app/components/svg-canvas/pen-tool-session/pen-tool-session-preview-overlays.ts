@@ -64,24 +64,43 @@ export function computePenRubberBandOverlay(p: {
   );
 }
 
+export function computePenOpenPathContinueHoverOverlay(p: {
+  ports: PenOverlayPorts;
+  currentToolIsPen: boolean;
+  isPenSessionActive: boolean;
+  penHoverClientPx: { x: number; y: number } | null;
+  findOpenPathEndpointHoverAtClient: (
+    clientX: number,
+    clientY: number
+  ) => { x: number; y: number } | null;
+}): { cx: number; cy: number } | null {
+  if (!p.currentToolIsPen || p.isPenSessionActive || !p.penHoverClientPx) {
+    return null;
+  }
+  const endpoint = p.findOpenPathEndpointHoverAtClient(
+    p.penHoverClientPx.x,
+    p.penHoverClientPx.y
+  );
+  if (!endpoint) return null;
+  const o = penSvgUserPointToOverlayPixel(p.ports, endpoint.x, endpoint.y);
+  return { cx: o.x, cy: o.y };
+}
+
 export function computePenCloseTargetHoverOverlay(p: {
   ports: PenOverlayPorts;
   currentToolIsPen: boolean;
   isPenSessionActive: boolean;
   penHoverClientPx: { x: number; y: number } | null;
-  segments: readonly PenPathSegment[];
-  penCommittedPathHasVertexBeyondMoveto: boolean;
+  penCloseTargetMv: { x: number; y: number } | null;
+  penCloseAffordanceAllowed: boolean;
   isPenPointerWithinCloseRadius: (clientX: number, clientY: number) => boolean;
 }): { cx: number; cy: number } | null {
   if (!p.currentToolIsPen || !p.isPenSessionActive || !p.penHoverClientPx) {
     return null;
   }
-  const segs = p.segments;
-  if (!penPathSegmentsAreValid(segs)) return null;
-  const first = segs[0];
-  if (first.type !== 'M') return null;
-  if (!p.penCommittedPathHasVertexBeyondMoveto) return null;
+  if (!p.penCloseTargetMv) return null;
+  if (!p.penCloseAffordanceAllowed) return null;
   if (!p.isPenPointerWithinCloseRadius(p.penHoverClientPx.x, p.penHoverClientPx.y)) return null;
-  const o = penSvgUserPointToOverlayPixel(p.ports, first.x, first.y);
+  const o = penSvgUserPointToOverlayPixel(p.ports, p.penCloseTargetMv.x, p.penCloseTargetMv.y);
   return { cx: o.x, cy: o.y };
 }

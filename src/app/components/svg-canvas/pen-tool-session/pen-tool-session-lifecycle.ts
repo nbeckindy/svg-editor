@@ -1,6 +1,7 @@
 import type { PenSession, PenPathSegment, PenFirstAnchorP3Draft } from '../../../models/pen-path';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
 import type { PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
+import type { PenContinuingPathRewrite } from './pen-tool-session-path-continuation';
 import type { PenInsertOnPathDragState } from './pen-tool-session-insert-on-path';
 
 /**
@@ -17,7 +18,7 @@ export interface PenDrawingStateClearView {
   get penAwaitingColocatedSegmentEndpointAfterDraft(): boolean;
   get penPendingDragSvg(): { x: number; y: number } | null;
   get penHoverClientPx(): { x: number; y: number } | null;
-  get penContinuingPathRewrite(): { pathId: string; originalD: string } | null;
+  get penContinuingPathRewrite(): PenContinuingPathRewrite | null;
   get penOutgoingHandleDrag(): { segmentIndex: number; before: PenPathSegment } | null;
   get penInsertOnPath(): PenInsertOnPathDragState | null;
 
@@ -25,7 +26,7 @@ export interface PenDrawingStateClearView {
   set penPendingLastClient(v: { x: number; y: number } | null);
   set penPendingDragSvg(v: { x: number; y: number } | null);
   set penHoverClientPx(v: { x: number; y: number } | null);
-  set penContinuingPathRewrite(v: { pathId: string; originalD: string } | null);
+  set penContinuingPathRewrite(v: PenContinuingPathRewrite | null);
   set penOutgoingHandleDrag(v: { segmentIndex: number; before: PenPathSegment } | null);
   set penPointerSvg(v: { x: number; y: number } | null);
 

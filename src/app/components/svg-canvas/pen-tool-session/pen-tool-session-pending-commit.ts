@@ -45,6 +45,7 @@ export interface PenPendingCommitView {
   set pointerSvg(v: { x: number; y: number } | null);
 
   pathStartMv(): { x: number; y: number } | null;
+  pathCloseTargetMv(): { x: number; y: number } | null;
   pendingShowsCurvePreview(): boolean;
   pendingMousedownInCloseRadius(): boolean;
   pendingResolvedEndForCommit(
@@ -55,6 +56,8 @@ export interface PenPendingCommitView {
   pendingChordColocated(): boolean;
   pendingStartNearPathMoveto(): boolean;
   pendingCubicAltEndOnly(): boolean;
+
+  isPrependContinuationCloseAtFrozenTail(): boolean;
 
   clearFirstAnchorAwaitingDraft(): void;
 
@@ -93,9 +96,21 @@ export interface PenPendingCommitView {
 export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: MouseEvent): void {
   if (!v.pendingSegment) return;
 
+  if (v.pendingMousedownInCloseRadius()) {
+    if (v.isPrependContinuationCloseAtFrozenTail()) {
+      v.pendingSegment = null;
+      v.pendingLastClient = null;
+      v.pendingDragSvg = null;
+      v.pendingCurveAltChord = false;
+      v.pendingShiftAngleSnap = false;
+      v.tryFinishPath(true);
+      return;
+    }
+  }
+
   if (penPathSegmentsAreValid(v.penSession.getSegments()) && v.pendingMousedownInCloseRadius()) {
-    const m = v.pathStartMv();
-    if (m && v.pendingShowsCurvePreview() && v.pendingSegment) {
+    const closeTarget = v.pathCloseTargetMv();
+    if (closeTarget && v.pendingShowsCurvePreview() && v.pendingSegment) {
       const releaseSvg =
         v.ports.clientToEditorSvgPoint(event.clientX, event.clientY) ??
         v.pendingDragSvg ??
@@ -111,16 +126,16 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
         committed.length >= 2 && committed[1]!.type === 'C'
           ? penCloseNoPreviewDragCurrentForOpenExplicitC(
               committed,
-              m,
+              closeTarget,
               releaseSvg,
               PEN_CLOSE_CURVE_PREVIEW_RELEASE_NEAR_MOVETO_MAX_SQ
             )
           : releaseSvg;
-      v.commitDraggedCurve(pending.anchor, pending.startSvg, dragClose, pending.ctrlCurve, m);
+      v.commitDraggedCurve(pending.anchor, pending.startSvg, dragClose, pending.ctrlCurve, closeTarget);
       v.tryFinishPath(true);
       return;
     }
-    if (v.pendingSegment && m) {
+    if (v.pendingSegment && closeTarget) {
       const pending = v.pendingSegment;
       const releaseSvg =
         v.ports.clientToEditorSvgPoint(event.clientX, event.clientY) ?? v.pendingDragSvg ?? pending.startSvg;
@@ -135,25 +150,25 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       v.pendingCurveAltChord = false;
       v.pendingShiftAngleSnap = false;
 
-      if (penSvgDistanceSq(anchor, m) > 1e-12) {
+      if (penSvgDistanceSq(anchor, closeTarget) > 1e-12) {
         if (closeClickWithoutDrag) {
           if (penLastDrawableOutgoingCubicHandlePresentAtTip(committed)) {
             /**
-             * `P2 === M` so the closing segment’s incoming handle sits on the start vertex (not a
-             * symmetric chord-third interior point from zero drag at `M`).
+             * `P2 === closeTarget` so the closing segment’s incoming handle sits on the close vertex (not a
+             * symmetric chord-third interior point from zero drag at the target).
              */
-            v.commitDraggedCurve(anchor, startSvg, m, pending.ctrlCurve, m, undefined, undefined, true);
+            v.commitDraggedCurve(anchor, startSvg, closeTarget, pending.ctrlCurve, closeTarget, undefined, undefined, true);
           } else {
-            v.penSession.addLinePoint(m.x, m.y);
+            v.penSession.addLinePoint(closeTarget.x, closeTarget.y);
           }
         } else if (penStartingLegIsCubic(committed) || penLastIncomingSegmentIsCubicCurved(committed)) {
           const dragClose =
             committed.length >= 2 && committed[1]!.type === 'C'
-              ? penCloseNoPreviewDragCurrentForOpenExplicitC(committed, m, releaseSvg)
+              ? penCloseNoPreviewDragCurrentForOpenExplicitC(committed, closeTarget, releaseSvg)
               : releaseSvg;
-          v.commitDraggedCurve(anchor, startSvg, dragClose, pending.ctrlCurve, m);
+          v.commitDraggedCurve(anchor, startSvg, dragClose, pending.ctrlCurve, closeTarget);
         } else {
-          v.penSession.addLinePoint(m.x, m.y);
+          v.penSession.addLinePoint(closeTarget.x, closeTarget.y);
         }
       }
       v.tryFinishPath(true);
@@ -277,7 +292,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
   if (screenDist < MARQUEE_MIN_DRAG_PX) {
     const segs = v.penSession.getSegments();
     const st = penReflectStateAfterCommitted(segs);
-    const mClose = v.pathStartMv();
+    const mClose = v.pathCloseTargetMv();
     if (v.pendingStartNearPathMoveto() && mClose) {
       const dragCurrentClose = v.pendingDragSvg ?? v.pointerSvg ?? startSvg;
       v.commitDraggedCurve(anchor, resolvedEnd, dragCurrentClose, ctrl, mClose, placementDrag);
@@ -294,7 +309,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       v.penSession.addLinePoint(end.x, end.y);
     }
   } else {
-    const mClose = v.pathStartMv();
+    const mClose = v.pathCloseTargetMv();
     if (v.pendingStartNearPathMoveto() && mClose) {
       v.commitDraggedCurve(anchor, resolvedEnd, dragCurrent, ctrl, mClose, placementDrag);
     } else {
@@ -396,7 +411,7 @@ export function flushPenPendingAsCurrentPointerForView(v: PenPendingCommitView):
   if (screenDist < MARQUEE_MIN_DRAG_PX) {
     const segs = v.penSession.getSegments();
     const st = penReflectStateAfterCommitted(segs);
-    const mClose = v.pathStartMv();
+    const mClose = v.pathCloseTargetMv();
     if (v.pendingStartNearPathMoveto() && mClose) {
       const dragCurrentClose = v.pendingDragSvg ?? v.pointerSvg ?? startSvg;
       v.commitDraggedCurve(anchor, resolvedEnd, dragCurrentClose, ctrl, mClose, placementDrag);
@@ -413,7 +428,7 @@ export function flushPenPendingAsCurrentPointerForView(v: PenPendingCommitView):
       v.penSession.addLinePoint(end.x, end.y);
     }
   } else {
-    const mClose = v.pathStartMv();
+    const mClose = v.pathCloseTargetMv();
     if (v.pendingStartNearPathMoveto() && mClose) {
       v.commitDraggedCurve(anchor, resolvedEnd, dragCurrent, ctrl, mClose, placementDrag);
     } else {

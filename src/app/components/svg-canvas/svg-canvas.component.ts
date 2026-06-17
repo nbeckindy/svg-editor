@@ -719,6 +719,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return this.penTool.penCloseTargetHoverOverlay;
   }
 
+  get penOpenPathContinueHoverOverlay(): { cx: number; cy: number } | null {
+    return this.penTool.penOpenPathContinueHoverOverlay;
+  }
+
+  get penContinuationGhostPathD(): string | null {
+    return this.penTool.penContinuationGhostPathD;
+  }
+
   /**
    * While authoring a pen path, node-edit–style anchors and Bézier handles for the current preview
    * `d` (same geometry as {@link penSessionPreviewPathD}). `null` when inactive or not parseable.
@@ -3374,6 +3382,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       const p = this.pendingPenInsertHoverClient;
       this.pendingPenInsertHoverClient = null;
       if (p) {
+        this.penTool.updateIdlePenHoverClient(p.x, p.y);
         this.applyPenInsertHoverCursorFromClient(p.x, p.y);
       }
     });

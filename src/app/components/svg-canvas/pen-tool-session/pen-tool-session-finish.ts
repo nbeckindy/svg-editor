@@ -49,7 +49,7 @@ export function applyPenFinishedPathDocumentEffects(
     finalClosed: string;
     closePath: boolean;
     finishingSegsSnapshot: readonly PenPathSegment[];
-    continuingPathRewrite: { pathId: string; originalD: string } | null;
+    continuingPathRewrite: { pathId: string; originalD: string; stitch: 'appendToExistingTail' | 'prependBeforeExisting'; existingSegments?: readonly PenPathSegment[] } | null;
     findPenOpenPathFinishJoin: (finishingSegs: readonly PenPathSegment[]) => PenOpenPathFinishJoinHit;
     combinePenContinuationSegments: (
       primary: readonly PenPathSegment[],
@@ -72,8 +72,21 @@ export function applyPenFinishedPathDocumentEffects(
 
   const cont = continuingPathRewrite;
   if (cont) {
-    ports.svgManipulation.updatePathData(cont.pathId, finalClosed);
-    const cmd = new EditPathNodesCommand(ports.svgManipulation, cont.pathId, cont.originalD, finalClosed, true);
+    let mergedD = finalClosed;
+    if (cont.stitch === 'prependBeforeExisting' && cont.existingSegments) {
+      if (closePath) {
+        mergedD = finalClosed;
+      } else {
+        const mergedSegments = combinePenContinuationSegments(finishingSegsSnapshot, cont.existingSegments);
+        if (!mergedSegments) {
+          clearDrawingState();
+          return;
+        }
+        mergedD = penPathSegmentsToD(mergedSegments);
+      }
+    }
+    ports.svgManipulation.updatePathData(cont.pathId, mergedD);
+    const cmd = new EditPathNodesCommand(ports.svgManipulation, cont.pathId, cont.originalD, mergedD, true);
     ports.editorHistory.pushAndExecute(cmd);
     const svgSel = ports.svgManipulation.getSVGInstance();
     const mergedEl = svgSel?.findOne(`#${cont.pathId}`) as SvgJsElement | undefined;

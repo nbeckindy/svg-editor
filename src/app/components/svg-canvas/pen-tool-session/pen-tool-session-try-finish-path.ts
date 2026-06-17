@@ -1,19 +1,14 @@
-import {
-  PenSession,
-  penPathSegmentsAreValid,
-  penRewriteLastSegmentEndToMatchMoveto,
-  type PenPathSegment
-} from '../../../models/pen-path';
+import { PenSession, penPathSegmentsAreValid, penPathSegmentsToD, penRewriteLastSegmentEndToMatchMoveto, type PenPathSegment } from '../../../models/pen-path';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
 import { applyPenFinishedPathDocumentEffects } from './pen-tool-session-finish';
 import { PEN_CLOSE_MOVETO_REWRITE_MAX_SQ } from './pen-tool-session-constants';
-import { combinePenContinuationSegments, findPenOpenPathFinishJoin } from './pen-tool-session-path-continuation';
+import { combinePenContinuationSegments, combinePrependContinuationForClose, findPenOpenPathFinishJoin, isPrependContinuationCloseAtFrozenTail, type PenContinuingPathRewrite } from './pen-tool-session-path-continuation';
 
 export interface TryFinishPenPathView {
   readonly ports: PenToolSessionPorts;
   readonly penSession: PenSession;
 
-  get continuingPathRewrite(): { pathId: string; originalD: string } | null;
+  get continuingPathRewrite(): PenContinuingPathRewrite | null;
 
   finishOutgoingHandleDrag(): void;
   incompleteFirstSegmentFromEmpty(): boolean;
@@ -22,6 +17,7 @@ export interface TryFinishPenPathView {
   flushPenPendingAsCurrentPointer(): void;
   purgeProvisionalPenSegmentHistory(): void;
   pathStartMv(): { x: number; y: number } | null;
+  pathCloseTargetMv(): { x: number; y: number } | null;
   clearPenFinishFeedback(): void;
   clearDrawingState(): void;
 }
@@ -53,11 +49,27 @@ export function tryFinishPenPathForView(v: TryFinishPenPathView, closePath: bool
   v.flushPenPendingAsCurrentPointer();
   v.purgeProvisionalPenSegmentHistory();
 
-  maybeRewritePenLastSegmentEndToMatchMoveto(v.penSession, closePath, () => v.pathStartMv(), PEN_CLOSE_MOVETO_REWRITE_MAX_SQ);
+  const cont = v.continuingPathRewrite;
+  const prependCloseAtFrozenTail = closePath && isPrependContinuationCloseAtFrozenTail(cont);
+
+  if (!prependCloseAtFrozenTail) {
+    maybeRewritePenLastSegmentEndToMatchMoveto(
+      v.penSession,
+      closePath,
+      () => v.pathCloseTargetMv(),
+      PEN_CLOSE_MOVETO_REWRITE_MAX_SQ
+    );
+  }
 
   const finishingSegsSnapshot = [...v.penSession.getSegments()] as PenPathSegment[];
 
-  const d = v.penSession.finishPath();
+  let d: string | null;
+  if (prependCloseAtFrozenTail && cont?.existingSegments) {
+    const merged = combinePrependContinuationForClose(finishingSegsSnapshot, cont.existingSegments);
+    d = merged ? penPathSegmentsToD(merged) : null;
+  } else {
+    d = v.penSession.finishPath();
+  }
   if (!d) {
     v.showPenFinishFeedback();
     return;

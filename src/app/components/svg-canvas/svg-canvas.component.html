@@ -410,12 +410,35 @@
               stroke-width="1.5"
               vector-effect="non-scaling-stroke"/>
           }
+          @if (editorChrome.penContinuationGhostPathD; as ghostD) {
+            <path
+              class="creation-ghost-shape"
+              data-testid="canvas-pen-continuation-ghost"
+              [attr.d]="ghostD"
+              fill="none"
+              [attr.stroke]="drawingDefaults.stroke()"
+              [attr.stroke-width]="drawingDefaults.strokeWidth()"
+              vector-effect="non-scaling-stroke"/>
+          }
           @if (editorChrome.penCloseTargetHoverOverlay; as closeRing) {
             <circle
               class="creation-ghost-shape pen-close-target-ring"
               data-testid="canvas-pen-close-hover"
               [attr.cx]="closeRing.cx"
               [attr.cy]="closeRing.cy"
+              r="8"
+              fill="none"
+              stroke="#00c853"
+              stroke-width="2"
+              stroke-dasharray="4 3"
+              vector-effect="non-scaling-stroke"/>
+          }
+          @if (editorChrome.penOpenPathContinueHoverOverlay; as continueRing) {
+            <circle
+              class="creation-ghost-shape pen-continue-target-ring"
+              data-testid="canvas-pen-continue-hover"
+              [attr.cx]="continueRing.cx"
+              [attr.cy]="continueRing.cy"
               r="8"
               fill="none"
               stroke="#00c853"

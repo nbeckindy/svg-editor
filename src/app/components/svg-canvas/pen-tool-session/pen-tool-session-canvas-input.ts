@@ -14,6 +14,7 @@ import {
   type PenInsertOnPathDragMutable
 } from './pen-tool-session-insert-on-path';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
+import type { PenContinuingPathRewrite } from './pen-tool-session-path-continuation';
 import type { PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
 
 /**
@@ -46,8 +47,8 @@ export interface PenCanvasInputView {
   get pointerSvg(): { x: number; y: number } | null;
   set pointerSvg(v: { x: number; y: number } | null);
 
-  get penContinuingPathRewrite(): { pathId: string; originalD: string } | null;
-  set penContinuingPathRewrite(v: { pathId: string; originalD: string } | null);
+  get penContinuingPathRewrite(): PenContinuingPathRewrite | null;
+  set penContinuingPathRewrite(v: PenContinuingPathRewrite | null);
 
   get awaitingColocatedEndpoint(): boolean;
   get colocatedDraft(): PenFirstAnchorP3Draft | null;
