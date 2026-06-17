@@ -23,7 +23,7 @@ import type { SvgExportImagePolicyResult } from '../utils/svg-export-image-href-
 import type { GradientFillEditorSvgPort } from '../history/gradient-fill-editor-svg.port';
 import type { LayersPanelSvgPort } from '../history/layers-panel-svg.port';
 import type { PropertiesPanelSvgPort } from '../history/properties-panel-svg.port';
-import type { EditorShapeLifecycleSvgPort, PathDataEditorSvgPort } from '../history/editor-shape-lifecycle-svg.port';
+import type { EditorShapeLifecycleSvgPort, PathDataEditorSvgPort, PathNodeHandleLinkSvgPort } from '../history/editor-shape-lifecycle-svg.port';
 import type { ResizeHandle } from '../utils/selection-resize';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 
@@ -46,7 +46,8 @@ export class SvgManipulationService
     LayersPanelSvgPort,
     PropertiesPanelSvgPort,
     EditorShapeLifecycleSvgPort,
-    PathDataEditorSvgPort
+    PathDataEditorSvgPort,
+    PathNodeHandleLinkSvgPort
 {
   private readonly doc = inject(SvgEditorDocumentService);
   private readonly gradients = inject(SvgGradientDefsService);
@@ -144,6 +145,14 @@ export class SvgManipulationService
 
   updatePathData(pathId: string, d: string): void {
     this.shapes.updatePathData(pathId, d);
+  }
+
+  getPathNodeHandleLinkRaw(pathId: string): string | null {
+    return this.shapes.getPathNodeHandleLinkRaw(pathId);
+  }
+
+  setPathNodeHandleLinkRaw(pathId: string, value: string | null): void {
+    this.shapes.setPathNodeHandleLinkRaw(pathId, value);
   }
 
   getTextContent(textId: string): string | null {

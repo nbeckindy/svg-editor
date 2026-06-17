@@ -69,6 +69,9 @@ export interface SvgShapeContentPort {
   updateOpacity(shapeId: string, opacity: number): void;
   updatePathData(pathId: string, d: string): void;
 
+  getPathNodeHandleLinkRaw(pathId: string): string | null;
+  setPathNodeHandleLinkRaw(pathId: string, value: string | null): void;
+
   getTextContent(textId: string): string | null;
   updateTextContent(textId: string, text: string): void;
   updateTextFontFamily(textId: string, fontFamily: string): void;

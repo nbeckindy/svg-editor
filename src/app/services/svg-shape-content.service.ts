@@ -21,6 +21,7 @@ import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
 import { CONTENT_SHAPE_SELECTOR, EDITOR_CONTENT_GROUP_ID, SVG_NS } from './svg-editor-stage.constants';
+import { EDITOR_PATH_NODE_HANDLE_LINK_ATTR } from '../models/path-node-handle-link';
 
 const URL_REF_RE = /url\(\s*(['"]?)#([^)'"\\s]+)\1\s*\)/g;
 
@@ -600,6 +601,25 @@ export class SvgShapeContentService implements SvgShapeContentPort {
     const shape = this.doc.getSVGInstance()!.findOne(`#${pathId}`) as SvgJsElement | undefined;
     if (!shape || shape.type !== 'path') return;
     shape.attr('d', d);
+    this.doc.bumpDocumentRevision();
+  }
+
+  getPathNodeHandleLinkRaw(pathId: string): string | null {
+    if (!this.doc.getSVGInstance()) return null;
+    const shape = this.doc.getSVGInstance()!.findOne(`#${pathId}`) as SvgJsElement | undefined;
+    if (!shape || shape.type !== 'path' || !shape.node) return null;
+    return shape.node.getAttribute(EDITOR_PATH_NODE_HANDLE_LINK_ATTR);
+  }
+
+  setPathNodeHandleLinkRaw(pathId: string, value: string | null): void {
+    if (!this.doc.getSVGInstance()) return;
+    const shape = this.doc.getSVGInstance()!.findOne(`#${pathId}`) as SvgJsElement | undefined;
+    if (!shape || shape.type !== 'path' || !shape.node) return;
+    if (value === null || value === '') {
+      shape.node.removeAttribute(EDITOR_PATH_NODE_HANDLE_LINK_ATTR);
+    } else {
+      shape.attr(EDITOR_PATH_NODE_HANDLE_LINK_ATTR, value);
+    }
     this.doc.bumpDocumentRevision();
   }
 

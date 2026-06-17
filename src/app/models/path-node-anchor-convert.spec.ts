@@ -5,6 +5,7 @@ import {
   collectPathNodeAnchorsForPathNodeConversion,
   convertPathAnchorAtMoveSegmentIndexToCorner,
   convertPathAnchorAtMoveSegmentIndexToMirrorCubic,
+  getIndependentHandlesJointUiState,
   getMirrorCubicJointUiState,
   isPathNodeCornerAnchorAlreadyApplied,
   PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK,
@@ -366,5 +367,34 @@ describe('getMirrorCubicJointUiState', () => {
       { type: 'L', x: 10, y: 0 }
     ];
     expect(getMirrorCubicJointUiState(segments, 0).kind).toBe('needs-two-lines');
+  });
+});
+
+describe('getIndependentHandlesJointUiState', () => {
+  it('applicable on C–C with both joint handles off the vertex', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 0, x2: 4, y2: 0, x: 5, y: 0 },
+      { type: 'C', x1: 6, y1: 0, x2: 9, y2: 0, x: 10, y: 0 }
+    ];
+    expect(getIndependentHandlesJointUiState(segments, 1).kind).toBe('applicable');
+  });
+
+  it('not applicable on L–L (mirror cubic promotion needed first)', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 5, y: 0 },
+      { type: 'L', x: 10, y: 0 }
+    ];
+    expect(getIndependentHandlesJointUiState(segments, 1).kind).toBe('needs-cubic-joint');
+  });
+
+  it('corner-like when handles are collapsed on the vertex', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 0, x2: 5, y2: 0, x: 5, y: 0 },
+      { type: 'C', x1: 5, y1: 0, x2: 9, y2: 0, x: 10, y: 0 }
+    ];
+    expect(getIndependentHandlesJointUiState(segments, 1).kind).toBe('corner-like');
   });
 });

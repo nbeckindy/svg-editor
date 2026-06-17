@@ -3,33 +3,7 @@
     <h3>Properties</h3>
   </div>
 
-  @if (showPathNodeAnchorTools()) {
-    <div
-      class="property-group path-node-anchor-group"
-      role="group"
-      aria-label="Path node anchor tools"
-      data-testid="properties-path-node-anchor-tools">
-      <span class="property-label">Path nodes</span>
-      <div class="path-node-anchor-buttons">
-        <button
-          type="button"
-          class="path-node-anchor-btn"
-          data-testid="Corner anchor"
-          [disabled]="pathNodeCornerDisabled()"
-          (click)="onPathNodeCornerAnchorClick()">
-          Corner anchor
-        </button>
-        <button
-          type="button"
-          class="path-node-anchor-btn"
-          data-testid="Mirror cubic"
-          [disabled]="pathNodeMirrorDisabled()"
-          (click)="onPathNodeMirrorCubicClick()">
-          Mirror cubic
-        </button>
-      </div>
-    </div>
-  }
+  <app-path-node-anchor-tools />
 
   <div class="paint-segment">
     <p class="paint-target-indicator">{{ paintTargetLabel() }}</p>

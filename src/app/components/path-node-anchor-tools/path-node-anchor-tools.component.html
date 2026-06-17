@@ -1,0 +1,44 @@
+@if (visible()) {
+  <div
+    class="property-group path-node-anchor-group"
+    role="radiogroup"
+    aria-label="Path node anchor mode"
+    data-testid="properties-path-node-anchor-tools">
+    <span class="property-label">Path nodes</span>
+    <div class="path-node-anchor-buttons">
+      <button
+        type="button"
+        class="path-node-anchor-btn"
+        role="radio"
+        data-testid="Corner anchor"
+        [disabled]="pathNodeCornerDisabled()"
+        [class.active]="pathNodeBridgeChrome().anchorMode === 'corner'"
+        [attr.aria-checked]="pathNodeBridgeChrome().anchorMode === 'corner'"
+        (click)="onPathNodeCornerAnchorClick()">
+        Corner anchor
+      </button>
+      <button
+        type="button"
+        class="path-node-anchor-btn"
+        role="radio"
+        data-testid="Mirror cubic"
+        [disabled]="pathNodeMirrorDisabled()"
+        [class.active]="pathNodeBridgeChrome().anchorMode === 'mirror'"
+        [attr.aria-checked]="pathNodeBridgeChrome().anchorMode === 'mirror'"
+        (click)="onPathNodeMirrorCubicClick()">
+        Mirror cubic
+      </button>
+      <button
+        type="button"
+        class="path-node-anchor-btn"
+        role="radio"
+        data-testid="Independent handles"
+        [disabled]="pathNodeIndependentDisabled()"
+        [class.active]="pathNodeBridgeChrome().anchorMode === 'independent'"
+        [attr.aria-checked]="pathNodeBridgeChrome().anchorMode === 'independent'"
+        (click)="onPathNodeIndependentHandlesClick()">
+        Independent handles
+      </button>
+    </div>
+  </div>
+}

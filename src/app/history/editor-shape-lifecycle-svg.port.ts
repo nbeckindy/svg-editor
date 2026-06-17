@@ -29,3 +29,9 @@ export interface EditorShapeLifecycleSvgPort {
 export interface PathDataEditorSvgPort {
   updatePathData(pathId: string, d: string): void;
 }
+
+/** Svg seam for {@link SetPathNodeHandleLinkCommand} — `data-editor-path-node-handle-link` on `<path>`. */
+export interface PathNodeHandleLinkSvgPort {
+  getPathNodeHandleLinkRaw(pathId: string): string | null;
+  setPathNodeHandleLinkRaw(pathId: string, value: string | null): void;
+}

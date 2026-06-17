@@ -132,3 +132,29 @@ describe('applySymmetricCubicControlDragInPlace', () => {
     expect(applySymmetricCubicControlDragInPlace(segments, 1, 'x2y2', 3, 3)).toBe(false);
   });
 });
+
+describe('independent cubic handle drag (node-edit policy)', () => {
+  it('plain incoming P2 move leaves outgoing P1 unchanged; symmetric updates it', () => {
+    const base: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 0, x2: 2, y2: 0, x: 10, y: 0 },
+      { type: 'C', x1: 8, y1: 0, x2: 9, y2: 0, x: 10, y: 10 }
+    ];
+    const sym = base.map((s) => ({ ...s })) as PathSegment[];
+    applySymmetricCubicControlDragInPlace(sym, 1, 'x2y2', 5, 6);
+    const symC2 = sym[2];
+    const x1AfterSym = symC2.type === 'C' ? symC2.x1 : NaN;
+
+    const ind = base.map((s) => ({ ...s })) as PathSegment[];
+    const indC1 = ind[1];
+    expect(indC1.type === 'C').toBe(true);
+    if (indC1.type === 'C') {
+      indC1.x2 = 5;
+      indC1.y2 = 6;
+    }
+    const indC2 = ind[2];
+    const x1AfterInd = indC2.type === 'C' ? indC2.x1 : NaN;
+    expect(x1AfterInd).toBe(8);
+    expect(x1AfterSym).not.toBe(8);
+  });
+});

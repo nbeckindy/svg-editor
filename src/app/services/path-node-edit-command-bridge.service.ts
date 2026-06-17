@@ -1,5 +1,8 @@
 import { Injectable, signal } from '@angular/core';
 
+/** Mutually exclusive anchor modes at the selected path node (node-edit chrome). */
+export type PathNodeAnchorMode = 'corner' | 'mirror' | 'independent' | 'none';
+
 /** Snapshot for properties panel + path-node chrome (driven from svg-canvas). */
 export interface PathNodeEditBridgeChrome {
   toolIsNodeEdit: boolean;
@@ -7,6 +10,9 @@ export interface PathNodeEditBridgeChrome {
   pathLocked: boolean;
   cornerEnabled: boolean;
   mirrorCubicEnabled: boolean;
+  independentHandlesEnabled: boolean;
+  /** Which of the three anchor toggles is selected at this vertex. */
+  anchorMode: PathNodeAnchorMode;
 }
 
 const DEFAULT_CHROME: PathNodeEditBridgeChrome = {
@@ -14,7 +20,9 @@ const DEFAULT_CHROME: PathNodeEditBridgeChrome = {
   hasSelectedPathNode: false,
   pathLocked: false,
   cornerEnabled: false,
-  mirrorCubicEnabled: false
+  mirrorCubicEnabled: false,
+  independentHandlesEnabled: false,
+  anchorMode: 'none'
 };
 
 export type PathNodeAnchorCommandResult = { ok: true } | { ok: false };
@@ -22,6 +30,7 @@ export type PathNodeAnchorCommandResult = { ok: true } | { ok: false };
 export interface PathNodeEditCommandBridgeHandlers {
   convertSelectedAnchorToCorner(): PathNodeAnchorCommandResult;
   convertSelectedAnchorToMirrorCubic(): PathNodeAnchorCommandResult;
+  convertSelectedAnchorToIndependentHandles(): PathNodeAnchorCommandResult;
 }
 
 /**
@@ -51,5 +60,9 @@ export class PathNodeEditCommandBridgeService {
 
   convertSelectedAnchorToMirrorCubic(): PathNodeAnchorCommandResult {
     return this.handlers?.convertSelectedAnchorToMirrorCubic() ?? { ok: false };
+  }
+
+  convertSelectedAnchorToIndependentHandles(): PathNodeAnchorCommandResult {
+    return this.handlers?.convertSelectedAnchorToIndependentHandles() ?? { ok: false };
   }
 }

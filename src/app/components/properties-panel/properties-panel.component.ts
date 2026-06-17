@@ -12,11 +12,18 @@ import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaul
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
-import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-command-bridge.service';
+import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-node-anchor-tools.component';
 
 @Component({
   selector: 'app-properties-panel',
-  imports: [CommonModule, FormsModule, ColorPickerComponent, DocumentSettingsComponent, GradientFillEditorComponent],
+  imports: [
+    CommonModule,
+    FormsModule,
+    ColorPickerComponent,
+    DocumentSettingsComponent,
+    GradientFillEditorComponent,
+    PathNodeAnchorToolsComponent
+  ],
   templateUrl: './properties-panel.component.html',
   styleUrl: './properties-panel.component.css'
 })
@@ -38,9 +45,6 @@ export class PropertiesPanelComponent {
   private chromeApply = inject(ChromeEditorApplyService);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
   private readonly svgManipulation = inject(SvgManipulationService);
-  private readonly pathNodeEditBridge = inject(PathNodeEditCommandBridgeService);
-
-  readonly pathNodeBridgeChrome = this.pathNodeEditBridge.chrome;
   readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
   readonly selectionTransformReadout = this.transformReadoutSvc.selectionTransformReadout;
   readonly selectionBBoxFieldModel = this.transformReadoutSvc.selectionBBoxFieldModel;
@@ -65,20 +69,6 @@ export class PropertiesPanelComponent {
   });
   /** Text tool active: typography controls edit placement defaults when nothing is selected. */
   readonly textToolPlacementMode = computed(() => this.editorTool.currentTool() === 'text');
-  /** Node-edit path anchor tools (driven by svg-canvas via {@link PathNodeEditCommandBridgeService}). */
-  readonly showPathNodeAnchorTools = computed(
-    () =>
-      this.editorTool.currentTool() === 'node-edit-selector' &&
-      this.pathNodeBridgeChrome().hasSelectedPathNode
-  );
-  readonly pathNodeCornerDisabled = computed(() => {
-    const c = this.pathNodeBridgeChrome();
-    return c.pathLocked || !c.cornerEnabled;
-  });
-  readonly pathNodeMirrorDisabled = computed(() => {
-    const c = this.pathNodeBridgeChrome();
-    return c.pathLocked || !c.mirrorCubicEnabled;
-  });
   readonly paintTargetLabel = computed(() => {
     if (this.editorTool.currentTool() === 'eyedropper') {
       return 'Eyedropper: click = fill, Shift+click = stroke';
@@ -88,14 +78,6 @@ export class PropertiesPanelComponent {
 
   onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event): void {
     this.chromeApply.onSelectionBBoxFieldCommit(field, event);
-  }
-
-  onPathNodeCornerAnchorClick(): void {
-    this.pathNodeEditBridge.convertSelectedAnchorToCorner();
-  }
-
-  onPathNodeMirrorCubicClick(): void {
-    this.pathNodeEditBridge.convertSelectedAnchorToMirrorCubic();
   }
 
   readonly alignShortcutLabels = {

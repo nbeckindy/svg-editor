@@ -440,6 +440,48 @@ export function getMirrorCubicJointUiState(
   return { kind: 'needs-two-lines' };
 }
 
+export type PathNodeIndependentHandlesUiState =
+  | { kind: 'applicable' }
+  | { kind: 'corner-like' }
+  | { kind: 'needs-cubic-joint' }
+  | { kind: 'rejects-quadratic' }
+  | { kind: 'invalid' };
+
+/**
+ * Eligibility for **Independent handles** (unlink opposite-handle drag at `V`).
+ * Requires a **C–C** joint with both joint-side controls off the vertex — not tied to mirror-cubic
+ * “applicable” (L–L promotion) or corner collapse.
+ */
+export function getIndependentHandlesJointUiState(
+  segments: readonly PathSegment[],
+  moveSegmentIndex: number
+): PathNodeIndependentHandlesUiState {
+  const legs = resolvePathNodeConversionLegs(segments, moveSegmentIndex);
+  if (!legs) return { kind: 'invalid' };
+  if (legs.incoming === null || legs.outgoing === null) {
+    return { kind: 'needs-cubic-joint' };
+  }
+  const inc = segments[legs.incoming];
+  const out = segments[legs.outgoing];
+  if (!inc || !out) return { kind: 'invalid' };
+  if (segmentAtJointUnsupportedForNodeAnchorOps(inc) || segmentAtJointUnsupportedForNodeAnchorOps(out)) {
+    return { kind: 'rejects-quadratic' };
+  }
+  if (inc.type !== 'C' || out.type !== 'C') {
+    return { kind: 'needs-cubic-joint' };
+  }
+  if (isPathNodeCornerAnchorAlreadyApplied(segments, moveSegmentIndex)) {
+    return { kind: 'corner-like' };
+  }
+  const V = legs.vertex;
+  const incOff = penSvgDistanceSq({ x: inc.x2, y: inc.y2 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
+  const outOff = penSvgDistanceSq({ x: out.x1, y: out.y1 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
+  if (incOff && outOff) {
+    return { kind: 'applicable' };
+  }
+  return { kind: 'needs-cubic-joint' };
+}
+
 /**
  * When mirror promotes `L`→`C`, the non-`V` endpoint of that leg should keep a **corner** look:
  * collapse the far control onto that anchor (`x1` at start of incoming, `x2` at end of outgoing).

@@ -19,7 +19,7 @@ import type { GradientFillSnapshotSvgPort } from '../gradient-fill-editor-svg.po
 import type { LayerReorderGroupSvgPort } from '../layers-panel-svg.port';
 import type { AlignDistributeSvgPort } from '../align-distribute-svg.port';
 import type { PropertiesPanelTextSvgPort, BakePresentationSvgPort } from '../properties-panel-svg.port';
-import type { EditorShapeLifecycleSvgPort, PathDataEditorSvgPort } from '../editor-shape-lifecycle-svg.port';
+import type { EditorShapeLifecycleSvgPort, PathDataEditorSvgPort, PathNodeHandleLinkSvgPort } from '../editor-shape-lifecycle-svg.port';
 
 export class FillColorCommand implements CoalesceableCommand {
   readonly description: string;
@@ -1384,6 +1384,37 @@ export class EditPathNodesCommand implements EditorCommand {
 
   undo(): void {
     this.svc.updatePathData(this.pathId, this.oldD);
+  }
+}
+
+/**
+ * Undoable edit to `data-editor-path-node-handle-link` on a `<path>` (independent vs linked cubic drags).
+ */
+export class SetPathNodeHandleLinkCommand implements EditorCommand {
+  readonly description = 'Path node handle link';
+
+  private appliedAlready: boolean;
+
+  constructor(
+    private readonly svc: PathNodeHandleLinkSvgPort,
+    private readonly pathId: string,
+    private readonly oldRaw: string | null,
+    private readonly newRaw: string | null,
+    appliedAlready = false
+  ) {
+    this.appliedAlready = appliedAlready;
+  }
+
+  execute(): void {
+    if (this.appliedAlready) {
+      this.appliedAlready = false;
+      return;
+    }
+    this.svc.setPathNodeHandleLinkRaw(this.pathId, this.newRaw);
+  }
+
+  undo(): void {
+    this.svc.setPathNodeHandleLinkRaw(this.pathId, this.oldRaw);
   }
 }
 

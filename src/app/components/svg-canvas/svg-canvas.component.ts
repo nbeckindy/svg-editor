@@ -37,6 +37,7 @@ import {
   AddShapeCommand,
   AddPathCommand,
   EditPathNodesCommand,
+  SetPathNodeHandleLinkCommand,
   PasteCommand,
   DuplicateCommand,
   TextContentCommand,
@@ -63,12 +64,19 @@ import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment
 import {
   convertPathAnchorAtMoveSegmentIndexToCorner,
   convertPathAnchorAtMoveSegmentIndexToMirrorCubic,
+  getIndependentHandlesJointUiState,
   getMirrorCubicJointUiState,
   isPathNodeCornerAnchorAlreadyApplied,
   PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK,
   resolvePathNodeConversionLegs
 } from '../../models/path-node-anchor-convert';
 import { applySymmetricCubicControlDragInPlace } from '../../models/path-node-cubic-handle-mirror';
+import {
+  parsePathNodeHandleLinkMap,
+  remapPathNodeHandleLinkMapByStableAnchors,
+  serializePathNodeHandleLinkMap,
+  type PathNodeHandleLinkMap
+} from '../../models/path-node-handle-link';
 import { findPenPathInsertHit } from '../../models/path-pen-insert';
 import { ClipboardService } from '../../services/clipboard.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
@@ -141,6 +149,8 @@ interface PathNodeControlHandle {
   controlY: number;
   segmentIndex: number;
   controlPoint: 'x1y1' | 'x2y2';
+  /** Move-segment index of the anchor vertex this handle belongs to (node-edit selection key). */
+  vertexMoveSegmentIndex: number;
 }
 
 interface PathNodeEditPathState {
@@ -1715,7 +1725,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       convertSelectedAnchorToCorner: () =>
         this.tryApplyPathNodeAnchorCornerFromBridge() ? { ok: true } : { ok: false },
       convertSelectedAnchorToMirrorCubic: () =>
-        this.tryApplyPathNodeMirrorCubicFromBridge() ? { ok: true } : { ok: false }
+        this.tryApplyPathNodeMirrorCubicFromBridge() ? { ok: true } : { ok: false },
+      convertSelectedAnchorToIndependentHandles: () =>
+        this.tryApplyPathNodeIndependentHandlesFromBridge() ? { ok: true } : { ok: false }
     });
     effect(() => {
       void this.editorTool.currentTool();
@@ -2588,6 +2600,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     const cmd = new EditPathNodesCommand(this.svgManipulation, targetPathState.pathId, oldD, newD, true);
     this.editorHistory.pushAndExecute(cmd);
 
+    const remappedLinks = remapPathNodeHandleLinkMapByStableAnchors(
+      parsed,
+      nextSegments,
+      parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(targetPathState.pathId))
+    );
+    this.pushPathNodeHandleLinkMapIfChanged(targetPathState.pathId, remappedLinks);
+
     const refreshed = this.buildPathNodeEditState(targetPathState.pathId);
     if (!refreshed.state) {
       this.exitPathNodeEditMode();
@@ -2645,7 +2664,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
         hasSelectedPathNode: false,
         pathLocked: false,
         cornerEnabled: false,
-        mirrorCubicEnabled: false
+        mirrorCubicEnabled: false,
+        independentHandlesEnabled: false,
+        anchorMode: 'none'
       });
       return;
     }
@@ -2661,7 +2682,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
         hasSelectedPathNode: true,
         pathLocked: locked,
         cornerEnabled: false,
-        mirrorCubicEnabled: false
+        mirrorCubicEnabled: false,
+        independentHandlesEnabled: false,
+        anchorMode: 'none'
       });
       return;
     }
@@ -2683,14 +2706,100 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       cornerEnabled = false;
     }
     const mirrorState = getMirrorCubicJointUiState(parsed, mi);
-    const mirrorCubicEnabled = !locked && mirrorState.kind === 'applicable';
+    const independentState = getIndependentHandlesJointUiState(parsed, mi);
+    const linkMap = parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId));
+    const independentAtVertex = linkMap.get(mi) === 'independent';
+    const cornerAtVertex = isPathNodeCornerAnchorAlreadyApplied(parsed, mi);
+
+    let anchorMode: 'corner' | 'mirror' | 'independent' | 'none' = 'none';
+    if (cornerAtVertex) {
+      anchorMode = 'corner';
+    } else if (independentAtVertex) {
+      anchorMode = 'independent';
+    } else if (mirrorState.kind === 'already-cubic-noop') {
+      anchorMode = 'mirror';
+    }
+
+    const mirrorCubicEnabled =
+      !locked &&
+      (mirrorState.kind === 'applicable' || (independentAtVertex && independentState.kind === 'applicable'));
+    const independentHandlesEnabled =
+      !locked && independentState.kind === 'applicable' && !independentAtVertex;
+
     this.pathNodeEditBridge.setChrome({
       toolIsNodeEdit: true,
       hasSelectedPathNode: true,
       pathLocked: locked,
       cornerEnabled: !!cornerEnabled,
-      mirrorCubicEnabled
+      mirrorCubicEnabled,
+      independentHandlesEnabled,
+      anchorMode
     });
+  }
+
+  private pushPathNodeHandleLinkMapIfChanged(pathId: string, nextMap: PathNodeHandleLinkMap): void {
+    const oldRaw = this.svgManipulation.getPathNodeHandleLinkRaw(pathId);
+    const newSer = serializePathNodeHandleLinkMap(nextMap);
+    const normOld = oldRaw?.trim() || null;
+    const normNew = newSer?.trim() || null;
+    if (normOld === normNew) return;
+    this.svgManipulation.setPathNodeHandleLinkRaw(pathId, normNew);
+    this.editorHistory.pushAndExecute(
+      new SetPathNodeHandleLinkCommand(this.svgManipulation, pathId, normOld, normNew, true)
+    );
+  }
+
+  private clearIndependentHandleLinkForMove(pathId: string, moveSegmentIndex: number): void {
+    const map = parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId));
+    if (!map.delete(moveSegmentIndex)) return;
+    this.pushPathNodeHandleLinkMapIfChanged(pathId, map);
+  }
+
+  private tryApplyPathNodeIndependentHandlesFromBridge(): boolean {
+    if (!this.pathNodeEditState || !this.selectedPathNode) {
+      this.showPathNodeEditFeedback('Select a path node first.');
+      return false;
+    }
+    const pathId = this.selectedPathNode.pathId;
+    if (this.svgManipulation.isElementOrAncestorLocked(pathId)) {
+      this.showPathNodeEditFeedback('That path is locked.');
+      return false;
+    }
+    const mi = this.selectedPathNode.moveSegmentIndex;
+    const svg = this.svgManipulation.getSVGInstance();
+    const pathEl = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
+    if (!pathEl) return false;
+    const d = pathEl.getAttribute('d') ?? '';
+    const parsed = parsePathDForNodeEditing(d);
+    if (!parsed) {
+      this.showPathNodeEditFeedback('Unable to read that path.');
+      return false;
+    }
+    const linkMap = parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId));
+    if (linkMap.get(mi) === 'independent') {
+      this.clearPathNodeEditFeedback();
+      this.syncPathNodeEditBridgeChrome();
+      return true;
+    }
+    const state = getIndependentHandlesJointUiState(parsed, mi);
+    if (state.kind !== 'applicable') {
+      const msg =
+        state.kind === 'corner-like'
+          ? 'Independent handles are not available on a corner anchor.'
+          : state.kind === 'rejects-quadratic'
+            ? PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK
+            : state.kind === 'needs-cubic-joint'
+              ? 'Independent handles need two cubic segments meeting at this node.'
+              : 'Independent handles are not available at this node.';
+      this.showPathNodeEditFeedback(msg);
+      return false;
+    }
+    linkMap.set(mi, 'independent');
+    this.pushPathNodeHandleLinkMapIfChanged(pathId, linkMap);
+    this.clearPathNodeEditFeedback();
+    this.syncPathNodeEditBridgeChrome();
+    this.cdr.markForCheck();
+    return true;
   }
 
   private tryApplyPathNodeAnchorCornerFromBridge(): boolean {
@@ -2722,6 +2831,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       }
       return false;
     }
+
+    this.clearIndependentHandleLinkForMove(pathId, moveIdx);
 
     const newD = pathSegmentsToD(outcome.segments);
     if (newD === oldD) {
@@ -2781,6 +2892,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     }
 
     const moveIdx = this.selectedPathNode.moveSegmentIndex;
+    const linkMap = parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId));
+    if (linkMap.get(moveIdx) === 'independent') {
+      this.clearIndependentHandleLinkForMove(pathId, moveIdx);
+      this.clearPathNodeEditFeedback();
+      this.syncPathNodeEditBridgeChrome();
+      this.cdr.markForCheck();
+      return true;
+    }
+
     const joint = getMirrorCubicJointUiState(parsed, moveIdx);
     if (joint.kind === 'already-cubic-noop') {
       this.clearPathNodeEditFeedback();
@@ -2805,6 +2925,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       }
       return false;
     }
+
+    this.clearIndependentHandleLinkForMove(pathId, moveIdx);
 
     const newD = pathSegmentsToD(outcome.segments);
     if (newD === oldD) {
@@ -2992,6 +3114,19 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       return;
     }
     if (segment.type !== 'C') return;
+    const linkMap = parsePathNodeHandleLinkMap(
+      pathId ? this.svgManipulation.getPathNodeHandleLinkRaw(pathId) : null
+    );
+    if (linkMap.get(handle.vertexMoveSegmentIndex) === 'independent') {
+      if (handle.controlPoint === 'x1y1') {
+        segment.x1 = x;
+        segment.y1 = y;
+      } else {
+        segment.x2 = x;
+        segment.y2 = y;
+      }
+      return;
+    }
     applySymmetricCubicControlDragInPlace(segments, handle.segmentIndex, handle.controlPoint, x, y);
   }
 
@@ -3063,6 +3198,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     this.svgManipulation.updatePathData(pathId, newD);
     const cmd = new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true);
     this.editorHistory.pushAndExecute(cmd);
+
+    const oldParsed = this.parsePathDataForNodeEditing(oldD);
+    const newParsed = this.parsePathDataForNodeEditing(newD);
+    if (oldParsed && newParsed) {
+      const remappedLinks = remapPathNodeHandleLinkMapByStableAnchors(
+        oldParsed,
+        newParsed,
+        parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId))
+      );
+      this.pushPathNodeHandleLinkMapIfChanged(pathId, remappedLinks);
+    }
 
     const el = svg?.findOne(`#${pathId}`) as SVGElement | undefined;
     if (el) {
@@ -3689,7 +3835,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
             controlX: segment.x1,
             controlY: segment.y1,
             segmentIndex,
-            controlPoint: 'x1y1'
+            controlPoint: 'x1y1',
+            vertexMoveSegmentIndex: current.moveSegmentIndex
           });
         }
         handles.push({
@@ -3698,7 +3845,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
           controlX: segment.x2,
           controlY: segment.y2,
           segmentIndex,
-          controlPoint: 'x2y2'
+          controlPoint: 'x2y2',
+          vertexMoveSegmentIndex: segmentIndex
         });
         current = { x: segment.x, y: segment.y, segmentIndex, moveSegmentIndex: segmentIndex };
         continue;
@@ -3711,7 +3859,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
             controlX: segment.x1,
             controlY: segment.y1,
             segmentIndex,
-            controlPoint: 'x1y1'
+            controlPoint: 'x1y1',
+            vertexMoveSegmentIndex: current.moveSegmentIndex
           });
         }
         current = { x: segment.x, y: segment.y, segmentIndex, moveSegmentIndex: segmentIndex };
