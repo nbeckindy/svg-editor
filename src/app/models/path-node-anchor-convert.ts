@@ -203,7 +203,9 @@ export function resolvePathNodeConversionLegs(
     if (subClosed) {
       if (zIdx <= subM + 1) return null;
       const incoming = zIdx - 1;
-      return { incoming, outgoing: null, vertex };
+      const out = subM + 1;
+      if (out >= zIdx || segments[out].type === 'Z') return null;
+      return { incoming, outgoing: out, vertex };
     }
     if (isLastAnchor) {
       return { incoming: null, outgoing: null, vertex };

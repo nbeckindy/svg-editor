@@ -45,7 +45,7 @@ describe('resolvePathNodeConversionLegs', () => {
     });
   });
 
-  it('closed subpath M: incoming only (segment before Z)', () => {
+  it('closed subpath M: incoming (before Z) and outgoing (first segment after M)', () => {
     const segments: PathSegment[] = [
       { type: 'M', x: 0, y: 0 },
       { type: 'L', x: 10, y: 0 },
@@ -55,7 +55,7 @@ describe('resolvePathNodeConversionLegs', () => {
     ];
     const legs = resolvePathNodeConversionLegs(segments, 0);
     expect(legs?.incoming).toBe(3);
-    expect(legs?.outgoing).toBeNull();
+    expect(legs?.outgoing).toBe(1);
     expect(legs?.vertex).toEqual({ x: 0, y: 0 });
   });
 
@@ -154,6 +154,27 @@ describe('convertPathAnchorAtMoveSegmentIndexToCorner', () => {
     expect(r.segments).toEqual(segments);
   });
 
+  it('closed path at M: collapses handles on both closing and opening cubics at the start vertex', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 2, y1: 0, x2: 4, y2: 0, x: 10, y: 0 },
+      { type: 'C', x1: 16, y1: 0, x2: 18, y2: 0, x: 20, y: 0 },
+      { type: 'C', x1: 16, y1: 10, x2: 4, y2: 10, x: 0, y: 0 },
+      { type: 'Z' }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToCorner(segments, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const opening = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const closing = r.segments[3] as Extract<PathSegment, { type: 'C' }>;
+    expect(opening.x1).toBe(0);
+    expect(opening.y1).toBe(0);
+    expect(closing.x2).toBe(0);
+    expect(closing.y2).toBe(0);
+    expect(opening.x2).toBe(4);
+    expect(closing.x1).toBe(16);
+  });
+
   it('reports corner already applied when cubic handles sit on the vertex', () => {
     const segments: PathSegment[] = [
       { type: 'M', x: 0, y: 0 },
@@ -215,6 +236,24 @@ describe('convertPathAnchorAtMoveSegmentIndexToMirrorCubic', () => {
     expect(out.y).toBe(B.y);
 
     expectCubicJointMirror180AtVertex(inc, out, V);
+  });
+
+  it('closed path at M: mirrors across wrap (last segment before Z + first after M)', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 10, y: 0 },
+      { type: 'L', x: 10, y: 10 },
+      { type: 'L', x: 0, y: 0 },
+      { type: 'Z' }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(segments, 0);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const inc = r.segments[3] as Extract<PathSegment, { type: 'C' }>;
+    const out = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    expect(inc.type).toBe('C');
+    expect(out.type).toBe('C');
+    expectCubicJointMirror180AtVertex(inc, out, { x: 0, y: 0 });
   });
 
   it('after corner L–L mirror, pins incoming x1 to M when that anchor stays corner-like', () => {
