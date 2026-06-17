@@ -7,6 +7,7 @@ import {
   convertPathAnchorAtMoveSegmentIndexToIndependentHandles,
   convertPathAnchorAtMoveSegmentIndexToMirrorCubic,
   getIndependentHandlesJointUiState,
+  mirrorCubicJointControlsFromIndependentHandlesAtVertex,
   getMirrorCubicJointUiState,
   isPathNodeCornerAnchorAlreadyApplied,
   PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK,
@@ -281,6 +282,32 @@ describe('convertPathAnchorAtMoveSegmentIndexToMirrorCubic', () => {
     expect(r.ok).toBe(false);
     if (r.ok) return;
     expect(r.feedback).toBeUndefined();
+  });
+
+  it('from independent: mirrors joint on bisector with average arm length', () => {
+    const V = { x: 5, y: 0 };
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 0, x2: 2, y2: 0, x: 5, y: 0 },
+      { type: 'C', x1: 5, y1: 3, x2: 9, y2: 0, x: 10, y: 0 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(segments, 1, { fromIndependent: true });
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const out = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expectCubicJointMirror180AtVertex(inc, out, V);
+    const joint = mirrorCubicJointControlsFromIndependentHandlesAtVertex(
+      V,
+      { x: 2, y: 0 },
+      { x: 5, y: 3 }
+    );
+    expect(inc.x2).toBeCloseTo(joint.incomingX2, 6);
+    expect(inc.y2).toBeCloseTo(joint.incomingY2, 6);
+    expect(out.x1).toBeCloseTo(joint.outgoingX1, 6);
+    expect(out.y1).toBeCloseTo(joint.outgoingY1, 6);
+    expect(inc.x1).toBe(1);
+    expect(out.x2).toBe(9);
   });
 
   it('mirror cubic from corner-like C–C only moves handles at V; keeps far controls', () => {

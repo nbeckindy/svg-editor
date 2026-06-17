@@ -2952,21 +2952,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
 
     const moveIdx = this.selectedPathNode.moveSegmentIndex;
     const linkMap = parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId));
-    if (linkMap.get(moveIdx) === 'independent') {
-      this.clearIndependentHandleLinkForMove(pathId, moveIdx);
-      this.clearPathNodeEditFeedback();
-      this.syncPathNodeEditBridgeChrome();
-      this.cdr.markForCheck();
-      return true;
-    }
+    const fromIndependent = linkMap.get(moveIdx) === 'independent';
 
     const joint = getMirrorCubicJointUiState(parsed, moveIdx);
-    if (joint.kind === 'already-cubic-noop') {
+    if (!fromIndependent && joint.kind === 'already-cubic-noop') {
       this.clearPathNodeEditFeedback();
       this.syncPathNodeEditBridgeChrome();
       return true;
     }
-    if (joint.kind !== 'applicable') {
+    if (!fromIndependent && joint.kind !== 'applicable') {
       const msg =
         joint.kind === 'rejects-quadratic'
           ? PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK
@@ -2977,7 +2971,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       return false;
     }
 
-    const outcome = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(parsed, moveIdx);
+    const outcome = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(parsed, moveIdx, {
+      fromIndependent
+    });
     if (!outcome.ok) {
       if (outcome.feedback) {
         this.showPathNodeEditFeedback(outcome.feedback);
@@ -2985,22 +2981,46 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       return false;
     }
 
-    this.clearIndependentHandleLinkForMove(pathId, moveIdx);
-
     const newD = pathSegmentsToD(outcome.segments);
-    if (newD === oldD) {
-      this.clearPathNodeEditFeedback();
-      this.syncPathNodeEditBridgeChrome();
-      return true;
-    }
-    if (!this.isValidNodeEditSerializedPath(newD)) {
+    if (newD !== oldD && !this.isValidNodeEditSerializedPath(newD)) {
       this.showPathNodeEditFeedback('Unable to apply mirror cubic for this path.');
       return false;
     }
 
-    pathEl.setAttribute('d', newD);
-    const cmd = new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true);
-    this.editorHistory.pushAndExecute(cmd);
+    const oldLinkRaw = this.svgManipulation.getPathNodeHandleLinkRaw(pathId);
+    const nextLinkMap = parsePathNodeHandleLinkMap(oldLinkRaw);
+    if (fromIndependent) {
+      nextLinkMap.delete(moveIdx);
+    }
+    const newLinkSer = serializePathNodeHandleLinkMap(nextLinkMap);
+    const normOldLink = oldLinkRaw?.trim() || null;
+    const normNewLink = newLinkSer?.trim() || null;
+
+    const historyCmds: EditorCommand[] = [];
+    if (newD !== oldD) {
+      pathEl.setAttribute('d', newD);
+      historyCmds.push(
+        new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true)
+      );
+    }
+    if (fromIndependent && normOldLink !== normNewLink) {
+      this.svgManipulation.setPathNodeHandleLinkRaw(pathId, normNewLink);
+      historyCmds.push(
+        new SetPathNodeHandleLinkCommand(this.svgManipulation, pathId, normOldLink, normNewLink, true)
+      );
+    }
+
+    if (historyCmds.length === 1) {
+      this.editorHistory.pushAndExecute(historyCmds[0]);
+    } else if (historyCmds.length > 1) {
+      this.editorHistory.pushAndExecute(new CompositeCommand(historyCmds, 'Mirror cubic'));
+    }
+
+    if (newD === oldD && !fromIndependent) {
+      this.clearPathNodeEditFeedback();
+      this.syncPathNodeEditBridgeChrome();
+      return true;
+    }
 
     const refreshed = this.buildPathNodeEditState(pathId);
     if (!refreshed.state) {

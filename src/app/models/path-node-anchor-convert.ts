@@ -601,9 +601,94 @@ function pinFarHandlesWhenLineBecameCubic(
   }
 }
 
+/**
+ * From independent joint handles at `V`, derive **180°-mirrored** cubic controls on the angle
+ * bisector of the two tangent directions, with arm length the average of the two independent arm lengths.
+ */
+export function mirrorCubicJointControlsFromIndependentHandlesAtVertex(
+  V: { x: number; y: number },
+  incomingHandle: { x: number; y: number },
+  outgoingHandle: { x: number; y: number }
+): { incomingX2: number; incomingY2: number; outgoingX1: number; outgoingY1: number } {
+  const dInX = V.x - incomingHandle.x;
+  const dInY = V.y - incomingHandle.y;
+  const dOutX = outgoingHandle.x - V.x;
+  const dOutY = outgoingHandle.y - V.y;
+  const lenIn = Math.hypot(dInX, dInY);
+  const lenOut = Math.hypot(dOutX, dOutY);
+
+  if (lenIn < 1e-9 && lenOut < 1e-9) {
+    return { incomingX2: V.x, incomingY2: V.y, outgoingX1: V.x, outgoingY1: V.y };
+  }
+
+  let tX = 0;
+  let tY = 0;
+  if (lenIn >= 1e-9) {
+    tX += dInX / lenIn;
+    tY += dInY / lenIn;
+  }
+  if (lenOut >= 1e-9) {
+    tX += dOutX / lenOut;
+    tY += dOutY / lenOut;
+  }
+  const tLen = Math.hypot(tX, tY);
+  const h = (lenIn + lenOut) / 2;
+
+  if (tLen < 1e-9) {
+    const uX = lenIn >= 1e-9 ? dInX / lenIn : dOutX / lenOut;
+    const uY = lenIn >= 1e-9 ? dInY / lenIn : dOutY / lenOut;
+    const x2 = V.x - h * uX;
+    const y2 = V.y - h * uY;
+    return { incomingX2: x2, incomingY2: y2, outgoingX1: 2 * V.x - x2, outgoingY1: 2 * V.y - y2 };
+  }
+
+  const x2 = V.x - (h * tX) / tLen;
+  const y2 = V.y - (h * tY) / tLen;
+  return { incomingX2: x2, incomingY2: y2, outgoingX1: 2 * V.x - x2, outgoingY1: 2 * V.y - y2 };
+}
+
+function applyMirroredJointFromIndependentHandles(
+  next: PathSegment[],
+  legs: PathNodeConversionLegs,
+  incBefore: PathSegment,
+  outBefore: PathSegment
+): boolean {
+  const incIdx = legs.incoming;
+  const outIdx = legs.outgoing;
+  if (incIdx === null || outIdx === null) return false;
+  const V = legs.vertex;
+
+  if (incIdx === outIdx && incBefore.type === 'C') {
+    const joint = mirrorCubicJointControlsFromIndependentHandlesAtVertex(
+      V,
+      { x: incBefore.x2, y: incBefore.y2 },
+      { x: incBefore.x1, y: incBefore.y1 }
+    );
+    next[incIdx] = {
+      ...incBefore,
+      x2: joint.incomingX2,
+      y2: joint.incomingY2,
+      x1: joint.outgoingX1,
+      y1: joint.outgoingY1
+    };
+    return true;
+  }
+
+  if (incBefore.type !== 'C' || outBefore.type !== 'C') return false;
+  const joint = mirrorCubicJointControlsFromIndependentHandlesAtVertex(
+    V,
+    { x: incBefore.x2, y: incBefore.y2 },
+    { x: outBefore.x1, y: outBefore.y1 }
+  );
+  next[incIdx] = { ...incBefore, x2: joint.incomingX2, y2: joint.incomingY2 };
+  next[outIdx] = { ...outBefore, x1: joint.outgoingX1, y1: joint.outgoingY1 };
+  return true;
+}
+
 export function convertPathAnchorAtMoveSegmentIndexToMirrorCubic(
   segments: readonly PathSegment[],
-  moveSegmentIndex: number
+  moveSegmentIndex: number,
+  options?: { fromIndependent?: boolean }
 ): PathNodeAnchorConvertModelResult {
   const legs = resolvePathNodeConversionLegs(segments, moveSegmentIndex);
   if (!legs) {
@@ -632,6 +717,13 @@ export function convertPathAnchorAtMoveSegmentIndexToMirrorCubic(
 
   if (inc.type === 'C' && out.type === 'C') {
     if (incOff && outOff) {
+      if (options?.fromIndependent) {
+        const next = segments.map((s) => ({ ...s }));
+        if (!applyMirroredJointFromIndependentHandles(next, legs, inc, out)) {
+          return { ok: false, feedback: 'Unable to apply mirror cubic at this node.' };
+        }
+        return { ok: true, segments: next };
+      }
       return { ok: false };
     }
   } else {
