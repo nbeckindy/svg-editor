@@ -1,4 +1,4 @@
-import { mirrorCornerCubicsFromStraightLL, penSvgDistanceSq } from './pen-path';
+import { mirrorCornerCubicsFromStraightLL, penSvgDistanceSq, symmetricCubicControlPoints } from './pen-path';
 import { pointBeforeSegmentIndex } from './path-pen-insert';
 import type { PathSegment } from './path-d';
 
@@ -443,16 +443,22 @@ export function getMirrorCubicJointUiState(
 }
 
 export type PathNodeIndependentHandlesUiState =
-  | { kind: 'applicable' }
-  | { kind: 'corner-like' }
+  | { kind: 'link-only' }
+  | { kind: 'promote-from-corner' }
   | { kind: 'needs-cubic-joint' }
   | { kind: 'rejects-quadratic' }
   | { kind: 'invalid' };
 
+export function isIndependentHandlesJointActionable(
+  state: PathNodeIndependentHandlesUiState
+): boolean {
+  return state.kind === 'link-only' || state.kind === 'promote-from-corner';
+}
+
 /**
  * Eligibility for **Independent handles** (unlink opposite-handle drag at `V`).
- * Requires a **C–C** joint with both joint-side controls off the vertex — not tied to mirror-cubic
- * “applicable” (L–L promotion) or corner collapse.
+ * `link-only`: C–C with handles already off the vertex (metadata only).
+ * `promote-from-corner`: corner-like joint — place joint-side handles on chord thirds, then link.
  */
 export function getIndependentHandlesJointUiState(
   segments: readonly PathSegment[],
@@ -469,19 +475,100 @@ export function getIndependentHandlesJointUiState(
   if (segmentAtJointUnsupportedForNodeAnchorOps(inc) || segmentAtJointUnsupportedForNodeAnchorOps(out)) {
     return { kind: 'rejects-quadratic' };
   }
-  if (inc.type !== 'C' || out.type !== 'C') {
-    return { kind: 'needs-cubic-joint' };
-  }
-  if (isPathNodeCornerAnchorAlreadyApplied(segments, moveSegmentIndex)) {
-    return { kind: 'corner-like' };
-  }
+  if (inc.type !== 'C' && inc.type !== 'L') return { kind: 'needs-cubic-joint' };
+  if (out.type !== 'C' && out.type !== 'L') return { kind: 'needs-cubic-joint' };
+
   const V = legs.vertex;
-  const incOff = penSvgDistanceSq({ x: inc.x2, y: inc.y2 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
-  const outOff = penSvgDistanceSq({ x: out.x1, y: out.y1 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
-  if (incOff && outOff) {
-    return { kind: 'applicable' };
+  if (inc.type === 'C' && out.type === 'C') {
+    const incOff = penSvgDistanceSq({ x: inc.x2, y: inc.y2 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
+    const outOff = penSvgDistanceSq({ x: out.x1, y: out.y1 }, V) >= PATH_NODE_CORNER_HANDLE_AT_VERTEX_EPS_SQ;
+    if (incOff && outOff) {
+      return { kind: 'link-only' };
+    }
+    return { kind: 'promote-from-corner' };
   }
+
+  if (isPathNodeCornerAnchorAlreadyApplied(segments, moveSegmentIndex)) {
+    return { kind: 'promote-from-corner' };
+  }
+
   return { kind: 'needs-cubic-joint' };
+}
+
+/**
+ * Place joint-side cubic handles on chord **one-third** points (per leg, not mirrored through `V`)
+ * and/or promote `L`→`C` for independent-handle drags. No-op geometry when {@link getIndependentHandlesJointUiState}
+ * is `link-only`.
+ */
+export function convertPathAnchorAtMoveSegmentIndexToIndependentHandles(
+  segments: readonly PathSegment[],
+  moveSegmentIndex: number
+): PathNodeAnchorConvertModelResult {
+  const state = getIndependentHandlesJointUiState(segments, moveSegmentIndex);
+  if (state.kind === 'link-only') {
+    return { ok: true, segments: segments.map((s) => ({ ...s })) };
+  }
+  if (state.kind !== 'promote-from-corner') {
+    return {
+      ok: false,
+      feedback:
+        state.kind === 'rejects-quadratic'
+          ? PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK
+          : 'Independent handles are not available at this node.'
+    };
+  }
+
+  const legs = resolvePathNodeConversionLegs(segments, moveSegmentIndex);
+  if (!legs || legs.incoming === null || legs.outgoing === null) {
+    return { ok: false, feedback: 'Unable to adjust that node.' };
+  }
+
+  const incIdx = legs.incoming;
+  const outIdx = legs.outgoing;
+  const incBefore = segments[incIdx];
+  const outBefore = segments[outIdx];
+  const V = legs.vertex;
+  const p0 = pointBeforeSegmentIndex(segments, incIdx);
+  if (!p0) {
+    return { ok: false, feedback: 'Unable to resolve geometry for independent handles.' };
+  }
+  const B = pathSegmentEndXY(outBefore);
+  const next = segments.map((s) => ({ ...s }));
+
+  if (incIdx === outIdx) {
+    if (incBefore.type !== 'C') {
+      return { ok: false, feedback: 'Unable to adjust that node.' };
+    }
+    const symIn = symmetricCubicControlPoints(p0, V);
+    const symOut = symmetricCubicControlPoints(V, B);
+    next[incIdx] = {
+      ...incBefore,
+      x2: symIn.x2,
+      y2: symIn.y2,
+      x1: symOut.x1,
+      y1: symOut.y1
+    };
+    return { ok: true, segments: next };
+  }
+
+  if (incBefore.type === 'L') {
+    const sym = symmetricCubicControlPoints(p0, V);
+    next[incIdx] = { type: 'C', x1: sym.x1, y1: sym.y1, x2: sym.x2, y2: sym.y2, x: V.x, y: V.y };
+  } else if (incBefore.type === 'C') {
+    const sym = symmetricCubicControlPoints(p0, V);
+    next[incIdx] = { ...incBefore, x2: sym.x2, y2: sym.y2 };
+  }
+
+  if (outBefore.type === 'L') {
+    const sym = symmetricCubicControlPoints(V, B);
+    next[outIdx] = { type: 'C', x1: sym.x1, y1: sym.y1, x2: sym.x2, y2: sym.y2, x: B.x, y: B.y };
+  } else if (outBefore.type === 'C') {
+    const sym = symmetricCubicControlPoints(V, B);
+    next[outIdx] = { ...outBefore, x1: sym.x1, y1: sym.y1 };
+  }
+
+  pinFarHandlesWhenLineBecameCubic(next, legs, incBefore, outBefore);
+  return { ok: true, segments: next };
 }
 
 /**

@@ -4,6 +4,7 @@ import { mirrorCornerCubicsFromStraightLL, symmetricCubicControlPoints } from '.
 import {
   collectPathNodeAnchorsForPathNodeConversion,
   convertPathAnchorAtMoveSegmentIndexToCorner,
+  convertPathAnchorAtMoveSegmentIndexToIndependentHandles,
   convertPathAnchorAtMoveSegmentIndexToMirrorCubic,
   getIndependentHandlesJointUiState,
   getMirrorCubicJointUiState,
@@ -410,30 +411,82 @@ describe('getMirrorCubicJointUiState', () => {
 });
 
 describe('getIndependentHandlesJointUiState', () => {
-  it('applicable on C–C with both joint handles off the vertex', () => {
+  it('link-only on C–C with both joint handles off the vertex', () => {
     const segments: PathSegment[] = [
       { type: 'M', x: 0, y: 0 },
       { type: 'C', x1: 1, y1: 0, x2: 4, y2: 0, x: 5, y: 0 },
       { type: 'C', x1: 6, y1: 0, x2: 9, y2: 0, x: 10, y: 0 }
     ];
-    expect(getIndependentHandlesJointUiState(segments, 1).kind).toBe('applicable');
+    expect(getIndependentHandlesJointUiState(segments, 1).kind).toBe('link-only');
   });
 
-  it('not applicable on L–L (mirror cubic promotion needed first)', () => {
+  it('promote-from-corner on corner-like L–L', () => {
     const segments: PathSegment[] = [
       { type: 'M', x: 0, y: 0 },
       { type: 'L', x: 5, y: 0 },
       { type: 'L', x: 10, y: 0 }
     ];
-    expect(getIndependentHandlesJointUiState(segments, 1).kind).toBe('needs-cubic-joint');
+    expect(getIndependentHandlesJointUiState(segments, 1).kind).toBe('promote-from-corner');
   });
 
-  it('corner-like when handles are collapsed on the vertex', () => {
+  it('promote-from-corner when cubic handles are collapsed on the vertex', () => {
     const segments: PathSegment[] = [
       { type: 'M', x: 0, y: 0 },
       { type: 'C', x1: 1, y1: 0, x2: 5, y2: 0, x: 5, y: 0 },
       { type: 'C', x1: 5, y1: 0, x2: 9, y2: 0, x: 10, y: 0 }
     ];
-    expect(getIndependentHandlesJointUiState(segments, 1).kind).toBe('corner-like');
+    expect(getIndependentHandlesJointUiState(segments, 1).kind).toBe('promote-from-corner');
+  });
+});
+
+describe('convertPathAnchorAtMoveSegmentIndexToIndependentHandles', () => {
+  it('from corner C–C: places joint handles on chord thirds (1/3 from each anchor)', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'C', x1: 1, y1: 0, x2: 5, y2: 0, x: 5, y: 0 },
+      { type: 'C', x1: 5, y1: 0, x2: 9, y2: 0, x: 10, y: 0 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToIndependentHandles(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const V = { x: 5, y: 0 };
+    const p0 = { x: 0, y: 0 };
+    const B = { x: 10, y: 0 };
+    const symIn = symmetricCubicControlPoints(p0, V);
+    const symOut = symmetricCubicControlPoints(V, B);
+    const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const out = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expect(inc.x2).toBe(symIn.x2);
+    expect(inc.y2).toBe(symIn.y2);
+    expect(out.x1).toBe(symOut.x1);
+    expect(out.y1).toBe(symOut.y1);
+    expect(inc.x1).toBe(1);
+    expect(out.x2).toBe(9);
+  });
+
+  it('from corner L–L: promotes both legs to C with chord-third controls at V', () => {
+    const segments: PathSegment[] = [
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 10, y: 0 },
+      { type: 'L', x: 10, y: 10 }
+    ];
+    const r = convertPathAnchorAtMoveSegmentIndexToIndependentHandles(segments, 1);
+    expect(r.ok).toBe(true);
+    if (!r.ok) return;
+    const V = { x: 10, y: 0 };
+    const p0 = { x: 0, y: 0 };
+    const B = { x: 10, y: 10 };
+    const symIn = symmetricCubicControlPoints(p0, V);
+    const symOut = symmetricCubicControlPoints(V, B);
+    const inc = r.segments[1] as Extract<PathSegment, { type: 'C' }>;
+    const out = r.segments[2] as Extract<PathSegment, { type: 'C' }>;
+    expect(inc.x2).toBe(symIn.x2);
+    expect(inc.y2).toBe(symIn.y2);
+    expect(out.x1).toBe(symOut.x1);
+    expect(out.y1).toBe(symOut.y1);
+    expect(inc.x1).toBe(0);
+    expect(inc.y1).toBe(0);
+    expect(out.x2).toBe(B.x);
+    expect(out.y2).toBe(B.y);
   });
 });
