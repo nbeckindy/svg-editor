@@ -40,6 +40,42 @@ function ensurePathSelectedAfterPenClose(ports: PenToolSessionPorts, pathId: str
   setTimeout(reapply, 32);
 }
 
+function finishPenPathOnDocument(
+  ports: PenToolSessionPorts,
+  options: {
+    pathId: string;
+    closePath: boolean;
+    clearDrawingState: () => void;
+    pushHistory: () => void;
+    mergedD?: string;
+  }
+): void {
+  const { pathId, closePath, clearDrawingState, pushHistory, mergedD } = options;
+  const postFinishTool: EditorTool = closePath ? 'node-edit-selector' : 'selector';
+
+  if (mergedD !== undefined) {
+    ports.svgManipulation.updatePathData(pathId, mergedD);
+  }
+  pushHistory();
+
+  const svg = ports.svgManipulation.getSVGInstance();
+  const el = svg?.findOne(`#${pathId}`) as SvgJsElement | undefined;
+  if (el) {
+    ports.shapeSelection.selectShape(ports.svgManipulation.getShapeProperties(el));
+  }
+  const shapeBbox = ports.svgManipulation.getShapeBBox(pathId);
+  if (shapeBbox) {
+    ports.setLastBbox(shapeBbox);
+    ports.clearHighlightRectCache();
+  }
+  clearDrawingState();
+  ports.setTool(postFinishTool);
+  if (closePath) {
+    ensurePathSelectedAfterPenClose(ports, pathId);
+  }
+  ports.markForCheck();
+}
+
 /**
  * After {@link PenSession} has produced `finalClosed` `d`, apply continue / join / new-path branches
  * to the **Live tree**, **History**, and **Selection** (then caller clears **Pen authoring session** state).
@@ -69,8 +105,6 @@ export function applyPenFinishedPathDocumentEffects(
     clearDrawingState
   } = options;
 
-  const postFinishTool: EditorTool = closePath ? 'node-edit-selector' : 'selector';
-
   const cont = continuingPathRewrite;
   if (cont) {
     let mergedD = finalClosed;
@@ -86,25 +120,16 @@ export function applyPenFinishedPathDocumentEffects(
         mergedD = penPathSegmentsToD(mergedSegments);
       }
     }
-    ports.svgManipulation.updatePathData(cont.pathId, mergedD);
-    const cmd = new EditPathNodesCommand(ports.svgManipulation, cont.pathId, cont.originalD, mergedD, true);
-    ports.editorHistory.pushAndExecute(cmd);
-    const svgSel = ports.svgManipulation.getSVGInstance();
-    const mergedEl = svgSel?.findOne(`#${cont.pathId}`) as SvgJsElement | undefined;
-    if (mergedEl) {
-      ports.shapeSelection.selectShape(ports.svgManipulation.getShapeProperties(mergedEl));
-    }
-    const shapeBboxContinue = ports.svgManipulation.getShapeBBox(cont.pathId);
-    if (shapeBboxContinue) {
-      ports.setLastBbox(shapeBboxContinue);
-      ports.clearHighlightRectCache();
-    }
-    clearDrawingState();
-    ports.setTool(postFinishTool);
-    if (closePath) {
-      ensurePathSelectedAfterPenClose(ports, cont.pathId);
-    }
-    ports.markForCheck();
+    finishPenPathOnDocument(ports, {
+      pathId: cont.pathId,
+      closePath,
+      clearDrawingState,
+      mergedD,
+      pushHistory: () => {
+        const cmd = new EditPathNodesCommand(ports.svgManipulation, cont.pathId, cont.originalD, mergedD, true);
+        ports.editorHistory.pushAndExecute(cmd);
+      }
+    });
     return;
   }
 
@@ -116,31 +141,22 @@ export function applyPenFinishedPathDocumentEffects(
         : combinePenContinuationSegments(finishingSegsSnapshot, joinHit.existing);
     if (mergedSegments) {
       const mergedD = closePath ? `${penPathSegmentsToD(mergedSegments)} Z` : penPathSegmentsToD(mergedSegments);
-      ports.svgManipulation.updatePathData(joinHit.pathId, mergedD);
-      const joinCmd = new EditPathNodesCommand(
-        ports.svgManipulation,
-        joinHit.pathId,
-        joinHit.originalD,
+      finishPenPathOnDocument(ports, {
+        pathId: joinHit.pathId,
+        closePath,
+        clearDrawingState,
         mergedD,
-        true
-      );
-      ports.editorHistory.pushAndExecute(joinCmd);
-      const svgJoin = ports.svgManipulation.getSVGInstance();
-      const joinedEl = svgJoin?.findOne(`#${joinHit.pathId}`) as SvgJsElement | undefined;
-      if (joinedEl) {
-        ports.shapeSelection.selectShape(ports.svgManipulation.getShapeProperties(joinedEl));
-      }
-      const jb = ports.svgManipulation.getShapeBBox(joinHit.pathId);
-      if (jb) {
-        ports.setLastBbox(jb);
-        ports.clearHighlightRectCache();
-      }
-      clearDrawingState();
-      ports.setTool(postFinishTool);
-      if (closePath) {
-        ensurePathSelectedAfterPenClose(ports, joinHit.pathId);
-      }
-      ports.markForCheck();
+        pushHistory: () => {
+          const joinCmd = new EditPathNodesCommand(
+            ports.svgManipulation,
+            joinHit.pathId,
+            joinHit.originalD,
+            mergedD,
+            true
+          );
+          ports.editorHistory.pushAndExecute(joinCmd);
+        }
+      });
       return;
     }
   }
@@ -150,22 +166,13 @@ export function applyPenFinishedPathDocumentEffects(
     clearDrawingState();
     return;
   }
-  const svg = ports.svgManipulation.getSVGInstance();
-  const el = svg?.findOne(`#${id}`) as SvgJsElement | undefined;
-  if (el) {
-    ports.shapeSelection.selectShape(ports.svgManipulation.getShapeProperties(el));
-  }
-  const cmd = new AddPathCommand(ports.svgManipulation, id, ports.shapeSelection);
-  ports.editorHistory.pushAndExecute(cmd);
-  const shapeBbox = ports.svgManipulation.getShapeBBox(id);
-  if (shapeBbox) {
-    ports.setLastBbox(shapeBbox);
-    ports.clearHighlightRectCache();
-  }
-  clearDrawingState();
-  ports.setTool(postFinishTool);
-  if (closePath) {
-    ensurePathSelectedAfterPenClose(ports, id);
-  }
-  ports.markForCheck();
+  finishPenPathOnDocument(ports, {
+    pathId: id,
+    closePath,
+    clearDrawingState,
+    pushHistory: () => {
+      const cmd = new AddPathCommand(ports.svgManipulation, id, ports.shapeSelection);
+      ports.editorHistory.pushAndExecute(cmd);
+    }
+  });
 }
