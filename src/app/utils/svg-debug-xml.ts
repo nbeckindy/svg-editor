@@ -107,3 +107,36 @@ export function formatSvgXmlWithHighlightSegments(
 
   return formatElement(root, 0, false, selected);
 }
+
+/** Pretty-print SVG XML without selection highlights (for editable debug text). */
+export function formatSvgXmlPlain(xml: string): string {
+  return formatSvgXmlWithHighlightSegments(xml, [])
+    .map((segment) => segment.text)
+    .join('');
+}
+
+export interface SvgXmlEditValidation {
+  ok: boolean;
+  message?: string;
+}
+
+/** Validate user-edited SVG before applying it to the canvas. */
+export function validateSvgXmlForEdit(xml: string): SvgXmlEditValidation {
+  const trimmed = xml.trim();
+  if (!trimmed) {
+    return { ok: false, message: 'SVG markup cannot be empty.' };
+  }
+
+  const parser = new DOMParser();
+  const doc = parser.parseFromString(trimmed, 'image/svg+xml');
+  if (hasParserError(doc)) {
+    return { ok: false, message: 'Unable to parse SVG. Fix XML syntax and try again.' };
+  }
+
+  const root = doc.documentElement;
+  if (!root || root.tagName.toLowerCase() !== 'svg') {
+    return { ok: false, message: 'Document must have a root <svg> element.' };
+  }
+
+  return { ok: true };
+}

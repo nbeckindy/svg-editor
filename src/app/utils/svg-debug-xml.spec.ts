@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { formatSvgXmlWithHighlightSegments } from './svg-debug-xml';
+import {
+  formatSvgXmlPlain,
+  formatSvgXmlWithHighlightSegments,
+  validateSvgXmlForEdit
+} from './svg-debug-xml';
 
 describe('formatSvgXmlWithHighlightSegments', () => {
   it('pretty-prints a minimal svg with indentation', () => {
@@ -75,5 +79,37 @@ describe('formatSvgXmlWithHighlightSegments', () => {
       '<svg xmlns="http://www.w3.org/2000/svg"><rect id="r" data-x="a&amp;b&quot;c" width="1" height="1" /></svg>';
     const joined = formatSvgXmlWithHighlightSegments(xml, []).map((s) => s.text).join('');
     expect(joined).toContain('data-x="a&amp;b&quot;c"');
+  });
+});
+
+describe('formatSvgXmlPlain', () => {
+  it('returns pretty-printed XML without highlight metadata', () => {
+    const xml =
+      '<svg xmlns="http://www.w3.org/2000/svg"><circle id="c1" cx="0" cy="0" r="1" /></svg>';
+    const plain = formatSvgXmlPlain(xml);
+    expect(plain).toContain('<circle');
+    expect(plain).toContain('id="c1"');
+  });
+});
+
+describe('validateSvgXmlForEdit', () => {
+  it('accepts valid svg markup', () => {
+    expect(
+      validateSvgXmlForEdit(
+        '<svg xmlns="http://www.w3.org/2000/svg"><rect width="10" height="10" /></svg>'
+      ).ok
+    ).toBe(true);
+  });
+
+  it('rejects empty markup', () => {
+    const result = validateSvgXmlForEdit('   ');
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('empty');
+  });
+
+  it('rejects non-svg root', () => {
+    const result = validateSvgXmlForEdit('<div></div>');
+    expect(result.ok).toBe(false);
+    expect(result.message).toContain('<svg>');
   });
 });

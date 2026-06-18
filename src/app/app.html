@@ -18,7 +18,9 @@
         <app-svg-canvas data-testid="editor-svg-canvas" [svgContent]="svgContent"></app-svg-canvas>
       </div>
       <div class="debug-strip" data-testid="editor-debug-strip">
-        <app-svg-debug-panel data-testid="editor-svg-debug-panel"></app-svg-debug-panel>
+        <app-svg-debug-panel
+          data-testid="editor-svg-debug-panel"
+          (svgContentApplied)="onSVGLoaded($event)"></app-svg-debug-panel>
       </div>
     </section>
 

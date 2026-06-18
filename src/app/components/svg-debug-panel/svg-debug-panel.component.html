@@ -35,9 +35,38 @@
         <div class="pointer-intent-empty">Move the mouse over the editor to sample (driven by canvas).</div>
       }
     </div>
-    @if (segments(); as segs) {
+    @if (hasDocument()) {
+      <div class="debug-xml-toolbar">
+        <button
+          type="button"
+          class="debug-xml-action"
+          data-testid="svg-debug-apply"
+          [disabled]="!isDirty()"
+          (click)="applyToCanvas()">
+          Apply to canvas
+        </button>
+        <button
+          type="button"
+          class="debug-xml-action"
+          data-testid="svg-debug-revert"
+          [disabled]="!isDirty()"
+          (click)="revertDraft()">
+          Revert
+        </button>
+        <span class="debug-xml-hint">⌘/Ctrl+Enter to apply</span>
+      </div>
+      @if (parseError(); as error) {
+        <div class="debug-xml-error" data-testid="svg-debug-parse-error" role="alert">{{ error }}</div>
+      }
       <div id="svg-debug-body" class="debug-panel-body">
-        <pre class="debug-xml" aria-label="Exported SVG XML"><code>@for (seg of segs; track $index) {<span [class.selected]="seg.selected">{{ seg.text }}</span>}</code></pre>
+        <textarea
+          class="debug-xml-editor"
+          data-testid="svg-debug-editor"
+          aria-label="Editable exported SVG XML"
+          spellcheck="false"
+          [value]="draftXml()"
+          (input)="onDraftInput($event)"
+          (keydown)="onDraftKeydown($event)"></textarea>
       </div>
     } @else {
       <div class="debug-panel-empty" data-testid="svg-debug-empty">Load an SVG to see exported document XML.</div>

@@ -1,37 +1,84 @@
-import { Component, computed, inject, signal } from '@angular/core';
+import { Component, computed, effect, inject, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import { ShapeSelectionService } from '../../services/shape-selection.service';
 import type { SvgDebugPanelSvgPort } from '../../history/editor-chrome-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { EditorPointerIntentDebugService } from '../../services/editor-pointer-intent-debug.service';
-import { formatSvgXmlWithHighlightSegments } from '../../utils/svg-debug-xml';
+import {
+  formatSvgXmlPlain,
+  validateSvgXmlForEdit
+} from '../../utils/svg-debug-xml';
 
 @Component({
   selector: 'app-svg-debug-panel',
-  standalone: true,
   imports: [CommonModule],
   templateUrl: './svg-debug-panel.component.html',
   styleUrl: './svg-debug-panel.component.css'
 })
 export class SvgDebugPanelComponent {
-  private shapeSelection = inject(ShapeSelectionService);
   private readonly svg: SvgDebugPanelSvgPort = inject(SvgManipulationService);
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
+
+  readonly svgContentApplied = output<string>();
+
   readonly isCollapsed = signal(true);
+  readonly draftXml = signal('');
+  readonly isDirty = signal(false);
+  readonly parseError = signal<string | null>(null);
 
   readonly pointerIntent = this.pointerIntentDebug.snapshot;
 
-  readonly segments = computed(() => {
+  readonly hasDocument = computed(() => {
     this.svg.documentRevision();
-    const raw = this.svg.exportSVG().trim();
-    if (!raw) {
-      return null;
-    }
-    const ids = this.shapeSelection.selectedShapes().map((s) => s.id);
-    return formatSvgXmlWithHighlightSegments(raw, ids);
+    return this.svg.exportSVG().trim().length > 0;
   });
+
+  constructor() {
+    effect(() => {
+      if (this.isDirty()) {
+        return;
+      }
+      this.svg.documentRevision();
+      const raw = this.svg.exportSVG().trim();
+      this.draftXml.set(raw ? formatSvgXmlPlain(raw) : '');
+      this.parseError.set(null);
+    });
+  }
 
   toggleCollapsed(): void {
     this.isCollapsed.update((value) => !value);
+  }
+
+  onDraftInput(event: Event): void {
+    const value = (event.target as HTMLTextAreaElement).value;
+    this.draftXml.set(value);
+    this.isDirty.set(true);
+    this.parseError.set(null);
+  }
+
+  onDraftKeydown(event: KeyboardEvent): void {
+    if ((event.ctrlKey || event.metaKey) && event.key === 'Enter') {
+      event.preventDefault();
+      this.applyToCanvas();
+    }
+  }
+
+  revertDraft(): void {
+    this.isDirty.set(false);
+    this.parseError.set(null);
+    const raw = this.svg.exportSVG().trim();
+    this.draftXml.set(raw ? formatSvgXmlPlain(raw) : '');
+  }
+
+  applyToCanvas(): void {
+    const validation = validateSvgXmlForEdit(this.draftXml());
+    if (!validation.ok) {
+      this.parseError.set(validation.message ?? 'Invalid SVG.');
+      return;
+    }
+
+    const trimmed = this.draftXml().trim();
+    this.isDirty.set(false);
+    this.parseError.set(null);
+    this.svgContentApplied.emit(trimmed);
   }
 }

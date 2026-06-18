@@ -59,28 +59,58 @@
   color: color-mix(in srgb, CanvasText 65%, transparent);
 }
 
-.debug-xml {
+.debug-xml-toolbar {
+  display: flex;
+  flex-shrink: 0;
+  align-items: center;
+  gap: 8px;
+  padding: 8px 12px 0;
+}
+
+.debug-xml-action {
+  border: 1px solid color-mix(in srgb, CanvasText 20%, transparent);
+  background: Canvas;
+  color: CanvasText;
+  border-radius: 4px;
+  font-size: 0.75rem;
+  padding: 4px 8px;
+  cursor: pointer;
+}
+
+.debug-xml-action:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.debug-xml-hint {
+  margin-left: auto;
+  font-size: 0.6875rem;
+  color: color-mix(in srgb, CanvasText 55%, transparent);
+}
+
+.debug-xml-error {
+  padding: 6px 12px 0;
+  font-size: 0.75rem;
+  color: color-mix(in srgb, #b42318 88%, CanvasText 12%);
+}
+
+.debug-xml-editor {
+  display: block;
   margin: 0;
   padding: 8px 12px 12px;
+  width: 100%;
+  min-width: 100%;
+  min-height: 8rem;
+  box-sizing: border-box;
+  border: 0;
+  resize: vertical;
+  background: transparent;
+  color: inherit;
   font-family: ui-monospace, 'Cascadia Code', 'Source Code Pro', Menlo, monospace;
   font-size: 0.75rem;
   line-height: 1.45;
   white-space: pre;
   tab-size: 2;
-  /* Let the block grow to longest line so .debug-panel-body can show a horizontal scrollbar */
-  width: max-content;
-  min-width: 100%;
-  box-sizing: border-box;
-}
-
-.debug-xml code {
-  font: inherit;
-}
-
-.debug-xml .selected {
-  background: color-mix(in srgb, Highlight 28%, transparent);
-  outline: 1px solid color-mix(in srgb, Highlight 45%, transparent);
-  outline-offset: -1px;
 }
 
 .pointer-intent-block {
