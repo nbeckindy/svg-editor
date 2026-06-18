@@ -174,6 +174,51 @@ export function pathHasClosedSubpaths(pathData: string): boolean {
   return subpaths.every(subpathIsClosed);
 }
 
+export interface PathBooleanSelectionShape {
+  id: string;
+  type: string;
+}
+
+export interface PathBooleanSelectionState {
+  eligible: boolean;
+  reason: string;
+  operandIds: string[];
+}
+
+/** Shared eligibility for path boolean UI (Path ops panel). */
+export function evaluatePathBooleanSelection(
+  isSelectorMode: boolean,
+  shapes: readonly PathBooleanSelectionShape[],
+  isLocked: (shapeId: string) => boolean,
+  getPathD: (shapeId: string) => string | null
+): PathBooleanSelectionState {
+  if (!isSelectorMode) {
+    return { eligible: false, reason: 'Switch to the selector tool.', operandIds: [] };
+  }
+  if (shapes.length < 2) {
+    return { eligible: false, reason: 'Select two or more paths.', operandIds: [] };
+  }
+  if (shapes.some((s) => isLocked(s.id))) {
+    return { eligible: false, reason: 'Selection includes a locked layer.', operandIds: [] };
+  }
+  if (!shapes.every((s) => s.type === 'path')) {
+    return { eligible: false, reason: 'Only <path> elements can be combined.', operandIds: [] };
+  }
+  const operandIds = shapes.map((s) => s.id);
+  const allClosed = operandIds.every((id) => {
+    const d = getPathD(id);
+    return d != null && pathHasClosedSubpaths(d);
+  });
+  if (!allClosed) {
+    return {
+      eligible: false,
+      reason: 'Each path must be closed (ends with Z on every subpath).',
+      operandIds
+    };
+  }
+  return { eligible: true, reason: '', operandIds };
+}
+
 export function flattenSubpathToRing(
   subpath: PathSegment[],
   pathId: string,

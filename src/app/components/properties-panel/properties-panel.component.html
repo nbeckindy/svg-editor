@@ -246,21 +246,6 @@
           </div>
         </div>
 
-        <div class="property-group align-distribute-group">
-          <label class="property-label">Pathfinder</label>
-          <div class="align-toolbar distribute-toolbar">
-            <button
-              type="button"
-              class="align-btn"
-              data-testid="properties-pathfinder-union"
-              [disabled]="!canApplyPathBooleanUnion()"
-              [attr.title]="canApplyPathBooleanUnion() ? 'Union selected paths' : 'Select two or more closed paths'"
-              (click)="onPathBooleanUnion()">
-              Union
-            </button>
-          </div>
-        </div>
-
         @if (selectionBBoxFieldModel(); as bb) {
         @if (bb.ok) {
         <div class="property-group transform-bbox-readout">

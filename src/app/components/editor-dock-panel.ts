@@ -1,2 +1,2 @@
-/** Tab identifiers for the right inspector dock (properties vs layers). */
-export type EditorDockPanel = 'properties' | 'layers';
+/** Tab identifiers for the right inspector dock. */
+export type EditorDockPanel = 'properties' | 'layers' | 'pathOps';

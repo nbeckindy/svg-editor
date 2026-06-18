@@ -1,4 +1,5 @@
 import { Component, input, output } from '@angular/core';
+import { BooleanPathPanelComponent } from '../boolean-path-panel/boolean-path-panel.component';
 import { LayersPanelComponent } from '../layers-panel/layers-panel.component';
 import { PropertiesPanelComponent } from '../properties-panel/properties-panel.component';
 import { EditorDockPanel } from '../editor-dock-panel';
@@ -6,7 +7,7 @@ import { EditorDockPanel } from '../editor-dock-panel';
 @Component({
   selector: 'app-editor-right-dock',
   standalone: true,
-  imports: [PropertiesPanelComponent, LayersPanelComponent],
+  imports: [PropertiesPanelComponent, LayersPanelComponent, BooleanPathPanelComponent],
   templateUrl: './editor-right-dock.component.html',
   styleUrl: './editor-right-dock.component.css'
 })
@@ -19,6 +20,7 @@ export class EditorRightDockComponent {
 
   readonly layersInactive = (): boolean => this.activeDockPanel() !== 'layers';
   readonly propertiesInactive = (): boolean => this.activeDockPanel() !== 'properties';
+  readonly pathOpsInactive = (): boolean => this.activeDockPanel() !== 'pathOps';
 
   collapseDock(): void {
     this.dockCollapsedChange.emit(true);

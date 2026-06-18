@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   BOOLEAN_FLATTEN_TOLERANCE,
+  evaluatePathBooleanSelection,
   flattenCubicToPoints,
   flattenQuadraticToPoints,
   foldMartinezUnion,
@@ -136,5 +137,55 @@ describe('path-boolean union', () => {
     expect(g2).not.toBeNull();
     const merged = foldMartinezUnion([g1!, g2!]);
     expect(merged).not.toBeNull();
+  });
+});
+
+describe('evaluatePathBooleanSelection', () => {
+  const closedD = 'M 0 0 L 10 0 L 10 10 L 0 10 Z';
+
+  it('requires selector mode and two closed paths', () => {
+    expect(
+      evaluatePathBooleanSelection(false, [{ id: 'a', type: 'path' }, { id: 'b', type: 'path' }], () => false, () => closedD)
+        .eligible
+    ).toBe(false);
+    expect(
+      evaluatePathBooleanSelection(true, [{ id: 'a', type: 'path' }], () => false, () => closedD).eligible
+    ).toBe(false);
+    expect(
+      evaluatePathBooleanSelection(
+        true,
+        [
+          { id: 'a', type: 'path' },
+          { id: 'b', type: 'path' }
+        ],
+        () => false,
+        () => closedD
+      ).eligible
+    ).toBe(true);
+  });
+
+  it('rejects non-path and open geometry', () => {
+    expect(
+      evaluatePathBooleanSelection(
+        true,
+        [
+          { id: 'a', type: 'rect' },
+          { id: 'b', type: 'path' }
+        ],
+        () => false,
+        () => closedD
+      ).reason
+    ).toContain('Only <path>');
+    expect(
+      evaluatePathBooleanSelection(
+        true,
+        [
+          { id: 'a', type: 'path' },
+          { id: 'b', type: 'path' }
+        ],
+        () => false,
+        (id) => (id === 'a' ? closedD : 'M 0 0 L 10 10')
+      ).eligible
+    ).toBe(false);
   });
 });

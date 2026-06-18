@@ -25,6 +25,16 @@
           (click)="activeDockPanelChange.emit('layers')">
           Layers
         </button>
+        <button
+          type="button"
+          role="tab"
+          class="dock-tab"
+          data-testid="dock-tab-path-ops"
+          [class.active]="activeDockPanel() === 'pathOps'"
+          [attr.aria-selected]="activeDockPanel() === 'pathOps'"
+          (click)="activeDockPanelChange.emit('pathOps')">
+          Path ops
+        </button>
       </div>
       <button
         type="button"
@@ -54,6 +64,16 @@
       role="tabpanel"
       aria-label="Layers">
       <app-layers-panel data-testid="editor-layers-panel"></app-layers-panel>
+    </section>
+
+    <section
+      class="dock-panel path-ops-panel-host"
+      data-testid="editor-path-ops-area"
+      [hidden]="pathOpsInactive()"
+      [attr.inert]="pathOpsInactive() ? '' : null"
+      role="tabpanel"
+      aria-label="Path operations">
+      <app-boolean-path-panel data-testid="editor-path-ops-panel"></app-boolean-path-panel>
     </section>
   </div>
 

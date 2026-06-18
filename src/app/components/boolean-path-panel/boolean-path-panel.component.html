@@ -1,0 +1,38 @@
+<div class="path-ops-panel">
+  <div class="panel-header">
+    <h3>Path ops</h3>
+  </div>
+
+  <div class="panel-body">
+    @if (operandCount() >= 2) {
+      <p class="operand-summary" data-testid="path-ops-operand-summary">
+        <span class="operand-count">{{ operandCount() }} paths selected</span>
+      </p>
+      <ul class="operand-list" data-testid="path-ops-operand-list" aria-label="Selected path operands">
+        @for (id of selectionState().operandIds; track id) {
+          <li class="operand-item" [attr.data-testid]="'path-ops-operand-' + id">{{ id }}</li>
+        }
+      </ul>
+    } @else {
+      <p class="empty-hint" data-testid="path-ops-empty-hint">
+        Select two or more closed paths to combine them.
+      </p>
+    }
+
+    @if (selectionState().reason) {
+      <p class="status-hint" data-testid="path-ops-status-hint" role="status">{{ selectionState().reason }}</p>
+    }
+
+    <div class="ops-toolbar" role="group" aria-label="Path boolean operations">
+      <button
+        type="button"
+        class="op-btn"
+        data-testid="path-ops-union"
+        [disabled]="!selectionState().eligible"
+        [attr.title]="selectionState().eligible ? 'Union selected paths' : selectionState().reason"
+        (click)="onUnion()">
+        Union
+      </button>
+    </div>
+  </div>
+</div>

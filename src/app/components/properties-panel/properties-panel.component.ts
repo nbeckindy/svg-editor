@@ -12,7 +12,6 @@ import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaul
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
-import { pathHasClosedSubpaths } from '../../models/path-boolean';
 import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-node-anchor-tools.component';
 
 @Component({
@@ -59,19 +58,6 @@ export class PropertiesPanelComponent {
   readonly anySelectedShapeLocked = computed(() => {
     const shapes = this.shapeSelectionService.getSelectedShapes();
     return shapes.some((s) => this.svgManipulation.isElementOrAncestorLocked(s.id));
-  });
-  readonly canApplyPathBooleanUnion = computed(() => {
-    if (!this.isSelectorMode()) return false;
-    const shapes = this.shapeSelectionService.getSelectedShapes();
-    if (shapes.length < 2) return false;
-    if (shapes.some((s) => this.svgManipulation.isElementOrAncestorLocked(s.id))) return false;
-    if (!shapes.every((s) => s.type === 'path')) return false;
-    return shapes.every((s) => {
-      const svg = this.svgManipulation.getSVGInstance();
-      const el = svg?.findOne(`#${s.id}`)?.node as Element | undefined;
-      const d = el?.getAttribute('d');
-      return d != null && pathHasClosedSubpaths(d);
-    });
   });
   /**
    * True when selected `<text>` nodes include any that are under a lock
@@ -685,10 +671,5 @@ export class PropertiesPanelComponent {
   onDistribute(direction: 'horizontal' | 'vertical'): void {
     const ids = this.selectedShapesList().map((shape) => shape.id);
     this.chromeApply.applyDistributeFromChrome(direction, ids);
-  }
-
-  onPathBooleanUnion(): void {
-    const ids = this.selectedShapesList().map((shape) => shape.id);
-    this.chromeApply.applyPathBooleanUnion(ids);
   }
 }

@@ -32,7 +32,7 @@
 
 .dock-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr 1fr 1fr;
   gap: 6px;
   min-width: 0;
 }
@@ -86,7 +86,8 @@
 }
 
 .dock-panel app-properties-panel,
-.dock-panel app-layers-panel {
+.dock-panel app-layers-panel,
+.dock-panel app-boolean-path-panel {
   display: block;
   height: 100%;
 }
