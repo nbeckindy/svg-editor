@@ -3,6 +3,7 @@ import { AddPathCommand, EditPathNodesCommand } from '../../../models/editor-com
 import { penPathSegmentsToD, type PenPathSegment } from '../../../models/pen-path';
 import type { EditorTool } from '../../../services/editor-tool.service';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
+import { combinePrependContinuationForOpen } from './pen-tool-session-path-continuation';
 
 export type PenOpenPathFinishJoinHit =
   | {
@@ -77,7 +78,7 @@ export function applyPenFinishedPathDocumentEffects(
       if (closePath) {
         mergedD = finalClosed;
       } else {
-        const mergedSegments = combinePenContinuationSegments(finishingSegsSnapshot, cont.existingSegments);
+        const mergedSegments = combinePrependContinuationForOpen(finishingSegsSnapshot, cont.existingSegments);
         if (!mergedSegments) {
           clearDrawingState();
           return;

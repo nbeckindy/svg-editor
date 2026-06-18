@@ -54,6 +54,7 @@ export interface SvgCanvasPointerGestureHost {
   readonly canvasViewInitialized: boolean;
   beginPanSession(event: MouseEvent): void;
   onCanvasPenPrimaryMouseDown(event: MouseEvent): boolean;
+  wouldPickUpPenOpenPathContinuationAt(event: MouseEvent): boolean;
   isCreationToolActive(): boolean;
   getCurrentTool(): EditorTool;
   isSelectorInteractionTool(tool: EditorTool): boolean;
@@ -184,7 +185,9 @@ export class PointerGestureRouter {
     }
     if (host.getCurrentTool() === 'pen') {
       const target = event.target as Element;
-      if (host.hasPathNodeEditState() && host.tryStartPathNodeDrag(target, event)) {
+      const penIdle = !host.isPenToolWithActiveSession() && !host.isPenInsertOnPathDragActive();
+      const openPathPickup = penIdle && host.wouldPickUpPenOpenPathContinuationAt(event);
+      if (!openPathPickup && host.hasPathNodeEditState() && host.tryStartPathNodeDrag(target, event)) {
         event.preventDefault();
         return;
       }

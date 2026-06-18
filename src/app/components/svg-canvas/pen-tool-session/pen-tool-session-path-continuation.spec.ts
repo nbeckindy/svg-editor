@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   combinePrependContinuationForClose,
+  combinePrependContinuationForOpen,
   findPenOpenPathEndpointHoverAtClient,
   findPenOpenPathPickupAtEvent,
   penClientPxWithinJoinToleranceVsSvgPoint,
@@ -181,6 +182,45 @@ describe('pen-tool-session-path-continuation', () => {
       { type: 'L', x: 502.5, y: 109.609375 }
     ] as const;
     const merged = combinePrependContinuationForClose(newStroke, existing);
+    expect(penPathSegmentsToD(merged!)).toBe(penPathSegmentsToD(existing));
+  });
+
+  it('combinePrependContinuationForOpen: re-anchors M at last drawn vertex then original path', () => {
+    const existing = [
+      { type: 'M', x: 281, y: 189.609375 },
+      { type: 'L', x: 413, y: 85.609375 },
+      { type: 'L', x: 450, y: 233.609375 }
+    ] as const;
+    const newStroke = [
+      { type: 'M', x: 281, y: 189.609375 },
+      { type: 'L', x: 293, y: 259.609375 },
+      { type: 'L', x: 369, y: 280.609375 }
+    ] as const;
+    const merged = combinePrependContinuationForOpen(newStroke, existing);
+    expect(penPathSegmentsToD(merged!)).toBe(
+      'M 369 280.609375 L 293 259.609375 L 281 189.609375 L 413 85.609375 L 450 233.609375'
+    );
+  });
+
+  it('combinePrependContinuationForOpen: single extension re-anchors at new tail', () => {
+    const existing = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 50, y: 40 }
+    ] as const;
+    const newStroke = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 2, y: 2 }
+    ] as const;
+    const merged = combinePrependContinuationForOpen(newStroke, existing);
+    expect(penPathSegmentsToD(merged!)).toBe('M 2 2 L 10 10 L 50 40');
+  });
+
+  it('combinePrependContinuationForOpen: M-only finish keeps existing path', () => {
+    const existing = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 50, y: 40 }
+    ] as const;
+    const merged = combinePrependContinuationForOpen([{ type: 'M', x: 10, y: 10 }], existing);
     expect(penPathSegmentsToD(merged!)).toBe(penPathSegmentsToD(existing));
   });
 });

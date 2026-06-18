@@ -288,8 +288,13 @@ export function onCanvasPenPrimaryMouseDownForView(
   }
   const penTarget = event.target as Element | null;
   if (penTarget && v.ports.isEditorContentShapeTarget(penTarget)) {
-    if (v.penSession.getSegments().length === 0 && !v.pendingSegment && tryBeginInsert(penTarget, event)) {
-      return true;
+    if (v.penSession.getSegments().length === 0 && !v.pendingSegment) {
+      if (v.tryPickUpPenOpenPathContinuation(event)) {
+        return true;
+      }
+      if (tryBeginInsert(penTarget, event)) {
+        return true;
+      }
     }
     return false;
   }

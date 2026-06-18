@@ -45,6 +45,7 @@ function makeHost(over: Partial<SvgCanvasPointerGestureHost>): SvgCanvasPointerG
     canvasViewInitialized: true,
     beginPanSession: vi.fn(),
     onCanvasPenPrimaryMouseDown: vi.fn(() => false),
+    wouldPickUpPenOpenPathContinuationAt: () => false,
     isCreationToolActive: () => false,
     getCurrentTool: () => 'selector',
     isSelectorInteractionTool: () => true,
@@ -349,12 +350,37 @@ describe('PointerGestureRouter', () => {
     expect(rotate.start).toHaveBeenCalledWith(emptyRt, ev);
   });
 
-  it('onCanvasMouseDownPrimary with pen tries path node drag before pen mousedown', () => {
+  it('onCanvasMouseDownPrimary with pen prefers open-path continuation over path node drag', () => {
+    const tryStartPathNodeDrag = vi.fn(() => true);
+    const onCanvasPenPrimaryMouseDown = vi.fn(() => true);
+    const host = makeHost({
+      getCurrentTool: () => 'pen',
+      hasPathNodeEditState: () => true,
+      wouldPickUpPenOpenPathContinuationAt: () => true,
+      tryStartPathNodeDrag,
+      onCanvasPenPrimaryMouseDown
+    });
+    const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
+    anchor.setAttribute('data-path-node-anchor-index', '0');
+    anchor.setAttribute('data-path-node-path-id', 'path-a');
+    const ev = {
+      button: 0,
+      target: anchor,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent;
+    router.onCanvasMouseDownPrimary(host, ev);
+    expect(tryStartPathNodeDrag).not.toHaveBeenCalled();
+    expect(onCanvasPenPrimaryMouseDown).toHaveBeenCalledWith(ev);
+    expect(ev.preventDefault).toHaveBeenCalled();
+  });
+
+  it('onCanvasMouseDownPrimary with pen tries path node drag before pen mousedown when not open-path pickup', () => {
     const tryStartPathNodeDrag = vi.fn(() => true);
     const onCanvasPenPrimaryMouseDown = vi.fn(() => false);
     const host = makeHost({
       getCurrentTool: () => 'pen',
       hasPathNodeEditState: () => true,
+      wouldPickUpPenOpenPathContinuationAt: () => false,
       tryStartPathNodeDrag,
       onCanvasPenPrimaryMouseDown
     });

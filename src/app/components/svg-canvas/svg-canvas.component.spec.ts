@@ -5017,6 +5017,130 @@ describe('SvgCanvasComponent', () => {
       expect(fixture.nativeElement.querySelector('[data-testid="canvas-pen-continue-hover"]')).toBeTruthy();
     });
 
+    it('picks up open path continuation on selected path in node-edit without deselecting', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="open-a" d="M 10 10 L 50 40" fill="none" stroke="black"/></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'open-a',
+        type: 'path',
+        fill: 'none',
+        stroke: '#000000',
+        strokeWidth: 2,
+        opacity: 1
+      });
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+      expect(component.isPathNodeEditModeActive).toBe(true);
+
+      const pathEl = fixture.nativeElement.querySelector('#open-a') as SVGPathElement;
+      expect(pathEl).toBeTruthy();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 40,
+        detail: 1,
+        preventDefault: vi.fn(),
+        target: pathEl
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      expect(component.isPenSessionActive).toBe(true);
+      expect(shapeSelectionService.isShapeSelected('open-a')).toBe(true);
+      expect(component.isPathNodeEditModeActive).toBe(true);
+    });
+
+    it('picks up open path continuation at tail node anchor while path is selected', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 100 100"><path id="open-a" d="M 10 10 L 50 40" fill="none" stroke="black"/></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'open-a',
+        type: 'path',
+        fill: 'none',
+        stroke: '#000000',
+        strokeWidth: 2,
+        opacity: 1
+      });
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+
+      const tailAnchor = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-path-node-anchor"][data-path-node-path-id="open-a"][data-path-node-anchor-index="1"]'
+      ) as Element;
+      expect(tailAnchor).toBeTruthy();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 50,
+        clientY: 40,
+        detail: 1,
+        preventDefault: vi.fn(),
+        target: tailAnchor
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      expect(component.isPenSessionActive).toBe(true);
+      expect(shapeSelectionService.isShapeSelected('open-a')).toBe(true);
+    });
+
+    it('finishing head continuation without close re-anchors M at last drawn vertex', async () => {
+      await loadSvgAndPenMode(
+        '<svg viewBox="0 0 600 400"><path id="open-a" d="M 281 189.609375 L 413 85.609375 L 450 233.609375" fill="none" stroke="black"/></svg>'
+      );
+
+      const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 281,
+        clientY: 189.609375,
+        detail: 1,
+        shiftKey: true,
+        preventDefault: vi.fn(),
+        target: svgRoot
+      } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 293,
+        clientY: 259.609375,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 293,
+        clientY: 259.609375
+      } as MouseEvent);
+
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 369,
+        clientY: 280.609375,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 369,
+        clientY: 280.609375
+      } as MouseEvent);
+
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      const dAfter =
+        svgManipulationService.getSVGInstance()?.findOne('#open-a')?.attr('d')?.toString() ?? '';
+      expect(dAfter).toBe(
+        'M 369 280.609375 L 293 259.609375 L 281 189.609375 L 413 85.609375 L 450 233.609375'
+      );
+      expect(dAfter.toUpperCase()).not.toMatch(/Z/);
+    });
+
     it('picks up open path at head and prepends new stroke on finish', async () => {
       await loadSvgAndPenMode(
         '<svg viewBox="0 0 100 100"><path id="open-a" d="M 10 10 L 50 40" fill="none" stroke="black"/></svg>'

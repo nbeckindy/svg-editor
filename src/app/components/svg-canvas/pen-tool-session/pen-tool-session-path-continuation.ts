@@ -145,6 +145,54 @@ function appendLineVertices(
   return result;
 }
 
+function appendDrawableSegments(
+  segments: readonly PenPathSegment[],
+  toAppend: readonly PenPathSegment[]
+): PenPathSegment[] {
+  let result = segments.map((s) => ({ ...s })) as PenPathSegment[];
+  for (const seg of toAppend) {
+    if (seg.type === 'M') continue;
+    const end = lastCommittedVertex([seg]);
+    const cur = lastCommittedVertex(result);
+    if (end && cur && penSvgDistanceSq(cur, end) < 1e-8) continue;
+    result.push({ ...seg } as PenPathSegment);
+  }
+  return result;
+}
+
+/**
+ * Merge a prepend stroke with frozen existing geometry for **open finish** (no `Z`).
+ * Re-anchors `M` at the last vertex drawn from the original head, then walks back through
+ * earlier new vertices, then continues forward along the frozen open path from its head.
+ */
+export function combinePrependContinuationForOpen(
+  newStroke: readonly PenPathSegment[],
+  existing: readonly PenPathSegment[]
+): PenPathSegment[] | null {
+  if (existing.length < 1 || existing[0].type !== 'M') return null;
+  if (newStroke.length === 0 || newStroke[0].type !== 'M') return null;
+
+  if (newStroke.length === 1) {
+    return existing.map((s) => ({ ...s })) as PenPathSegment[];
+  }
+
+  if (!penPathSegmentsAreValid(newStroke)) return null;
+
+  const newVerts = drawableEndVerticesAfterMoveto(newStroke);
+  if (newVerts.length === 0) {
+    return existing.map((s) => ({ ...s })) as PenPathSegment[];
+  }
+
+  const reversed = [...newVerts].reverse();
+  const head = { x: existing[0].x, y: existing[0].y };
+  const body = existing.slice(1);
+
+  let result: PenPathSegment[] = [{ type: 'M', x: reversed[0].x, y: reversed[0].y }];
+  result = appendLineVertices(result, reversed.slice(1));
+  result = appendLineVertices(result, [head]);
+  return appendDrawableSegments(result, body);
+}
+
 /**
  * Merge a prepend stroke with frozen existing geometry for **close at tail**.
  * Keeps the original open path forward (head→tail), then appends new vertices drawn from `M`

@@ -1091,6 +1091,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return this.penTool.onCanvasPenPrimaryMouseDown(event, (cx, cy, s) => this.getSnappedPenPoint(cx, cy, s));
   }
 
+  wouldPickUpPenOpenPathContinuationAt(event: MouseEvent): boolean {
+    return this.penTool.wouldPickUpPenOpenPathContinuationAt(event);
+  }
+
   isCreationToolActive(): boolean {
     return this.editorTool.isCreationTool();
   }
