@@ -15,7 +15,7 @@ import {
 } from './pen-tool-session-insert-on-path';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
 import type { PenContinuingPathRewrite } from './pen-tool-session-path-continuation';
-import type { PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
+import { clearPendingSegmentFields, type PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
 
 /**
  * Narrow surface for canvas primary / document pointer routing extracted from {@link PenToolSession}.
@@ -87,11 +87,7 @@ export interface PenCanvasInputView {
 
 export function handlePenCanvasMouseDownForView(v: PenCanvasInputView, event: MouseEvent, pt: { x: number; y: number }): void {
   if (event.detail >= 2) {
-    v.pendingSegment = null;
-    v.pendingLastClient = null;
-    v.pendingDragSvg = null;
-    v.pendingCurveAltChord = false;
-    v.pendingShiftAngleSnap = false;
+    clearPendingSegmentFields(v);
     v.clearFirstAnchorAwaitingDraft();
     v.clearColocatedDraft();
     if (v.penSession.getSegments().length === 0) {

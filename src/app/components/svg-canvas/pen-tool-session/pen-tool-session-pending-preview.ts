@@ -18,6 +18,40 @@ export type PenPendingSegmentForPreview = {
   firstSegmentCurveDraft?: PenFirstAnchorP3Draft | null;
 };
 
+/** Mutable pending-segment draft slice cleared on cancel / commit complete. */
+export type PendingSegmentDraftClearTarget = {
+  pendingSegment: PenPendingSegmentForPreview | null;
+  pendingLastClient: { x: number; y: number } | null;
+  pendingDragSvg: { x: number; y: number } | null;
+  pendingCurveAltChord: boolean;
+  pendingShiftAngleSnap: boolean;
+};
+
+/** Same fields as {@link PendingSegmentDraftClearTarget} on {@link PenToolSession} / lifecycle views. */
+export type PenPrefixedPendingSegmentDraftClearTarget = {
+  penPendingSegment: PenPendingSegmentForPreview | null;
+  penPendingLastClient: { x: number; y: number } | null;
+  penPendingDragSvg: { x: number; y: number } | null;
+  penPendingCurveAltChord: boolean;
+  penPendingShiftAngleSnap: boolean;
+};
+
+export function clearPendingSegmentFields(target: PendingSegmentDraftClearTarget): void {
+  target.pendingSegment = null;
+  target.pendingLastClient = null;
+  target.pendingDragSvg = null;
+  target.pendingCurveAltChord = false;
+  target.pendingShiftAngleSnap = false;
+}
+
+export function clearPenPendingSegmentFields(target: PenPrefixedPendingSegmentDraftClearTarget): void {
+  target.penPendingSegment = null;
+  target.penPendingLastClient = null;
+  target.penPendingDragSvg = null;
+  target.penPendingCurveAltChord = false;
+  target.penPendingShiftAngleSnap = false;
+}
+
 /** Pending segment end `P3` for preview / chord geometry: the mousedown-planted `startSvg` (second anchor). */
 export function penPendingEffectiveEndSvg(
   pending: Pick<PenPendingSegmentForPreview, 'startSvg'>

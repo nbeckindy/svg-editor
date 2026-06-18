@@ -16,7 +16,7 @@ import {
   type PenPathSegment
 } from '../../../models/pen-path';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
-import type { PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
+import { clearPendingSegmentFields, type PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
 
 /**
  * Mutable pen draft slice + delegates for {@link commitPenPendingSegmentForView} /
@@ -114,11 +114,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
         v.pendingDragSvg ??
         v.pendingSegment.startSvg;
       const pending = v.pendingSegment;
-      v.pendingSegment = null;
-      v.pendingLastClient = null;
-      v.pendingDragSvg = null;
-      v.pendingCurveAltChord = false;
-      v.pendingShiftAngleSnap = false;
+      clearPendingSegmentFields(v);
       const committed = v.penSession.getSegments();
       const dragClose =
         committed.length >= 2 && committed[1]!.type === 'C'
@@ -142,11 +138,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       const closeClickWithoutDrag =
         Math.hypot(event.clientX - startClient.x, event.clientY - startClient.y) < MARQUEE_MIN_DRAG_PX;
 
-      v.pendingSegment = null;
-      v.pendingLastClient = null;
-      v.pendingDragSvg = null;
-      v.pendingCurveAltChord = false;
-      v.pendingShiftAngleSnap = false;
+      clearPendingSegmentFields(v);
 
       if (penSvgDistanceSq(anchor, closeTarget) > 1e-12) {
         if (closeClickWithoutDrag) {
@@ -172,11 +164,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       v.tryFinishPath(true);
       return;
     }
-    v.pendingSegment = null;
-    v.pendingLastClient = null;
-    v.pendingDragSvg = null;
-    v.pendingCurveAltChord = false;
-    v.pendingShiftAngleSnap = false;
+    clearPendingSegmentFields(v);
     v.tryFinishPath(true);
     return;
   }
@@ -206,11 +194,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
     const screenDist0 = Math.hypot(event.clientX - startClient.x, event.clientY - startClient.y);
     if (screenDist0 < MARQUEE_MIN_DRAG_PX) {
       v.clearFirstAnchorAwaitingDraft();
-      v.pendingSegment = null;
-      v.pendingLastClient = null;
-      v.pendingDragSvg = null;
-      v.pendingCurveAltChord = false;
-      v.pendingShiftAngleSnap = false;
+      clearPendingSegmentFields(v);
       v.pointerSvg = { x: anchor.x, y: anchor.y };
       v.markForCheck();
       return;
@@ -224,11 +208,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
     Math.hypot(event.clientX - startClient.x, event.clientY - startClient.y) < MARQUEE_MIN_DRAG_PX &&
     !v.pendingShowsCurvePreview()
   ) {
-    v.pendingSegment = null;
-    v.pendingLastClient = null;
-    v.pendingDragSvg = null;
-    v.pendingCurveAltChord = false;
-    v.pendingShiftAngleSnap = false;
+    clearPendingSegmentFields(v);
     v.markForCheck();
     return;
   }
@@ -248,11 +228,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       frozenOutgoingP1Svg: v.pendingCubicAltEndOnly() ? undefined : { x: mirrored.x1, y: mirrored.y1 }
     };
     v.awaitingColocatedEndpoint = true;
-    v.pendingSegment = null;
-    v.pendingLastClient = null;
-    v.pendingDragSvg = null;
-    v.pendingCurveAltChord = false;
-    v.pendingShiftAngleSnap = false;
+    clearPendingSegmentFields(v);
     const tip = lastCommittedVertex(v.penSession.getSegments());
     if (tip) {
       v.pointerSvg = { x: tip.x, y: tip.y };
@@ -276,11 +252,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       shiftAngleSnap: v.pendingShiftAngleSnap,
       frozenOutgoingP1Svg: v.pendingCubicAltEndOnly() ? undefined : { x: mirrored.x1, y: mirrored.y1 }
     };
-    v.pendingSegment = null;
-    v.pendingLastClient = null;
-    v.pendingDragSvg = null;
-    v.pendingCurveAltChord = false;
-    v.pendingShiftAngleSnap = false;
+    clearPendingSegmentFields(v);
     v.markForCheck();
     return;
   }
@@ -314,11 +286,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
       v.commitDraggedCurve(anchor, resolvedEnd, dragCurrent, ctrl, undefined, placementDrag);
     }
   }
-  v.pendingSegment = null;
-  v.pendingLastClient = null;
-  v.pendingDragSvg = null;
-  v.pendingCurveAltChord = false;
-  v.pendingShiftAngleSnap = false;
+  clearPendingSegmentFields(v);
   const lvAfter = lastCommittedVertex(v.penSession.getSegments());
   if (lvAfter) v.pointerSvg = { x: lvAfter.x, y: lvAfter.y };
   v.markForCheck();
@@ -326,11 +294,7 @@ export function commitPenPendingSegmentForView(v: PenPendingCommitView, event: M
 
 export function flushPenPendingAsCurrentPointerForView(v: PenPendingCommitView): void {
   if (!v.pendingSegment || !v.pointerSvg) {
-    v.pendingSegment = null;
-    v.pendingLastClient = null;
-    v.pendingDragSvg = null;
-    v.pendingCurveAltChord = false;
-    v.pendingShiftAngleSnap = false;
+    clearPendingSegmentFields(v);
     return;
   }
   const pendingSeg = v.pendingSegment;
@@ -349,11 +313,7 @@ export function flushPenPendingAsCurrentPointerForView(v: PenPendingCommitView):
     const lc0 = v.pendingLastClient ?? startClient;
     const screenDist0 = Math.hypot(lc0.x - startClient.x, lc0.y - startClient.y);
     if (screenDist0 < MARQUEE_MIN_DRAG_PX) {
-      v.pendingSegment = null;
-      v.pendingLastClient = null;
-      v.pendingDragSvg = null;
-      v.pendingCurveAltChord = false;
-      v.pendingShiftAngleSnap = false;
+      clearPendingSegmentFields(v);
       return;
     }
   }
@@ -366,11 +326,7 @@ export function flushPenPendingAsCurrentPointerForView(v: PenPendingCommitView):
       MARQUEE_MIN_DRAG_PX &&
     !v.pendingShowsCurvePreview()
   ) {
-    v.pendingSegment = null;
-    v.pendingLastClient = null;
-    v.pendingDragSvg = null;
-    v.pendingCurveAltChord = false;
-    v.pendingShiftAngleSnap = false;
+    clearPendingSegmentFields(v);
     return;
   }
   if (v.pendingChordColocated() && v.pendingShowsCurvePreview()) {
@@ -389,11 +345,7 @@ export function flushPenPendingAsCurrentPointerForView(v: PenPendingCommitView):
       frozenOutgoingP1Svg: v.pendingCubicAltEndOnly() ? undefined : { x: mirrored.x1, y: mirrored.y1 }
     };
     v.awaitingColocatedEndpoint = true;
-    v.pendingSegment = null;
-    v.pendingLastClient = null;
-    v.pendingDragSvg = null;
-    v.pendingCurveAltChord = false;
-    v.pendingShiftAngleSnap = false;
+    clearPendingSegmentFields(v);
     const tip = lastCommittedVertex(v.penSession.getSegments());
     if (tip) {
       v.pointerSvg = { x: tip.x, y: tip.y };
@@ -434,11 +386,7 @@ export function flushPenPendingAsCurrentPointerForView(v: PenPendingCommitView):
       v.commitDraggedCurve(anchor, resolvedEnd, dragCurrent, ctrl, undefined, placementDrag);
     }
   }
-  v.pendingSegment = null;
-  v.pendingLastClient = null;
-  v.pendingDragSvg = null;
-  v.pendingCurveAltChord = false;
-  v.pendingShiftAngleSnap = false;
+  clearPendingSegmentFields(v);
   const lvFlush = lastCommittedVertex(v.penSession.getSegments());
   if (lvFlush) v.pointerSvg = { x: lvFlush.x, y: lvFlush.y };
   v.markForCheck();

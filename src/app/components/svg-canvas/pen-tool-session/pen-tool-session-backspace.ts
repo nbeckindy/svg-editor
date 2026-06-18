@@ -1,7 +1,7 @@
 import { lastCommittedVertex, penPathOnlyMoveto, type PenPathSegment } from '../../../models/pen-path';
 import type { PenFirstAnchorP3Draft } from '../../../models/pen-path';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
-import type { PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
+import { clearPenPendingSegmentFields, type PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
 
 /**
  * Narrow surface for {@link tryPenBackspaceShortcutForView}. Implemented by {@link PenToolSession}.
@@ -65,11 +65,7 @@ export function tryPenBackspaceShortcutForView(v: PenBackspaceShortcutView): boo
   const pending = v.penPendingSegment;
   if (pending?.firstSegmentCurveDraft && penPathOnlyMoveto(v.penSession.getSegments())) {
     const d = pending.firstSegmentCurveDraft;
-    v.penPendingSegment = null;
-    v.penPendingLastClient = null;
-    v.penPendingDragSvg = null;
-    v.penPendingCurveAltChord = false;
-    v.penPendingShiftAngleSnap = false;
+    clearPenPendingSegmentFields(v);
     v.penFirstAnchorP3Draft = d;
     const m0 = v.penSession.getSegments()[0];
     if (m0?.type === 'M') {
@@ -94,11 +90,7 @@ export function tryPenBackspaceShortcutForView(v: PenBackspaceShortcutView): boo
   }
 
   if (pending) {
-    v.penPendingSegment = null;
-    v.penPendingLastClient = null;
-    v.penPendingDragSvg = null;
-    v.penPendingCurveAltChord = false;
-    v.penPendingShiftAngleSnap = false;
+    clearPenPendingSegmentFields(v);
     const segsAfter = v.penSession.getSegments();
     if (penPathOnlyMoveto(segsAfter)) {
       v.clearDrawingState();

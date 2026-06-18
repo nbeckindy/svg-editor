@@ -1,6 +1,6 @@
 import type { PenSession, PenPathSegment, PenFirstAnchorP3Draft } from '../../../models/pen-path';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
-import type { PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
+import { clearPenPendingSegmentFields, type PenPendingSegmentForPreview } from './pen-tool-session-pending-preview';
 import type { PenContinuingPathRewrite } from './pen-tool-session-path-continuation';
 import type { PenInsertOnPathDragState } from './pen-tool-session-insert-on-path';
 
@@ -63,15 +63,11 @@ export function clearDrawingStateForView(v: PenDrawingStateClearView): void {
       const { segmentIndex, before } = v.penOutgoingHandleDrag;
       v.penSession.replaceSegmentAt(segmentIndex, before);
     }
-    v.penPendingSegment = null;
-    v.penPendingLastClient = null;
-    v.penPendingDragSvg = null;
+    clearPenPendingSegmentFields(v);
     v.penHoverClientPx = null;
     v.penContinuingPathRewrite = null;
     v.penOutgoingHandleDrag = null;
     v.clearPenInsertOnPathDragState();
-    v.penPendingCurveAltChord = false;
-    v.penPendingShiftAngleSnap = false;
     v.ports.setPenAltCurveMode(false);
     v.clearPenFirstAnchorAwaitingDraft();
     v.clearPenColocatedSegmentEndpointDraft();

@@ -50,6 +50,7 @@ import {
   penPendingDragSampleSvg as samplePenPendingDragSvg,
   penPendingStartNearPathMoveto as computePenPendingStartNearPathMoveto,
   penPendingStartNearPathCloseTarget as computePenPendingStartNearPathCloseTarget,
+  clearPendingSegmentFields,
   type PenPendingSegmentForPreview
 } from './pen-tool-session-pending-preview';
 import {
@@ -382,11 +383,7 @@ export class PenToolSession {
         setPointerAfterFirstSegmentDraftCommit: (tip) => {
           self.penPointerSvg = { x: tip.x, y: tip.y };
         },
-        clearPendingSegmentFields: () => {
-          self.penPendingSegment = null;
-          self.penPendingLastClient = null;
-          self.penPendingDragSvg = null;
-        },
+        clearPendingSegmentFields: () => clearPendingSegmentFields(self.pendingCommitView()),
         markForCheck: () => self.ports.markForCheck()
       };
     }
