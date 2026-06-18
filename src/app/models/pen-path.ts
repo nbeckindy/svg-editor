@@ -698,7 +698,7 @@ function snapCubicControlsFromShiftAnchor(
 
 /**
  * Cubic controls for pen pending preview/commit (matches
- * {@link PenToolSession} `penPendingCubicAdjustedSnappedControls` behavior).
+ * {@link commitPenDraggedCurveOnSession} / overlay chrome via {@link penAdjustedCubicControlsForPendingLikeDrag}).
  * Default placement uses {@link placementCornerAnchorDragCubicControlPoints}; Alt uses pointer placement.
  */
 export function penAdjustedCubicControlsForPendingLikeDrag(

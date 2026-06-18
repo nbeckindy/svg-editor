@@ -20,19 +20,12 @@
  */
 import {
   PenSession,
-  lastCommittedVertex,
   penPathOnlyMoveto,
-  penPathSegmentsAreValid,
-  penReflectStateAfterCommitted,
-  penCubicSmoothReflectP1Usable,
+  penPathSegmentsToD,
   penSvgDistanceSq,
   penLastOutgoingHandleSvg,
-  snapVectorTo45DegFrom,
-  penAdjustedCubicControlsForPendingLikeDrag,
   penStartingLegIsCubic,
-  placementPointerCubicControlPoints,
   type PenFirstAnchorP3Draft,
-  type CubicControlPoints,
   type PenPathSegment
 } from '../../../models/pen-path';
 import { PenSegmentReplaceCommand } from '../../../models/editor-commands';
@@ -49,14 +42,14 @@ import {
 import type { PenDiscardReason, PenToolSessionPorts } from './pen-tool-session-ports';
 import { penSvgUserPointToOverlayPixel, penSvgUserSegmentToOverlayLine } from './pen-tool-session-overlay';
 import {
-  PEN_FINISH_FEEDBACK_DURATION_MS,
-  PEN_SINGLE_CLICK_CLOSE_RADIUS_PX
+  PEN_FINISH_FEEDBACK_DURATION_MS
 } from './pen-tool-session-constants';
 import {
   computePenPendingShowsCurvePreviewForClose,
   penPendingCurvePreviewEndSvg as penPendingCurvePreviewEndUserSvg,
   penPendingDragSampleSvg as samplePenPendingDragSvg,
   penPendingStartNearPathMoveto as computePenPendingStartNearPathMoveto,
+  penPendingStartNearPathCloseTarget as computePenPendingStartNearPathCloseTarget,
   type PenPendingSegmentForPreview
 } from './pen-tool-session-pending-preview';
 import {
@@ -67,6 +60,7 @@ import {
 import {
   computePenCloseTargetHoverOverlay,
   computePenCommittedOutgoingHandleSvg,
+  computePenOpenPathContinueHoverOverlay,
   computePenRubberBandOverlay
 } from './pen-tool-session-preview-overlays';
 import {
@@ -87,14 +81,13 @@ import {
   type PenCanvasInputView
 } from './pen-tool-session-canvas-input';
 import {
-  combinePenContinuationSegments as splicePenContinuationSegments,
-  findPenOpenPathFinishJoin as findPenOpenPathFinishJoinForPorts,
+  findPenOpenPathEndpointHoverAtClient,
   findPenOpenPathPickupAtEvent,
-  openPenDrawableForJoin as openPenDrawableForJoinOnPorts,
+  isPrependContinuationCloseAtFrozenTail,
   penClientPxWithinJoinToleranceVsSvgPoint as penClientPxWithinJoinToleranceVsSvgPointForPorts,
   penEndpointsWithinJoinTolerance as penEndpointsWithinJoinToleranceForPorts,
-  penScreenDistanceSq as penScreenDistanceSqForPorts,
-  penSvgUserPointToApproxClient as penSvgUserPointToApproxClientForPorts
+  penSessionCloseTargetMv,
+  type PenContinuingPathRewrite
 } from './pen-tool-session-path-continuation';
 import {
   tryCommitPenFirstSegmentCurveFromPendingDraftForView,
@@ -129,7 +122,7 @@ export class PenToolSession {
   private penAwaitingColocatedSegmentEndpointAfterDraft = false;
   private penColocatedSegmentEndpointDraft: PenFirstAnchorP3Draft | null = null;
   private penHoverClientPx: { x: number; y: number } | null = null;
-  private penContinuingPathRewrite: { pathId: string; originalD: string } | null = null;
+  private penContinuingPathRewrite: PenContinuingPathRewrite | null = null;
   private penOutgoingHandleDrag: { segmentIndex: number; before: PenPathSegment } | null = null;
 
   /** Mousedown→drag→mouseup insert on an existing path (idle pen session). */
@@ -221,13 +214,19 @@ export class PenToolSession {
           self.penPointerSvg = v;
         },
         pathStartMv: () => self.penPathStartMv(),
+        pathCloseTargetMv: () => self.penPathCloseTargetMv(),
         pendingShowsCurvePreview: () => self.penPendingShowsCurvePreview,
         pendingMousedownInCloseRadius: () => self.penPendingMousedownInCloseRadius(),
         pendingResolvedEndForCommit: (p, r) => self.penPendingResolvedEndSvgForCommit(p, r),
         pendingIsFirstFromMoveto: () => self.penPendingIsFirstSegmentFromMovetoGesture(),
         pendingChordColocated: () => self.penPendingChordColocated(),
         pendingStartNearPathMoveto: () => self.penPendingStartNearPathMoveto(),
+        pendingStartNearPathCloseTarget: () => self.penPendingStartNearPathCloseTarget(),
         pendingCubicAltEndOnly: () => self.penPendingCubicAltEndHandleOnly(),
+        isPrependContinuationCloseAtFrozenTail: () =>
+          isPrependContinuationCloseAtFrozenTail(self.penContinuingPathRewrite),
+        isPointerWithinCloseRadius: (clientX, clientY) =>
+          self.isPenPointerWithinCloseRadius(clientX, clientY),
         clearFirstAnchorAwaitingDraft: () => self.clearPenFirstAnchorAwaitingDraft(),
         get colocatedDraft() {
           return self.penColocatedSegmentEndpointDraft;
@@ -414,6 +413,7 @@ export class PenToolSession {
         flushPenPendingAsCurrentPointer: () => self.flushPenPendingAsCurrentPointer(),
         purgeProvisionalPenSegmentHistory: () => self.purgeProvisionalPenSegmentHistory(),
         pathStartMv: () => self.penPathStartMv(),
+        pathCloseTargetMv: () => self.penPathCloseTargetMv(),
         clearPenFinishFeedback: () => self.clearPenFinishFeedback(),
         clearDrawingState: () => clearDrawingStateForView(self.drawingStateClearView())
       };
@@ -471,7 +471,7 @@ export class PenToolSession {
         set penHoverClientPx(v: { x: number; y: number } | null) {
           self.penHoverClientPx = v;
         },
-        set penContinuingPathRewrite(v: { pathId: string; originalD: string } | null) {
+        set penContinuingPathRewrite(v: PenContinuingPathRewrite | null) {
           self.penContinuingPathRewrite = v;
         },
         set penOutgoingHandleDrag(v: { segmentIndex: number; before: PenPathSegment } | null) {
@@ -554,6 +554,15 @@ export class PenToolSession {
 
   get isPenSessionActive(): boolean {
     return this.penSession.getSegments().length > 0;
+  }
+
+  /**
+   * Close ring / click-to-close allowed when there is drawable geometry after `M`, or when prepending
+   * from an open path head (close at frozen tail reuses existing body + `Z`).
+   */
+  private penCloseAffordanceAllowed(): boolean {
+    if (this.penCommittedPathHasVertexBeyondMoveto()) return true;
+    return isPrependContinuationCloseAtFrozenTail(this.penContinuingPathRewrite);
   }
 
   /**
@@ -651,17 +660,25 @@ export class PenToolSession {
       this.penPendingSegment,
       this.penPathStartMv(),
       this.penCommittedPathHasVertexBeyondMoveto(),
-      (ax, ay, bx, by) => this.penEndpointsWithinJoinTolerance(ax, ay, bx, by)
+      (ax, ay, bx, by) => penEndpointsWithinJoinToleranceForPorts(this.ports, ax, ay, bx, by)
     );
   }
 
-  /** Pending curve preview end vertex: exact `M` when closing from start, else effective segment end. */
+  private penPendingStartNearPathCloseTarget(): boolean {
+    return computePenPendingStartNearPathCloseTarget(
+      this.penPendingSegment,
+      this.penPathCloseTargetMv(),
+      (ax, ay, bx, by) => penEndpointsWithinJoinToleranceForPorts(this.ports, ax, ay, bx, by)
+    );
+  }
+
+  /** Pending curve preview end vertex: exact close target when closing, else effective segment end. */
   private penPendingCurvePreviewEndSvg(pending: PenPendingSegmentForPreview): { x: number; y: number } {
     return penPendingCurvePreviewEndUserSvg(
       pending,
-      this.penPathStartMv(),
+      this.penPathCloseTargetMv(),
       this.penCommittedPathHasVertexBeyondMoveto(),
-      (ax, ay, bx, by) => this.penEndpointsWithinJoinTolerance(ax, ay, bx, by)
+      (ax, ay, bx, by) => penEndpointsWithinJoinToleranceForPorts(this.ports, ax, ay, bx, by)
     );
   }
 
@@ -681,7 +698,7 @@ export class PenToolSession {
       penPendingIsFirstSegmentFromMovetoGesture: this.penPendingIsFirstSegmentFromMovetoGesture(),
       penPendingChordColocated: this.penPendingChordColocated(),
       penPendingStartNearPathMoveto: this.penPendingStartNearPathMoveto(),
-      penPathStartMv: this.penPathStartMv(),
+      penPathStartMv: this.penPathCloseTargetMv(),
       allowRelaxedCloseRingCurvePreview: penStartingLegIsCubic(this.penSession.getSegments())
     });
   }
@@ -873,11 +890,47 @@ export class PenToolSession {
       currentToolIsPen: this.ports.getCurrentTool() === 'pen',
       isPenSessionActive: this.isPenSessionActive,
       penHoverClientPx: this.penHoverClientPx,
-      segments: this.penSession.getSegments(),
-      penCommittedPathHasVertexBeyondMoveto: this.penCommittedPathHasVertexBeyondMoveto(),
+      penCloseTargetMv: this.penPathCloseTargetMv(),
+      penCloseAffordanceAllowed: this.penCloseAffordanceAllowed(),
       isPenPointerWithinCloseRadius: (clientX, clientY) =>
         this.isPenPointerWithinCloseRadius(clientX, clientY)
     });
+  }
+
+  /** Idle pen: open-path head/tail continue affordance — same ring styling as close target. */
+  get penOpenPathContinueHoverOverlay(): { cx: number; cy: number } | null {
+    return computePenOpenPathContinueHoverOverlay({
+      ports: this.ports,
+      currentToolIsPen: this.ports.getCurrentTool() === 'pen',
+      isPenSessionActive: this.isPenSessionActive,
+      penHoverClientPx: this.penHoverClientPx,
+      findOpenPathEndpointHoverAtClient: (clientX, clientY) => {
+        const hit = findPenOpenPathEndpointHoverAtClient(this.ports, clientX, clientY);
+        return hit ? hit.endpoint : null;
+      }
+    });
+  }
+
+  /** While continuing from an open path head, show the frozen existing stroke as a ghost preview. */
+  get penContinuationGhostPathD(): string | null {
+    const cont = this.penContinuingPathRewrite;
+    if (cont?.stitch !== 'prependBeforeExisting' || !cont.existingSegments?.length) {
+      return null;
+    }
+    return penPathSegmentsToD(cont.existingSegments);
+  }
+
+  /** Update hover sample for idle-pen continue ring (throttled from canvas pointer router). */
+  updateIdlePenHoverClient(clientX: number, clientY: number): void {
+    if (this.ports.getCurrentTool() !== 'pen' || this.isPenSessionActive || this.isPenInsertOnPathDragActive) {
+      if (this.penHoverClientPx !== null) {
+        this.penHoverClientPx = null;
+        this.ports.markForCheck();
+      }
+      return;
+    }
+    this.penHoverClientPx = { x: clientX, y: clientY };
+    this.ports.markForCheck();
   }
 
   confirmDiscardPenSessionIfNeeded(reason: PenDiscardReason): boolean {
@@ -892,13 +945,18 @@ export class PenToolSession {
     return s?.type === 'M' ? { x: s.x, y: s.y } : null;
   }
 
+  /** Close-ring / click-to-close target: frozen-path tail when prepending from `M`, else session `M`. */
+  penPathCloseTargetMv(): { x: number; y: number } | null {
+    return penSessionCloseTargetMv(this.penContinuingPathRewrite, this.penSession.getSegments());
+  }
+
   /**
-   * True if (clientX, clientY) is within {@link PEN_SINGLE_CLICK_CLOSE_RADIUS_PX} px of pen path start.
+   * True if (clientX, clientY) is within {@link PEN_SINGLE_CLICK_CLOSE_RADIUS_PX} px of the close target.
    */
   isPenPointerWithinCloseRadius(clientX: number, clientY: number): boolean {
-    const m = this.penPathStartMv();
-    if (!m) return false;
-    return this.penClientPxWithinJoinToleranceVsSvgPoint(clientX, clientY, m.x, m.y);
+    const target = this.penPathCloseTargetMv();
+    if (!target) return false;
+    return penClientPxWithinJoinToleranceVsSvgPointForPorts(this.ports, clientX, clientY, target.x, target.y);
   }
 
   /**
@@ -910,66 +968,42 @@ export class PenToolSession {
   private penPendingMousedownInCloseRadius(): boolean {
     const pending = this.penPendingSegment;
     if (!pending) return false;
-    if (!this.penCommittedPathHasVertexBeyondMoveto()) return false;
+    if (!this.penCloseAffordanceAllowed()) return false;
     return this.isPenPointerWithinCloseRadius(pending.startClient.x, pending.startClient.y);
   }
 
-  /** Viewport-pixel tolerance match for pen join / single-click-close (never true if mapping fails). */
-  penClientPxWithinJoinToleranceVsSvgPoint(
-    clientX: number,
-    clientY: number,
-    svgX: number,
-    svgY: number,
-    tolPx = PEN_SINGLE_CLICK_CLOSE_RADIUS_PX
-  ): boolean {
-    return penClientPxWithinJoinToleranceVsSvgPointForPorts(this.ports, clientX, clientY, svgX, svgY, tolPx);
-  }
-
-  svgUserPointToApproxClient(userX: number, userY: number): { x: number; y: number } | null {
-    return penSvgUserPointToApproxClientForPorts(this.ports, userX, userY);
-  }
-
-  /** Squared distance in viewport pixels between two root-SVG-user points (`null` if mapping fails). */
-  penScreenDistanceSq(ax: number, ay: number, bx: number, by: number): number | null {
-    return penScreenDistanceSqForPorts(this.ports, ax, ay, bx, by);
-  }
-
-  /** Pen: join hit test (~{@link PEN_SINGLE_CLICK_CLOSE_RADIUS_PX} viewport px). Returns false if mapping fails so we never merge accidentally. */
-  penEndpointsWithinJoinTolerance(ax: number, ay: number, bx: number, by: number): boolean {
-    return penEndpointsWithinJoinToleranceForPorts(this.ports, ax, ay, bx, by);
-  }
-
-  /** Parse `<path>` `d`; must be **open** and pen-compatible drawable segments */
-  openPenDrawableForJoin(pathId: string): { segments: PenPathSegment[]; d: string } | null {
-    return openPenDrawableForJoinOnPorts(this.ports, pathId);
-  }
-
-  combinePenContinuationSegments(
-    primary: readonly PenPathSegment[],
-    continuation: readonly PenPathSegment[]
-  ): PenPathSegment[] | null {
-    return splicePenContinuationSegments(primary, continuation);
+  wouldPickUpPenOpenPathContinuationAt(event: MouseEvent): boolean {
+    if (this.penSession.getSegments().length !== 0 || this.penPendingSegment || this.penInsertOnPath) {
+      return false;
+    }
+    return findPenOpenPathPickupAtEvent(this.ports, event) !== null;
   }
 
   tryPickUpPenOpenPathContinuation(event: MouseEvent): boolean {
     if (this.penSession.getSegments().length !== 0) return false;
     const hit = findPenOpenPathPickupAtEvent(this.ports, event);
     if (!hit) return false;
-    this.penContinuingPathRewrite = { pathId: hit.pathId, originalD: hit.originalD };
-    this.penSession.restoreDrawableSegments(hit.segments);
-    this.penPointerSvg = { x: hit.tail.x, y: hit.tail.y };
+    if (hit.stitch === 'appendToExistingTail') {
+      this.penContinuingPathRewrite = {
+        pathId: hit.pathId,
+        originalD: hit.originalD,
+        stitch: 'appendToExistingTail'
+      };
+      this.penSession.restoreDrawableSegments(hit.segments);
+    } else {
+      this.penContinuingPathRewrite = {
+        pathId: hit.pathId,
+        originalD: hit.originalD,
+        stitch: 'prependBeforeExisting',
+        existingSegments: hit.segments
+      };
+      this.penSession.beginPath(hit.endpoint.x, hit.endpoint.y);
+    }
+    this.penPointerSvg = { x: hit.endpoint.x, y: hit.endpoint.y };
     this.penHoverClientPx = { x: event.clientX, y: event.clientY };
     this.ports.clearPenPostInsertAnchorOverlay();
     this.ports.markForCheck();
     return true;
-  }
-
-  findPenOpenPathFinishJoin(
-    finishingSegs: readonly PenPathSegment[]
-  ):
-    | { pathId: string; originalD: string; existing: PenPathSegment[]; stitch: 'appendToExistingTail' | 'prependBeforeExisting' }
-    | null {
-    return findPenOpenPathFinishJoinForPorts(this.ports, finishingSegs);
   }
 
   /** Pen tool: Backspace pops last committed anchor; cancels in-progress segment first. */
@@ -1004,57 +1038,7 @@ export class PenToolSession {
     this.ports.markForCheck();
   }
 
-  /**
-   * After Shift angle snap: Alt end-handle-only mode updates only `(x2,y2)`; default mode mirrors
-   * `(x1,y1)` through `(anchor,end)` from snapped `(x2,y2)` (see {@link snapCubicControlsFromShiftAnchor}).
-   */
-  snapPenPendingCubicControls(
-    anchor: { x: number; y: number },
-    end: { x: number; y: number },
-    controls: CubicControlPoints,
-    altEndHandleOnlyPlacement: boolean
-  ): CubicControlPoints {
-    if (!this.penPendingShiftAngleSnap) return controls;
-    const s = snapVectorTo45DegFrom(end, { x: controls.x2, y: controls.y2 });
-    if (altEndHandleOnlyPlacement) {
-      return { ...controls, x2: s.x, y2: s.y };
-    }
-    return {
-      x1: anchor.x + end.x - s.x,
-      y1: anchor.y + end.y - s.y,
-      x2: s.x,
-      y2: s.y
-    };
-  }
-
-  /**
-   * Corner-anchor cubic placement or Alt pointer placement, optional smooth-node reflection on P1, then Shift 45° snap.
-   */
-  private penPendingCubicAdjustedSnappedControls(
-    anchor: { x: number; y: number },
-    end: { x: number; y: number },
-    dragCurrent: { x: number; y: number },
-    dragStartSvg: { x: number; y: number },
-    segments: readonly PenPathSegment[],
-    altEndOnly: boolean,
-    shiftAngleSnap?: boolean,
-    /** First-anchor awaiting `P3`: match preview path (`P2 === P3`). */
-    zeroIncomingAtEnd = false
-  ): CubicControlPoints {
-    const sh = shiftAngleSnap === undefined ? this.penPendingShiftAngleSnap : shiftAngleSnap;
-    return penAdjustedCubicControlsForPendingLikeDrag(
-      anchor,
-      end,
-      dragCurrent,
-      dragStartSvg,
-      segments,
-      altEndOnly,
-      sh,
-      zeroIncomingAtEnd
-    );
-  }
-
-  /** Alt: use {@link placementPointerCubicControlPoints} (pointer on end handle only). */
+  /** Alt: chord end handle only (pointer placement on `P2`). */
   penPendingCubicAltEndHandleOnly(): boolean {
     return this.penPendingCurveAltChord;
   }
@@ -1272,6 +1256,9 @@ export class PenToolSession {
           headline: 'Pen: over shape — insert-on-path disabled (session not empty)',
           details
         };
+      }
+      if (this.wouldPickUpPenOpenPathContinuationAt({ clientX, clientY } as MouseEvent)) {
+        return { headline: 'Pen: continue open path at endpoint', details: ['Hit: open path head/tail'] };
       }
       const ins = this.evaluatePenInsertOnPathAt(penTarget, clientX, clientY);
       if (ins.ok) {
