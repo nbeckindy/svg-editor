@@ -345,6 +345,16 @@
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
           }
+          @if (editorChrome.penSessionPathOutlineOverlayD; as penOutlineD) {
+            <path
+              class="path-selection-outline"
+              data-testid="canvas-pen-session-path-outline"
+              [attr.d]="penOutlineD"
+              fill="none"
+              stroke="#1E88E5"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"/>
+          }
           @if (editorChrome.penCurvePreviewPathD || editorChrome.penFirstAnchorMirroredHandleDragActive || editorChrome.penColocatedTipMirroredHandleDragActive) {
             @for (h of editorChrome.penCurveHandleOverlays; track h.cx + ',' + h.cy) {
               <circle
@@ -447,6 +457,17 @@
               vector-effect="non-scaling-stroke"/>
           }
           @if (editorChrome.showPathNodeEditOverlays) {
+            @for (outline of editorChrome.pathSelectionOutlineOverlays; track outline.pathId) {
+              <path
+                class="path-selection-outline"
+                data-testid="canvas-path-selection-outline"
+                [attr.data-path-selection-outline-path-id]="outline.pathId"
+                [attr.d]="outline.d"
+                fill="none"
+                stroke="#1E88E5"
+                stroke-width="1.5"
+                vector-effect="non-scaling-stroke"/>
+            }
             @for (handle of editorChrome.pathNodeControlHandleOverlays; track $index) {
               <line
                 class="path-node-control-line"

@@ -277,6 +277,10 @@
   cursor: grabbing;
 }
 
+.path-selection-outline {
+  pointer-events: none;
+}
+
 .path-node-control-line {
   pointer-events: none;
 }

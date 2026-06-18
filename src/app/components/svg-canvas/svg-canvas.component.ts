@@ -62,6 +62,7 @@ import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createSvgCanvasPointerStack } from './svg-canvas-pointer-stack.factory';
 import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
 import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
+import { buildPathSelectionOutlineOverlayD } from '../../models/path-selection-outline';
 import {
   convertPathAnchorAtMoveSegmentIndexToCorner,
   convertPathAnchorAtMoveSegmentIndexToIndependentHandles,
@@ -789,6 +790,35 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       !this.isRotatingSelection &&
       !this.isSkewingSelection
     );
+  }
+
+  /**
+   * Thin blue path outline in overlay space for selected paths (node-edit or idle pen).
+   * Uses current DOM `d` so it tracks live node drags and parent transforms.
+   */
+  get pathSelectionOutlineOverlays(): { pathId: string; d: string }[] {
+    if (!this.showPathNodeEditOverlays || !this.pathNodeEditState) return [];
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg) return [];
+    const overlays: { pathId: string; d: string }[] = [];
+    for (const pathState of this.pathNodeEditState.paths) {
+      const pathEl = svg.findOne(`#${pathState.pathId}`)?.node as SVGPathElement | null;
+      if (!pathEl) continue;
+      const overlayD = this.pathLocalPathDToOutlineOverlayD(pathState.pathId, pathEl.getAttribute('d') ?? '');
+      if (overlayD) overlays.push({ pathId: pathState.pathId, d: overlayD });
+    }
+    return overlays;
+  }
+
+  /**
+   * Thin blue outline for the in-progress pen preview (`penSessionPreviewPathD` / curve preview).
+   * Root SVG user space → overlay pixels; same stroke chrome as {@link pathSelectionOutlineOverlays}.
+   */
+  get penSessionPathOutlineOverlayD(): string | null {
+    if (!this.isPenToolWithActiveSession()) return null;
+    const sourceD = this.penCurvePreviewPathD ?? this.penSessionPreviewPathD;
+    if (!sourceD?.trim()) return null;
+    return this.rootUserPathDToOutlineOverlayD(sourceD);
   }
 
   /** Blue bbox / union highlight: off during path node edit and whenever Pen is active (insert + idle). */
@@ -3230,6 +3260,24 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     const mapped = this.svgManipulation.mapPathLocalToRootUser(pathId, lx, ly);
     const o = this.svgBboxToOverlayPixels({ x: mapped.x, y: mapped.y, width: 0, height: 0 });
     return { x: o.x, y: o.y };
+  }
+
+  private pathLocalPathDToOutlineOverlayD(pathId: string, pathD: string): string | null {
+    const parsed = this.parsePathDataForNodeEditing(pathD);
+    if (!parsed) return null;
+    const d = buildPathSelectionOutlineOverlayD(pathId, parsed, (id, lx, ly) =>
+      this.pathNodeLocalPointToOverlay(id, lx, ly)
+    );
+    return d || null;
+  }
+
+  private rootUserPathDToOutlineOverlayD(pathD: string): string | null {
+    const parsed = this.parsePathDataForNodeEditing(pathD);
+    if (!parsed?.some((segment) => segment.type !== 'M')) return null;
+    const d = buildPathSelectionOutlineOverlayD('pen-session', parsed, (_id, rx, ry) =>
+      this.penRootUserPointToOverlay(rx, ry)
+    );
+    return d || null;
   }
 
   private pathNodeRootUserPointToLocal(pathId: string, rx: number, ry: number): { x: number; y: number } | null {

@@ -3053,6 +3053,72 @@ describe('SvgCanvasComponent', () => {
       expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBeGreaterThan(0);
     });
 
+    it('shows a thin non-scaling blue path outline when node-edit-selector is active', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-outline" d="M 10 10 L 60 50" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-outline',
+        type: 'path',
+        fill: '#ffffff',
+        stroke: '#ffffff',
+        strokeWidth: 4,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      const outline = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-path-selection-outline"][data-path-selection-outline-path-id="path-outline"]'
+      ) as SVGPathElement;
+      expect(outline).toBeTruthy();
+      expect(outline.getAttribute('stroke')).toBe('#1E88E5');
+      expect(outline.getAttribute('stroke-width')).toBe('1.5');
+      expect(outline.getAttribute('vector-effect')).toBe('non-scaling-stroke');
+      expect(outline.getAttribute('d')).toContain('M 10 10');
+      expect(outline.getAttribute('d')).toContain('L 60 50');
+    });
+
+    it('aligns path selection outline with transformed path geometry', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-outline-tx" transform="translate(20 30)" d="M 10 10 L 20 20" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-outline-tx',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      await activateNodeEditSelectorTool();
+      const outline = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-path-selection-outline"][data-path-selection-outline-path-id="path-outline-tx"]'
+      ) as SVGPathElement;
+      expect(outline).toBeTruthy();
+      expect(outline.getAttribute('d')).toBe('M 30 40 L 40 50');
+    });
+
+    it('shows path selection outline under pen when a parseable path is selected', async () => {
+      await loadSvgForSelector(
+        '<svg viewBox="0 0 100 100"><path id="path-pen-outline" d="M 5 5 L 40 40" /></svg>'
+      );
+      shapeSelectionService.selectShape({
+        id: 'path-pen-outline',
+        type: 'path',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      editorToolService.setTool('pen');
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 0));
+      fixture.detectChanges();
+      const outline = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-path-selection-outline"][data-path-selection-outline-path-id="path-pen-outline"]'
+      );
+      expect(outline).toBeTruthy();
+    });
+
     it('dismisses path node edit on Escape when pen tool is active', async () => {
       await loadSvgForSelector('<svg viewBox="0 0 100 100"><path id="path-pen-esc" d="M 10 10 L 20 20" /></svg>');
       shapeSelectionService.selectShape({
@@ -3145,6 +3211,7 @@ describe('SvgCanvasComponent', () => {
       expect(component.isPathNodeEditModeActive).toBe(true);
       expect(component.showPathNodeEditOverlays).toBe(true);
       expect(fixture.nativeElement.querySelectorAll('[data-testid="canvas-path-node-anchor"]').length).toBeGreaterThan(0);
+      expect(fixture.nativeElement.querySelector('[data-testid="canvas-path-selection-outline"]')).toBeTruthy();
 
       vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 50, height: 40 });
       const pathEl =
@@ -3177,6 +3244,7 @@ describe('SvgCanvasComponent', () => {
 
       expect(component.isDraggingShape).toBe(true);
       expect(component.showPathNodeEditOverlays).toBe(false);
+      expect(component.pathSelectionOutlineOverlays).toEqual([]);
     });
 
     it('hides path node overlays while resizing selection', async () => {
@@ -4218,6 +4286,36 @@ describe('SvgCanvasComponent', () => {
 
       expect(pathEl?.getAttribute('d')).toBe(before);
       expect(preventDefault).not.toHaveBeenCalled();
+    });
+
+    it('shows pen session path outline while drawing a new stroke', async () => {
+      await loadEmptySvgAndPenMode();
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 30,
+        clientY: 40,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      component.onDocumentMouseUp({ button: 0, clientX: 30, clientY: 40 } as MouseEvent);
+      fixture.detectChanges();
+      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penSessionPreviewPathD).toMatch(/ L /);
+      expect(component.penSessionPathOutlineOverlayD).toBeTruthy();
+      const penOutline = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-pen-session-path-outline"]'
+      ) as SVGPathElement;
+      expect(penOutline).toBeTruthy();
+      expect(penOutline.getAttribute('stroke')).toBe('#1E88E5');
+      expect(penOutline.getAttribute('stroke-width')).toBe('1.5');
+      expect(penOutline.getAttribute('vector-effect')).toBe('non-scaling-stroke');
     });
 
     it('accepts pen mousedown on empty canvas background', async () => {

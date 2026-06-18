@@ -128,6 +128,12 @@ export class SvgCanvasEditorChromeFacade {
   get showPathNodeEditOverlays(): boolean {
     return this.root.showPathNodeEditOverlays;
   }
+  get pathSelectionOutlineOverlays() {
+    return this.root.pathSelectionOutlineOverlays;
+  }
+  get penSessionPathOutlineOverlayD(): string | null {
+    return this.root.penSessionPathOutlineOverlayD;
+  }
   get pathNodeControlHandleOverlays() {
     return this.root.pathNodeControlHandleOverlays;
   }
