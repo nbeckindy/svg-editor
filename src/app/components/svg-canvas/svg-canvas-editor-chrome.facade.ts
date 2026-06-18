@@ -134,6 +134,9 @@ export class SvgCanvasEditorChromeFacade {
   get penSessionPathOutlineOverlayD(): string | null {
     return this.root.penSessionPathOutlineOverlayD;
   }
+  get pathBooleanPreviewOverlayD(): string | null {
+    return this.root.pathBooleanPreviewOverlayD;
+  }
   get pathNodeControlHandleOverlays() {
     return this.root.pathNodeControlHandleOverlays;
   }

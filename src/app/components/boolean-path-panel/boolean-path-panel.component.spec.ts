@@ -6,6 +6,8 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
+import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
+import { PathBooleanGeometryService } from '../../services/path-boolean-geometry.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 
 describe('BooleanPathPanelComponent', () => {
@@ -13,6 +15,7 @@ describe('BooleanPathPanelComponent', () => {
   let selectedShapes: WritableSignal<ShapeProperties[]>;
   let currentTool: WritableSignal<string>;
   let applyPathBoolean: ReturnType<typeof vi.fn>;
+  let previewService: PathBooleanPreviewService;
 
   beforeEach(async () => {
     selectedShapes = signal<ShapeProperties[]>([]);
@@ -22,6 +25,7 @@ describe('BooleanPathPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [BooleanPathPanelComponent],
       providers: [
+        PathBooleanPreviewService,
         {
           provide: ShapeSelectionService,
           useValue: {
@@ -53,17 +57,23 @@ describe('BooleanPathPanelComponent', () => {
           }
         },
         {
-          provide: ChromeEditorApplyService,
+          provide: PathBooleanGeometryService,
           useValue: {
-            applyPathBooleanUnion: (ids: string[]) => applyPathBoolean('union', ids),
-            applyPathBooleanSubtract: (ids: string[]) => applyPathBoolean('subtract', ids),
-            applyPathBooleanIntersect: (ids: string[]) => applyPathBoolean('intersect', ids)
+            createGeometryPort: () => ({}),
+            unionLocalD: () => 'M 0 0 L 10 0 L 10 10 L 0 10 Z',
+            subtractLocalD: () => 'M 0 0 L 10 0 L 10 10 L 0 10 Z',
+            intersectLocalD: () => 'M 0 0 L 10 0 L 10 10 L 0 10 Z'
           }
+        },
+        {
+          provide: ChromeEditorApplyService,
+          useValue: { applyPathBoolean }
         }
       ]
     }).compileComponents();
 
     fixture = TestBed.createComponent(BooleanPathPanelComponent);
+    previewService = TestBed.inject(PathBooleanPreviewService);
     fixture.detectChanges();
   });
 
@@ -72,32 +82,38 @@ describe('BooleanPathPanelComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="path-ops-union"]')?.disabled).toBe(true);
   });
 
-  it('lists operands and enables union for two closed paths', () => {
+  it('selects union preview then applies through chrome apply', () => {
     selectedShapes.set([
       { id: 'path-a', type: 'path' } as ShapeProperties,
       { id: 'path-b', type: 'path' } as ShapeProperties
     ]);
     fixture.detectChanges();
 
-    expect(fixture.nativeElement.querySelector('[data-testid="path-ops-operand-list"]')).toBeTruthy();
-    expect(fixture.nativeElement.querySelector('[data-testid="path-ops-operand-path-a"]')).toBeTruthy();
     const unionBtn = fixture.nativeElement.querySelector('[data-testid="path-ops-union"]') as HTMLButtonElement;
     expect(unionBtn.disabled).toBe(false);
-
     unionBtn.click();
+    fixture.detectChanges();
+
+    expect(previewService.previewOp()).toBe('union');
+    expect(fixture.nativeElement.querySelector('[data-testid="path-ops-apply"]')).toBeTruthy();
+
+    (fixture.nativeElement.querySelector('[data-testid="path-ops-apply"]') as HTMLButtonElement).click();
     expect(applyPathBoolean).toHaveBeenCalledWith('union', ['path-a', 'path-b']);
+    expect(previewService.previewOp()).toBeNull();
   });
 
-  it('wires subtract and intersect buttons', () => {
+  it('cancel clears preview without applying', () => {
     selectedShapes.set([
       { id: 'path-a', type: 'path' } as ShapeProperties,
       { id: 'path-b', type: 'path' } as ShapeProperties
     ]);
     fixture.detectChanges();
 
-    (fixture.nativeElement.querySelector('[data-testid="path-ops-subtract"]') as HTMLButtonElement).click();
     (fixture.nativeElement.querySelector('[data-testid="path-ops-intersect"]') as HTMLButtonElement).click();
-    expect(applyPathBoolean).toHaveBeenCalledWith('subtract', ['path-a', 'path-b']);
-    expect(applyPathBoolean).toHaveBeenCalledWith('intersect', ['path-a', 'path-b']);
+    fixture.detectChanges();
+    (fixture.nativeElement.querySelector('[data-testid="path-ops-cancel"]') as HTMLButtonElement).click();
+
+    expect(applyPathBoolean).not.toHaveBeenCalled();
+    expect(previewService.previewOp()).toBeNull();
   });
 });

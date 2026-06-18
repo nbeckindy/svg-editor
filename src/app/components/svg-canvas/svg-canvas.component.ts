@@ -90,6 +90,7 @@ import {
   TEXT_TOOL_PREVIEW_DATA_ATTR
 } from '../../utils/text-typography-from-defaults';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
+import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
 import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-command-bridge.service';
 import {
   EditorPointerIntentDebugService,
@@ -819,6 +820,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     const sourceD = this.penCurvePreviewPathD ?? this.penSessionPreviewPathD;
     if (!sourceD?.trim()) return null;
     return this.rootUserPathDToOutlineOverlayD(sourceD);
+  }
+
+  /** Semi-transparent ghost for path boolean preview (root user `d` → overlay pixels). */
+  get pathBooleanPreviewOverlayD(): string | null {
+    const d = this.pathBooleanPreview.previewRootUserD();
+    if (!d?.trim()) return null;
+    return this.rootUserPathDToOutlineOverlayD(d);
   }
 
   /** Blue bbox / union highlight: off during path node edit and whenever Pen is active (insert + idle). */
@@ -1598,7 +1606,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     private clipboard: ClipboardService,
     protected drawingDefaults: DrawingStyleDefaultsService,
     private chromeEditorApply: ChromeEditorApplyService,
-    private pathNodeEditBridge: PathNodeEditCommandBridgeService
+    private pathNodeEditBridge: PathNodeEditCommandBridgeService,
+    private pathBooleanPreview: PathBooleanPreviewService
   ) {
     const pointerStack = createSvgCanvasPointerStack({
       cdr: this.cdr,
@@ -1630,6 +1639,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     this.pointerGestureRouter = pointerStack.pointerGestureRouter;
     this.penTool = pointerStack.penTool;
     this.editorChrome = new SvgCanvasEditorChromeFacade(this);
+
+    effect(() => {
+      this.pathBooleanPreview.previewRootUserD();
+      this.pathBooleanPreview.previewOp();
+      void this.canvasView.scale;
+      void this.canvasView.panX;
+      void this.canvasView.panY;
+      void this.wrapperWidth;
+      void this.wrapperHeight;
+      this.cdr.markForCheck();
+    });
 
     effect(() => {
       const incomingSvgContent = this.svgContent();

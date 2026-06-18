@@ -1,4 +1,5 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
+import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import {
   allocateShapeId,
   buildBooleanResultPathMarkup,
@@ -15,6 +16,7 @@ import {
   type BooleanOp,
   type PathBooleanGeometryPort
 } from '../models/path-boolean';
+import { SvgManipulationService } from './svg-manipulation.service';
 
 export interface PathBooleanResult {
   resultId: string;
@@ -30,6 +32,27 @@ export type PathBooleanUnionResult = PathBooleanResult;
   providedIn: 'root'
 })
 export class PathBooleanGeometryService {
+  private readonly svgManipulation = inject(SvgManipulationService);
+
+  createGeometryPort(): PathBooleanGeometryPort | null {
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg) return null;
+    return {
+      getPathElement: (id) => {
+        const node = svg.findOne(`#${id}`)?.node as Element | undefined;
+        return node?.tagName.toLowerCase() === 'path' ? node : null;
+      },
+      getPathD: (id) => {
+        const el = svg.findOne(`#${id}`)?.node as Element | undefined;
+        return el?.tagName.toLowerCase() === 'path' ? el.getAttribute('d') : null;
+      },
+      mapPathLocalToRootUser: (id, lx, ly) =>
+        this.svgManipulation.mapPathLocalToRootUser(id, lx, ly),
+      mapRootUserToPathLocal: (id, rx, ry) =>
+        this.svgManipulation.mapRootUserToPathLocal(id, rx, ry)
+    };
+  }
+
   private localDForOp(op: BooleanOp, pathIds: string[], port: PathBooleanGeometryPort): string | null {
     if (pathIds.length < 2) return null;
     for (const id of pathIds) {

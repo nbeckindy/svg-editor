@@ -1,7 +1,8 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, computed, effect, inject } from '@angular/core';
 import { evaluatePathBooleanSelection, type BooleanOp } from '../../models/path-boolean';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { EditorToolService } from '../../services/editor-tool.service';
+import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 
@@ -16,6 +17,9 @@ export class BooleanPathPanelComponent {
   private readonly editorTool = inject(EditorToolService);
   private readonly svgManipulation = inject(SvgManipulationService);
   private readonly chromeApply = inject(ChromeEditorApplyService);
+  private readonly preview = inject(PathBooleanPreviewService);
+
+  readonly previewOp = this.preview.previewOp;
 
   readonly selectionState = computed(() => {
     const shapes = this.shapeSelection.getSelectedShapes();
@@ -45,11 +49,34 @@ export class BooleanPathPanelComponent {
       : this.selectionState().reason
   );
 
-  onBoolean(op: BooleanOp): void {
+  constructor() {
+    effect(() => {
+      const op = this.preview.previewOp();
+      if (!op) return;
+      const state = this.selectionState();
+      if (!state.eligible) {
+        this.preview.clearPreview();
+        return;
+      }
+      this.preview.setPreview(op, state.operandIds);
+    });
+  }
+
+  onSelectOp(op: BooleanOp): void {
     const { eligible, operandIds } = this.selectionState();
     if (!eligible) return;
-    if (op === 'union') this.chromeApply.applyPathBooleanUnion(operandIds);
-    else if (op === 'subtract') this.chromeApply.applyPathBooleanSubtract(operandIds);
-    else this.chromeApply.applyPathBooleanIntersect(operandIds);
+    this.preview.setPreview(op, operandIds);
+  }
+
+  onApplyPreview(): void {
+    const op = this.preview.previewOp();
+    const ids = [...this.preview.previewOperandIds()];
+    if (!op || ids.length < 2) return;
+    this.chromeApply.applyPathBoolean(op, ids);
+    this.preview.clearPreview();
+  }
+
+  onCancelPreview(): void {
+    this.preview.clearPreview();
   }
 }

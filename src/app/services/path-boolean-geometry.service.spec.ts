@@ -1,9 +1,28 @@
-import { describe, expect, it } from 'vitest';
+import { TestBed } from '@angular/core/testing';
+import { describe, expect, it, vi } from 'vitest';
 import { PathBooleanGeometryService } from './path-boolean-geometry.service';
 import type { PathBooleanGeometryPort } from '../models/path-boolean';
+import { SvgManipulationService } from './svg-manipulation.service';
 
 describe('PathBooleanGeometryService', () => {
-  const service = new PathBooleanGeometryService();
+  let service: PathBooleanGeometryService;
+
+  beforeEach(() => {
+    TestBed.configureTestingModule({
+      providers: [
+        PathBooleanGeometryService,
+        {
+          provide: SvgManipulationService,
+          useValue: {
+            getSVGInstance: vi.fn(),
+            mapPathLocalToRootUser: (_id: string, lx: number, ly: number) => ({ x: lx, y: ly }),
+            mapRootUserToPathLocal: (_id: string, rx: number, ry: number) => ({ x: rx, y: ry })
+          }
+        }
+      ]
+    });
+    service = TestBed.inject(PathBooleanGeometryService);
+  });
 
   function mockPort(paths: Record<string, string>): PathBooleanGeometryPort {
     const nodes = new Map<string, Element>();

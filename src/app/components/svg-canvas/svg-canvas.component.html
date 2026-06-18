@@ -355,6 +355,16 @@
               stroke-width="1.5"
               vector-effect="non-scaling-stroke"/>
           }
+          @if (editorChrome.pathBooleanPreviewOverlayD; as booleanPreviewD) {
+            <path
+              class="path-boolean-preview"
+              data-testid="canvas-path-boolean-preview"
+              [attr.d]="booleanPreviewD"
+              fill="rgba(33, 150, 243, 0.25)"
+              stroke="#2196F3"
+              stroke-width="1.5"
+              vector-effect="non-scaling-stroke"/>
+          }
           @if (editorChrome.penCurvePreviewPathD || editorChrome.penFirstAnchorMirroredHandleDragActive || editorChrome.penColocatedTipMirroredHandleDragActive) {
             @for (h of editorChrome.penCurveHandleOverlays; track h.cx + ',' + h.cy) {
               <circle

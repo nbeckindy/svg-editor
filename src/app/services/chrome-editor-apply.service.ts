@@ -59,8 +59,7 @@ import { PathBooleanGeometryService } from './path-boolean-geometry.service';
 import {
   pathHasClosedSubpaths,
   sortPathIdsByDocumentOrder,
-  type BooleanOp,
-  type PathBooleanGeometryPort
+  type BooleanOp
 } from '../models/path-boolean';
 
 const OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
@@ -554,17 +553,8 @@ export class ChromeEditorApplyService {
     const contentGroup = svg.findOne('[data-editor-content-group]');
     if (!contentGroup?.node) return;
 
-    const port: PathBooleanGeometryPort = {
-      getPathElement: (id) => {
-        const node = svg.findOne(`#${id}`)?.node as Element | undefined;
-        return node?.tagName.toLowerCase() === 'path' ? node : null;
-      },
-      getPathD: (id) => port.getPathElement(id)?.getAttribute('d') ?? null,
-      mapPathLocalToRootUser: (id, lx, ly) =>
-        this.svgManipulation.mapPathLocalToRootUser(id, lx, ly),
-      mapRootUserToPathLocal: (id, rx, ry) =>
-        this.svgManipulation.mapRootUserToPathLocal(id, rx, ry)
-    };
+    const port = this.pathBooleanGeometry.createGeometryPort();
+    if (!port) return;
 
     const sorted = sortPathIdsByDocumentOrder(pathIds, port);
     const topmostId = sorted[sorted.length - 1];

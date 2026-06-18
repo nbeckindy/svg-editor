@@ -27,30 +27,52 @@
       <button
         type="button"
         class="op-btn"
+        [class.active]="previewOp() === 'union'"
         data-testid="path-ops-union"
         [disabled]="!selectionState().eligible"
-        [attr.title]="selectionState().eligible ? 'Union selected paths' : selectionState().reason"
-        (click)="onBoolean('union')">
+        [attr.title]="selectionState().eligible ? 'Preview union of selected paths' : selectionState().reason"
+        (click)="onSelectOp('union')">
         Union
       </button>
       <button
         type="button"
         class="op-btn"
+        [class.active]="previewOp() === 'subtract'"
         data-testid="path-ops-subtract"
         [disabled]="!selectionState().eligible"
         [attr.title]="subtractTitle()"
-        (click)="onBoolean('subtract')">
+        (click)="onSelectOp('subtract')">
         Subtract
       </button>
       <button
         type="button"
         class="op-btn"
+        [class.active]="previewOp() === 'intersect'"
         data-testid="path-ops-intersect"
         [disabled]="!selectionState().eligible"
         [attr.title]="intersectTitle()"
-        (click)="onBoolean('intersect')">
+        (click)="onSelectOp('intersect')">
         Intersect
       </button>
     </div>
+
+    @if (previewOp()) {
+      <div class="preview-actions" role="group" aria-label="Boolean preview actions">
+        <button
+          type="button"
+          class="op-btn op-btn-primary"
+          data-testid="path-ops-apply"
+          (click)="onApplyPreview()">
+          Apply
+        </button>
+        <button
+          type="button"
+          class="op-btn"
+          data-testid="path-ops-cancel"
+          (click)="onCancelPreview()">
+          Cancel
+        </button>
+      </div>
+    }
   </div>
 </div>
