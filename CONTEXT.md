@@ -102,6 +102,58 @@ _Avoid_: User-facing product copy; conflating with **PenSession** the model inst
 Pointer routing where, with the pen **Tool** active, hits on existing artwork prefer starting or continuing the **Pen authoring session** (dropping anchors) instead of only transferring **Selection** to the shape under the cursor.
 _Avoid_: Implying pen ignores modifiers or right-click policies; using for non-pen tools without stating the exception.
 
+**Pending segment**:
+The in-progress pen stroke leg between primary mousedown and mouseup during a **Pen authoring session**—preview geometry, handle drag, and commit target—not yet a committed segment in **PenSession** and not a **Path node**.
+_Avoid_: Using for the **First-anchor P3 draft** gap after `M` before the second primary down; calling preview-only rubber-band geometry a committed segment.
+
+**First-anchor P3 draft**:
+The two-step first-segment curve workflow after placing `M`: step one drags mirrored outgoing handles from the moveto; step two plants the segment end (`P3`) on the next primary mousedown, then commits the first cubic (`C`) on release. Carried as `PenFirstAnchorP3Draft` in code until commit or discard.
+_Avoid_: Treating step-one handle drag as a normal **Pending segment** (no planted chord end yet); using “first anchor” alone when you mean any path start **Path node** after finish.
+
+**Join tolerance**:
+The shared viewport-pixel hit radius (~8px; `PEN_SINGLE_CLICK_CLOSE_RADIUS_PX`) for **Single-click close**, **Close target** hover, **Open path continuation** pickup, and **Path finish join**. Mapping from document coordinates to screen space must succeed or the hit test fails closed (no accidental merge).
+_Avoid_: Calling every pen proximity test “join tolerance” when it uses a different constant; assuming SVG-user distance alone defines close rings without screen mapping.
+
+**Close target**:
+The on-screen ring the user snaps to for **Single-click close** and close-hover **Editor chrome**. Usually the session moveto (`M`); when **Open path continuation** prepends from the path head, the frozen existing tail—not session `M`.
+_Avoid_: Equating **Close target** with “path start” during prepend continuation; using for arbitrary **Path node** anchors away from close/join rings.
+
+**Single-click close**:
+Completing a **Path close** by releasing the pointer within **Join tolerance** of the **Close target** after a **Pending segment** began there—appends a closing `L` or `C` (per tip geometry) and `Z`, without requiring marquee-scale drag.
+_Avoid_: Calling every `Z` append **Single-click close** when the user dragged a closing curve from the start anchor; conflating with **Path finish join** onto another open path.
+
+**Path close**:
+Looping the current pen subpath by appending a closing segment and `Z` so start and end meet—via **Single-click close**, drag-close from the **Close target**, or equivalent finish logic.
+_Avoid_: Using **Path close** when the stroke simply ends open on the **Live tree**; saying “close” when you mean **Path finish** without `Z`.
+
+**Path finish**:
+Committing a **Pen authoring session** stroke to the **Live tree**—as a new `<path>`, a **Continuing path rewrite**, or a **Path finish join**—whether the result stays open or receives `Z` via **Path close**.
+_Avoid_: Using **Path finish** only for closed paths; conflating with discarding the session or switching **Tool** without writing geometry.
+
+**Open path continuation**:
+Resuming pen authoring from an existing open `<path>` endpoint (head = moveto, tail = last committed vertex) within **Join tolerance**, then merging new stroke geometry into that path on **Path finish** rather than creating a second element.
+_Avoid_: Using for **Insert on path** (splitting a segment interior); using for **Node-edit tool** drags on committed knots; implying continuation works on closed subpaths.
+
+**Continuation stitch**:
+How new pen geometry attaches during **Open path continuation**: `appendToExistingTail` (extend from tail) or `prependBeforeExisting` (draw from head backward into frozen existing segments).
+_Avoid_: Inventing stitch names in prose that don’t match these two modes; calling either mode a separate **Tool**.
+
+**Continuing path rewrite**:
+In-session record that the active stroke mutates an existing `<path>` (`pathId`, `originalD`, **Continuation stitch**, optional frozen `existingSegments` for prepend)—drives preview, **Close target**, and the `EditPath`-style **History** entry on **Path finish**.
+_Avoid_: Using for brand-new paths with no prior `pathId`; conflating with **PenSession** segment math alone.
+
+**Path finish join**:
+Automatic merge on **Path finish** when the drawn endpoint lands within **Join tolerance** of another open path’s head or tail, producing one `<path>` without requiring idle endpoint pickup first.
+_Avoid_: Equating with **Open path continuation** pickup (which starts the session at the endpoint); using “join” for welding interior segment hits.
+
+**Insert on path**:
+Idle pen **Tool** behavior: primary mousedown→drag on an existing `<path>` segment interior splits the path and inserts a new knot with handle authoring—distinct from **Open path continuation** (endpoints) and from ordinary **Node-edit tool** editing of committed geometry.
+_Avoid_: Calling endpoint pickup **Insert on path**; using when a **Pen authoring session** stroke is already in progress.
+
+**Pen cubic notation (P0–P3)**:
+Informal pen-review labels for a cubic leg: **P0** = segment start anchor, **P1** / **P2** = outgoing / incoming control points, **P3** = segment end. **Vertex** and **Knot** in `plans/ux/bezier-anchor-handle-interactions.md` name the same on-curve loci for node-edit prose.
+_Avoid_: Treating P-labels as separate **Path node** types; using P2/P3 interchangeably across quadratic (`Q`) segments without saying so.
+
 **Ports**:
 Narrow dependencies injected into **PenToolSession** (and similar tool orchestrators) so they can push **History**, update **Selection**, ask for user confirm, and apply svg.js mutations without importing the full component graph.
 _Avoid_: “Dependencies” with no qualifier; calling every Angular provider a **Port**—here it means the explicit seam for a tool session.
@@ -130,6 +182,12 @@ _Avoid_: Using **Canvas adapter** when you mean the **Canvas** viewport alone; n
 - **Node-edit tool** is still a **Tool** variant: it changes pointer routing on the **Canvas** like other tools and cooperates with **Editor chrome** overlays for knots and handles.
 - The pen **Tool** routes through a **Canvas adapter** into **PenToolSession**, which owns **Pen authoring session** policy while mutating or reading a **PenSession** model; **PenToolSession** uses **Ports** to touch **History**, **Selection**, and svg.js—not the full widget tree.
 - **Pen-over-shape input** is a hit-test priority policy in the **Canvas adapter** / pen stack, not a separate **Tool** name.
+- **Pending segment** and **First-anchor P3 draft** are in-session draft states in **Pen authoring session**; neither is a **Path node** until committed to the **Live tree**.
+- **Join tolerance** is shared by **Single-click close**, **Close target** affordances, **Open path continuation**, and **Path finish join**; failed screen mapping must not merge paths.
+- **Close target** may differ from session `M` when **Continuing path rewrite** uses `prependBeforeExisting`.
+- **Open path continuation**, **Path finish join**, and **Continuing path rewrite** extend **Pen authoring session** join rules; they are not separate **Tool**s and write **History** via path edit commands on **Path finish**.
+- **Insert on path** applies on segment interiors while the pen session is idle; **Open path continuation** applies at open path endpoints—both use the pen **Tool** but different hit targets and outcomes.
+- **Path close** adds `Z` (and closing geometry); **Path finish** is the broader commit to the **Live tree** and may leave the path open or merge via join/continuation.
 - **Automatic tool revert (after creation)** couples shape-creation tools with the Select **Tool**; it does not by itself change **History** beyond the creation command already pushed.
 
 ## Shell UI (thin **Chrome**)
@@ -180,6 +238,15 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 > **Dev:** "When the user switches away from pen mid-path, does **PenSession** clear?"
 > **Contributor:** "The value type isn’t the policy—**Pen authoring session** asks via **Ports**; if they cancel confirm, **PenSession** data stays and the **Tool** shouldn’t have switched."
 
+> **Dev:** "Is clicking an open path’s end cap the same as insert-on-path?"
+> **Contributor:** "No — endpoint pickup is **Open path continuation**; splitting a segment mid-span is **Insert on path**."
+
+> **Dev:** "Does close target always mean the first point I placed?"
+> **Contributor:** "Usually session `M`, but prepend continuation freezes the existing tail as **Close target**—not the new stroke’s moveto."
+
+> **Dev:** "Did the user close the path or just finish drawing?"
+> **Contributor:** "**Path close** means `Z` looped the subpath; **Path finish** is the commit either way—they might finish open or merge via **Path finish join**."
+
 ## Flagged ambiguities
 
 - The word “document” in casual prose often means the browser DOM — in editor discussion reserve **Document** for the logical SVG artwork.
@@ -194,3 +261,7 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 - A **Layer** row can be a `<g>` that acts as a clip/mask carrier in selection rules—still a **Layer** in the stack list, but behavior may differ from a user-authored group; see code and product rules before assuming “folder” semantics.
 - The codebase exposes multiple “revision” style counters (e.g. logical **Document** bumps vs undo/redo navigation); they are not interchangeable—name which seam you mean in reviews.
 - **PenSession**, **Pen authoring session**, and **PenToolSession** are three layers (model value, policy scope, class)—don’t swap names in reviews without saying which layer you mean.
+- “Close” in pen chat may mean **Path close** (`Z`), snapping to **Close target**, or merely **Path finish**—name which you mean.
+- “Join” may mean **Path finish join**, **Open path continuation** stitch, or collinear handle behavior at a **Smooth node**—don’t overload without context.
+- **Close target** is not always session `M` during `prependBeforeExisting` **Continuation stitch**—check **Continuing path rewrite** before reviewing close-ring bugs.
+- **First-anchor P3 draft** is not a **Pending segment**; reviews of first-segment curve bugs should say which step failed (mirrored handle drag vs `P3` plant vs commit).
