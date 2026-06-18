@@ -103,7 +103,9 @@ function runCloseClickScenario(opts: {
     pendingIsFirstFromMoveto: () => false,
     pendingChordColocated: () => false,
     pendingStartNearPathMoveto: () => false,
+    pendingStartNearPathCloseTarget: () => false,
     pendingCubicAltEndOnly: () => false,
+    isPointerWithinCloseRadius: () => false,
     clearFirstAnchorAwaitingDraft: vi.fn(),
     get colocatedDraft() {
       return null;
@@ -393,7 +395,9 @@ describe('commitPenPendingSegmentForView — click close on start (close radius)
       pendingIsFirstFromMoveto: () => false,
       pendingChordColocated: () => false,
       pendingStartNearPathMoveto: () => false,
+      pendingStartNearPathCloseTarget: () => false,
       pendingCubicAltEndOnly: () => false,
+      isPointerWithinCloseRadius: () => false,
       clearFirstAnchorAwaitingDraft: vi.fn(),
       get colocatedDraft() {
         return null;

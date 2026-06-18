@@ -110,6 +110,10 @@ export function isPrependContinuationCloseAtFrozenTail(
   return rewrite?.stitch === 'prependBeforeExisting' && !!rewrite.existingSegments?.length;
 }
 
+function drawableSegmentsAfterMoveto(stroke: readonly PenPathSegment[]): PenPathSegment[] {
+  return stroke.slice(1).map((s) => ({ ...s })) as PenPathSegment[];
+}
+
 function drawableEndVerticesAfterMoveto(stroke: readonly PenPathSegment[]): { x: number; y: number }[] {
   const out: { x: number; y: number }[] = [];
   for (const seg of stroke.slice(1)) {
@@ -119,30 +123,104 @@ function drawableEndVerticesAfterMoveto(stroke: readonly PenPathSegment[]): { x:
   return out;
 }
 
-/** New closing vertices that are not already on the frozen forward open path (incl. tail). */
-function filterNewClosingVerticesNotOnForward(
-  forward: readonly PenPathSegment[],
-  newVerts: readonly { x: number; y: number }[]
-): { x: number; y: number }[] {
-  const onForward = drawableEndVerticesAfterMoveto(forward);
-  const tail = lastCommittedVertex(forward);
-  return newVerts.filter((v) => {
-    if (tail && penSvgDistanceSq(v, tail) < 1e-8) return false;
-    return !onForward.some((fv) => penSvgDistanceSq(fv, v) < 1e-8);
-  });
+function reverseDrawableSegment(
+  seg: PenPathSegment,
+  to: { x: number; y: number }
+): PenPathSegment {
+  if (seg.type === 'L') {
+    return { type: 'L', x: to.x, y: to.y };
+  }
+  if (seg.type === 'C') {
+    return { type: 'C', x1: seg.x2, y1: seg.y2, x2: seg.x1, y2: seg.y1, x: to.x, y: to.y };
+  }
+  if (seg.type === 'Q') {
+    return { type: 'Q', x1: seg.x1, y1: seg.y1, x: to.x, y: to.y };
+  }
+  return { type: 'L', x: to.x, y: to.y };
 }
 
-function appendLineVertices(
-  segments: readonly PenPathSegment[],
-  verts: readonly { x: number; y: number }[]
+/** Reverse drawable segments after `M`, preserving curve control geometry. */
+function reverseDrawableSegmentsAfterMoveto(
+  moveto: { x: number; y: number },
+  drawable: readonly PenPathSegment[]
 ): PenPathSegment[] {
-  let result = segments.map((s) => ({ ...s })) as PenPathSegment[];
-  for (const v of verts) {
-    const cur = lastCommittedVertex(result);
-    if (cur && penSvgDistanceSq(cur, v) < 1e-8) continue;
-    result.push({ type: 'L', x: v.x, y: v.y });
+  if (drawable.length === 0) return [];
+  const anchors: { x: number; y: number }[] = [moveto];
+  for (const seg of drawable) {
+    const end = lastCommittedVertex([seg]);
+    if (end) anchors.push(end);
   }
-  return result;
+  const reversed: PenPathSegment[] = [];
+  for (let i = drawable.length - 1; i >= 0; i--) {
+    reversed.push(reverseDrawableSegment(drawable[i], anchors[i]));
+  }
+  return reversed;
+}
+
+/** Closing leg from frozen tail through reversed head-drawn geometry (`Z` closes to `M`). */
+function closingSegmentsFromPrependStroke(
+  moveto: { x: number; y: number },
+  drawable: readonly PenPathSegment[],
+  tail: { x: number; y: number }
+): PenPathSegment[] {
+  if (drawable.length === 0) return [];
+
+  const anchors: { x: number; y: number }[] = [moveto];
+  for (const seg of drawable) {
+    const end = lastCommittedVertex([seg]);
+    if (end) anchors.push(end);
+  }
+
+  const lastDrawn = lastCommittedVertex(drawable);
+  if (!lastDrawn) return [];
+
+  const lastStartsAtFrozenTail =
+    anchors.length >= 2 && penSvgDistanceSq(tail, anchors[anchors.length - 2]) < 1e-8;
+
+  if (lastStartsAtFrozenTail) {
+    let out: PenPathSegment[] = [{ ...drawable[drawable.length - 1] } as PenPathSegment];
+    let reversed = reverseDrawableSegmentsAfterMoveto(moveto, drawable.slice(0, -1));
+    if (reversed.length > 0) {
+      const lastRev = reversed[reversed.length - 1];
+      const end = lastCommittedVertex([lastRev]);
+      if (end && penSvgDistanceSq(end, moveto) < 1e-8 && lastRev.type === 'L') {
+        reversed = reversed.slice(0, -1);
+      }
+    }
+    out.push(...reversed);
+    return out;
+  }
+
+  let reversed = reverseDrawableSegmentsAfterMoveto(moveto, drawable);
+  if (reversed.length > 0) {
+    const lastRev = reversed[reversed.length - 1];
+    const end = lastCommittedVertex([lastRev]);
+    if (end && penSvgDistanceSq(end, moveto) < 1e-8 && lastRev.type === 'L') {
+      reversed = reversed.slice(0, -1);
+    }
+  }
+
+  const out: PenPathSegment[] = [];
+  if (penSvgDistanceSq(tail, lastDrawn) >= 1e-8) {
+    out.push({ type: 'L', x: lastDrawn.x, y: lastDrawn.y });
+  }
+  out.push(...reversed);
+  return out;
+}
+
+/** New closing segments that are not already on the frozen forward open path (incl. tail). */
+function filterNewClosingSegmentsNotOnForward(
+  forward: readonly PenPathSegment[],
+  closingSegments: readonly PenPathSegment[]
+): PenPathSegment[] {
+  const onForward = drawableEndVerticesAfterMoveto(forward);
+  const tail = lastCommittedVertex(forward);
+  return closingSegments.filter((seg) => {
+    const end = lastCommittedVertex([seg]);
+    if (!end) return false;
+    if (tail && penSvgDistanceSq(end, tail) < 1e-8) return false;
+    return !onForward.some((fv) => penSvgDistanceSq(fv, end) < 1e-8);
+  });
 }
 
 function appendDrawableSegments(
@@ -178,19 +256,21 @@ export function combinePrependContinuationForOpen(
 
   if (!penPathSegmentsAreValid(newStroke)) return null;
 
-  const newVerts = drawableEndVerticesAfterMoveto(newStroke);
-  if (newVerts.length === 0) {
+  const drawable = drawableSegmentsAfterMoveto(newStroke);
+  if (drawable.length === 0) {
     return existing.map((s) => ({ ...s })) as PenPathSegment[];
   }
 
-  const reversed = [...newVerts].reverse();
-  const head = { x: existing[0].x, y: existing[0].y };
-  const body = existing.slice(1);
+  const moveto = { x: newStroke[0].x, y: newStroke[0].y };
+  const lastDrawn = lastCommittedVertex(drawable);
+  if (!lastDrawn) {
+    return existing.map((s) => ({ ...s })) as PenPathSegment[];
+  }
 
-  let result: PenPathSegment[] = [{ type: 'M', x: reversed[0].x, y: reversed[0].y }];
-  result = appendLineVertices(result, reversed.slice(1));
-  result = appendLineVertices(result, [head]);
-  return appendDrawableSegments(result, body);
+  const reversed = reverseDrawableSegmentsAfterMoveto(moveto, drawable);
+  let result: PenPathSegment[] = [{ type: 'M', x: lastDrawn.x, y: lastDrawn.y }];
+  result = appendDrawableSegments(result, reversed);
+  return appendDrawableSegments(result, existing.slice(1));
 }
 
 /**
@@ -212,13 +292,17 @@ export function combinePrependContinuationForClose(
     return forward;
   }
 
-  const closingVerts = filterNewClosingVerticesNotOnForward(
+  const moveto = { x: newStroke[0].x, y: newStroke[0].y };
+  const drawable = drawableSegmentsAfterMoveto(newStroke);
+  const tail = lastCommittedVertex(forward);
+  if (!tail) return forward;
+  const closingSegments = filterNewClosingSegmentsNotOnForward(
     forward,
-    [...drawableEndVerticesAfterMoveto(newStroke)].reverse()
+    closingSegmentsFromPrependStroke(moveto, drawable, tail)
   );
-  if (closingVerts.length > 0 && !penPathSegmentsAreValid(newStroke)) return null;
+  if (drawable.length > 0 && closingSegments.length > 0 && !penPathSegmentsAreValid(newStroke)) return null;
 
-  return appendLineVertices(forward, closingVerts);
+  return appendDrawableSegments(forward, closingSegments);
 }
 
 export type PenContinuingPathRewrite = {

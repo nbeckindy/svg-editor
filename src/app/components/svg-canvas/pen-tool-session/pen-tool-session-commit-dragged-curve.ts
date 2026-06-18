@@ -4,6 +4,7 @@ import {
   penCubicSmoothReflectP1Usable,
   penDragCurveAuthoringKind,
   penReflectStateAfterCommitted,
+  penSvgDistanceSq,
   placementPointerQuadraticControlPoint,
   snapVectorTo45DegFrom,
   type CubicControlPoints,
@@ -71,7 +72,18 @@ export function commitPenDraggedCurveOnSession(
   } = args;
 
   const mv = opts.penPathStartMv();
-  const committedEnd = segmentEnd !== undefined ? (mv ?? segmentEnd) : chordEndSvg;
+  let committedEnd: { x: number; y: number };
+  if (segmentEnd !== undefined) {
+    // Exact session `M` when closing back to path start (float parity). Prepend close-at-tail passes a
+    // different `segmentEnd` — must not substitute session `M` or the closing leg gets a straight connector.
+    if (mv && penSvgDistanceSq(segmentEnd, mv) < 1e-10) {
+      committedEnd = mv;
+    } else {
+      committedEnd = segmentEnd;
+    }
+  } else {
+    committedEnd = chordEndSvg;
+  }
   const placementDragResolved =
     placementDragStartSvg ?? (segmentEnd !== undefined ? committedEnd : chordEndSvg);
   const kind = penDragCurveAuthoringKind(ctrlCurve, session.getSegments());

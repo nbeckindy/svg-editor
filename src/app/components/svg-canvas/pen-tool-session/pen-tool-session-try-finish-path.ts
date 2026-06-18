@@ -1,4 +1,4 @@
-import { PenSession, penPathSegmentsAreValid, penPathSegmentsToD, penRewriteLastSegmentEndToMatchMoveto, type PenPathSegment } from '../../../models/pen-path';
+import { PenSession, lastCommittedVertex, penPathSegmentsAreValid, penPathSegmentsToD, penRewriteLastSegmentEndToMatchMoveto, type PenPathSegment } from '../../../models/pen-path';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
 import { applyPenFinishedPathDocumentEffects } from './pen-tool-session-finish';
 import { PEN_CLOSE_MOVETO_REWRITE_MAX_SQ } from './pen-tool-session-constants';
@@ -62,10 +62,22 @@ export function tryFinishPenPathForView(v: TryFinishPenPathView, closePath: bool
   }
 
   const finishingSegsSnapshot = [...v.penSession.getSegments()] as PenPathSegment[];
+  let segsForPrependClose = finishingSegsSnapshot;
 
   let d: string | null;
   if (prependCloseAtFrozenTail && cont?.existingSegments) {
-    const merged = combinePrependContinuationForClose(finishingSegsSnapshot, cont.existingSegments);
+    const tail = lastCommittedVertex(cont.existingSegments);
+    if (tail) {
+      const rewritten = penRewriteLastSegmentEndToMatchMoveto(
+        segsForPrependClose,
+        tail,
+        PEN_CLOSE_MOVETO_REWRITE_MAX_SQ
+      );
+      if (rewritten) {
+        segsForPrependClose = rewritten;
+      }
+    }
+    const merged = combinePrependContinuationForClose(segsForPrependClose, cont.existingSegments);
     d = merged ? penPathSegmentsToD(merged) : null;
   } else {
     d = v.penSession.finishPath();

@@ -223,4 +223,79 @@ describe('pen-tool-session-path-continuation', () => {
     const merged = combinePrependContinuationForOpen([{ type: 'M', x: 10, y: 10 }], existing);
     expect(penPathSegmentsToD(merged!)).toBe(penPathSegmentsToD(existing));
   });
+
+  it('combinePrependContinuationForOpen: preserves cubic segments from click+drag', () => {
+    const existing = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 50, y: 40 }
+    ] as const;
+    const newStroke = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'C', x1: 5, y1: 5, x2: 2, y2: 8, x: 2, y: 2 }
+    ] as const;
+    const merged = combinePrependContinuationForOpen(newStroke, existing);
+    expect(penPathSegmentsToD(merged!)).toBe('M 2 2 C 2 8 5 5 10 10 L 50 40');
+  });
+
+  it('combinePrependContinuationForClose: preserves cubic from head on closing leg', () => {
+    const existing = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 50, y: 40 }
+    ] as const;
+    const newStroke = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'C', x1: 5, y1: 5, x2: 2, y2: 8, x: 2, y: 2 }
+    ] as const;
+    const merged = combinePrependContinuationForClose(newStroke, existing);
+    expect(penPathSegmentsToD(merged!)).toBe('M 10 10 L 50 40 L 2 2 C 2 8 5 5 10 10');
+  });
+
+  it('combinePrependContinuationForClose: last segment from frozen tail keeps forward cubic', () => {
+    const existing = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 50, y: 40 }
+    ] as const;
+    const newStroke = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 20, y: 20 },
+      { type: 'L', x: 50, y: 40 },
+      { type: 'C', x1: 55, y1: 35, x2: 60, y2: 45, x: 30, y: 2 }
+    ] as const;
+    const merged = combinePrependContinuationForClose(newStroke, existing);
+    expect(penPathSegmentsToD(merged!)).toBe(
+      'M 10 10 L 50 40 C 55 35 60 45 30 2 L 20 20'
+    );
+  });
+
+  it('combinePrependContinuationForClose: preserves cubic between new vertices on closing leg', () => {
+    const existing = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 50, y: 40 }
+    ] as const;
+    const newStroke = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'C', x1: 5, y1: 5, x2: 2, y2: 8, x: 20, y: 20 },
+      { type: 'C', x1: 22, y1: 18, x2: 25, y2: 5, x: 30, y: 2 }
+    ] as const;
+    const merged = combinePrependContinuationForClose(newStroke, existing);
+    expect(penPathSegmentsToD(merged!)).toBe(
+      'M 10 10 L 50 40 L 30 2 C 25 5 22 18 20 20 C 2 8 5 5 10 10'
+    );
+  });
+
+  it('combinePrependContinuationForClose: last cubic ending at tail omits straight connector', () => {
+    const existing = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'L', x: 50, y: 40 }
+    ] as const;
+    const newStroke = [
+      { type: 'M', x: 10, y: 10 },
+      { type: 'C', x1: 5, y1: 5, x2: 2, y2: 8, x: 20, y: 20 },
+      { type: 'C', x1: 22, y1: 18, x2: 25, y2: 5, x: 50, y: 40 }
+    ] as const;
+    const merged = combinePrependContinuationForClose(newStroke, existing);
+    expect(penPathSegmentsToD(merged!)).toBe(
+      'M 10 10 L 50 40 C 25 5 22 18 20 20 C 2 8 5 5 10 10'
+    );
+  });
 });

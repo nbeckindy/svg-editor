@@ -39,6 +39,24 @@ export function penPendingDragSampleSvg(
 }
 
 /**
+ * True when the pending segment began on the path close target (within join/close tolerance).
+ * For prepend-from-head continuation the close target is the frozen tail, not session `M`.
+ */
+export function penPendingStartNearPathCloseTarget(
+  pending: PenPendingSegmentForPreview | null,
+  closeTargetMv: { x: number; y: number } | null,
+  endpointsWithinJoinTolerance: (ax: number, ay: number, bx: number, by: number) => boolean
+): boolean {
+  if (!pending || !closeTargetMv) return false;
+  return endpointsWithinJoinTolerance(
+    pending.startSvg.x,
+    pending.startSvg.y,
+    closeTargetMv.x,
+    closeTargetMv.y
+  );
+}
+
+/**
  * True when the pending segment began on the path start (within join/close tolerance in screen space).
  * Enables a scoped curve-preview rule without changing global marquee thresholds.
  */
