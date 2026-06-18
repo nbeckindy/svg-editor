@@ -25,20 +25,29 @@ test.describe('Editor shell layout', () => {
     await expect(page.getByTestId('dock-tab-properties')).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByTestId('editor-properties-area')).toBeVisible();
     await expect(page.getByTestId('editor-layers-area')).toBeHidden();
+    await expect(page.getByTestId('editor-path-ops-area')).toBeHidden();
   });
 
-  test('switches between properties and layers tabs', async ({ page }) => {
+  test('switches between properties, layers, and path ops tabs', async ({ page }) => {
     await page.goto('/');
 
     await page.getByTestId('dock-tab-layers').click();
     await expect(page.getByTestId('dock-tab-layers')).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByTestId('editor-layers-area')).toBeVisible();
     await expect(page.getByTestId('editor-properties-area')).toBeHidden();
+    await expect(page.getByTestId('editor-path-ops-area')).toBeHidden();
+
+    await page.getByTestId('dock-tab-path-ops').click();
+    await expect(page.getByTestId('dock-tab-path-ops')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('editor-path-ops-area')).toBeVisible();
+    await expect(page.getByTestId('editor-properties-area')).toBeHidden();
+    await expect(page.getByTestId('editor-layers-area')).toBeHidden();
 
     await page.getByTestId('dock-tab-properties').click();
     await expect(page.getByTestId('dock-tab-properties')).toHaveAttribute('aria-selected', 'true');
     await expect(page.getByTestId('editor-properties-area')).toBeVisible();
     await expect(page.getByTestId('editor-layers-area')).toBeHidden();
+    await expect(page.getByTestId('editor-path-ops-area')).toBeHidden();
   });
 
   // Narrow-viewport responsive / compact layout is covered in svg-editor-8x1.6; this is a 1000×900 smoke only.
@@ -50,6 +59,7 @@ test.describe('Editor shell layout', () => {
     await expect(page.getByTestId('editor-right-dock')).toBeVisible();
     await expect(page.getByTestId('dock-tab-properties')).toBeVisible();
     await expect(page.getByTestId('dock-tab-layers')).toBeVisible();
+    await expect(page.getByTestId('dock-tab-path-ops')).toBeVisible();
     await expect(page.getByTestId('editor-canvas-area')).toBeVisible();
   });
 
