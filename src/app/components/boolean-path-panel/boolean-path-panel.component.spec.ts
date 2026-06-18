@@ -12,12 +12,12 @@ describe('BooleanPathPanelComponent', () => {
   let fixture: ComponentFixture<BooleanPathPanelComponent>;
   let selectedShapes: WritableSignal<ShapeProperties[]>;
   let currentTool: WritableSignal<string>;
-  let applyPathBooleanUnion: ReturnType<typeof vi.fn>;
+  let applyPathBoolean: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
     selectedShapes = signal<ShapeProperties[]>([]);
     currentTool = signal('selector');
-    applyPathBooleanUnion = vi.fn();
+    applyPathBoolean = vi.fn();
 
     await TestBed.configureTestingModule({
       imports: [BooleanPathPanelComponent],
@@ -54,7 +54,11 @@ describe('BooleanPathPanelComponent', () => {
         },
         {
           provide: ChromeEditorApplyService,
-          useValue: { applyPathBooleanUnion }
+          useValue: {
+            applyPathBooleanUnion: (ids: string[]) => applyPathBoolean('union', ids),
+            applyPathBooleanSubtract: (ids: string[]) => applyPathBoolean('subtract', ids),
+            applyPathBooleanIntersect: (ids: string[]) => applyPathBoolean('intersect', ids)
+          }
         }
       ]
     }).compileComponents();
@@ -81,6 +85,19 @@ describe('BooleanPathPanelComponent', () => {
     expect(unionBtn.disabled).toBe(false);
 
     unionBtn.click();
-    expect(applyPathBooleanUnion).toHaveBeenCalledWith(['path-a', 'path-b']);
+    expect(applyPathBoolean).toHaveBeenCalledWith('union', ['path-a', 'path-b']);
+  });
+
+  it('wires subtract and intersect buttons', () => {
+    selectedShapes.set([
+      { id: 'path-a', type: 'path' } as ShapeProperties,
+      { id: 'path-b', type: 'path' } as ShapeProperties
+    ]);
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('[data-testid="path-ops-subtract"]') as HTMLButtonElement).click();
+    (fixture.nativeElement.querySelector('[data-testid="path-ops-intersect"]') as HTMLButtonElement).click();
+    expect(applyPathBoolean).toHaveBeenCalledWith('subtract', ['path-a', 'path-b']);
+    expect(applyPathBoolean).toHaveBeenCalledWith('intersect', ['path-a', 'path-b']);
   });
 });

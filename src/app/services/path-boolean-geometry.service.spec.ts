@@ -61,6 +61,25 @@ describe('PathBooleanGeometryService', () => {
       b: 'M 5 0 L 15 0 L 15 10 L 5 10 Z'
     });
     expect(service.unionLocalD(['a', 'b'], port)).toBeNull();
-    expect(service.buildUnionResult(['a', 'b'], port, new Set(), 0)).toBeNull();
+    expect(service.buildBooleanResult('union', ['a', 'b'], port, new Set(), 0)).toBeNull();
+  });
+
+  it('buildBooleanResult subtract and intersect produce markup', () => {
+    const port = mockPort({
+      back: 'M 0 0 L 10 0 L 10 10 L 0 10 Z',
+      front: 'M 5 0 L 15 0 L 15 10 L 5 10 Z'
+    });
+    const backNode = port.getPathElement('back')!;
+    const frontNode = port.getPathElement('front')!;
+    document.body.appendChild(backNode);
+    document.body.appendChild(frontNode);
+
+    const subtracted = service.buildBooleanResult('subtract', ['back', 'front'], port, new Set(), 1);
+    const intersected = service.buildBooleanResult('intersect', ['back', 'front'], port, new Set(), 1);
+    expect(subtracted?.resultMarkup).toContain('<path');
+    expect(intersected?.resultMarkup).toContain('<path');
+
+    backNode.remove();
+    frontNode.remove();
   });
 });

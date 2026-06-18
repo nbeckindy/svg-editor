@@ -1,51 +1,75 @@
 import { Injectable } from '@angular/core';
 import {
   allocateShapeId,
-  buildUnionResultPathMarkup,
-  foldMartinezUnion,
+  buildBooleanResultPathMarkup,
+  computeBooleanGeometry,
   geometryHasHoles,
+  geometryIsEmpty,
   geometryToRings,
-  operandPathToGeometry,
   pathHasClosedSubpaths,
   rootUserRingsToLocalPathD,
   sortPathIdsByDocumentOrder,
+  subtractPathGeometries,
+  intersectPathGeometries,
   unionPathGeometries,
+  type BooleanOp,
   type PathBooleanGeometryPort
 } from '../models/path-boolean';
 
-export interface PathBooleanUnionResult {
+export interface PathBooleanResult {
   resultId: string;
   resultMarkup: string;
   operandIds: string[];
   topmostOperandIndex: number;
 }
 
+/** @deprecated Use {@link PathBooleanResult}. */
+export type PathBooleanUnionResult = PathBooleanResult;
+
 @Injectable({
   providedIn: 'root'
 })
 export class PathBooleanGeometryService {
-  /** Returns local `d` for a union of the given path operands, or null when ineligible / empty. */
-  unionLocalD(pathIds: string[], port: PathBooleanGeometryPort): string | null {
+  private localDForOp(op: BooleanOp, pathIds: string[], port: PathBooleanGeometryPort): string | null {
     if (pathIds.length < 2) return null;
     for (const id of pathIds) {
       const d = port.getPathD(id);
       if (!d || !pathHasClosedSubpaths(d)) return null;
     }
-    const rings = unionPathGeometries(pathIds, port);
+    const rings =
+      op === 'union'
+        ? unionPathGeometries(pathIds, port)
+        : op === 'subtract'
+          ? subtractPathGeometries(pathIds, port)
+          : intersectPathGeometries(pathIds, port);
     if (!rings) return null;
     return rootUserRingsToLocalPathD(rings);
   }
 
+  /** Returns local `d` for a union of the given path operands, or null when ineligible / empty. */
+  unionLocalD(pathIds: string[], port: PathBooleanGeometryPort): string | null {
+    return this.localDForOp('union', pathIds, port);
+  }
+
+  subtractLocalD(pathIds: string[], port: PathBooleanGeometryPort): string | null {
+    return this.localDForOp('subtract', pathIds, port);
+  }
+
+  intersectLocalD(pathIds: string[], port: PathBooleanGeometryPort): string | null {
+    return this.localDForOp('intersect', pathIds, port);
+  }
+
   /**
-   * Compute union geometry and build serialized result `<path>` markup.
+   * Compute boolean geometry and build serialized result `<path>` markup.
    * Operands are sorted front-to-back; style is copied from the topmost operand.
    */
-  buildUnionResult(
+  buildBooleanResult(
+    op: BooleanOp,
     pathIds: string[],
     port: PathBooleanGeometryPort,
     usedIds: ReadonlySet<string>,
     topmostInsertionIndex: number
-  ): PathBooleanUnionResult | null {
+  ): PathBooleanResult | null {
     if (pathIds.length < 2) return null;
 
     const sorted = sortPathIdsByDocumentOrder(pathIds, port);
@@ -55,15 +79,10 @@ export class PathBooleanGeometryService {
       if (!port.getPathElement(id)) return null;
     }
 
-    const geometries = sorted
-      .map((id) => operandPathToGeometry(id, port))
-      .filter((g): g is NonNullable<typeof g> => g !== null);
-    if (geometries.length !== sorted.length) return null;
+    const geometry = computeBooleanGeometry(op, sorted, port);
+    if (!geometry || geometryIsEmpty(geometry)) return null;
 
-    const unioned = foldMartinezUnion(geometries);
-    if (!unioned) return null;
-
-    const rings = geometryToRings(unioned);
+    const rings = geometryToRings(geometry);
     if (rings.length === 0) return null;
     const localD = rootUserRingsToLocalPathD(rings);
 
@@ -72,11 +91,11 @@ export class PathBooleanGeometryService {
     if (!styleSource) return null;
 
     const resultId = allocateShapeId(usedIds);
-    const resultMarkup = buildUnionResultPathMarkup(
+    const resultMarkup = buildBooleanResultPathMarkup(
       resultId,
       localD,
       styleSource,
-      geometryHasHoles(unioned)
+      geometryHasHoles(geometry)
     );
 
     return {
@@ -85,5 +104,15 @@ export class PathBooleanGeometryService {
       operandIds: sorted,
       topmostOperandIndex: topmostInsertionIndex
     };
+  }
+
+  /** @deprecated Use {@link buildBooleanResult}. */
+  buildUnionResult(
+    pathIds: string[],
+    port: PathBooleanGeometryPort,
+    usedIds: ReadonlySet<string>,
+    topmostInsertionIndex: number
+  ): PathBooleanResult | null {
+    return this.buildBooleanResult('union', pathIds, port, usedIds, topmostInsertionIndex);
   }
 }

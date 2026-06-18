@@ -1,5 +1,5 @@
 import { Component, computed, inject } from '@angular/core';
-import { evaluatePathBooleanSelection } from '../../models/path-boolean';
+import { evaluatePathBooleanSelection, type BooleanOp } from '../../models/path-boolean';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -33,9 +33,23 @@ export class BooleanPathPanelComponent {
 
   readonly operandCount = computed(() => this.selectionState().operandIds.length);
 
-  onUnion(): void {
+  readonly subtractTitle = computed(() =>
+    this.selectionState().eligible
+      ? 'Subtract shapes behind the frontmost path from the frontmost path'
+      : this.selectionState().reason
+  );
+
+  readonly intersectTitle = computed(() =>
+    this.selectionState().eligible
+      ? 'Keep the overlapping region of all selected paths'
+      : this.selectionState().reason
+  );
+
+  onBoolean(op: BooleanOp): void {
     const { eligible, operandIds } = this.selectionState();
     if (!eligible) return;
-    this.chromeApply.applyPathBooleanUnion(operandIds);
+    if (op === 'union') this.chromeApply.applyPathBooleanUnion(operandIds);
+    else if (op === 'subtract') this.chromeApply.applyPathBooleanSubtract(operandIds);
+    else this.chromeApply.applyPathBooleanIntersect(operandIds);
   }
 }

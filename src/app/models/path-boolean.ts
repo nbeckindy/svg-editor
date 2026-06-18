@@ -1,4 +1,11 @@
-import { union as martinezUnion, type Geometry, type MultiPolygon, type Ring } from 'martinez-polygon-clipping';
+import {
+  diff as martinezDiff,
+  intersection as martinezIntersection,
+  union as martinezUnion,
+  type Geometry,
+  type MultiPolygon,
+  type Ring
+} from 'martinez-polygon-clipping';
 import { parsePathDForNodeEditing, type PathSegment } from './path-d';
 
 export const BOOLEAN_FLATTEN_TOLERANCE = 0.25;
@@ -359,6 +366,52 @@ export function foldMartinezUnion(geometries: Geometry[]): Geometry | null {
   return acc;
 }
 
+export function foldMartinezIntersection(geometries: Geometry[]): Geometry | null {
+  let acc: Geometry | null = null;
+  for (const geom of geometries) {
+    if (!acc) {
+      acc = geom;
+      continue;
+    }
+    const next = martinezIntersection(acc, geom);
+    if (!next) return null;
+    acc = next;
+  }
+  return acc;
+}
+
+/** Front geometry minus union of all others (operands sorted back-to-front). */
+export function subtractFrontFromOthers(geometries: Geometry[]): Geometry | null {
+  if (geometries.length < 2) return null;
+  const front = geometries[geometries.length - 1]!;
+  const rest = geometries.slice(0, -1);
+  const unionRest = foldMartinezUnion(rest);
+  if (!unionRest) return null;
+  const result = martinezDiff(front, unionRest);
+  if (!result || result.length === 0) return null;
+  return result;
+}
+
+export function geometryIsEmpty(geometry: Geometry): boolean {
+  return geometryToRings(geometry).length === 0;
+}
+
+export function computeBooleanGeometry(
+  op: BooleanOp,
+  sortedPathIds: string[],
+  port: PathBooleanGeometryPort
+): Geometry | null {
+  const geometries = sortedPathIds
+    .map((id) => operandPathToGeometry(id, port))
+    .filter((g): g is Geometry => g !== null);
+  if (geometries.length !== sortedPathIds.length) return null;
+
+  if (op === 'union') return foldMartinezUnion(geometries);
+  if (op === 'intersect') return foldMartinezIntersection(geometries);
+  if (op === 'subtract') return subtractFrontFromOthers(geometries);
+  return null;
+}
+
 export function sortPathIdsByDocumentOrder(pathIds: string[], port: PathBooleanGeometryPort): string[] {
   const nodes = pathIds
     .map((id) => ({ id, node: port.getPathElement(id) }))
@@ -392,14 +445,24 @@ export function operandPathToGeometry(
 
 export function unionPathGeometries(pathIds: string[], port: PathBooleanGeometryPort): FlattenedRing[] | null {
   const sorted = sortPathIdsByDocumentOrder(pathIds, port);
-  const geometries: Geometry[] = [];
-  for (const id of sorted) {
-    const geom = operandPathToGeometry(id, port);
-    if (geom) geometries.push(geom);
-  }
-  if (geometries.length === 0) return null;
-  const result = foldMartinezUnion(geometries);
-  if (!result) return null;
+  const result = computeBooleanGeometry('union', sorted, port);
+  if (!result || geometryIsEmpty(result)) return null;
+  const rings = geometryToRings(result);
+  return rings.length > 0 ? rings : null;
+}
+
+export function subtractPathGeometries(pathIds: string[], port: PathBooleanGeometryPort): FlattenedRing[] | null {
+  const sorted = sortPathIdsByDocumentOrder(pathIds, port);
+  const result = computeBooleanGeometry('subtract', sorted, port);
+  if (!result || geometryIsEmpty(result)) return null;
+  const rings = geometryToRings(result);
+  return rings.length > 0 ? rings : null;
+}
+
+export function intersectPathGeometries(pathIds: string[], port: PathBooleanGeometryPort): FlattenedRing[] | null {
+  const sorted = sortPathIdsByDocumentOrder(pathIds, port);
+  const result = computeBooleanGeometry('intersect', sorted, port);
+  if (!result || geometryIsEmpty(result)) return null;
   const rings = geometryToRings(result);
   return rings.length > 0 ? rings : null;
 }
@@ -419,7 +482,7 @@ export function copyPresentationAttrsFromElement(source: Element, target: Elemen
   }
 }
 
-export function buildUnionResultPathMarkup(
+export function buildBooleanResultPathMarkup(
   resultId: string,
   localD: string,
   styleSource: Element,
@@ -434,6 +497,9 @@ export function buildUnionResultPathMarkup(
   path.removeAttribute('transform');
   return path.outerHTML;
 }
+
+/** @deprecated Use {@link buildBooleanResultPathMarkup}. */
+export const buildUnionResultPathMarkup = buildBooleanResultPathMarkup;
 
 export function allocateShapeId(usedIds: ReadonlySet<string>): string {
   let newId: string;

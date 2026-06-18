@@ -1608,7 +1608,7 @@ export class TextVectorEffectCommand implements CoalesceableCommand {
  * Captures operand markup + indices and result markup in the constructor for undo/redo.
  */
 export class BooleanPathCommand implements EditorCommand {
-  readonly description = 'Union paths';
+  readonly description: string;
 
   private readonly operandSerializedMarkup = new Map<string, string>();
   private readonly operandInsertionIndices = new Map<string, number>();
@@ -1620,8 +1620,10 @@ export class BooleanPathCommand implements EditorCommand {
     private readonly resultId: string,
     private readonly resultMarkup: string,
     private readonly resultInsertionIndex: number,
+    description: string,
     private readonly selectionSync?: SelectionSyncPort
   ) {
+    this.description = description;
     this.operandIds = [...operandIds];
     this.captureOperandState();
   }

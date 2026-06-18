@@ -30,8 +30,26 @@
         data-testid="path-ops-union"
         [disabled]="!selectionState().eligible"
         [attr.title]="selectionState().eligible ? 'Union selected paths' : selectionState().reason"
-        (click)="onUnion()">
+        (click)="onBoolean('union')">
         Union
+      </button>
+      <button
+        type="button"
+        class="op-btn"
+        data-testid="path-ops-subtract"
+        [disabled]="!selectionState().eligible"
+        [attr.title]="subtractTitle()"
+        (click)="onBoolean('subtract')">
+        Subtract
+      </button>
+      <button
+        type="button"
+        class="op-btn"
+        data-testid="path-ops-intersect"
+        [disabled]="!selectionState().eligible"
+        [attr.title]="intersectTitle()"
+        (click)="onBoolean('intersect')">
+        Intersect
       </button>
     </div>
   </div>

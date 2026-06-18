@@ -59,10 +59,17 @@ import { PathBooleanGeometryService } from './path-boolean-geometry.service';
 import {
   pathHasClosedSubpaths,
   sortPathIdsByDocumentOrder,
+  type BooleanOp,
   type PathBooleanGeometryPort
 } from '../models/path-boolean';
 
 const OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
+
+const PATH_BOOLEAN_LABELS: Record<BooleanOp, string> = {
+  union: 'Union paths',
+  subtract: 'Subtract paths',
+  intersect: 'Intersect paths'
+};
 
 /**
  * **Chrome** write path for the **Editor runtime**: **History** (`pushAndExecute`), **Live tree**
@@ -526,6 +533,18 @@ export class ChromeEditorApplyService {
   }
 
   applyPathBooleanUnion(pathIds: string[]): void {
+    this.applyPathBoolean('union', pathIds);
+  }
+
+  applyPathBooleanSubtract(pathIds: string[]): void {
+    this.applyPathBoolean('subtract', pathIds);
+  }
+
+  applyPathBooleanIntersect(pathIds: string[]): void {
+    this.applyPathBoolean('intersect', pathIds);
+  }
+
+  applyPathBoolean(op: BooleanOp, pathIds: string[]): void {
     if (pathIds.length < 2) return;
     if (this.shapeIdsTouchLocked(pathIds)) return;
     if (this.editorTool.currentTool() !== 'selector') return;
@@ -563,7 +582,8 @@ export class ChromeEditorApplyService {
       if (id) usedIds.add(id);
     });
 
-    const built = this.pathBooleanGeometry.buildUnionResult(
+    const built = this.pathBooleanGeometry.buildBooleanResult(
+      op,
       pathIds,
       port,
       usedIds,
@@ -571,6 +591,7 @@ export class ChromeEditorApplyService {
     );
     if (!built) return;
 
+    const description = PATH_BOOLEAN_LABELS[op];
     this.pushCommandsAndSyncSelection(
       [
         new BooleanPathCommand(
@@ -579,10 +600,11 @@ export class ChromeEditorApplyService {
           built.resultId,
           built.resultMarkup,
           built.topmostOperandIndex,
+          description,
           this.shapeSelection
         )
       ],
-      'Union paths'
+      description
     );
   }
 

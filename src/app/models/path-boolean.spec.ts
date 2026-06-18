@@ -5,11 +5,13 @@ import {
   flattenCubicToPoints,
   flattenQuadraticToPoints,
   foldMartinezUnion,
+  intersectPathGeometries,
   operandPathToGeometry,
   pathHasClosedSubpaths,
   ringsToPathD,
   rootUserRingsToLocalPathD,
   sortPathIdsByDocumentOrder,
+  subtractPathGeometries,
   unionPathGeometries,
   type PathBooleanGeometryPort
 } from './path-boolean';
@@ -137,6 +139,37 @@ describe('path-boolean union', () => {
     expect(g2).not.toBeNull();
     const merged = foldMartinezUnion([g1!, g2!]);
     expect(merged).not.toBeNull();
+  });
+
+  it('subtracts front rect from back overlap', () => {
+    const back = makePathNode('back', 'M 0 0 L 10 0 L 10 10 L 0 10 Z');
+    const front = makePathNode('front', 'M 5 0 L 15 0 L 15 10 L 5 10 Z');
+    const port = identityPort({
+      back: { d: back.getAttribute('d')!, node: back },
+      front: { d: front.getAttribute('d')!, node: front }
+    });
+    const rings = subtractPathGeometries(['back', 'front'], port);
+    expect(rings).not.toBeNull();
+    const d = ringsToPathD(rings!);
+    expect(d).toContain('Z');
+    back.remove();
+    front.remove();
+  });
+
+  it('intersects overlapping rects', () => {
+    const a = makePathNode('a', 'M 0 0 L 10 0 L 10 10 L 0 10 Z');
+    const b = makePathNode('b', 'M 5 0 L 15 0 L 15 10 L 5 10 Z');
+    const port = identityPort({
+      a: { d: a.getAttribute('d')!, node: a },
+      b: { d: b.getAttribute('d')!, node: b }
+    });
+    const rings = intersectPathGeometries(['a', 'b'], port);
+    expect(rings).not.toBeNull();
+    const d = ringsToPathD(rings!);
+    expect(d).toContain('5');
+    expect(d).toContain('10');
+    a.remove();
+    b.remove();
   });
 });
 
