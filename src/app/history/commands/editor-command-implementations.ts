@@ -1602,3 +1602,80 @@ export class TextVectorEffectCommand implements CoalesceableCommand {
     return new TextVectorEffectCommand(this.svc, this.textId, this.oldEffect, n.newEffect);
   }
 }
+
+/**
+ * Atomic boolean path operation: removes operand paths and inserts one result path.
+ * Captures operand markup + indices and result markup in the constructor for undo/redo.
+ */
+export class BooleanPathCommand implements EditorCommand {
+  readonly description = 'Union paths';
+
+  private readonly operandSerializedMarkup = new Map<string, string>();
+  private readonly operandInsertionIndices = new Map<string, number>();
+  private readonly operandIds: string[];
+
+  constructor(
+    private readonly svc: EditorShapeLifecycleSvgPort,
+    operandIds: string[],
+    private readonly resultId: string,
+    private readonly resultMarkup: string,
+    private readonly resultInsertionIndex: number,
+    private readonly selectionSync?: SelectionSyncPort
+  ) {
+    this.operandIds = [...operandIds];
+    this.captureOperandState();
+  }
+
+  private captureOperandState(): void {
+    const svgInstance = this.svc.getSVGInstance();
+    if (!svgInstance) return;
+    const contentGroup = svgInstance.findOne('[data-editor-content-group]');
+    const contentNode = contentGroup?.node as Element | undefined;
+
+    for (const id of this.operandIds) {
+      const shape = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+      if (!shape?.node) continue;
+      this.operandSerializedMarkup.set(id, (shape.node as Element).outerHTML);
+      if (contentNode) {
+        const children = Array.from(contentNode.children);
+        const idx = children.indexOf(shape.node as Element);
+        if (idx >= 0) this.operandInsertionIndices.set(id, idx);
+      }
+    }
+  }
+
+  execute(): void {
+    this.svc.removeShapes(this.operandIds);
+    this.svc.insertShapeMarkup(this.resultMarkup, this.resultInsertionIndex);
+    if (!this.selectionSync) return;
+    const svgInstance = this.svc.getSVGInstance();
+    const el = svgInstance?.findOne(`#${this.resultId}`) as SvgJsElement | undefined;
+    if (el) {
+      this.selectionSync.selectShapes([this.svc.getShapeProperties(el)]);
+    }
+  }
+
+  undo(): void {
+    this.svc.removeShape(this.resultId);
+    this.svc.restoreRemovedShapesInContentGroup(
+      this.operandIds,
+      this.operandSerializedMarkup,
+      this.operandInsertionIndices
+    );
+    if (!this.selectionSync) return;
+    const svgInstance = this.svc.getSVGInstance();
+    if (!svgInstance) return;
+    const sorted = [...this.operandIds]
+      .filter((id) => this.operandSerializedMarkup.has(id))
+      .sort((a, b) => (this.operandInsertionIndices.get(a) ?? 0) - (this.operandInsertionIndices.get(b) ?? 0));
+    const restoredProps = sorted
+      .map((id) => {
+        const el = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
+        return el ? this.svc.getShapeProperties(el) : null;
+      })
+      .filter((p): p is NonNullable<typeof p> => p !== null);
+    if (restoredProps.length > 0) {
+      this.selectionSync.selectShapes(restoredProps);
+    }
+  }
+}

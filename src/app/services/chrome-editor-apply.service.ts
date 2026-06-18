@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ChromeEditorApplySvgPort } from '../history/chrome-editor-apply-svg.port';
+import type { EditorShapeLifecycleSvgPort } from '../history/editor-shape-lifecycle-svg.port';
 import type { LayerReorderGroupSvgPort } from '../history/layers-panel-svg.port';
 import type { PropertiesPanelSvgPort } from '../history/properties-panel-svg.port';
 import type { SelectionTransformApplySvgPort } from '../history/transform-gesture-svg.port';
@@ -42,7 +43,8 @@ import {
   BakeFillCommand,
   BakeStrokeCommand,
   AlignCommand,
-  DistributeCommand
+  DistributeCommand,
+  BooleanPathCommand
 } from '../models/editor-commands';
 import { defaultLinearGradientModel, serializeGradientElementToOuterHtml } from '../models/svg-gradient';
 import { MIN_UNION_SIZE } from '../utils/selection-resize';
@@ -53,6 +55,12 @@ import {
   normDeg0To360,
   shortestSignedDeltaDeg
 } from '../utils/selection-transform-matrix';
+import { PathBooleanGeometryService } from './path-boolean-geometry.service';
+import {
+  pathHasClosedSubpaths,
+  sortPathIdsByDocumentOrder,
+  type PathBooleanGeometryPort
+} from '../models/path-boolean';
 
 const OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
 
@@ -67,9 +75,12 @@ const OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
 export class ChromeEditorApplyService {
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly paintSvg: ChromeEditorApplySvgPort = inject(SvgManipulationService);
+  private readonly shapeLifecycleSvg: EditorShapeLifecycleSvgPort = inject(SvgManipulationService);
   private readonly propertiesSvg: PropertiesPanelSvgPort = inject(SvgManipulationService);
   private readonly layerSvg: LayerReorderGroupSvgPort = inject(SvgManipulationService);
   private readonly transformSvg: SelectionTransformApplySvgPort = inject(SvgManipulationService);
+  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly pathBooleanGeometry = inject(PathBooleanGeometryService);
   private readonly drawingDefaults = inject(DrawingStyleDefaultsService);
   private readonly editorHistory = inject(EditorHistoryService);
   private readonly editorTool = inject(EditorToolService);
@@ -511,6 +522,67 @@ export class ChromeEditorApplyService {
     this.pushCommandsAndSyncSelection(
       [new DistributeCommand(this.propertiesSvg, shapeIds, direction)],
       undefined
+    );
+  }
+
+  applyPathBooleanUnion(pathIds: string[]): void {
+    if (pathIds.length < 2) return;
+    if (this.shapeIdsTouchLocked(pathIds)) return;
+    if (this.editorTool.currentTool() !== 'selector') return;
+
+    const svg = this.shapeLifecycleSvg.getSVGInstance();
+    if (!svg) return;
+    const contentGroup = svg.findOne('[data-editor-content-group]');
+    if (!contentGroup?.node) return;
+
+    const port: PathBooleanGeometryPort = {
+      getPathElement: (id) => {
+        const node = svg.findOne(`#${id}`)?.node as Element | undefined;
+        return node?.tagName.toLowerCase() === 'path' ? node : null;
+      },
+      getPathD: (id) => port.getPathElement(id)?.getAttribute('d') ?? null,
+      mapPathLocalToRootUser: (id, lx, ly) =>
+        this.svgManipulation.mapPathLocalToRootUser(id, lx, ly),
+      mapRootUserToPathLocal: (id, rx, ry) =>
+        this.svgManipulation.mapRootUserToPathLocal(id, rx, ry)
+    };
+
+    const sorted = sortPathIdsByDocumentOrder(pathIds, port);
+    const topmostId = sorted[sorted.length - 1];
+    if (!topmostId) return;
+    const topmostNode = port.getPathElement(topmostId);
+    if (!topmostNode) return;
+
+    const children = Array.from((contentGroup.node as Element).children);
+    const topmostInsertionIndex = children.indexOf(topmostNode);
+    if (topmostInsertionIndex < 0) return;
+
+    const usedIds = new Set<string>();
+    contentGroup.find('*').forEach((el) => {
+      const id = el.id();
+      if (id) usedIds.add(id);
+    });
+
+    const built = this.pathBooleanGeometry.buildUnionResult(
+      pathIds,
+      port,
+      usedIds,
+      topmostInsertionIndex
+    );
+    if (!built) return;
+
+    this.pushCommandsAndSyncSelection(
+      [
+        new BooleanPathCommand(
+          this.shapeLifecycleSvg,
+          built.operandIds,
+          built.resultId,
+          built.resultMarkup,
+          built.topmostOperandIndex,
+          this.shapeSelection
+        )
+      ],
+      'Union paths'
     );
   }
 
