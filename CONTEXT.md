@@ -45,16 +45,37 @@ The selector **Tool** variant (direct-select / node tool) used to edit **Path no
 _Avoid_: Using **Node-edit tool** for marquee multi-select or group drill-in unless the product explicitly unifies those modes; calling uncommitted pen preview anchors **Path node**s before the path is finalized.
 
 **Primitive shape**:
-A basic drawable element created by shape tools—typically `<rect>`, `<circle>`, and `<line>` in this product—before any **Outline to path** conversion.
-_Avoid_: Treating `<path>` as a **Primitive shape** in roadmap prose; using “primitive” for raw DOM nodes outside the editor’s shape-tool set.
+A basic drawable element created by shape tools—typically `<rect>`, `<ellipse>` (ellipse tool), and `<line>` in this product—before any permanent **Outline to path** conversion. `<circle>` may appear in imported SVG; **Compound operand** eligibility includes rect, circle, and ellipse tags.
+_Avoid_: Treating `<path>` as a **Primitive shape** in roadmap prose; using “primitive” for raw DOM nodes outside the editor’s shape-tool set; assuming boolean ops accept primitives unless product scope expands beyond **Boolean operand** (path-only today).
 
 **Outline to path**:
 An edit that replaces a **Primitive shape** with a `<path>` whose `d` geometry matches the former element (stroke/fill/transform preserved per command rules) so **Node-edit tool** workflows apply.
-_Avoid_: Confusing with “outline stroke” (stroke-to-path) unless the same command implements both; using for text-to-path without defining text scope separately.
+_Avoid_: Confusing with **Compound path** (many operands → one path, operands removed) or transient primitive sampling used only during **Make compound path**; confusing with “outline stroke” (stroke-to-path) unless the same command implements both; using for text-to-path without defining text scope separately.
+
+**Path boolean operation**:
+One of **Union (path boolean)**, **Subtract (path boolean)**, or **Intersect (path boolean)**—combines **Boolean operand** fill geometry into a single result `<path>` via polygon clipping after **Flatten (boolean geometry)**. Committed through **Path ops panel** with optional **Boolean preview** before Apply.
+_Avoid_: Calling **Compound path** a boolean operation; implying curves survive in the result path today.
+
+**Union (path boolean)**:
+Merges overlapping fill regions of all **Boolean operand**s into one outline (order-independent for two operands; N-way fold for more).
+
+**Subtract (path boolean)**:
+Removes the union of back operands from the frontmost **Boolean operand** in paint order (Illustrator-style “minus front” for two shapes).
+
+**Intersect (path boolean)**:
+Keeps only the overlapping fill region shared by all **Boolean operand**s.
 
 **Path node**:
 A knot in a `<path>`’s segment model that **Node-edit tool** exposes as draggable, and that may support insertion, deletion, or type toggles (**Corner node** vs **Smooth node**).
 _Avoid_: Equating every parsed `d` token with a user-facing **Path node**—helpers and degenerate segments may not get handles; using for uncommitted pen preview points before path commit.
+
+**Path ops panel**:
+The right-dock **Chrome** tab (`pathOps`) for **Path boolean operation**s and **Make compound path**: operand summary, union/subtract/intersect (with **Boolean preview** Apply/Cancel), and compound. Not the generic properties inspector or **Editor chrome** on the **Canvas**.
+_Avoid_: “Boolean panel” when compound is in scope; placing path booleans in the properties strip as the primary home (legacy union affordance may exist elsewhere but **Path ops panel** is the dedicated surface).
+
+**Make compound path**:
+User action in **Path ops panel** that commits a **Compound path** immediately—no **Boolean preview**—replacing **Compound operand**s with one `<path>` in one **History** step.
+_Avoid_: Describing as boolean “union”; implying operands remain as separate elements after commit.
 
 **Corner node**:
 A **Path node** where segments meet with a sharp tangent discontinuity (no smooth outgoing handles).
@@ -65,6 +86,14 @@ A **Path node** with Bezier control handles arranged so adjacent segments meet w
 **Automatic tool revert (after creation)**:
 Policy where completing a new object with a shape-creation **Tool** immediately activates the primary Select **Tool**, so the user does not remain in draw mode by default.
 _Avoid_: Applying the name to pen paths if pen policy differs (pen may stay active until closed or confirmed—say so in product rules).
+
+**Boolean operand**:
+A closed `<path>` in **Selection** eligible for a **Path boolean operation** (union, subtract, or intersect). Each operand must have closed subpaths (`Z` on every subpath); transforms bake into root user space before polygon clipping.
+_Avoid_: Assuming **Primitive shape**s or **Compound operand**s are boolean operands unless product scope says so; using “operand” without saying boolean vs compound.
+
+**Boolean preview**:
+Non-destructive **Editor chrome** ghost of a pending **Path boolean operation** result on the **Canvas**, shown after the user picks union, subtract, or intersect and cleared on Apply or Cancel—no **History** entry until Apply commits.
+_Avoid_: Using for **Make compound path** (compound applies immediately); conflating with pen preview geometry or **Editor chrome** selection outlines.
 
 **Layer**:
 A shape or `<g>` subtree in **Live tree** DOM paint order that the layers list exposes for visibility and reorder—not **Selection** and not **Chrome**.
@@ -110,6 +139,10 @@ _Avoid_: Using for the **First-anchor P3 draft** gap after `M` before the second
 The two-step first-segment curve workflow after placing `M`: step one drags mirrored outgoing handles from the moveto; step two plants the segment end (`P3`) on the next primary mousedown, then commits the first cubic (`C`) on release. Carried as `PenFirstAnchorP3Draft` in code until commit or discard.
 _Avoid_: Treating step-one handle drag as a normal **Pending segment** (no planted chord end yet); using “first anchor” alone when you mean any path start **Path node** after finish.
 
+**Flatten (boolean geometry)**:
+Adaptive subdivision of operand outlines—including cubic/quadratic path segments and primitive corner/ellipse approximations—into line rings in root user space before polygon clipping. **Path boolean operation** results serialize as `M`/`L`/`Z` unless a future curve-preserving pipeline is adopted.
+_Avoid_: Saying **Compound path** “flattens” paths (compound preserves curve commands on path operands); using “flatten” for **Outline to path** or layer UI metaphors.
+
 **Join tolerance**:
 The shared viewport-pixel hit radius (~8px; `PEN_SINGLE_CLICK_CLOSE_RADIUS_PX`) for **Single-click close**, **Close target** hover, **Open path continuation** pickup, and **Path finish join**. Mapping from document coordinates to screen space must succeed or the hit test fails closed (no accidental merge).
 _Avoid_: Calling every pen proximity test “join tolerance” when it uses a different constant; assuming SVG-user distance alone defines close rings without screen mapping.
@@ -137,6 +170,14 @@ _Avoid_: Using for **Insert on path** (splitting a segment interior); using for 
 **Continuation stitch**:
 How new pen geometry attaches during **Open path continuation**: `appendToExistingTail` (extend from tail) or `prependBeforeExisting` (draw from head backward into frozen existing segments).
 _Avoid_: Inventing stitch names in prose that don’t match these two modes; calling either mode a separate **Tool**.
+
+**Compound operand**:
+A **Selection** member eligible for **Compound path**: a closed `<path>` or a **Primitive shape** (`<rect>`, `<circle>`, or `<ellipse>`). Primitives are sampled to closed subpath geometry in element-local space for the merge; operands are removed on commit (distinct from permanent **Outline to path** on a single shape).
+_Avoid_: Applying **Boolean operand** rules (path-only today) to compound without checking scope; treating open `<line>` or arbitrary tags as compound-eligible.
+
+**Compound path**:
+One `<path>` whose `d` concatenates multiple closed subpaths (`M…Z` per **Compound operand** outline) without polygon clipping—overlapping fill follows `fill-rule` (typically `evenodd` for hole-style overlaps). Replaces operands in a single **History** step.
+_Avoid_: Equating with **Union (path boolean)** (union merges overlapping regions via clip); describing as “grouping” when the DOM result is literally one path element.
 
 **Continuing path rewrite**:
 In-session record that the active stroke mutates an existing `<path>` (`pathId`, `originalD`, **Continuation stitch**, optional frozen `existingSegments` for prepend)—drives preview, **Close target**, and the `EditPath`-style **History** entry on **Path finish**.
@@ -179,6 +220,10 @@ _Avoid_: Using **Canvas adapter** when you mean the **Canvas** viewport alone; n
 - **Layer visibility** and **Layer lock** are independent axes on a row: hidden vs visible, editable vs guarded—UI may present them together but prose should stay precise.
 - **History** records applied edits and their inverses; undo/redo walks those stacks and mutates the **Live tree** (and may change **Selection** or **Layer** order as a side effect).
 - **Outline to path** turns **Primitive shape**s into `<path>` so **Path node**, **Corner node**, and **Smooth node** edits apply; until conversion, bbox handles own the shape.
+- **Compound path** may sample **Primitive shape** geometry transiently without a separate **Outline to path** command per operand; the committed artifact is still one `<path>`.
+- **Path boolean operation** (union / subtract / intersect) applies only to **Boolean operand**s (closed paths today); **Compound path** accepts **Compound operand**s including primitives.
+- **Boolean preview** is **Editor chrome** on the **Canvas**; **Path ops panel** is **Chrome** in the right dock—preview ghost is not artwork in the **Live tree** until Apply.
+- **Make compound path** and **Path boolean operation** Apply both push one **History** command that removes operands and inserts the result path.
 - **Node-edit tool** is still a **Tool** variant: it changes pointer routing on the **Canvas** like other tools and cooperates with **Editor chrome** overlays for knots and handles.
 - The pen **Tool** routes through a **Canvas adapter** into **PenToolSession**, which owns **Pen authoring session** policy while mutating or reading a **PenSession** model; **PenToolSession** uses **Ports** to touch **History**, **Selection**, and svg.js—not the full widget tree.
 - **Pen-over-shape input** is a hit-test priority policy in the **Canvas adapter** / pen stack, not a separate **Tool** name.
@@ -198,7 +243,7 @@ The workspace **Chrome** around the **Canvas** includes intentionally shallow co
 
 - **`EditorRightDockComponent`** follows a parent-owned seam: `activeDockPanel` and `dockCollapsed` are passed in with `input()` / `output()` from the app shell; the dock only forwards tab clicks and collapse/expand. That pattern is the reference if a second layout (alternate shell, embedded editor) needs the same inspector contract without duplicating state.
 - **`ToolStripComponent`** and **`EditorToolContextBarComponent`** call **`EditorToolService`** directly (constructor injection or `inject()`). That is appropriate while there is only one shell: there is no duplicated forwarding to deduplicate, and extracting `input()` / `output()` boundaries would add noise without a second consumer.
-- **`editor-dock-panel.ts`** holds the `'properties' | 'layers'` union only; extend it when new dock tabs are real product requirements, not preemptively.
+- **`editor-dock-panel.ts`** holds the `'properties' | 'layers' | 'pathOps'` union; **`pathOps`** hosts **Path ops panel**. Extend when new dock tabs are real product requirements, not preemptively.
 - **`ChromeEditorApplyService`** is the **Chrome** → **History** write path for the inspector dock and eyedropper: high-level methods batch `EditorCommand`s and reconcile **Selection** with the **Live tree** so panels do not duplicate `pushAndExecute` + sync ceremony.
 
 **When to deepen**
@@ -247,6 +292,15 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 > **Dev:** "Did the user close the path or just finish drawing?"
 > **Contributor:** "**Path close** means `Z` looped the subpath; **Path finish** is the commit either way—they might finish open or merge via **Path finish join**."
 
+> **Dev:** "Is compound the same as union?"
+> **Contributor:** "No — **Union (path boolean)** clips and merges overlapping fill; **Compound path** keeps each **Compound operand** outline as its own subpath without clipping."
+
+> **Dev:** "Does compound convert my rect to a path like outline-to-path?"
+> **Contributor:** "It samples primitive geometry into the result `d` and removes the rect element—similar outcome to **Outline to path** on each shape, but **Make compound path** is one **History** step for the whole **Selection**, not a permanent per-shape conversion command."
+
+> **Dev:** "Where does the blue boolean ghost live?"
+> **Contributor:** "**Boolean preview** — **Editor chrome** on the **Canvas**; cleared on Apply or Cancel. **Path ops panel** buttons live in right-dock **Chrome**."
+
 ## Flagged ambiguities
 
 - The word “document” in casual prose often means the browser DOM — in editor discussion reserve **Document** for the logical SVG artwork.
@@ -265,3 +319,7 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 - “Join” may mean **Path finish join**, **Open path continuation** stitch, or collinear handle behavior at a **Smooth node**—don’t overload without context.
 - **Close target** is not always session `M` during `prependBeforeExisting` **Continuation stitch**—check **Continuing path rewrite** before reviewing close-ring bugs.
 - **First-anchor P3 draft** is not a **Pending segment**; reviews of first-segment curve bugs should say which step failed (mirrored handle drag vs `P3` plant vs commit).
+- “Combine paths” in casual speech may mean **Union (path boolean)**, **Compound path**, or Illustrator “compound path” (evenodd holes)—name which operation and whether clipping ran.
+- **Boolean operand** (path-only for booleans today) vs **Compound operand** (paths + rect/circle/ellipse)—don’t say “selected paths” when primitives are in **Selection** for compound.
+- **Flatten (boolean geometry)** reduces curves to polylines for clipping; **Compound path** on path operands preserves `C`/`Q` in the result `d`—don’t describe both as “flattening.”
+- Permanent **Outline to path** vs transient sampling during **Compound path**—reviews should say whether operands should survive as separate elements after the edit.
