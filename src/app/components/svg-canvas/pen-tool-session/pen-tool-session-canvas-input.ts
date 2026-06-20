@@ -292,7 +292,7 @@ export function onCanvasPenPrimaryMouseDownForView(
         return true;
       }
     }
-    return false;
+    // No insert/continuation hit — draw on top of the filled shape (same as empty canvas).
   }
   const pt = getSnappedPenPoint(event.clientX, event.clientY, event.altKey || event.metaKey || event.ctrlKey);
   if (!pt) return false;

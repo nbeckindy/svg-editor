@@ -313,4 +313,47 @@ describe('PenToolSession', () => {
     expect(session.tryPenBackspaceShortcut()).toBe(true);
     expect(session.isPenSessionActive).toBe(false);
   });
+
+  it('starts a new pen stroke when idle mousedown is on filled path interior (no insert hit)', () => {
+    const clearSelectionForPenBackgroundStroke = vi.fn();
+    const ports = minimalPorts({
+      clearSelectionForPenBackgroundStroke,
+      isEditorContentShapeTarget: () => true,
+      getPathDForId: (id: string) =>
+        id === 'filled-rect' ? 'M 0 0 L 100 0 L 100 100 L 0 100 Z' : null,
+      clientToEditorSvgPoint: () => ({ x: 50, y: 50 })
+    });
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.id = 'filled-rect';
+    const session = new PenToolSession(ports);
+    const down = new MouseEvent('mousedown', { clientX: 50, clientY: 50, button: 0, detail: 1 });
+    vi.spyOn(down, 'target', 'get').mockReturnValue(path);
+    expect(session.onCanvasPenPrimaryMouseDown(down, () => ({ x: 50, y: 50 }))).toBe(true);
+    expect(session.isPenInsertOnPathDragActive).toBe(false);
+    expect(session.isPenSessionActive).toBe(true);
+    expect(clearSelectionForPenBackgroundStroke).toHaveBeenCalled();
+  });
+
+  it('adds a pen anchor when active session mousedown is on filled path interior', () => {
+    const ports = minimalPorts({
+      isEditorContentShapeTarget: () => true,
+      getPathDForId: (id: string) =>
+        id === 'filled-rect' ? 'M 0 0 L 100 0 L 100 100 L 0 100 Z' : null,
+      clientToEditorSvgPoint: vi.fn((cx: number, cy: number) => ({ x: cx, y: cy }))
+    });
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.id = 'filled-rect';
+    const session = new PenToolSession(ports);
+    session.onCanvasPenPrimaryMouseDown(
+      new MouseEvent('mousedown', { clientX: 10, clientY: 10, button: 0, detail: 1 }),
+      () => ({ x: 10, y: 10 })
+    );
+    session.onDocumentMouseUpPen(new MouseEvent('mouseup', { clientX: 10, clientY: 10, button: 0 }));
+    const down = new MouseEvent('mousedown', { clientX: 50, clientY: 50, button: 0, detail: 1 });
+    vi.spyOn(down, 'target', 'get').mockReturnValue(path);
+    expect(session.onCanvasPenPrimaryMouseDown(down, () => ({ x: 50, y: 50 }))).toBe(true);
+    expect(session.isPenInsertOnPathDragActive).toBe(false);
+    expect(session.isPenSessionActive).toBe(true);
+    expect(session.penSessionPreviewPathD).toMatch(/L\s+50\s+50/);
+  });
 });

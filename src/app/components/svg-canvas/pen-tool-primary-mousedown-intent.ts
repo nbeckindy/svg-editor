@@ -40,28 +40,22 @@ export function describePenPrimaryMouseDownIntent(
     }
   }
   if (penTarget && host.ports.isEditorContentShapeTarget(penTarget)) {
-    if (host.segmentCount() !== 0 || host.hasPendingSegment()) {
+    if (host.segmentCount() === 0 && !host.hasPendingSegment()) {
+      if (host.wouldPickUpOpenPathContinuationAt(clientX, clientY)) {
+        return { headline: 'Pen: continue open path at endpoint', details: ['Hit: open path head/tail'] };
+      }
+      const ins = host.evaluateInsertOnPathAt(penTarget, clientX, clientY);
+      if (ins.ok) {
+        details.push(`pathId=${ins.pathId}`, 'mousedown starts insert-drag; mouseup commits');
+        return { headline: 'Pen: insert anchor on existing path', details };
+      }
+      details.push(`insert skipped: ${ins.reason}`);
+    } else {
       details.push(
-        `segments=${host.segmentCount()} pendingSegment=${host.hasPendingSegment() ? 'yes' : 'no'}`
+        `segments=${host.segmentCount()} pendingSegment=${host.hasPendingSegment() ? 'yes' : 'no'}`,
+        'insert-on-path disabled while session active'
       );
-      return {
-        headline: 'Pen: over shape — insert-on-path disabled (session not empty)',
-        details
-      };
     }
-    if (host.wouldPickUpOpenPathContinuationAt(clientX, clientY)) {
-      return { headline: 'Pen: continue open path at endpoint', details: ['Hit: open path head/tail'] };
-    }
-    const ins = host.evaluateInsertOnPathAt(penTarget, clientX, clientY);
-    if (ins.ok) {
-      details.push(`pathId=${ins.pathId}`, 'mousedown starts insert-drag; mouseup commits');
-      return { headline: 'Pen: insert anchor on existing path', details };
-    }
-    details.push(`insert blocked: ${ins.reason}`);
-    return {
-      headline: 'Pen: over path — insert will NOT run (mousedown returns false; no new anchor here)',
-      details
-    };
   }
   const pt = getSnappedPenPoint(clientX, clientY, false);
   if (!pt) {
