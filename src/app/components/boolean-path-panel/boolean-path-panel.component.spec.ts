@@ -15,12 +15,14 @@ describe('BooleanPathPanelComponent', () => {
   let selectedShapes: WritableSignal<ShapeProperties[]>;
   let currentTool: WritableSignal<string>;
   let applyPathBoolean: ReturnType<typeof vi.fn>;
+  let applyPathCompound: ReturnType<typeof vi.fn>;
   let previewService: PathBooleanPreviewService;
 
   beforeEach(async () => {
     selectedShapes = signal<ShapeProperties[]>([]);
     currentTool = signal('selector');
     applyPathBoolean = vi.fn();
+    applyPathCompound = vi.fn();
 
     await TestBed.configureTestingModule({
       imports: [BooleanPathPanelComponent],
@@ -46,8 +48,25 @@ describe('BooleanPathPanelComponent', () => {
                 const id = sel.replace('#', '');
                 const shape = selectedShapes().find((s) => s.id === id);
                 if (!shape) return undefined;
+                if (shape.type === 'rect') {
+                  return {
+                    node: {
+                      tagName: 'rect',
+                      getAttribute: (attr: string) => {
+                        const attrs: Record<string, string> = {
+                          x: '0',
+                          y: '0',
+                          width: '10',
+                          height: '10'
+                        };
+                        return attrs[attr] ?? null;
+                      }
+                    }
+                  };
+                }
                 return {
                   node: {
+                    tagName: 'path',
                     getAttribute: (attr: string) =>
                       attr === 'd' ? 'M 0 0 L 10 0 L 10 10 L 0 10 Z' : null
                   }
@@ -67,7 +86,7 @@ describe('BooleanPathPanelComponent', () => {
         },
         {
           provide: ChromeEditorApplyService,
-          useValue: { applyPathBoolean }
+          useValue: { applyPathBoolean, applyPathCompound }
         }
       ]
     }).compileComponents();
@@ -115,5 +134,31 @@ describe('BooleanPathPanelComponent', () => {
 
     expect(applyPathBoolean).not.toHaveBeenCalled();
     expect(previewService.previewOp()).toBeNull();
+  });
+
+  it('compound applies immediately without preview', () => {
+    selectedShapes.set([
+      { id: 'path-a', type: 'path' } as ShapeProperties,
+      { id: 'path-b', type: 'path' } as ShapeProperties
+    ]);
+    fixture.detectChanges();
+
+    (fixture.nativeElement.querySelector('[data-testid="path-ops-compound"]') as HTMLButtonElement).click();
+    expect(applyPathCompound).toHaveBeenCalledWith(['path-a', 'path-b']);
+    expect(applyPathBoolean).not.toHaveBeenCalled();
+    expect(previewService.previewOp()).toBeNull();
+  });
+
+  it('compound enables for two rectangles', () => {
+    selectedShapes.set([
+      { id: 'rect-a', type: 'rect' } as ShapeProperties,
+      { id: 'rect-b', type: 'rect' } as ShapeProperties
+    ]);
+    fixture.detectChanges();
+
+    const compoundBtn = fixture.nativeElement.querySelector('[data-testid="path-ops-compound"]') as HTMLButtonElement;
+    expect(compoundBtn.disabled).toBe(false);
+    compoundBtn.click();
+    expect(applyPathCompound).toHaveBeenCalledWith(['rect-a', 'rect-b']);
   });
 });

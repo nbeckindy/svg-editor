@@ -2,9 +2,12 @@ import { describe, expect, it } from 'vitest';
 import {
   BOOLEAN_FLATTEN_TOLERANCE,
   evaluatePathBooleanSelection,
+  evaluatePathCompoundSelection,
   flattenCubicToPoints,
   flattenQuadraticToPoints,
   foldMartinezUnion,
+  compoundPathUsesEvenoddFillRule,
+  concatenatePathOperandsToLocalD,
   intersectPathGeometries,
   operandPathToGeometry,
   pathHasClosedSubpaths,
@@ -17,14 +20,30 @@ import {
 } from './path-boolean';
 
 function identityPort(
-  paths: Record<string, { d: string; node?: Element }>
+  paths: Record<string, { d: string; node?: Element; tag?: string }>
 ): PathBooleanGeometryPort {
   return {
-    getPathElement: (id) => paths[id]?.node ?? null,
+    getPathElement: (id) => {
+      const entry = paths[id];
+      if (!entry?.node) return null;
+      const tag = entry.tag ?? entry.node.tagName.toLowerCase();
+      return tag === 'path' ? entry.node : null;
+    },
+    getCompoundOperandElement: (id) => paths[id]?.node ?? null,
     getPathD: (id) => paths[id]?.d ?? null,
     mapPathLocalToRootUser: (_id, lx, ly) => ({ x: lx, y: ly }),
     mapRootUserToPathLocal: (_id, rx, ry) => ({ x: rx, y: ry })
   };
+}
+
+function makeShapeNode(id: string, tag: string, attrs: Record<string, string>): Element {
+  const el = document.createElementNS('http://www.w3.org/2000/svg', tag);
+  el.setAttribute('id', id);
+  for (const [k, v] of Object.entries(attrs)) {
+    el.setAttribute(k, v);
+  }
+  document.body.appendChild(el);
+  return el;
 }
 
 function makePathNode(id: string, d: string): Element {
@@ -71,6 +90,75 @@ describe('path-boolean flatten helpers', () => {
   });
 });
 
+describe('path-boolean compound path', () => {
+  it('concatenates two closed paths into multiple subpaths preserving curves', () => {
+    const a = makePathNode('a', 'M 0 0 L 10 0 L 10 10 L 0 10 Z');
+    const b = makePathNode('b', 'M 20 0 C 20 10 30 10 30 0 Z');
+    const port = identityPort({
+      a: { d: 'M 0 0 L 10 0 L 10 10 L 0 10 Z', node: a },
+      b: { d: 'M 20 0 C 20 10 30 10 30 0 Z', node: b }
+    });
+
+    const d = concatenatePathOperandsToLocalD(['a', 'b'], port);
+    expect(d).toContain('M 0 0');
+    expect(d).toContain('M 20 0');
+    expect(d).toContain('C');
+    expect((d!.match(/Z/g) ?? []).length).toBe(2);
+
+    a.remove();
+    b.remove();
+  });
+
+  it('uses evenodd when combining multiple operands', () => {
+    const a = makePathNode('a', 'M 0 0 L 10 0 L 10 10 L 0 10 Z');
+    const b = makePathNode('b', 'M 5 0 L 15 0 L 15 10 L 5 10 Z');
+    const port = identityPort({
+      a: { d: a.getAttribute('d')!, node: a },
+      b: { d: b.getAttribute('d')!, node: b }
+    });
+    expect(compoundPathUsesEvenoddFillRule(['a', 'b'], port)).toBe(true);
+
+    a.remove();
+    b.remove();
+  });
+
+  it('concatenates rect and ellipse operands', () => {
+    const rect = makeShapeNode('rect-a', 'rect', { x: '0', y: '0', width: '10', height: '10' });
+    const ellipse = makeShapeNode('ellipse-b', 'ellipse', { cx: '20', cy: '20', rx: '5', ry: '5' });
+    const port = identityPort({
+      'rect-a': { d: '', node: rect, tag: 'rect' },
+      'ellipse-b': { d: '', node: ellipse, tag: 'ellipse' }
+    });
+
+    const d = concatenatePathOperandsToLocalD(['rect-a', 'ellipse-b'], port);
+    expect(d).toContain('M 0 0');
+    expect(d).toContain('M 20 15');
+    expect(d).toContain('C');
+    expect((d!.match(/Z/g) ?? []).length).toBe(2);
+
+    rect.remove();
+    ellipse.remove();
+  });
+});
+describe('path-boolean compound selection', () => {
+  it('allows rect and ellipse operands', () => {
+    const rect = makeShapeNode('r1', 'rect', { x: '0', y: '0', width: '10', height: '10' });
+    const ellipse = makeShapeNode('e1', 'ellipse', { cx: '5', cy: '5', rx: '3', ry: '3' });
+    const state = evaluatePathCompoundSelection(
+      true,
+      [
+        { id: 'r1', type: 'rect' },
+        { id: 'e1', type: 'ellipse' }
+      ],
+      () => false,
+      (id) => (id === 'r1' ? rect : ellipse)
+    );
+    expect(state.eligible).toBe(true);
+    rect.remove();
+    ellipse.remove();
+  });
+});
+
 describe('path-boolean union', () => {
   it('unions two overlapping rect paths in identity space', () => {
     const a = makePathNode('a', 'M 0 0 L 10 0 L 10 10 L 0 10 Z');
@@ -109,6 +197,7 @@ describe('path-boolean union', () => {
     const path = makePathNode('scaled', 'M 0 0 L 10 0 L 10 10 L 0 10 Z');
     const port: PathBooleanGeometryPort = {
       getPathElement: () => path,
+      getCompoundOperandElement: () => path,
       getPathD: () => path.getAttribute('d'),
       mapPathLocalToRootUser: (_id, lx, ly) => ({ x: lx * 2, y: ly * 2 }),
       mapRootUserToPathLocal: (_id, rx, ry) => ({ x: rx / 2, y: ry / 2 })

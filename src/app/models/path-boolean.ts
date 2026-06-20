@@ -6,7 +6,8 @@ import {
   type MultiPolygon,
   type Ring
 } from 'martinez-polygon-clipping';
-import { parsePathDForNodeEditing, type PathSegment } from './path-d';
+import { parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from './path-d';
+import { isCompoundOperandType, primitiveElementToClosedSubpath } from './primitive-to-path';
 
 export const BOOLEAN_FLATTEN_TOLERANCE = 0.25;
 
@@ -20,6 +21,7 @@ export type FlattenedPolygon = FlattenedRing[];
 
 export interface PathBooleanGeometryPort {
   getPathElement(pathId: string): Element | null;
+  getCompoundOperandElement(shapeId: string): Element | null;
   getPathD(pathId: string): string | null;
   mapPathLocalToRootUser(pathId: string, lx: number, ly: number): { x: number; y: number };
   mapRootUserToPathLocal(pathId: string, rx: number, ry: number): { x: number; y: number } | null;
@@ -226,6 +228,60 @@ export function evaluatePathBooleanSelection(
   return { eligible: true, reason: '', operandIds };
 }
 
+/** Closed subpaths for a compound operand in element-local coordinates. */
+export function shapeLocalClosedSubpaths(element: Element): PathSegment[][] | null {
+  const tag = element.tagName.toLowerCase();
+  if (tag === 'path') {
+    const d = element.getAttribute('d');
+    if (!d || !pathHasClosedSubpaths(d)) return null;
+    const segments = parsePathDForNodeEditing(d);
+    if (!segments) return null;
+    const subpaths = splitPathIntoSubpaths(segments).filter(subpathIsClosed);
+    return subpaths.length > 0 ? subpaths : null;
+  }
+  const primitive = primitiveElementToClosedSubpath(element);
+  return primitive ? [primitive] : null;
+}
+
+export function evaluatePathCompoundSelection(
+  isSelectorMode: boolean,
+  shapes: readonly PathBooleanSelectionShape[],
+  isLocked: (shapeId: string) => boolean,
+  getOperandElement: (shapeId: string) => Element | null
+): PathBooleanSelectionState {
+  if (!isSelectorMode) {
+    return { eligible: false, reason: 'Switch to the selector tool.', operandIds: [] };
+  }
+  if (shapes.length < 2) {
+    return { eligible: false, reason: 'Select two or more paths or shapes.', operandIds: [] };
+  }
+  if (shapes.some((s) => isLocked(s.id))) {
+    return { eligible: false, reason: 'Selection includes a locked layer.', operandIds: [] };
+  }
+  if (!shapes.every((s) => isCompoundOperandType(s.type))) {
+    return {
+      eligible: false,
+      reason: 'Only paths, rectangles, circles, and ellipses can be combined.',
+      operandIds: []
+    };
+  }
+  const operandIds = shapes.map((s) => s.id);
+  for (const id of operandIds) {
+    const el = getOperandElement(id);
+    if (!el || shapeLocalClosedSubpaths(el) == null) {
+      return {
+        eligible: false,
+        reason:
+          el?.tagName.toLowerCase() === 'path'
+            ? 'Each path must be closed (ends with Z on every subpath).'
+            : 'Selected shape has invalid geometry for compound path.',
+        operandIds
+      };
+    }
+  }
+  return { eligible: true, reason: '', operandIds };
+}
+
 export function flattenSubpathToRing(
   subpath: PathSegment[],
   pathId: string,
@@ -413,8 +469,22 @@ export function computeBooleanGeometry(
 }
 
 export function sortPathIdsByDocumentOrder(pathIds: string[], port: PathBooleanGeometryPort): string[] {
-  const nodes = pathIds
-    .map((id) => ({ id, node: port.getPathElement(id) }))
+  return sortShapeIdsByDocumentOrder(pathIds, (id) => port.getPathElement(id));
+}
+
+export function sortCompoundOperandIdsByDocumentOrder(
+  shapeIds: string[],
+  port: PathBooleanGeometryPort
+): string[] {
+  return sortShapeIdsByDocumentOrder(shapeIds, (id) => port.getCompoundOperandElement(id));
+}
+
+function sortShapeIdsByDocumentOrder(
+  shapeIds: string[],
+  getElement: (id: string) => Element | null
+): string[] {
+  const nodes = shapeIds
+    .map((id) => ({ id, node: getElement(id) }))
     .filter((entry): entry is { id: string; node: Element } => entry.node !== null);
 
   nodes.sort((a, b) => {
@@ -500,6 +570,91 @@ export function buildBooleanResultPathMarkup(
 
 /** @deprecated Use {@link buildBooleanResultPathMarkup}. */
 export const buildUnionResultPathMarkup = buildBooleanResultPathMarkup;
+
+function mapPathPointToRootUser(
+  pathId: string,
+  lx: number,
+  ly: number,
+  port: PathBooleanGeometryPort
+): FlatPoint {
+  return port.mapPathLocalToRootUser(pathId, lx, ly);
+}
+
+function mapPathSegmentToRootUser(
+  pathId: string,
+  seg: PathSegment,
+  port: PathBooleanGeometryPort
+): PathSegment {
+  switch (seg.type) {
+    case 'M': {
+      const p = mapPathPointToRootUser(pathId, seg.x, seg.y, port);
+      return { type: 'M', x: p.x, y: p.y };
+    }
+    case 'L': {
+      const p = mapPathPointToRootUser(pathId, seg.x, seg.y, port);
+      return { type: 'L', x: p.x, y: p.y };
+    }
+    case 'C': {
+      const p1 = mapPathPointToRootUser(pathId, seg.x1, seg.y1, port);
+      const p2 = mapPathPointToRootUser(pathId, seg.x2, seg.y2, port);
+      const p = mapPathPointToRootUser(pathId, seg.x, seg.y, port);
+      return { type: 'C', x1: p1.x, y1: p1.y, x2: p2.x, y2: p2.y, x: p.x, y: p.y };
+    }
+    case 'Q': {
+      const p1 = mapPathPointToRootUser(pathId, seg.x1, seg.y1, port);
+      const p = mapPathPointToRootUser(pathId, seg.x, seg.y, port);
+      return { type: 'Q', x1: p1.x, y1: p1.y, x: p.x, y: p.y };
+    }
+    case 'S': {
+      const p2 = mapPathPointToRootUser(pathId, seg.x2, seg.y2, port);
+      const p = mapPathPointToRootUser(pathId, seg.x, seg.y, port);
+      return { type: 'S', x2: p2.x, y2: p2.y, x: p.x, y: p.y };
+    }
+    case 'T': {
+      const p = mapPathPointToRootUser(pathId, seg.x, seg.y, port);
+      return { type: 'T', x: p.x, y: p.y };
+    }
+    case 'Z':
+      return { type: 'Z' };
+  }
+}
+
+/** True when compound path output should use evenodd (holes / overlapping subpaths). */
+export function compoundPathUsesEvenoddFillRule(
+  operandIds: readonly string[],
+  port: PathBooleanGeometryPort
+): boolean {
+  for (const id of operandIds) {
+    const el = port.getCompoundOperandElement(id);
+    if (el?.getAttribute('fill-rule') === 'evenodd') return true;
+  }
+  return operandIds.length >= 2;
+}
+
+/**
+ * Concatenate closed subpaths from operands into one root-user `d` (identity transform on result).
+ * Preserves curve commands; does not run boolean clipping.
+ */
+export function concatenatePathOperandsToLocalD(
+  operandIds: readonly string[],
+  port: PathBooleanGeometryPort
+): string | null {
+  if (operandIds.length < 2) return null;
+  const combined: PathSegment[] = [];
+  for (const id of operandIds) {
+    const el = port.getCompoundOperandElement(id);
+    if (!el) return null;
+    const subpaths = shapeLocalClosedSubpaths(el);
+    if (!subpaths) return null;
+    for (const subpath of subpaths) {
+      for (const seg of subpath) {
+        combined.push(mapPathSegmentToRootUser(id, seg, port));
+      }
+    }
+  }
+  if (combined.length === 0) return null;
+  return pathSegmentsToD(combined);
+}
 
 export function allocateShapeId(usedIds: ReadonlySet<string>): string {
   let newId: string;

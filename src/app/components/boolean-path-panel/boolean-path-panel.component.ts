@@ -1,5 +1,5 @@
 import { Component, computed, effect, inject } from '@angular/core';
-import { evaluatePathBooleanSelection, type BooleanOp } from '../../models/path-boolean';
+import { evaluatePathBooleanSelection, evaluatePathCompoundSelection, type BooleanOp } from '../../models/path-boolean';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
@@ -35,7 +35,34 @@ export class BooleanPathPanelComponent {
     );
   });
 
-  readonly operandCount = computed(() => this.selectionState().operandIds.length);
+  readonly compoundSelectionState = computed(() => {
+    const shapes = this.shapeSelection.getSelectedShapes();
+    return evaluatePathCompoundSelection(
+      this.editorTool.currentTool() === 'selector',
+      shapes,
+      (id) => this.svgManipulation.isElementOrAncestorLocked(id),
+      (id) => {
+        const svg = this.svgManipulation.getSVGInstance();
+        return (svg?.findOne(`#${id}`)?.node as Element | undefined) ?? null;
+      }
+    );
+  });
+
+  readonly operandCount = computed(() => {
+    const shapes = this.shapeSelection.getSelectedShapes();
+    if (shapes.length >= 2) {
+      return this.compoundSelectionState().operandIds.length;
+    }
+    return this.selectionState().operandIds.length;
+  });
+
+  readonly operandIdsForList = computed(() => {
+    const shapes = this.shapeSelection.getSelectedShapes();
+    if (shapes.length >= 2) {
+      return this.compoundSelectionState().operandIds;
+    }
+    return this.selectionState().operandIds;
+  });
 
   readonly subtractTitle = computed(() =>
     this.selectionState().eligible
@@ -47,6 +74,12 @@ export class BooleanPathPanelComponent {
     this.selectionState().eligible
       ? 'Keep the overlapping region of all selected paths'
       : this.selectionState().reason
+  );
+
+  readonly compoundTitle = computed(() =>
+    this.compoundSelectionState().eligible
+      ? 'Combine selected paths and shapes into one compound path (keeps each outline as a subpath)'
+      : this.compoundSelectionState().reason
   );
 
   constructor() {
@@ -78,5 +111,12 @@ export class BooleanPathPanelComponent {
 
   onCancelPreview(): void {
     this.preview.clearPreview();
+  }
+
+  onMakeCompound(): void {
+    const { eligible, operandIds } = this.compoundSelectionState();
+    if (!eligible) return;
+    this.preview.clearPreview();
+    this.chromeApply.applyPathCompound(operandIds);
   }
 }

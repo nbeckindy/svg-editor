@@ -57,8 +57,8 @@ import {
 } from '../utils/selection-transform-matrix';
 import { PathBooleanGeometryService } from './path-boolean-geometry.service';
 import {
-  pathHasClosedSubpaths,
   sortPathIdsByDocumentOrder,
+  sortCompoundOperandIdsByDocumentOrder,
   type BooleanOp
 } from '../models/path-boolean';
 
@@ -544,6 +544,35 @@ export class ChromeEditorApplyService {
   }
 
   applyPathBoolean(op: BooleanOp, pathIds: string[]): void {
+    this.applyPathShapeOperation(
+      pathIds,
+      (port, usedIds, topmostInsertionIndex) =>
+        this.pathBooleanGeometry.buildBooleanResult(op, pathIds, port, usedIds, topmostInsertionIndex),
+      PATH_BOOLEAN_LABELS[op],
+      'boolean'
+    );
+  }
+
+  applyPathCompound(pathIds: string[]): void {
+    this.applyPathShapeOperation(
+      pathIds,
+      (port, usedIds, topmostInsertionIndex) =>
+        this.pathBooleanGeometry.buildCompoundPathResult(pathIds, port, usedIds, topmostInsertionIndex),
+      'Make compound path',
+      'compound'
+    );
+  }
+
+  private applyPathShapeOperation(
+    pathIds: string[],
+    build: (
+      port: NonNullable<ReturnType<PathBooleanGeometryService['createGeometryPort']>>,
+      usedIds: Set<string>,
+      topmostInsertionIndex: number
+    ) => ReturnType<PathBooleanGeometryService['buildBooleanResult']>,
+    description: string,
+    mode: 'boolean' | 'compound'
+  ): void {
     if (pathIds.length < 2) return;
     if (this.shapeIdsTouchLocked(pathIds)) return;
     if (this.editorTool.currentTool() !== 'selector') return;
@@ -556,10 +585,14 @@ export class ChromeEditorApplyService {
     const port = this.pathBooleanGeometry.createGeometryPort();
     if (!port) return;
 
-    const sorted = sortPathIdsByDocumentOrder(pathIds, port);
+    const sorted =
+      mode === 'compound'
+        ? sortCompoundOperandIdsByDocumentOrder(pathIds, port)
+        : sortPathIdsByDocumentOrder(pathIds, port);
     const topmostId = sorted[sorted.length - 1];
     if (!topmostId) return;
-    const topmostNode = port.getPathElement(topmostId);
+    const topmostNode =
+      mode === 'compound' ? port.getCompoundOperandElement(topmostId) : port.getPathElement(topmostId);
     if (!topmostNode) return;
 
     const children = Array.from((contentGroup.node as Element).children);
@@ -572,16 +605,9 @@ export class ChromeEditorApplyService {
       if (id) usedIds.add(id);
     });
 
-    const built = this.pathBooleanGeometry.buildBooleanResult(
-      op,
-      pathIds,
-      port,
-      usedIds,
-      topmostInsertionIndex
-    );
+    const built = build(port, usedIds, topmostInsertionIndex);
     if (!built) return;
 
-    const description = PATH_BOOLEAN_LABELS[op];
     this.pushCommandsAndSyncSelection(
       [
         new BooleanPathCommand(

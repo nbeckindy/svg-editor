@@ -3,6 +3,8 @@ import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import {
   allocateShapeId,
   buildBooleanResultPathMarkup,
+  compoundPathUsesEvenoddFillRule,
+  concatenatePathOperandsToLocalD,
   computeBooleanGeometry,
   geometryHasHoles,
   geometryIsEmpty,
@@ -10,6 +12,7 @@ import {
   pathHasClosedSubpaths,
   rootUserRingsToLocalPathD,
   sortPathIdsByDocumentOrder,
+  sortCompoundOperandIdsByDocumentOrder,
   subtractPathGeometries,
   intersectPathGeometries,
   unionPathGeometries,
@@ -41,6 +44,14 @@ export class PathBooleanGeometryService {
       getPathElement: (id) => {
         const node = svg.findOne(`#${id}`)?.node as Element | undefined;
         return node?.tagName.toLowerCase() === 'path' ? node : null;
+      },
+      getCompoundOperandElement: (id) => {
+        const node = svg.findOne(`#${id}`)?.node as Element | undefined;
+        const tag = node?.tagName.toLowerCase();
+        if (tag === 'path' || tag === 'rect' || tag === 'circle' || tag === 'ellipse') {
+          return node ?? null;
+        }
+        return null;
       },
       getPathD: (id) => {
         const el = svg.findOne(`#${id}`)?.node as Element | undefined;
@@ -119,6 +130,46 @@ export class PathBooleanGeometryService {
       localD,
       styleSource,
       geometryHasHoles(geometry)
+    );
+
+    return {
+      resultId,
+      resultMarkup,
+      operandIds: sorted,
+      topmostOperandIndex: topmostInsertionIndex
+    };
+  }
+
+  /**
+   * Combine operands into one compound `<path>` (concatenated subpaths, no boolean clip).
+   * Style is copied from the topmost operand.
+   */
+  buildCompoundPathResult(
+    pathIds: string[],
+    port: PathBooleanGeometryPort,
+    usedIds: ReadonlySet<string>,
+    topmostInsertionIndex: number
+  ): PathBooleanResult | null {
+    if (pathIds.length < 2) return null;
+
+    const sorted = sortCompoundOperandIdsByDocumentOrder(pathIds, port);
+    for (const id of sorted) {
+      if (!port.getCompoundOperandElement(id)) return null;
+    }
+
+    const localD = concatenatePathOperandsToLocalD(sorted, port);
+    if (!localD) return null;
+
+    const topmostId = sorted[sorted.length - 1]!;
+    const styleSource = port.getCompoundOperandElement(topmostId);
+    if (!styleSource) return null;
+
+    const resultId = allocateShapeId(usedIds);
+    const resultMarkup = buildBooleanResultPathMarkup(
+      resultId,
+      localD,
+      styleSource,
+      compoundPathUsesEvenoddFillRule(sorted, port)
     );
 
     return {

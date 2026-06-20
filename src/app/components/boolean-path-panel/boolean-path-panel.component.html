@@ -9,18 +9,20 @@
         <span class="operand-count">{{ operandCount() }} paths selected</span>
       </p>
       <ul class="operand-list" data-testid="path-ops-operand-list" aria-label="Selected path operands">
-        @for (id of selectionState().operandIds; track id) {
+        @for (id of operandIdsForList(); track id) {
           <li class="operand-item" [attr.data-testid]="'path-ops-operand-' + id">{{ id }}</li>
         }
       </ul>
     } @else {
       <p class="empty-hint" data-testid="path-ops-empty-hint">
-        Select two or more closed paths to combine them.
+        Select two or more closed paths or shapes (rect, circle, ellipse) to combine them.
       </p>
     }
 
-    @if (selectionState().reason) {
+    @if (selectionState().reason && !compoundSelectionState().eligible) {
       <p class="status-hint" data-testid="path-ops-status-hint" role="status">{{ selectionState().reason }}</p>
+    } @else if (compoundSelectionState().reason && compoundSelectionState().operandIds.length >= 2) {
+      <p class="status-hint" data-testid="path-ops-compound-status-hint" role="status">{{ compoundSelectionState().reason }}</p>
     }
 
     <div class="ops-toolbar" role="group" aria-label="Path boolean operations">
@@ -53,6 +55,18 @@
         [attr.title]="intersectTitle()"
         (click)="onSelectOp('intersect')">
         Intersect
+      </button>
+    </div>
+
+    <div class="compound-toolbar" role="group" aria-label="Compound path">
+      <button
+        type="button"
+        class="op-btn"
+        data-testid="path-ops-compound"
+        [disabled]="!compoundSelectionState().eligible"
+        [attr.title]="compoundTitle()"
+        (click)="onMakeCompound()">
+        Compound
       </button>
     </div>
 

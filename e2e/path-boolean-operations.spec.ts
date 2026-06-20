@@ -28,19 +28,49 @@ async function getContentPathIds(page: Page): Promise<string[]> {
   );
 }
 
-async function selectTwoPathsViaLayers(page: Page): Promise<void> {
-  const pathIds = await getContentPathIds(page);
-  expect(pathIds.length).toBeGreaterThanOrEqual(2);
+const MIXED_SHAPES_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+<rect id="bool-rect-a" x="100" y="100" width="80" height="60" fill="#000"/>
+<circle id="bool-circle-b" cx="200" cy="150" r="40" fill="#333"/>
+</svg>`;
+
+async function loadMixedShapes(page: Page): Promise<void> {
+  await page.goto('/');
+  await expect(page.getByTestId('canvas-viewport')).toBeVisible();
+
+  const debugPanel = page.getByTestId('editor-svg-debug-panel');
+  await debugPanel.getByRole('button', { name: 'Expand' }).click();
+  await page.getByTestId('svg-debug-editor').fill(MIXED_SHAPES_SVG);
+  await page.getByTestId('svg-debug-apply').click();
+  await expect(page.locator('[data-editor-content-group] rect')).toHaveCount(1);
+  await expect(page.locator('[data-editor-content-group] circle')).toHaveCount(1);
+  await debugPanel.getByRole('button', { name: 'Collapse' }).click();
+}
+
+async function getCompoundOperandIds(page: Page): Promise<string[]> {
+  return page.evaluate(() =>
+    Array.from(document.querySelectorAll('[data-editor-content-group] rect, [data-editor-content-group] circle, [data-editor-content-group] ellipse, [data-editor-content-group] path'))
+      .map((el) => el.id)
+      .filter((id) => id.length > 0)
+  );
+}
+
+async function selectTwoOperandsViaLayers(page: Page, getIds: () => Promise<string[]>): Promise<void> {
+  const ids = await getIds();
+  expect(ids.length).toBeGreaterThanOrEqual(2);
 
   await page.getByTestId('tool-selector').click();
   await page.getByTestId('dock-tab-layers').click();
-  await page.getByTestId(`layer-row-${pathIds[0]}`).click();
+  await page.getByTestId(`layer-row-${ids[0]}`).click();
   await page.keyboard.down('Shift');
-  await page.getByTestId(`layer-row-${pathIds[1]}`).click();
+  await page.getByTestId(`layer-row-${ids[1]}`).click();
   await page.keyboard.up('Shift');
 
   await expect.poll(async () => (await getSelectedLayerIds(page)).length).toBe(2);
   await page.getByTestId('dock-tab-path-ops').click();
+}
+
+async function selectTwoPathsViaLayers(page: Page): Promise<void> {
+  await selectTwoOperandsViaLayers(page, () => getContentPathIds(page));
   await expect(page.getByTestId('path-ops-union')).toBeEnabled();
 }
 
@@ -58,6 +88,48 @@ test.describe('Path boolean operations', () => {
     await expect(page.getByTestId('path-ops-union')).toBeDisabled();
     await expect(page.getByTestId('path-ops-subtract')).toBeDisabled();
     await expect(page.getByTestId('path-ops-intersect')).toBeDisabled();
+    await expect(page.getByTestId('path-ops-compound')).toBeDisabled();
+  });
+
+  test('compound combines two paths into one subpath element with evenodd', async ({ page }) => {
+    await loadTwoClosedPaths(page);
+    await selectTwoPathsViaLayers(page);
+
+    await page.getByTestId('path-ops-compound').click();
+    await expect(page.locator('[data-editor-content-group] path')).toHaveCount(1);
+
+    const compoundD = await page.evaluate(() => {
+      const path = document.querySelector('[data-editor-content-group] path');
+      return path?.getAttribute('d') ?? '';
+    });
+    expect((compoundD.match(/M/g) ?? []).length).toBe(2);
+    expect((compoundD.match(/Z/g) ?? []).length).toBe(2);
+
+    const fillRule = await page.evaluate(() =>
+      document.querySelector('[data-editor-content-group] path')?.getAttribute('fill-rule')
+    );
+    expect(fillRule).toBe('evenodd');
+
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('[data-editor-content-group] path')).toHaveCount(2);
+  });
+
+  test('compound combines rect and circle into one path', async ({ page }) => {
+    await loadMixedShapes(page);
+    await selectTwoOperandsViaLayers(page, () => getCompoundOperandIds(page));
+
+    await expect(page.getByTestId('path-ops-compound')).toBeEnabled();
+    await page.getByTestId('path-ops-compound').click();
+
+    await expect(page.locator('[data-editor-content-group] path')).toHaveCount(1);
+    await expect(page.locator('[data-editor-content-group] rect')).toHaveCount(0);
+    await expect(page.locator('[data-editor-content-group] circle')).toHaveCount(0);
+
+    const compoundD = await page.evaluate(() =>
+      document.querySelector('[data-editor-content-group] path')?.getAttribute('d') ?? ''
+    );
+    expect((compoundD.match(/Z/g) ?? []).length).toBe(2);
+    expect(compoundD).toContain('C');
   });
 
   test('union preview, apply, undo, and intersect through path ops panel', async ({ page }) => {
