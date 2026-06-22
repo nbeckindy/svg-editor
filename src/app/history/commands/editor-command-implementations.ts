@@ -903,6 +903,73 @@ export class UngroupElementsCommand implements EditorCommand {
   }
 }
 
+export type ReparentElementsMode =
+  | { kind: 'addToGroup'; targetGroupId: string; referenceNextSiblingId?: string | null }
+  | { kind: 'removeFromGroup' }
+  | {
+      kind: 'reparentToParent';
+      targetParentId: string | null;
+      referenceNextSiblingId: string | null;
+    };
+
+export class ReparentElementsCommand implements EditorCommand {
+  readonly description: string;
+  private snapshots: import('../../services/svg-layer-structure.port').ElementParentSnapshot[] =
+    [];
+  private movedIds: string[] = [];
+
+  constructor(
+    private readonly svc: LayerReorderGroupSvgPort,
+    private readonly elementIds: string[],
+    private readonly mode: ReparentElementsMode
+  ) {
+    this.description =
+      mode.kind === 'removeFromGroup'
+        ? 'Remove from group'
+        : mode.kind === 'addToGroup'
+          ? 'Add to group'
+          : 'Reparent layers';
+  }
+
+  /** Element ids successfully reparented by the last `execute()`. */
+  get reparentedElementIds(): string[] {
+    return this.movedIds;
+  }
+
+  execute(): void {
+    this.snapshots = this.svc.snapshotElementParentOrder(this.elementIds);
+    switch (this.mode.kind) {
+      case 'addToGroup':
+        this.movedIds =
+          this.svc.addElementsToGroup(
+            this.elementIds,
+            this.mode.targetGroupId,
+            this.mode.referenceNextSiblingId ?? null
+          ) ?? [];
+        break;
+      case 'removeFromGroup':
+        this.movedIds = this.svc.removeElementsFromGroup(this.elementIds) ?? [];
+        break;
+      case 'reparentToParent':
+        this.movedIds =
+          this.svc.reparentElementsToParent(
+            this.elementIds,
+            this.mode.targetParentId,
+            this.mode.referenceNextSiblingId
+          ) ?? [];
+        break;
+    }
+  }
+
+  undo(): void {
+    for (let i = this.snapshots.length - 1; i >= 0; i--) {
+      const s = this.snapshots[i];
+      this.svc.restoreElementParentOrder(s.elementId, s.formerParentId, s.formerIndex);
+    }
+    this.movedIds = [];
+  }
+}
+
 /**
  * Snapshot of fill-related DOM state needed to fully restore the cascade on undo.
  */

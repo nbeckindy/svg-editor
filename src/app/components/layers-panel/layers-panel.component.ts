@@ -54,6 +54,30 @@ export class LayersPanelComponent {
     return shapes.length > 0 && shapes.every((s) => s.type === 'g');
   });
 
+  readonly canAddToGroup = computed(() => {
+    const shapes = this.shapeSelection.selectedShapes();
+    if (shapes.length < 2) return false;
+    const userGroups = shapes.filter(
+      (s) =>
+        s.type === 'g' &&
+        this.svg.isUserGroupId(s.id) &&
+        !this.svg.isGroupClipMaskCarrier(s.id)
+    );
+    if (userGroups.length !== 1) return false;
+    const targetId = userGroups[0].id;
+    const toMove = shapes.filter((s) => s.id !== targetId);
+    if (toMove.length === 0) return false;
+    if (shapes.some((s) => this.svg.isElementOrAncestorLocked(s.id))) return false;
+    return !toMove.some((s) => this.isStrictAncestor(s.id, targetId));
+  });
+
+  readonly canRemoveFromGroup = computed(() => {
+    const shapes = this.shapeSelection.selectedShapes();
+    if (shapes.length === 0) return false;
+    if (shapes.some((s) => this.svg.isElementOrAncestorLocked(s.id))) return false;
+    return shapes.some((s) => this.getUserGroupParentId(s.id) != null);
+  });
+
   readonly flattenedLayers = computed<LayerTreeViewModel[]>(() => {
     this.svg.documentRevision();
     const tree = this.svg.getLayerTree();
@@ -103,14 +127,61 @@ export class LayersPanelComponent {
       event.dataTransfer?.getData('application/x-svg-editor-layer-id') ||
       event.dataTransfer?.getData('text/plain');
     if (!draggedId || draggedId === targetId) return;
+    if (
+      this.svg.isElementOrAncestorLocked(draggedId) ||
+      this.svg.isElementOrAncestorLocked(targetId)
+    ) {
+      return;
+    }
+
     const row = event.currentTarget as HTMLElement;
-    const frontHalf = event.offsetY < row.clientHeight / 2;
-    const res = this.resolveDropReferenceSibling(draggedId, targetId, frontHalf);
-    if (!res.ok) return;
-    this.chromeApply.moveLayerBeforeSibling(draggedId, res.ref);
+    const relY = row.clientHeight > 0 ? event.offsetY / row.clientHeight : 0.5;
+    const topEdge = relY < 0.25;
+    const bottomEdge = relY > 0.75;
+    const middleZone = !topEdge && !bottomEdge;
+
+    const targetLayer = this.flattenedLayers().find((l) => l.id === targetId);
+    const svg = this.svg.getSVGInstance();
+    if (!svg) return;
+    const draggedNode = svg.findOne(`#${draggedId}`)?.node as Element | undefined;
+    const targetNode = svg.findOne(`#${targetId}`)?.node as Element | undefined;
+    if (!draggedNode || !targetNode) return;
+
+    if (targetLayer?.isGroup && middleZone) {
+      if (draggedId === targetId || this.isStrictAncestor(draggedId, targetId)) return;
+      if (this.svg.isGroupClipMaskCarrier(targetId)) return;
+      this.chromeApply.reparentLayerDrag([draggedId], {
+        kind: 'addToGroup',
+        targetGroupId: targetId
+      });
+      return;
+    }
+
+    const sameParent = draggedNode.parentElement === targetNode.parentElement;
+    if (sameParent) {
+      const frontHalf = relY < 0.5;
+      const res = this.resolveSameParentDropReferenceSibling(draggedId, targetId, frontHalf);
+      if (!res.ok) return;
+      this.chromeApply.moveLayerBeforeSibling(draggedId, res.ref);
+      return;
+    }
+
+    const cross = this.resolveCrossParentDrop(
+      draggedId,
+      targetId,
+      targetLayer?.isGroup ?? false,
+      topEdge,
+      bottomEdge,
+      relY < 0.5
+    );
+    if (!cross.ok) return;
+
+    if (cross.action.kind === 'reparentToParent') {
+      this.chromeApply.reparentLayerDrag([draggedId], cross.action);
+    }
   }
 
-  private resolveDropReferenceSibling(
+  private resolveSameParentDropReferenceSibling(
     draggedId: string,
     targetId: string,
     frontHalf: boolean
@@ -133,6 +204,84 @@ export class LayersPanelComponent {
       return { ok: true, ref };
     }
     return { ok: true, ref: targetId };
+  }
+
+  private resolveCrossParentDrop(
+    draggedId: string,
+    targetId: string,
+    targetIsGroup: boolean,
+    topEdge: boolean,
+    bottomEdge: boolean,
+    frontHalf: boolean
+  ):
+    | {
+        ok: true;
+        action: {
+          kind: 'reparentToParent';
+          targetParentId: string | null;
+          referenceNextSiblingId: string | null;
+        };
+      }
+    | { ok: false } {
+    const svg = this.svg.getSVGInstance();
+    if (!svg) return { ok: false };
+    const draggedNode = svg.findOne(`#${draggedId}`)?.node as Element | undefined;
+    const targetNode = svg.findOne(`#${targetId}`)?.node as Element | undefined;
+    if (!draggedNode || !targetNode) return { ok: false };
+
+    if (draggedId === targetId || this.isStrictAncestor(draggedId, targetId)) return { ok: false };
+    if (targetIsGroup && this.svg.isGroupClipMaskCarrier(targetId)) return { ok: false };
+
+    const targetParentId = this.getElementParentId(targetNode);
+
+    if (targetIsGroup && (topEdge || bottomEdge)) {
+      if (topEdge) {
+        return {
+          ok: true,
+          action: {
+            kind: 'reparentToParent',
+            targetParentId,
+            referenceNextSiblingId: targetId
+          }
+        };
+      }
+      let next: Element | null = targetNode.nextElementSibling;
+      while (next && (!next.id || next.id === draggedId)) {
+        next = next.nextElementSibling;
+      }
+      return {
+        ok: true,
+        action: {
+          kind: 'reparentToParent',
+          targetParentId,
+          referenceNextSiblingId: next?.id ?? null
+        }
+      };
+    }
+
+    if (frontHalf) {
+      return {
+        ok: true,
+        action: {
+          kind: 'reparentToParent',
+          targetParentId,
+          referenceNextSiblingId: targetId
+        }
+      };
+    }
+
+    let next: Element | null = targetNode.nextElementSibling;
+    while (next && (!next.id || next.id === draggedId)) {
+      next = next.nextElementSibling;
+    }
+    return {
+      ok: true,
+      action: {
+        kind: 'reparentToParent',
+        targetParentId,
+        referenceNextSiblingId: next?.id ?? null
+      }
+    };
   }
 
   onMoveForward(layerId: string): void {
@@ -161,6 +310,25 @@ export class LayersPanelComponent {
     const selected = this.shapeSelection.selectedShapes();
     const groupIds = selected.filter((s) => s.type === 'g').map((s) => s.id);
     this.chromeApply.ungroupSelectedFromLayersPanel(groupIds);
+  }
+
+  onAddToGroupSelected(): void {
+    const selected = this.shapeSelection.selectedShapes();
+    const userGroups = selected.filter(
+      (s) =>
+        s.type === 'g' &&
+        this.svg.isUserGroupId(s.id) &&
+        !this.svg.isGroupClipMaskCarrier(s.id)
+    );
+    if (userGroups.length !== 1) return;
+    const targetId = userGroups[0].id;
+    const elementIds = selected.filter((s) => s.id !== targetId).map((s) => s.id);
+    this.chromeApply.addSelectionToGroupFromLayersPanel(elementIds, targetId);
+  }
+
+  onRemoveFromGroupSelected(): void {
+    const selected = this.shapeSelection.selectedShapes();
+    this.chromeApply.removeSelectionFromGroupFromLayersPanel(selected.map((s) => s.id));
   }
 
   onLayerClick(layerId: string, event?: MouseEvent): void {
@@ -257,6 +425,50 @@ export class LayersPanelComponent {
       }
     }
     return ids;
+  }
+
+  private getContentRoot(): Element | null {
+    return (
+      (this.svg.getSVGInstance()?.findOne('[data-editor-content-group]')?.node as Element | null) ??
+      null
+    );
+  }
+
+  private getElementParentId(node: Element): string | null {
+    const contentRoot = this.getContentRoot();
+    const parent = node.parentElement;
+    if (!parent || parent === contentRoot) return null;
+    return parent.id || null;
+  }
+
+  private getUserGroupParentId(elementId: string): string | null {
+    const svg = this.svg.getSVGInstance();
+    if (!svg) return null;
+    const node = svg.findOne(`#${elementId}`)?.node as Element | undefined;
+    if (!node) return null;
+    const contentRoot = this.getContentRoot();
+    let current: Element | null = node.parentElement;
+    while (current && current !== contentRoot) {
+      if (
+        current.tagName?.toLowerCase() === 'g' &&
+        current.id &&
+        this.svg.isUserGroupId(current.id) &&
+        !this.svg.isGroupClipMaskCarrier(current.id)
+      ) {
+        return current.id;
+      }
+      current = current.parentElement;
+    }
+    return null;
+  }
+
+  private isStrictAncestor(ancestorId: string, descendantId: string): boolean {
+    const svg = this.svg.getSVGInstance();
+    if (!svg) return false;
+    const anc = svg.findOne(`#${ancestorId}`)?.node as Element | undefined;
+    const desc = svg.findOne(`#${descendantId}`)?.node as Element | undefined;
+    if (!anc || !desc) return false;
+    return anc !== desc && anc.contains(desc);
   }
 
   private createPreviewDataUrl(layer: PreviewPaintData): string {

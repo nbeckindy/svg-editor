@@ -24,6 +24,7 @@ import {
   GroupCommand,
   UngroupCommand,
   UngroupElementsCommand,
+  ReparentElementsCommand,
   RemoveShapesCommand,
   AddShapeCommand,
   AddPathCommand,
@@ -70,6 +71,15 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     groupSelectedElements: vi.fn(),
     ungroupElement: vi.fn(),
     ungroupElements: vi.fn().mockReturnValue({ allChildElementIds: [], undoSnapshots: [] }),
+    addElementsToGroup: vi.fn().mockReturnValue(['a']),
+    removeElementsFromGroup: vi.fn().mockReturnValue(['a']),
+    reparentElementsToParent: vi.fn().mockReturnValue(['a']),
+    snapshotElementParentOrder: vi.fn().mockReturnValue([
+      { elementId: 'a', formerParentId: 'g1', formerIndex: 0 }
+    ]),
+    restoreElementParentOrder: vi.fn(),
+    isUserGroupId: vi.fn().mockReturnValue(true),
+    isGroupClipMaskCarrier: vi.fn().mockReturnValue(false),
     removeShapes: vi.fn(),
     restoreRemovedShapesInContentGroup: vi.fn(),
     restoreBakedFillPresentation: vi.fn(),
@@ -1116,6 +1126,51 @@ describe('UngroupCommand', () => {
 
   it('should have description "Ungroup elements"', () => {
     expect(new UngroupCommand(mockSvc(), 'g1').description).toBe('Ungroup elements');
+  });
+});
+
+describe('ReparentElementsCommand', () => {
+  it('addToGroup snapshots then calls addElementsToGroup', () => {
+    const svc = mockSvc({
+      snapshotElementParentOrder: vi.fn().mockReturnValue([
+        { elementId: 'a', formerParentId: null, formerIndex: 1 }
+      ]),
+      addElementsToGroup: vi.fn().mockReturnValue(['a'])
+    });
+    const cmd = new ReparentElementsCommand(svc, ['a'], {
+      kind: 'addToGroup',
+      targetGroupId: 'g1'
+    });
+    cmd.execute();
+    expect(svc.snapshotElementParentOrder).toHaveBeenCalledWith(['a']);
+    expect(svc.addElementsToGroup).toHaveBeenCalledWith(['a'], 'g1', null);
+    expect(cmd.reparentedElementIds).toEqual(['a']);
+  });
+
+  it('removeFromGroup restores snapshots on undo', () => {
+    const svc = mockSvc({
+      snapshotElementParentOrder: vi.fn().mockReturnValue([
+        { elementId: 'a', formerParentId: 'inner', formerIndex: 0 }
+      ]),
+      removeElementsFromGroup: vi.fn().mockReturnValue(['a'])
+    });
+    const cmd = new ReparentElementsCommand(svc, ['a'], { kind: 'removeFromGroup' });
+    cmd.execute();
+    cmd.undo();
+    expect(svc.restoreElementParentOrder).toHaveBeenCalledWith('a', 'inner', 0);
+  });
+
+  it('reparentToParent calls reparentElementsToParent', () => {
+    const svc = mockSvc({
+      reparentElementsToParent: vi.fn().mockReturnValue(['a'])
+    });
+    const cmd = new ReparentElementsCommand(svc, ['a'], {
+      kind: 'reparentToParent',
+      targetParentId: null,
+      referenceNextSiblingId: 'b'
+    });
+    cmd.execute();
+    expect(svc.reparentElementsToParent).toHaveBeenCalledWith(['a'], null, 'b');
   });
 });
 

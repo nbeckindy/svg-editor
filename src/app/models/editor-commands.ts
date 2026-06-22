@@ -18,6 +18,7 @@ export type { DocumentArtboardCommandSvgPort, DocumentSettingsSvgPort } from '..
 export type { SvgDebugPanelSvgPort, AppRootSvgManipulationPort } from '../history/editor-chrome-svg.port';
 export type { GradientFillSnapshotSvgPort, GradientFillEditorSvgPort } from '../history/gradient-fill-editor-svg.port';
 export type { LayerReorderGroupSvgPort, LayersPanelSvgPort } from '../history/layers-panel-svg.port';
+export type { ElementParentSnapshot } from '../services/svg-layer-structure.port';
 export type { AlignDistributeSvgPort } from '../history/align-distribute-svg.port';
 export type {
   PropertiesPanelTextSvgPort,

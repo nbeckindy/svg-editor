@@ -7,7 +7,7 @@ import {
   EDITOR_LAYER_LOCKED_ATTR,
   LAYER_TREE_SKIP_TAGS
 } from './svg-editor-stage.constants';
-import type { LayerStackItem, LayerTreeNode, SvgLayerStructurePort } from './svg-layer-structure.port';
+import type { LayerStackItem, LayerTreeNode, SvgLayerStructurePort, ElementParentSnapshot } from './svg-layer-structure.port';
 import { SvgShapeContentService } from './svg-shape-content.service';
 import { getShapeIdsInDomOrderFromSvg } from '../utils/svg-shape-ids-dom-order';
 import { isSvgEditorNodeHidden } from '../utils/svg-node-visibility';
@@ -274,6 +274,151 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
     return name || el.id() || elementId;
   }
 
+  isUserGroupId(groupId: string): boolean {
+    if (!this.doc.getSVGInstance()) return false;
+    const node = this.doc.getSVGInstance()!.findOne(`#${groupId}`)?.node as Element | undefined;
+    return node != null && this.isUserGroupElement(node);
+  }
+
+  isGroupClipMaskCarrier(groupId: string): boolean {
+    if (!this.doc.getSVGInstance()) return false;
+    const node = this.doc.getSVGInstance()!.findOne(`#${groupId}`)?.node as Element | undefined;
+    if (!node) return false;
+    return node.hasAttribute('clip-path') || node.hasAttribute('mask');
+  }
+
+  snapshotElementParentOrder(elementIds: string[]): ElementParentSnapshot[] {
+    if (!this.doc.getSVGInstance()) return [];
+    const contentRoot = this.getContentRootElement();
+    if (!contentRoot) return [];
+    const out: ElementParentSnapshot[] = [];
+    for (const id of elementIds) {
+      const node = this.doc.getSVGInstance()!.findOne(`#${id}`)?.node as Element | undefined;
+      if (!node?.parentElement) continue;
+      const parent = node.parentElement;
+      const formerParentId = parent === contentRoot ? null : parent.id || null;
+      out.push({
+        elementId: id,
+        formerParentId,
+        formerIndex: Array.from(parent.children).indexOf(node)
+      });
+    }
+    return out;
+  }
+
+  restoreElementParentOrder(
+    elementId: string,
+    formerParentId: string | null,
+    oldIndex: number
+  ): void {
+    if (!this.doc.getSVGInstance() || oldIndex < 0) return;
+    const node = this.doc.getSVGInstance()!.findOne(`#${elementId}`)?.node as Element | undefined;
+    if (!node) return;
+
+    let targetParent: Element | null = null;
+    if (formerParentId === null) {
+      targetParent = this.getContentRootElement();
+    } else {
+      targetParent =
+        (this.doc.getSVGInstance()!.findOne(`#${formerParentId}`)?.node as Element | undefined) ??
+        null;
+      if (!targetParent && formerParentId) {
+        targetParent = this.recreateEmptyUserGroup(formerParentId);
+      }
+    }
+    if (!targetParent) return;
+
+    const children = targetParent.children;
+    if (oldIndex >= children.length) {
+      targetParent.appendChild(node);
+    } else {
+      targetParent.insertBefore(node, children[oldIndex]);
+    }
+  }
+
+  addElementsToGroup(
+    elementIds: string[],
+    targetGroupId: string,
+    referenceNextSiblingId: string | null = null
+  ): string[] | null {
+    if (!this.isUserGroupId(targetGroupId) || this.isGroupClipMaskCarrier(targetGroupId)) {
+      return null;
+    }
+    const targetNode = this.doc.getSVGInstance()!.findOne(`#${targetGroupId}`)?.node as
+      | Element
+      | undefined;
+    if (!targetNode) return null;
+
+    const ids = elementIds.filter((id) => id !== targetGroupId);
+    if (ids.length === 0) return null;
+    for (const id of ids) {
+      if (id === targetGroupId || this.isStrictAncestorElement(id, targetGroupId)) {
+        return null;
+      }
+    }
+
+    return this.reparentElementsToTargetParent(ids, targetNode, referenceNextSiblingId, true);
+  }
+
+  removeElementsFromGroup(elementIds: string[]): string[] | null {
+    if (!this.doc.getSVGInstance() || elementIds.length === 0) return null;
+    const contentRoot = this.getContentRootElement();
+    if (!contentRoot) return null;
+
+    const sorted = this.sortElementIdsByDocumentOrder([...new Set(elementIds)]);
+    const moved: string[] = [];
+    const formerParents = new Set<Element>();
+
+    for (const id of sorted) {
+      const node = this.doc.getSVGInstance()!.findOne(`#${id}`)?.node as Element | undefined;
+      if (!node?.parentElement) continue;
+      const groupParent = node.parentElement;
+      if (!this.isUserGroupElement(groupParent)) continue;
+
+      const grandparent = groupParent.parentNode as Element | null;
+      if (!grandparent) continue;
+
+      const groupIndex = Array.from(grandparent.children).indexOf(groupParent);
+      if (groupIndex < 0) continue;
+
+      formerParents.add(groupParent);
+      const insertBefore = grandparent.children[groupIndex] ?? null;
+      grandparent.insertBefore(node, insertBefore);
+      moved.push(id);
+    }
+
+    if (moved.length === 0) return null;
+    this.pruneEmptyGroupsAfterReparent(formerParents);
+    this.doc.bumpDocumentRevision();
+    return moved;
+  }
+
+  reparentElementsToParent(
+    elementIds: string[],
+    targetParentId: string | null,
+    referenceNextSiblingId: string | null
+  ): string[] | null {
+    const targetParent = this.resolveTargetParentElement(targetParentId);
+    if (!targetParent) return null;
+
+    const ids = [...new Set(elementIds)];
+    if (ids.length === 0) return null;
+
+    for (const id of ids) {
+      if (targetParentId && (id === targetParentId || this.isStrictAncestorElement(id, targetParentId))) {
+        return null;
+      }
+    }
+
+    if (referenceNextSiblingId != null) {
+      const refNode = this.doc.getSVGInstance()!.findOne(`#${referenceNextSiblingId}`)
+        ?.node as Element | undefined;
+      if (!refNode || refNode.parentElement !== targetParent) return null;
+    }
+
+    return this.reparentElementsToTargetParent(ids, targetParent, referenceNextSiblingId, true);
+  }
+
   /**
    * Return all editable content shapes in DOM/painter order.
    * First item is visually back-most, last item is front-most.
@@ -504,5 +649,97 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
     }
     parent.removeChild(node);
     return childIds;
+  }
+
+  private getContentRootElement(): Element | null {
+    if (!this.doc.getSVGInstance()) return null;
+    return (
+      (this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`)?.node as Element | null) ??
+      null
+    );
+  }
+
+  private isUserGroupElement(el: Element): boolean {
+    if (el.tagName?.toLowerCase() !== 'g') return false;
+    if (el.getAttribute(EDITOR_CONTENT_GROUP_ID) === 'true') return false;
+    if (!el.id) return false;
+    return !el.hasAttribute('clip-path') && !el.hasAttribute('mask');
+  }
+
+  private resolveTargetParentElement(targetParentId: string | null): Element | null {
+    if (targetParentId === null) return this.getContentRootElement();
+    if (!this.isUserGroupId(targetParentId) || this.isGroupClipMaskCarrier(targetParentId)) {
+      return null;
+    }
+    return (
+      (this.doc.getSVGInstance()!.findOne(`#${targetParentId}`)?.node as Element | undefined) ??
+      null
+    );
+  }
+
+  private recreateEmptyUserGroup(groupId: string): Element | null {
+    const contentRoot = this.getContentRootElement();
+    if (!contentRoot) return null;
+    const gEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    gEl.setAttribute('id', groupId);
+    contentRoot.appendChild(gEl);
+    return gEl;
+  }
+
+  private reparentElementsToTargetParent(
+    elementIds: string[],
+    targetParent: Element,
+    referenceNextSiblingId: string | null,
+    bumpRevision: boolean
+  ): string[] | null {
+    if (!this.doc.getSVGInstance() || elementIds.length === 0) return null;
+    const contentRoot = this.getContentRootElement();
+    if (!contentRoot || !contentRoot.contains(targetParent)) return null;
+
+    const sorted = this.sortElementIdsByDocumentOrder([...new Set(elementIds)]);
+    const nodes: Element[] = [];
+    for (const id of sorted) {
+      const node = this.doc.getSVGInstance()!.findOne(`#${id}`)?.node as Element | undefined;
+      if (!node || !contentRoot.contains(node)) return null;
+      nodes.push(node);
+    }
+
+    let insertRef: Element | null = null;
+    if (referenceNextSiblingId != null) {
+      insertRef =
+        (this.doc.getSVGInstance()!.findOne(`#${referenceNextSiblingId}`)?.node as
+          | Element
+          | undefined) ?? null;
+      if (!insertRef || insertRef.parentElement !== targetParent) return null;
+    }
+
+    const formerParents = new Set<Element>();
+    const moved: string[] = [];
+
+    if (insertRef) {
+      for (let i = nodes.length - 1; i >= 0; i--) {
+        const node = nodes[i];
+        if (node.parentElement === targetParent && node.nextElementSibling === insertRef) {
+          continue;
+        }
+        if (node.parentElement) formerParents.add(node.parentElement);
+        targetParent.insertBefore(node, insertRef);
+        moved.push(node.id);
+      }
+    } else {
+      for (const node of nodes) {
+        if (node.parentElement === targetParent && node === targetParent.lastElementChild) {
+          continue;
+        }
+        if (node.parentElement) formerParents.add(node.parentElement);
+        targetParent.appendChild(node);
+        moved.push(node.id);
+      }
+    }
+
+    if (moved.length === 0) return null;
+    this.pruneEmptyGroupsAfterReparent(formerParents);
+    if (bumpRevision) this.doc.bumpDocumentRevision();
+    return moved;
   }
 }

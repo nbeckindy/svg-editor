@@ -14,7 +14,8 @@ import {
   ReorderCommand,
   GroupCommand,
   UngroupCommand,
-  UngroupElementsCommand
+  UngroupElementsCommand,
+  ReparentElementsCommand
 } from '../../models/editor-commands';
 
 describe('LayersPanelComponent', () => {
@@ -56,6 +57,10 @@ describe('LayersPanelComponent', () => {
             getShapePropertiesInSameClipGroup,
             isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
             isElementDirectLocked: vi.fn().mockReturnValue(false),
+            isUserGroupId: vi.fn(
+              (id: string) => id.startsWith('g') || id.includes('group')
+            ),
+            isGroupClipMaskCarrier: vi.fn().mockReturnValue(false),
             setLayerLocked: vi.fn(),
             moveElementBeforeNextSibling: vi.fn().mockReturnValue(true)
           }
@@ -597,5 +602,132 @@ describe('LayersPanelComponent', () => {
     expect(preview).toBeTruthy();
     expect(preview!.src).not.toContain(junk);
     expect(preview!.src.length).toBeLessThan(8000);
+  });
+
+  it('add to group button is enabled with one group and other shapes', () => {
+    getLayerTree.mockReturnValue([
+      { id: 'g1', type: 'g', name: 'g1', visible: true, locked: false, elementMarkup: '<g id="g1"/>', children: [] },
+      { id: 'r1', type: 'rect', name: 'r1', visible: true, locked: false, elementMarkup: '<rect id="r1"/>' }
+    ]);
+    selectedShapes.set([
+      { id: 'g1', type: 'g' },
+      { id: 'r1', type: 'rect' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const addBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="layers-add-to-group-btn"]'
+    ) as HTMLButtonElement;
+    expect(addBtn.disabled).toBe(false);
+  });
+
+  it('add to group button dispatches ReparentElementsCommand', () => {
+    getLayerTree.mockReturnValue([
+      { id: 'g1', type: 'g', name: 'g1', visible: true, locked: false, elementMarkup: '<g id="g1"/>', children: [] },
+      { id: 'r1', type: 'rect', name: 'r1', visible: true, locked: false, elementMarkup: '<rect id="r1"/>' }
+    ]);
+    selectedShapes.set([
+      { id: 'g1', type: 'g' },
+      { id: 'r1', type: 'rect' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const addBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="layers-add-to-group-btn"]'
+    ) as HTMLButtonElement;
+    addBtn.click();
+
+    expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReparentElementsCommand);
+  });
+
+  it('remove from group button is enabled when selection has a grouped shape', () => {
+    const contentRoot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    contentRoot.setAttribute('data-editor-content-group', 'true');
+    const groupEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    groupEl.id = 'g1';
+    contentRoot.appendChild(groupEl);
+    const rectEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rectEl.id = 'r1';
+    groupEl.appendChild(rectEl);
+
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '[data-editor-content-group]') return { node: contentRoot };
+        if (sel === '#r1') return { node: rectEl };
+        if (sel === '#g1') return { node: groupEl };
+        return null;
+      })
+    });
+
+    getLayerTree.mockReturnValue([
+      {
+        id: 'g1',
+        type: 'g',
+        name: 'g1',
+        visible: true,
+        locked: false,
+        elementMarkup: '<g id="g1"><rect id="r1"/></g>',
+        children: [
+          { id: 'r1', type: 'rect', name: 'r1', visible: true, locked: false, elementMarkup: '<rect id="r1"/>' }
+        ]
+      }
+    ]);
+    selectedShapes.set([{ id: 'r1', type: 'rect' }]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const removeBtn = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="layers-remove-from-group-btn"]'
+    ) as HTMLButtonElement;
+    expect(removeBtn.disabled).toBe(false);
+  });
+
+  it('drop on group row middle dispatches add-to-group reparent', () => {
+    const contentRoot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    contentRoot.setAttribute('data-editor-content-group', 'true');
+    const groupEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    groupEl.id = 'g1';
+    contentRoot.appendChild(groupEl);
+    const rectEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rectEl.id = 'r1';
+    contentRoot.appendChild(rectEl);
+
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '[data-editor-content-group]') return { node: contentRoot };
+        if (sel === '#g1') return { node: groupEl };
+        if (sel === '#r1') return { node: rectEl };
+        return null;
+      })
+    });
+
+    getLayerTree.mockReturnValue([
+      { id: 'g1', type: 'g', name: 'g1', visible: true, locked: false, elementMarkup: '<g id="g1"/>', children: [] },
+      { id: 'r1', type: 'rect', name: 'r1', visible: true, locked: false, elementMarkup: '<rect id="r1"/>' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const groupRow = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="layer-row-g1"]'
+    ) as HTMLElement;
+    const dropEvent = {
+      preventDefault: vi.fn(),
+      dataTransfer: {
+        getData: (type: string) =>
+          type.includes('layer') || type === 'text/plain' ? 'r1' : ''
+      },
+      offsetY: 20,
+      currentTarget: { clientHeight: 40 }
+    } as unknown as DragEvent;
+    fixture.componentInstance.onLayerRowDrop('g1', dropEvent);
+
+    expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    const cmd = pushAndExecute.mock.calls[0][0] as ReparentElementsCommand;
+    expect(cmd).toBeInstanceOf(ReparentElementsCommand);
+    expect(cmd.description).toBe('Add to group');
   });
 });

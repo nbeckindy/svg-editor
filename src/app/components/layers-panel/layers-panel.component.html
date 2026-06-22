@@ -16,6 +16,20 @@
               (click)="onUngroupSelected()">
         <span aria-hidden="true">⊟</span>
       </button>
+      <button type="button" class="panel-action-btn" title="Add selection to group"
+              data-testid="layers-add-to-group-btn"
+              aria-label="Add selection to group"
+              [disabled]="!canAddToGroup()"
+              (click)="onAddToGroupSelected()">
+        <span aria-hidden="true">⊕</span>
+      </button>
+      <button type="button" class="panel-action-btn" title="Remove from group"
+              data-testid="layers-remove-from-group-btn"
+              aria-label="Remove selection from group"
+              [disabled]="!canRemoveFromGroup()"
+              (click)="onRemoveFromGroupSelected()">
+        <span aria-hidden="true">⊖</span>
+      </button>
     </div>
   </div>
 

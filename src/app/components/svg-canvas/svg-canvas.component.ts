@@ -1515,6 +1515,42 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     this.drilledIntoGroupId = null;
   }
 
+  private syncDrillAfterGroupStructureChange(payload: {
+    movedElementIds: string[];
+    targetGroupId?: string | null;
+  }): void {
+    if (!this.drilledIntoGroupId) return;
+
+    const drilledId = this.drilledIntoGroupId;
+    const svg = this.svgManipulation.getSVGInstance();
+    if (!svg?.findOne(`#${drilledId}`)) {
+      this.drilledIntoGroupId = null;
+      return;
+    }
+
+    if (payload.movedElementIds.includes(drilledId)) {
+      this.drilledIntoGroupId = null;
+      return;
+    }
+
+    if (payload.targetGroupId === drilledId) {
+      return;
+    }
+
+    for (const movedId of payload.movedElementIds) {
+      const movedNode = svg.findOne(`#${movedId}`)?.node as Element | undefined;
+      const drilledNode = svg.findOne(`#${drilledId}`)?.node as Element | undefined;
+      if (movedNode && drilledNode && drilledNode.contains(movedNode)) {
+        return;
+      }
+    }
+
+    const drilledNode = svg.findOne(`#${drilledId}`)?.node as Element | undefined;
+    if (!drilledNode) {
+      this.drilledIntoGroupId = null;
+    }
+  }
+
   private ungroupSelectedShape(): void {
     const selected = this.shapeSelection.getSelectedShapes();
     const groupIds = selected.filter((s) => s.type === 'g').map((s) => s.id);
@@ -1804,9 +1840,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
 
   private boundOnWheel = this.onWheel.bind(this);
 
-  ngOnInit(): void {}
+  ngOnInit(): void {
+    this.chromeEditorApply.afterGroupStructureChange = (payload) =>
+      this.syncDrillAfterGroupStructureChange(payload);
+  }
 
   ngOnDestroy(): void {
+    this.chromeEditorApply.afterGroupStructureChange = null;
     if (this.penInsertCursorRaf !== 0) {
       window.cancelAnimationFrame(this.penInsertCursorRaf);
       this.penInsertCursorRaf = 0;

@@ -8,6 +8,14 @@ export interface LayerStackItem {
   opacity?: number;
 }
 
+/** Parent location of an element before a reparent operation (for undo). */
+export interface ElementParentSnapshot {
+  elementId: string;
+  /** `null` when the former parent is the editor content root. */
+  formerParentId: string | null;
+  formerIndex: number;
+}
+
 export interface LayerTreeNode {
   id: string;
   type: string;
@@ -51,6 +59,28 @@ export interface SvgLayerStructurePort {
   ungroupElements(
     groupIds: string[]
   ): { allChildElementIds: string[]; undoSnapshots: string[][] };
+  /** Move elements into an existing user `<g>`, preserving DOM order. Returns moved ids or `null`. */
+  addElementsToGroup(
+    elementIds: string[],
+    targetGroupId: string,
+    referenceNextSiblingId?: string | null
+  ): string[] | null;
+  /** Hoist each element one level out of its immediate user-group parent. Returns moved ids or `null`. */
+  removeElementsFromGroup(elementIds: string[]): string[] | null;
+  /** Reparent elements under `targetParentId` (`null` = content root) before optional sibling ref. */
+  reparentElementsToParent(
+    elementIds: string[],
+    targetParentId: string | null,
+    referenceNextSiblingId: string | null
+  ): string[] | null;
+  snapshotElementParentOrder(elementIds: string[]): ElementParentSnapshot[];
+  restoreElementParentOrder(
+    elementId: string,
+    formerParentId: string | null,
+    oldIndex: number
+  ): void;
+  isUserGroupId(groupId: string): boolean;
+  isGroupClipMaskCarrier(groupId: string): boolean;
   renameElement(elementId: string, newName: string): void;
   getElementName(elementId: string): string;
 }

@@ -1,7 +1,7 @@
 import type { Signal } from '@angular/core';
 import type { Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../models/shape-properties.interface';
-import type { LayerTreeNode } from '../services/svg-layer-structure.port';
+import type { LayerTreeNode, ElementParentSnapshot } from '../services/svg-layer-structure.port';
 
 /**
  * Svg slice for layer reorder / visibility / group commands (`ReorderCommand`,
@@ -25,6 +25,25 @@ export interface LayerReorderGroupSvgPort {
   ungroupElements(
     groupIds: string[]
   ): { allChildElementIds: string[]; undoSnapshots: string[][] };
+  addElementsToGroup(
+    elementIds: string[],
+    targetGroupId: string,
+    referenceNextSiblingId?: string | null
+  ): string[] | null;
+  removeElementsFromGroup(elementIds: string[]): string[] | null;
+  reparentElementsToParent(
+    elementIds: string[],
+    targetParentId: string | null,
+    referenceNextSiblingId: string | null
+  ): string[] | null;
+  snapshotElementParentOrder(elementIds: string[]): ElementParentSnapshot[];
+  restoreElementParentOrder(
+    elementId: string,
+    formerParentId: string | null,
+    oldIndex: number
+  ): void;
+  isUserGroupId(groupId: string): boolean;
+  isGroupClipMaskCarrier(groupId: string): boolean;
   /** Undo for {@link ReorderCommand}: move `elementId` back to `oldIndex` among its parent's element children. */
   restoreElementSiblingOrder(elementId: string, oldIndex: number): void;
 }

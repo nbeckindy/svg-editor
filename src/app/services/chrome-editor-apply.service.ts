@@ -35,6 +35,8 @@ import {
   GroupCommand,
   UngroupCommand,
   UngroupElementsCommand,
+  ReparentElementsCommand,
+  type ReparentElementsMode,
   FontCommand,
   TextAlignCommand,
   TextPaintOrderCommand,
@@ -87,6 +89,11 @@ export class ChromeEditorApplyService {
   private readonly transformSvg: SelectionTransformApplySvgPort = inject(SvgManipulationService);
   private readonly svgManipulation = inject(SvgManipulationService);
   private readonly pathBooleanGeometry = inject(PathBooleanGeometryService);
+
+  /** Canvas hook: sync drill-in state after group membership changes from chrome. */
+  afterGroupStructureChange:
+    | ((payload: { movedElementIds: string[]; targetGroupId?: string | null }) => void)
+    | null = null;
   private readonly drawingDefaults = inject(DrawingStyleDefaultsService);
   private readonly editorHistory = inject(EditorHistoryService);
   private readonly editorTool = inject(EditorToolService);
@@ -771,6 +778,7 @@ export class ChromeEditorApplyService {
         this.shapeSelection.selectShapes([this.propertiesSvg.getShapeProperties(groupEl)]);
       }
     }
+    this.afterGroupStructureChange?.({ movedElementIds: selectedShapeIds, targetGroupId: newGroupId });
   }
 
   ungroupSelectedFromLayersPanel(groupIds: string[]): void {
@@ -806,6 +814,95 @@ export class ChromeEditorApplyService {
       const multi = new UngroupElementsCommand(this.layerSvg, groupIds);
       this.editorHistory.pushAndExecute(multi);
       selectFreedChildren(multi.ungroupedChildIds);
+    }
+    this.afterGroupStructureChange?.({ movedElementIds: groupIds, targetGroupId: null });
+  }
+
+  addSelectionToGroupFromLayersPanel(
+    elementIds: string[],
+    targetGroupId: string,
+    referenceNextSiblingId: string | null = null
+  ): void {
+    const ids = elementIds.filter((id) => id !== targetGroupId);
+    if (ids.length === 0) return;
+    if (this.shapeIdsTouchLocked([...ids, targetGroupId])) return;
+    if (!this.layerSvg.isUserGroupId(targetGroupId) || this.layerSvg.isGroupClipMaskCarrier(targetGroupId)) {
+      return;
+    }
+
+    const cmd = new ReparentElementsCommand(this.layerSvg, ids, {
+      kind: 'addToGroup',
+      targetGroupId,
+      referenceNextSiblingId
+    });
+    this.editorHistory.pushAndExecute(cmd);
+    this.selectReparentedElements(cmd.reparentedElementIds);
+    this.afterGroupStructureChange?.({
+      movedElementIds: cmd.reparentedElementIds,
+      targetGroupId
+    });
+  }
+
+  removeSelectionFromGroupFromLayersPanel(elementIds: string[]): void {
+    if (elementIds.length === 0) return;
+    if (this.shapeIdsTouchLocked(elementIds)) return;
+
+    const cmd = new ReparentElementsCommand(this.layerSvg, elementIds, { kind: 'removeFromGroup' });
+    this.editorHistory.pushAndExecute(cmd);
+    this.selectReparentedElements(cmd.reparentedElementIds);
+    this.afterGroupStructureChange?.({
+      movedElementIds: cmd.reparentedElementIds,
+      targetGroupId: null
+    });
+  }
+
+  reparentLayersFromPanel(
+    elementIds: string[],
+    mode: ReparentElementsMode
+  ): void {
+    if (elementIds.length === 0) return;
+    if (this.shapeIdsTouchLocked(elementIds)) return;
+    if (mode.kind === 'addToGroup' && this.shapeIdsTouchLocked([mode.targetGroupId])) return;
+    if (
+      mode.kind === 'reparentToParent' &&
+      mode.targetParentId &&
+      this.shapeIdsTouchLocked([mode.targetParentId])
+    ) {
+      return;
+    }
+
+    const cmd = new ReparentElementsCommand(this.layerSvg, elementIds, mode);
+    this.editorHistory.pushAndExecute(cmd);
+    this.selectReparentedElements(cmd.reparentedElementIds);
+    const targetGroupId =
+      mode.kind === 'addToGroup'
+        ? mode.targetGroupId
+        : mode.kind === 'reparentToParent'
+          ? mode.targetParentId
+          : null;
+    this.afterGroupStructureChange?.({
+      movedElementIds: cmd.reparentedElementIds,
+      targetGroupId
+    });
+  }
+
+  /** Undoable layer drag reparent (into/out of groups or cross-parent insert). */
+  reparentLayerDrag(
+    elementIds: string[],
+    mode: ReparentElementsMode
+  ): void {
+    this.reparentLayersFromPanel(elementIds, mode);
+  }
+
+  private selectReparentedElements(elementIds: string[]): void {
+    const svg = this.paintSvg.getSVGInstance();
+    if (!svg || elementIds.length === 0) return;
+    const shapes = elementIds
+      .map((id) => svg.findOne(`#${id}`) as SvgJsElement | null)
+      .filter((el): el is SvgJsElement => el != null)
+      .map((el) => this.propertiesSvg.getShapeProperties(el));
+    if (shapes.length > 0) {
+      this.shapeSelection.selectShapes(shapes);
     }
   }
 

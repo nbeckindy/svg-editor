@@ -438,6 +438,46 @@ export class SvgManipulationService
     return this.layers.ungroupElements(groupIds);
   }
 
+  addElementsToGroup(
+    elementIds: string[],
+    targetGroupId: string,
+    referenceNextSiblingId?: string | null
+  ): string[] | null {
+    return this.layers.addElementsToGroup(elementIds, targetGroupId, referenceNextSiblingId);
+  }
+
+  removeElementsFromGroup(elementIds: string[]): string[] | null {
+    return this.layers.removeElementsFromGroup(elementIds);
+  }
+
+  reparentElementsToParent(
+    elementIds: string[],
+    targetParentId: string | null,
+    referenceNextSiblingId: string | null
+  ): string[] | null {
+    return this.layers.reparentElementsToParent(elementIds, targetParentId, referenceNextSiblingId);
+  }
+
+  snapshotElementParentOrder(elementIds: string[]) {
+    return this.layers.snapshotElementParentOrder(elementIds);
+  }
+
+  restoreElementParentOrder(
+    elementId: string,
+    formerParentId: string | null,
+    oldIndex: number
+  ): void {
+    this.layers.restoreElementParentOrder(elementId, formerParentId, oldIndex);
+  }
+
+  isUserGroupId(groupId: string): boolean {
+    return this.layers.isUserGroupId(groupId);
+  }
+
+  isGroupClipMaskCarrier(groupId: string): boolean {
+    return this.layers.isGroupClipMaskCarrier(groupId);
+  }
+
   renameElement(elementId: string, newName: string): void {
     this.layers.renameElement(elementId, newName);
   }

@@ -1387,6 +1387,125 @@ describe('SvgManipulationService', () => {
     });
   });
 
+  describe('addElementsToGroup', () => {
+    it('moves root shapes into an existing group', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="grp"><rect id="inside" width="2" height="2"/></g>
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+        <circle id="c1" cx="50" cy="50" r="5"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const moved = service.addElementsToGroup(['r1', 'c1'], 'grp');
+      expect(moved).toEqual(['r1', 'c1']);
+      const group = container.querySelector('#grp')!;
+      expect(group.querySelector('#r1')).toBeTruthy();
+      expect(group.querySelector('#c1')).toBeTruthy();
+    });
+
+    it('moves a shape from one nested group into another', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="ga"><rect id="r1" width="5" height="5"/></g>
+        <g id="gb"><rect id="r2" width="5" height="5"/></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.addElementsToGroup(['r1'], 'gb');
+      expect(container.querySelector('#gb')?.querySelector('#r1')).toBeTruthy();
+      expect(container.querySelector('#ga')).toBeNull();
+    });
+
+    it('returns null when target is a clip carrier', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="clipper" clip-path="url(#c)"><rect id="r1" width="5" height="5"/></g>
+        <rect id="r2" width="5" height="5"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.addElementsToGroup(['r2'], 'clipper')).toBeNull();
+    });
+
+    it('returns null when moving group into itself or descendant', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="outer"><g id="inner"><rect id="r1" width="2" height="2"/></g></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.addElementsToGroup(['outer'], 'inner')).toBeNull();
+      expect(service.addElementsToGroup(['inner'], 'inner')).toBeNull();
+    });
+  });
+
+  describe('removeElementsFromGroup', () => {
+    it('hoists one child from inner group to outer group', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="outer">
+          <g id="inner">
+            <rect id="r1" x="0" y="0" width="10" height="10"/>
+            <rect id="r2" x="20" y="0" width="10" height="10"/>
+          </g>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const moved = service.removeElementsFromGroup(['r1']);
+      expect(moved).toEqual(['r1']);
+      const outer = container.querySelector('#outer')!;
+      expect(outer.querySelector('#inner')?.querySelector('#r1')).toBeNull();
+      expect(outer.querySelector('#r1')).toBeTruthy();
+      expect(outer.querySelector('#inner')?.querySelector('#r2')).toBeTruthy();
+    });
+
+    it('prunes empty inner group after removing its only child', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="outer"><g id="inner"><rect id="r1" width="2" height="2"/></g></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.removeElementsFromGroup(['r1']);
+      expect(container.querySelector('#inner')).toBeNull();
+      expect(container.querySelector('#outer')?.querySelector('#r1')).toBeTruthy();
+    });
+
+    it('hoists from outer group to content root and prunes empty group', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="before" width="2" height="2"/>
+        <g id="grp"><rect id="r1" width="5" height="5"/></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.removeElementsFromGroup(['r1']);
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
+      expect(ids).toEqual(['before', 'r1']);
+      expect(container.querySelector('#grp')).toBeNull();
+    });
+  });
+
+  describe('reparentElementsToParent / restoreElementParentOrder', () => {
+    it('reparentElementsToParent moves element to content root before sibling', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="grp"><rect id="r1" width="5" height="5"/><rect id="r1b" width="3" height="3"/></g>
+        <rect id="after" width="2" height="2"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const moved = service.reparentElementsToParent(['r1'], null, 'after');
+      expect(moved).toEqual(['r1']);
+      const contentGroup = container.querySelector('[data-editor-content-group]')!;
+      const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
+      expect(ids).toEqual(['grp', 'r1', 'after']);
+    });
+
+    it('restoreElementParentOrder undoes a reparent', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <g id="grp"><rect id="r1" width="5" height="5"/><rect id="r1b" width="3" height="3"/></g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const snap = service.snapshotElementParentOrder(['r1']);
+      service.reparentElementsToParent(['r1'], null, null);
+      expect(container.querySelector('#grp')?.querySelector('#r1')).toBeNull();
+      service.restoreElementParentOrder(
+        snap[0].elementId,
+        snap[0].formerParentId,
+        snap[0].formerIndex
+      );
+      expect(container.querySelector('#grp')?.querySelector('#r1')).toBeTruthy();
+    });
+  });
+
   describe('ungroupElements', () => {
     it('ungroups two sibling groups in one revision', () => {
       const svgContent = `<svg viewBox="0 0 100 100">
