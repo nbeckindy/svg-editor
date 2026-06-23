@@ -27,9 +27,6 @@ function makeHost(over: Partial<SvgCanvasPointerGestureHost>): SvgCanvasPointerG
     isCreatingShape: false,
     getPathNodeDragSession: () => null,
     updatePathNodeDrag: vi.fn(),
-    isPenToolWithActiveSession: () => false,
-    isPenInsertOnPathDragActive: () => false,
-    onPenDocumentMouseMove: vi.fn(),
     isSelectionMarquee: false,
     isZoomMarquee: false,
     isResizingSelection: false,
@@ -40,19 +37,14 @@ function makeHost(over: Partial<SvgCanvasPointerGestureHost>): SvgCanvasPointerG
     isDraggingShape: false,
     updateTextToolPreviewFromClient: vi.fn(),
     recordInsertAnchorFromClient: vi.fn(),
-    schedulePenInsertHoverCursorHitTest: vi.fn(),
     finishPathNodeDrag: vi.fn(),
-    onPenDocumentMouseUp: vi.fn(),
     commitZoomMarquee: vi.fn(),
     clearPanningFlag: vi.fn(),
     svgContentValue: '',
     canvasViewInitialized: true,
     beginPanSession: vi.fn(),
-    onCanvasPenPrimaryMouseDown: vi.fn(() => false),
-    wouldPickUpPenOpenPathContinuationAt: () => false,
     isCreationToolActive: () => false,
     getCurrentTool: () => 'selector',
-    isSelectorInteractionTool: () => true,
     hasPathNodeEditState: () => false,
     tryStartPathNodeDrag: () => false,
     isEditorContentShapeTarget: () => true,
@@ -163,16 +155,14 @@ describe('PointerGestureRouter', () => {
     expect(ev.preventDefault).toHaveBeenCalled();
   });
 
-  it('onDocumentMouseMove prefers path node drag session over pen and marquee', () => {
+  it('onDocumentMouseMove prefers path node drag session over selector marquee', () => {
     const host = makeHost({
       getPathNodeDragSession: () => ({}),
-      isPenToolWithActiveSession: () => true,
       isSelectionMarquee: true,
       updatePathNodeDrag: vi.fn()
     });
     router.onDocumentMouseMove(host, { clientX: 3, clientY: 4, shiftKey: false } as MouseEvent);
     expect(host.updatePathNodeDrag).toHaveBeenCalledWith(3, 4);
-    expect(host.onPenDocumentMouseMove).not.toHaveBeenCalled();
     expect(selectionMarquee.move).not.toHaveBeenCalled();
   });
 
@@ -297,12 +287,12 @@ describe('PointerGestureRouter', () => {
     expect(host.clearPanningFlag).not.toHaveBeenCalled();
   });
 
-  it('onDocumentMouseUp clears panning then ends resize when resizing', () => {
+  it('onDocumentMouseUp ends resize when resizing with selector tool', () => {
     vi.spyOn(resize, 'end');
     const host = makeHost({ isResizingSelection: true });
     router.onDocumentMouseUp(host, { button: 0, altKey: true } as MouseEvent);
-    expect(host.clearPanningFlag).toHaveBeenCalled();
     expect(resize.end).toHaveBeenCalledWith(emptyRt, true);
+    expect(host.clearPanningFlag).not.toHaveBeenCalled();
   });
 
   it('onDocumentMouseUp ends skew and rotate when active', () => {

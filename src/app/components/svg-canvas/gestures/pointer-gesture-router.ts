@@ -24,14 +24,6 @@ export interface SvgCanvasPointerGestureHost {
   readonly isCreatingShape: boolean;
   getPathNodeDragSession(): unknown | null;
   updatePathNodeDrag(clientX: number, clientY: number): void;
-  /**
-   * True when the pen session has at least a moveto (`[M]`). Includes first-segment handle-draft
-   * state where committed segments are still `M`-only — document `mousemove`/`mouseup` must keep routing.
-   */
-  isPenToolWithActiveSession(): boolean;
-  /** True while pen insert-on-path mousedown→mouseup is in progress (no committed pen session). */
-  isPenInsertOnPathDragActive(): boolean;
-  onPenDocumentMouseMove(event: MouseEvent): void;
   readonly isSelectionMarquee: boolean;
   readonly isZoomMarquee: boolean;
   readonly isResizingSelection: boolean;
@@ -42,12 +34,9 @@ export interface SvgCanvasPointerGestureHost {
   readonly isDraggingShape: boolean;
   updateTextToolPreviewFromClient(clientX: number, clientY: number): void;
   recordInsertAnchorFromClient(clientX: number, clientY: number): void;
-  /** Throttled idle pen: valid insert hit cursor on canvas host. */
-  schedulePenInsertHoverCursorHitTest(clientX: number, clientY: number): void;
 
   // --- document:mouseup ---
   finishPathNodeDrag(): void;
-  onPenDocumentMouseUp(event: MouseEvent): void;
   commitZoomMarquee(): void;
   clearPanningFlag(): void;
 
@@ -55,11 +44,8 @@ export interface SvgCanvasPointerGestureHost {
   readonly svgContentValue: string | null | undefined;
   readonly canvasViewInitialized: boolean;
   beginPanSession(event: MouseEvent): void;
-  onCanvasPenPrimaryMouseDown(event: MouseEvent): boolean;
-  wouldPickUpPenOpenPathContinuationAt(event: MouseEvent): boolean;
   isCreationToolActive(): boolean;
   getCurrentTool(): EditorTool;
-  isSelectorInteractionTool(tool: EditorTool): boolean;
   hasPathNodeEditState(): boolean;
   tryStartPathNodeDrag(target: Element, event: MouseEvent): boolean;
   isEditorContentShapeTarget(target: Element): boolean;
@@ -96,16 +82,14 @@ export class PointerGestureRouter {
   private dispatchRegisteredPointerDown(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
     const tool = this.toolRegistry?.get(host.getCurrentTool());
     if (!tool?.onPointerDown) return false;
-    const svgPoint = this.svgPointFromEvent(host, event);
-    if (!svgPoint) return false;
+    const svgPoint = this.svgPointFromEvent(host, event) ?? { x: 0, y: 0 };
     return tool.onPointerDown(event, svgPoint);
   }
 
   private dispatchRegisteredPointerMove(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
     const tool = this.toolRegistry?.get(host.getCurrentTool());
     if (!tool?.onPointerMove) return false;
-    const svgPoint = this.svgPointFromEvent(host, event);
-    if (!svgPoint) return false;
+    const svgPoint: CanvasSvgPoint = { x: event.clientX, y: event.clientY };
     const consumed = tool.onPointerMove(event, svgPoint);
     return consumed !== false;
   }
@@ -113,8 +97,7 @@ export class PointerGestureRouter {
   private dispatchRegisteredPointerUp(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
     const tool = this.toolRegistry?.get(host.getCurrentTool());
     if (!tool?.onPointerUp) return false;
-    const svgPoint = this.svgPointFromEvent(host, event);
-    if (!svgPoint) return false;
+    const svgPoint: CanvasSvgPoint = { x: event.clientX, y: event.clientY };
     const consumed = tool.onPointerUp(event, svgPoint);
     return consumed !== false;
   }
@@ -125,6 +108,65 @@ export class PointerGestureRouter {
 
   private shouldUseLegacyCreationRouting(host: SvgCanvasPointerGestureHost): boolean {
     return host.isCreatingShape && !this.isRegisteredTool(host.getCurrentTool());
+  }
+
+  private shouldUseLegacySelectorRouting(host: SvgCanvasPointerGestureHost): boolean {
+    const toolId = host.getCurrentTool();
+    if (!this.toolRegistry) {
+      return toolId === 'selector' || toolId === 'node-edit-selector';
+    }
+    if (!this.toolRegistry.isSelectorInteractionTool(toolId)) return false;
+    return !this.toolRegistry.has(toolId);
+  }
+
+  private routeLegacySelectorPointerMove(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
+    if (!this.shouldUseLegacySelectorRouting(host)) return false;
+    if (host.isSelectionMarquee) {
+      this.g.selectionMarquee.move(event.clientX, event.clientY, host.gestureRuntime);
+      return true;
+    }
+    if (host.isResizingSelection) {
+      this.g.resize.move(host.gestureRuntime, event.clientX, event.clientY, event.altKey, event.shiftKey);
+      return true;
+    }
+    if (host.isSkewingSelection) {
+      this.g.skew.move(host.gestureRuntime, event.clientX, event.clientY);
+      return true;
+    }
+    if (host.isRotatingSelection) {
+      this.g.rotate.move(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
+      return true;
+    }
+    if (host.isDraggingShape) {
+      this.g.drag.move(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
+      return true;
+    }
+    return false;
+  }
+
+  private routeLegacySelectorPointerUp(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
+    if (!this.shouldUseLegacySelectorRouting(host)) return false;
+    if (host.isSelectionMarquee) {
+      this.g.selectionMarquee.endAt(event.clientX, event.clientY, event.shiftKey, host.gestureRuntime);
+      return true;
+    }
+    if (host.isResizingSelection) {
+      this.g.resize.end(host.gestureRuntime, event.altKey);
+      return true;
+    }
+    if (host.isSkewingSelection) {
+      this.g.skew.end(host.gestureRuntime);
+      return true;
+    }
+    if (host.isRotatingSelection) {
+      this.g.rotate.end(host.gestureRuntime);
+      return true;
+    }
+    if (host.isDraggingShape) {
+      this.g.drag.end(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
+      return true;
+    }
+    return false;
   }
 
   onDocumentMouseMove(host: SvgCanvasPointerGestureHost, event: MouseEvent): void {
@@ -139,8 +181,7 @@ export class PointerGestureRouter {
       this.g.creation.move(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
       return;
     }
-    if (host.isSelectionMarquee) {
-      this.g.selectionMarquee.move(event.clientX, event.clientY, host.gestureRuntime);
+    if (this.routeLegacySelectorPointerMove(host, event)) {
       return;
     }
     if (host.isZoomMarquee) {
@@ -148,22 +189,8 @@ export class PointerGestureRouter {
       this.cdr.detectChanges();
       return;
     }
-    if (host.isResizingSelection) {
-      this.g.resize.move(host.gestureRuntime, event.clientX, event.clientY, event.altKey, event.shiftKey);
-      return;
-    }
-    if (host.isSkewingSelection) {
-      this.g.skew.move(host.gestureRuntime, event.clientX, event.clientY);
-      return;
-    }
-    if (host.isRotatingSelection) {
-      this.g.rotate.move(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
-      return;
-    }
     if (host.isPanning) {
       host.applyPanDragFromEvent(event);
-    } else if (host.isDraggingShape) {
-      this.g.drag.move(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
     }
     host.updateTextToolPreviewFromClient(event.clientX, event.clientY);
     host.recordInsertAnchorFromClient(event.clientX, event.clientY);
@@ -182,8 +209,7 @@ export class PointerGestureRouter {
       this.g.creation.end(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
       return;
     }
-    if (host.isSelectionMarquee) {
-      this.g.selectionMarquee.endAt(event.clientX, event.clientY, event.shiftKey, host.gestureRuntime);
+    if (this.routeLegacySelectorPointerUp(host, event)) {
       return;
     }
     if (host.isZoomMarquee) {
@@ -191,21 +217,6 @@ export class PointerGestureRouter {
       return;
     }
     host.clearPanningFlag();
-    if (host.isResizingSelection) {
-      this.g.resize.end(host.gestureRuntime, event.altKey);
-      return;
-    }
-    if (host.isSkewingSelection) {
-      this.g.skew.end(host.gestureRuntime);
-      return;
-    }
-    if (host.isRotatingSelection) {
-      this.g.rotate.end(host.gestureRuntime);
-      return;
-    }
-    if (host.isDraggingShape) {
-      this.g.drag.end(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
-    }
   }
 
   /**
@@ -236,82 +247,82 @@ export class PointerGestureRouter {
       }
       return;
     }
-    if (!host.isSelectorInteractionTool(host.getCurrentTool()) || !host.svgContentValue || !host.canvasViewInitialized) {
-      return;
-    }
-    const target = event.target as Element;
+    if (this.shouldUseLegacySelectorRouting(host)) {
+      if (!host.svgContentValue || !host.canvasViewInitialized) return;
+      const target = event.target as Element;
 
-    if (host.hasPathNodeEditState() && host.tryStartPathNodeDrag(target, event)) {
-      event.preventDefault();
-      event.stopPropagation();
-      return;
-    }
-
-    const resizeEl = target.closest?.('[data-resize-handle]');
-    if (resizeEl) {
-      const h = resizeEl.getAttribute('data-resize-handle') as ResizeHandle | null;
-      if (
-        h &&
-        (h === 'nw' ||
-          h === 'ne' ||
-          h === 'sw' ||
-          h === 'se' ||
-          h === 'n' ||
-          h === 's' ||
-          h === 'e' ||
-          h === 'w')
-      ) {
-        if (this.g.resize.start(host.gestureRuntime, h, event)) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        return;
-      }
-    }
-
-    const skewEl = target.closest?.('[data-skew-handle]');
-    if (skewEl) {
-      const edge = skewEl.getAttribute('data-skew-handle') as SkewEdge | null;
-      if (edge === 'n' || edge === 's' || edge === 'e' || edge === 'w') {
-        if (this.g.skew.start(host.gestureRuntime, edge, event)) {
-          event.preventDefault();
-          event.stopPropagation();
-        }
-        return;
-      }
-    }
-
-    const rotateEl = target.closest?.('[data-rotate-handle]');
-    if (rotateEl) {
-      if (this.g.rotate.start(host.gestureRuntime, event)) {
+      if (host.hasPathNodeEditState() && host.tryStartPathNodeDrag(target, event)) {
         event.preventDefault();
         event.stopPropagation();
-      }
-      return;
-    }
-
-    if (!host.isEditorContentShapeTarget(target)) {
-      this.g.selectionMarquee.startAt(event.clientX, event.clientY);
-      event.preventDefault();
-      return;
-    }
-
-    if (target.tagName === 'svg' || !target.id) return;
-    let effectiveDragId = target.id;
-    if (!host.isShapeSelected(target.id)) {
-      const nearestGroupId = host.getNearestGroupAncestorId(target.id);
-      if (nearestGroupId && host.isShapeSelected(nearestGroupId)) {
-        effectiveDragId = nearestGroupId;
-      } else {
         return;
       }
-    }
-    if (event.shiftKey || event.ctrlKey || event.metaKey) return;
-    const point = host.clientToEditorSvgPointForDrag(event.clientX, event.clientY);
-    if (!point) return;
-    const selectedIds = host.getSelectedShapeIds();
-    if (this.g.drag.start(host.gestureRuntime, selectedIds, effectiveDragId, point, event)) {
-      event.preventDefault();
+
+      const resizeEl = target.closest?.('[data-resize-handle]');
+      if (resizeEl) {
+        const h = resizeEl.getAttribute('data-resize-handle') as ResizeHandle | null;
+        if (
+          h &&
+          (h === 'nw' ||
+            h === 'ne' ||
+            h === 'sw' ||
+            h === 'se' ||
+            h === 'n' ||
+            h === 's' ||
+            h === 'e' ||
+            h === 'w')
+        ) {
+          if (this.g.resize.start(host.gestureRuntime, h, event)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          return;
+        }
+      }
+
+      const skewEl = target.closest?.('[data-skew-handle]');
+      if (skewEl) {
+        const edge = skewEl.getAttribute('data-skew-handle') as SkewEdge | null;
+        if (edge === 'n' || edge === 's' || edge === 'e' || edge === 'w') {
+          if (this.g.skew.start(host.gestureRuntime, edge, event)) {
+            event.preventDefault();
+            event.stopPropagation();
+          }
+          return;
+        }
+      }
+
+      const rotateEl = target.closest?.('[data-rotate-handle]');
+      if (rotateEl) {
+        if (this.g.rotate.start(host.gestureRuntime, event)) {
+          event.preventDefault();
+          event.stopPropagation();
+        }
+        return;
+      }
+
+      if (!host.isEditorContentShapeTarget(target)) {
+        this.g.selectionMarquee.startAt(event.clientX, event.clientY);
+        event.preventDefault();
+        return;
+      }
+
+      if (target.tagName === 'svg' || !target.id) return;
+      let effectiveDragId = target.id;
+      if (!host.isShapeSelected(target.id)) {
+        const nearestGroupId = host.getNearestGroupAncestorId(target.id);
+        if (nearestGroupId && host.isShapeSelected(nearestGroupId)) {
+          effectiveDragId = nearestGroupId;
+        } else {
+          return;
+        }
+      }
+      if (event.shiftKey || event.ctrlKey || event.metaKey) return;
+      const point = host.clientToEditorSvgPointForDrag(event.clientX, event.clientY);
+      if (!point) return;
+      const selectedIds = host.getSelectedShapeIds();
+      if (this.g.drag.start(host.gestureRuntime, selectedIds, effectiveDragId, point, event)) {
+        event.preventDefault();
+      }
     }
   }
 }

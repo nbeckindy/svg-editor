@@ -1682,7 +1682,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       hasPathNodeEditState: () => this.hasPathNodeEditState(),
       tryStartPathNodeDrag: (target, event) => this.tryStartPathNodeDrag(target, event),
       scheduleInsertHoverCursorHitTest: (clientX, clientY) =>
-        this.schedulePenInsertHoverCursorHitTest(clientX, clientY)
+        this.schedulePenInsertHoverCursorHitTest(clientX, clientY),
+      isEditorContentShapeTarget: (target) => this.isEditorContentShapeTarget(target),
+      isShapeSelected: (id) => this.isShapeSelected(id),
+      getNearestGroupAncestorId: (id) => this.getNearestGroupAncestorId(id),
+      getSelectedShapeIds: () => this.getSelectedShapeIds(),
+      isSelectionMarquee: () => this.isSelectionMarquee,
+      isResizingSelection: () => this.isResizingSelection,
+      isSkewingSelection: () => this.isSkewingSelection,
+      isRotatingSelection: () => this.isRotatingSelection,
+      isDraggingShape: () => this.isDraggingShape
     });
     this.drag = pointerStack.drag;
     this.resize = pointerStack.resize;

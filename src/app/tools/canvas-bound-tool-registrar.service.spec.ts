@@ -1,6 +1,11 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 import { CanvasBoundToolRegistrar } from './canvas-bound-tool-registrar.service';
 import { CreationGesture } from '../components/svg-canvas/gestures/creation-gesture';
+import { DragGesture } from '../components/svg-canvas/gestures/drag-gesture';
+import { ResizeGesture } from '../components/svg-canvas/gestures/resize-gesture';
+import { RotateGesture } from '../components/svg-canvas/gestures/rotate-gesture';
+import { SelectionMarqueeGesture } from '../components/svg-canvas/gestures/selection-marquee-gesture';
+import { SkewGesture } from '../components/svg-canvas/gestures/skew-gesture';
 import { ToolRegistryService } from './tool-registry.service';
 import type { GestureRuntimeContext } from '../components/svg-canvas/gestures/gesture-context';
 
@@ -10,6 +15,32 @@ const emptyRt = {
   transformDoc: {} as GestureRuntimeContext['transformDoc'],
   snap: {} as GestureRuntimeContext['snap']
 };
+
+function makeSelectorDeps() {
+  return {
+    getGestures: () => ({
+      selectionMarquee: new SelectionMarqueeGesture(),
+      resize: new ResizeGesture(),
+      skew: new SkewGesture(),
+      rotate: new RotateGesture(),
+      drag: new DragGesture()
+    }),
+    getRuntime: () => emptyRt,
+    isCanvasReady: () => true,
+    hasPathNodeEditState: () => false,
+    tryStartPathNodeDrag: () => false,
+    isEditorContentShapeTarget: () => false,
+    clientToEditorSvgPointForDrag: () => ({ x: 0, y: 0 }),
+    isShapeSelected: () => false,
+    getNearestGroupAncestorId: () => null,
+    getSelectedShapeIds: () => [],
+    isSelectionMarquee: () => false,
+    isResizingSelection: () => false,
+    isSkewingSelection: () => false,
+    isRotatingSelection: () => false,
+    isDraggingShape: () => false
+  };
+}
 
 describe('CanvasBoundToolRegistrar', () => {
   let registry: ToolRegistryService;
@@ -68,5 +99,14 @@ describe('CanvasBoundToolRegistrar', () => {
       scheduleInsertHoverCursorHitTest: vi.fn()
     }));
     expect(registry.get('pen')).toBeDefined();
+  });
+
+  it('registers selector tools once when bound', () => {
+    registrar.registerSelectorTools(makeSelectorDeps);
+    expect(registry.has('selector')).toBe(true);
+    expect(registry.has('node-edit-selector')).toBe(true);
+
+    registrar.registerSelectorTools(makeSelectorDeps);
+    expect(registry.get('selector')).toBeDefined();
   });
 });

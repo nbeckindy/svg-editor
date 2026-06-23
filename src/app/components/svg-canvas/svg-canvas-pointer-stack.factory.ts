@@ -12,6 +12,7 @@ import type { SnapCandidateShape, SnapService } from '../../services/snap.servic
 import type { ToolRegistryService } from '../../tools/tool-registry.service';
 import type { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
 import type { PenCanvasToolDeps } from '../../tools/pen-canvas-tool';
+import type { SelectorCanvasToolDeps } from '../../tools/selector-canvas-tool';
 import type { GestureRuntimeContext } from './gestures/gesture-context';
 import type { Rect } from './gestures/gesture-context';
 import { createDefaultTransformGestureDoc } from './gestures/transform-gesture-doc.port';
@@ -61,6 +62,15 @@ export interface CreateSvgCanvasPointerStackArgs {
   hasPathNodeEditState: PenCanvasToolDeps['hasPathNodeEditState'];
   tryStartPathNodeDrag: PenCanvasToolDeps['tryStartPathNodeDrag'];
   scheduleInsertHoverCursorHitTest: PenCanvasToolDeps['scheduleInsertHoverCursorHitTest'];
+  isEditorContentShapeTarget: SelectorCanvasToolDeps['isEditorContentShapeTarget'];
+  isShapeSelected: SelectorCanvasToolDeps['isShapeSelected'];
+  getNearestGroupAncestorId: SelectorCanvasToolDeps['getNearestGroupAncestorId'];
+  getSelectedShapeIds: SelectorCanvasToolDeps['getSelectedShapeIds'];
+  isSelectionMarquee: SelectorCanvasToolDeps['isSelectionMarquee'];
+  isResizingSelection: SelectorCanvasToolDeps['isResizingSelection'];
+  isSkewingSelection: SelectorCanvasToolDeps['isSkewingSelection'];
+  isRotatingSelection: SelectorCanvasToolDeps['isRotatingSelection'];
+  isDraggingShape: SelectorCanvasToolDeps['isDraggingShape'];
 }
 
 export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArgs): SvgCanvasPointerStack {
@@ -130,6 +140,24 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     tryStartPathNodeDrag: args.tryStartPathNodeDrag,
     isCanvasReady: args.isCanvasReady,
     scheduleInsertHoverCursorHitTest: args.scheduleInsertHoverCursorHitTest
+  }));
+
+  args.canvasBoundToolRegistrar.registerSelectorTools(() => ({
+    getGestures: () => ({ selectionMarquee, resize, skew, rotate, drag }),
+    getRuntime: () => gestureRuntime,
+    isCanvasReady: args.isCanvasReady,
+    hasPathNodeEditState: args.hasPathNodeEditState,
+    tryStartPathNodeDrag: args.tryStartPathNodeDrag,
+    isEditorContentShapeTarget: args.isEditorContentShapeTarget,
+    clientToEditorSvgPointForDrag: args.clientToEditorSvgPoint,
+    isShapeSelected: args.isShapeSelected,
+    getNearestGroupAncestorId: args.getNearestGroupAncestorId,
+    getSelectedShapeIds: args.getSelectedShapeIds,
+    isSelectionMarquee: args.isSelectionMarquee,
+    isResizingSelection: args.isResizingSelection,
+    isSkewingSelection: args.isSkewingSelection,
+    isRotatingSelection: args.isRotatingSelection,
+    isDraggingShape: args.isDraggingShape
   }));
 
   return {

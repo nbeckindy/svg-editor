@@ -3,6 +3,7 @@ import type { CreationGesture } from '../components/svg-canvas/gestures/creation
 import type { GestureRuntimeContext } from '../components/svg-canvas/gestures/gesture-context';
 import { registerCreationCanvasTools } from './creation-canvas-tool';
 import { registerPenCanvasTool, type PenCanvasToolDeps } from './pen-canvas-tool';
+import { registerSelectorCanvasTools, type SelectorCanvasToolDeps } from './selector-canvas-tool';
 import { ToolRegistryService } from './tool-registry.service';
 
 /**
@@ -16,6 +17,7 @@ export class CanvasBoundToolRegistrar {
   private registry: ToolRegistryService;
   private creationToolsRegistered = false;
   private penToolRegistered = false;
+  private selectorToolsRegistered = false;
 
   constructor(registry: ToolRegistryService) {
     this.registry = registry;
@@ -40,5 +42,11 @@ export class CanvasBoundToolRegistrar {
     if (this.penToolRegistered) return;
     registerPenCanvasTool(this.registry, getDeps);
     this.penToolRegistered = true;
+  }
+
+  registerSelectorTools(getDeps: () => SelectorCanvasToolDeps): void {
+    if (this.selectorToolsRegistered) return;
+    registerSelectorCanvasTools(this.registry, getDeps);
+    this.selectorToolsRegistered = true;
   }
 }
