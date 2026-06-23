@@ -10,28 +10,17 @@ import { LayerTreeNode } from '../../services/svg-layer-structure.port';
 import type { LayersPanelSvgPort } from '../../history/layers-panel-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
+import {
+  LayersPanelDndService,
+  type DropZone,
+  type LayerDropIntent
+} from './layers-panel-dnd.service';
+
+export type { DropZone, LayerDropAction, LayerDropIntent } from './layers-panel-dnd.service';
 
 /** Tiny PNG for layer-row previews — avoids re-embedding huge `data:` raster hrefs in preview SVG. */
 const LAYER_ROW_RASTER_PREVIEW_HREF =
   'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-
-export type DropZone = 'before' | 'after' | 'intoGroup' | 'none';
-
-export type LayerDropAction =
-  | { kind: 'reorderBeforeSibling'; referenceNextSiblingId: string | null }
-  | { kind: 'addToGroup'; targetGroupId: string }
-  | {
-      kind: 'reparentToParent';
-      targetParentId: string | null;
-      referenceNextSiblingId: string | null;
-    };
-
-export interface LayerDropIntent {
-  valid: boolean;
-  zone: DropZone;
-  targetId?: string;
-  action?: LayerDropAction;
-}
 
 interface LayerTreeViewModel {
   id: string;
@@ -65,6 +54,7 @@ export class LayersPanelComponent {
   private readonly svg: LayersPanelSvgPort = inject(SvgManipulationService);
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly chromeApply = inject(ChromeEditorApplyService);
+  private readonly dnd = inject(LayersPanelDndService);
   private readonly injector = inject(Injector);
 
   private lastPointerPosition: { x: number; y: number } | null = null;
@@ -109,7 +99,7 @@ export class LayersPanelComponent {
     const toMove = shapes.filter((s) => s.id !== targetId);
     if (toMove.length === 0) return false;
     if (shapes.some((s) => this.svg.isElementOrAncestorLocked(s.id))) return false;
-    return !toMove.some((s) => this.isStrictAncestor(s.id, targetId));
+    return !toMove.some((s) => this.dnd.isStrictAncestor(s.id, targetId));
   });
 
   readonly canRemoveFromGroup = computed(() => {
@@ -176,7 +166,7 @@ export class LayersPanelComponent {
     this.lastPointerPosition = null;
     this.pendingDropIntent.set(null);
     if (intent.valid && intent.action) {
-      this.executeDropAction(draggedId, intent.action);
+      this.dnd.executeDropAction(draggedId, intent.action);
     }
   }
 
@@ -185,81 +175,16 @@ export class LayersPanelComponent {
     draggedId: string,
     pointer: { x: number; y: number }
   ): LayerDropIntent {
-    const row = this.findLayerRowFromPointer(pointer, draggedId);
-    if (!row) return { valid: false, zone: 'none' };
-    const targetId = row.getAttribute('data-testid')?.replace('layer-row-', '');
-    if (!targetId) return { valid: false, zone: 'none' };
-    const rect = row.getBoundingClientRect();
-    const relY = rect.height > 0 ? (pointer.y - rect.top) / rect.height : 0.5;
-    const intent = this.resolveLayerDropIntent(draggedId, targetId, relY);
-    if (!intent.valid) return intent;
-    return { ...intent, targetId };
+    return this.dnd.resolveDropIntentFromPointer(draggedId, pointer, (targetId) =>
+      this.flattenedLayers().find((l) => l.id === targetId)?.isGroup ?? false
+    );
   }
 
   resolveLayerDropIntent(draggedId: string, targetId: string, relY: number): LayerDropIntent {
-    if (!draggedId || !targetId || draggedId === targetId) {
-      return { valid: false, zone: 'none' };
-    }
-    if (
-      this.svg.isElementOrAncestorLocked(draggedId) ||
-      this.svg.isElementOrAncestorLocked(targetId)
-    ) {
-      return { valid: false, zone: 'none' };
-    }
-
-    const topEdge = relY < 0.25;
-    const bottomEdge = relY > 0.75;
-    const middleZone = !topEdge && !bottomEdge;
-    const frontHalf = relY < 0.5;
-
-    const targetLayer = this.flattenedLayers().find((l) => l.id === targetId);
-    const svg = this.svg.getSVGInstance();
-    if (!svg) return { valid: false, zone: 'none' };
-    const draggedNode = svg.findOne(`#${draggedId}`)?.node as Element | undefined;
-    const targetNode = svg.findOne(`#${targetId}`)?.node as Element | undefined;
-    if (!draggedNode || !targetNode) return { valid: false, zone: 'none' };
-
-    if (targetLayer?.isGroup && middleZone) {
-      if (this.isStrictAncestor(draggedId, targetId)) {
-        return { valid: false, zone: 'none' };
-      }
-      if (this.svg.isGroupClipMaskCarrier(targetId)) {
-        return { valid: false, zone: 'none' };
-      }
-      return {
-        valid: true,
-        zone: 'intoGroup',
-        action: { kind: 'addToGroup', targetGroupId: targetId }
-      };
-    }
-
-    const zone: DropZone = topEdge ? 'before' : bottomEdge ? 'after' : frontHalf ? 'before' : 'after';
-
-    const sameParent = draggedNode.parentElement === targetNode.parentElement;
-    if (sameParent) {
-      const res = this.resolveSameParentDropReferenceSibling(draggedId, targetId, frontHalf);
-      if (!res.ok) return { valid: false, zone: 'none' };
-      return {
-        valid: true,
-        zone,
-        action: { kind: 'reorderBeforeSibling', referenceNextSiblingId: res.ref }
-      };
-    }
-
-    const cross = this.resolveCrossParentDrop(
-      draggedId,
-      targetId,
-      targetLayer?.isGroup ?? false,
-      topEdge,
-      bottomEdge,
-      frontHalf
-    );
-    if (!cross.ok) return { valid: false, zone: 'none' };
-    return {
-      valid: true,
-      zone,
-      action: cross.action
-    };
+    const targetIsGroup = this.flattenedLayers().find((l) => l.id === targetId)?.isGroup ?? false;
+    const intent = this.dnd.resolveLayerDropIntent(draggedId, targetId, relY, targetIsGroup);
+    if (!intent.valid) return intent;
+    return { ...intent, targetId };
   }
 
   onLayerContextMenu(layerId: string, event: MouseEvent): void {
@@ -396,162 +321,15 @@ export class LayersPanelComponent {
     draggedId: string,
     pointer: { x: number; y: number }
   ): void {
-    const intent = this.resolveDropIntentFromPointer(draggedId, pointer);
-    if (!intent.valid || !intent.targetId) {
+    const preview = this.dnd.computeDropPreview(draggedId, pointer, (targetId) =>
+      this.flattenedLayers().find((l) => l.id === targetId)?.isGroup ?? false
+    );
+    if (!preview.dropPreview) {
       this.dropPreview.set(null);
       return;
     }
-    this.pendingDropIntent.set(intent);
-    this.dropPreview.set({ targetId: intent.targetId, zone: intent.zone, valid: true });
-  }
-
-  /** Hit-test layer rows by pointer position (avoids CDK drag preview blocking elementsFromPoint). */
-  private findLayerRowFromPointer(
-    pointer: { x: number; y: number },
-    draggedId?: string
-  ): HTMLElement | null {
-    if (typeof document === 'undefined') return null;
-
-    const list = document.querySelector('[data-testid="layers-list"]');
-    if (!list) return null;
-
-    for (const row of list.querySelectorAll('[data-testid^="layer-row-"]')) {
-      const el = row as HTMLElement;
-      if (el.classList.contains('cdk-drag-preview')) continue;
-      if (el.classList.contains('cdk-drag-placeholder')) continue;
-      const targetId = el.getAttribute('data-testid')?.replace('layer-row-', '');
-      if (draggedId && targetId === draggedId) continue;
-      const rect = el.getBoundingClientRect();
-      if (
-        pointer.y >= rect.top &&
-        pointer.y <= rect.bottom &&
-        pointer.x >= rect.left &&
-        pointer.x <= rect.right
-      ) {
-        return el;
-      }
-    }
-    return null;
-  }
-
-  private executeDropAction(draggedId: string, action: LayerDropAction): void {
-    switch (action.kind) {
-      case 'reorderBeforeSibling':
-        this.chromeApply.moveLayerBeforeSibling(draggedId, action.referenceNextSiblingId);
-        break;
-      case 'addToGroup':
-        this.chromeApply.reparentLayerDrag([draggedId], {
-          kind: 'addToGroup',
-          targetGroupId: action.targetGroupId
-        });
-        break;
-      case 'reparentToParent':
-        this.chromeApply.reparentLayerDrag([draggedId], action);
-        break;
-    }
-  }
-
-  private resolveSameParentDropReferenceSibling(
-    draggedId: string,
-    targetId: string,
-    frontHalf: boolean
-  ): { ok: true; ref: string | null } | { ok: false } {
-    const svg = this.svg.getSVGInstance();
-    if (!svg) return { ok: false };
-    const d = svg.findOne(`#${draggedId}`) as SvgJsElement | undefined;
-    const t = svg.findOne(`#${targetId}`) as SvgJsElement | undefined;
-    if (!d?.node || !t?.node) return { ok: false };
-    const dn = d.node as Element;
-    const tn = t.node as Element;
-    if (dn.parentElement !== tn.parentElement) return { ok: false };
-
-    if (frontHalf) {
-      let s: Element | null = tn.nextElementSibling;
-      while (s && (!s.id || s.id === draggedId)) {
-        s = s.nextElementSibling;
-      }
-      const ref: string | null = s?.id ?? null;
-      return { ok: true, ref };
-    }
-    return { ok: true, ref: targetId };
-  }
-
-  private resolveCrossParentDrop(
-    draggedId: string,
-    targetId: string,
-    targetIsGroup: boolean,
-    topEdge: boolean,
-    bottomEdge: boolean,
-    frontHalf: boolean
-  ):
-    | {
-        ok: true;
-        action: {
-          kind: 'reparentToParent';
-          targetParentId: string | null;
-          referenceNextSiblingId: string | null;
-        };
-      }
-    | { ok: false } {
-    const svg = this.svg.getSVGInstance();
-    if (!svg) return { ok: false };
-    const draggedNode = svg.findOne(`#${draggedId}`)?.node as Element | undefined;
-    const targetNode = svg.findOne(`#${targetId}`)?.node as Element | undefined;
-    if (!draggedNode || !targetNode) return { ok: false };
-
-    if (draggedId === targetId || this.isStrictAncestor(draggedId, targetId)) return { ok: false };
-    if (targetIsGroup && this.svg.isGroupClipMaskCarrier(targetId)) return { ok: false };
-
-    const targetParentId = this.getElementParentId(targetNode);
-
-    if (targetIsGroup && (topEdge || bottomEdge)) {
-      if (topEdge) {
-        return {
-          ok: true,
-          action: {
-            kind: 'reparentToParent',
-            targetParentId,
-            referenceNextSiblingId: targetId
-          }
-        };
-      }
-      let next: Element | null = targetNode.nextElementSibling;
-      while (next && (!next.id || next.id === draggedId)) {
-        next = next.nextElementSibling;
-      }
-      return {
-        ok: true,
-        action: {
-          kind: 'reparentToParent',
-          targetParentId,
-          referenceNextSiblingId: next?.id ?? null
-        }
-      };
-    }
-
-    if (frontHalf) {
-      return {
-        ok: true,
-        action: {
-          kind: 'reparentToParent',
-          targetParentId,
-          referenceNextSiblingId: targetId
-        }
-      };
-    }
-
-    let next: Element | null = targetNode.nextElementSibling;
-    while (next && (!next.id || next.id === draggedId)) {
-      next = next.nextElementSibling;
-    }
-    return {
-      ok: true,
-      action: {
-        kind: 'reparentToParent',
-        targetParentId,
-        referenceNextSiblingId: next?.id ?? null
-      }
-    };
+    this.pendingDropIntent.set(preview.pendingIntent);
+    this.dropPreview.set(preview.dropPreview);
   }
 
   private flattenTree(
@@ -616,26 +394,13 @@ export class LayersPanelComponent {
     return ids;
   }
 
-  private getContentRoot(): Element | null {
-    return (
-      (this.svg.getSVGInstance()?.findOne('[data-editor-content-group]')?.node as Element | null) ??
-      null
-    );
-  }
-
-  private getElementParentId(node: Element): string | null {
-    const contentRoot = this.getContentRoot();
-    const parent = node.parentElement;
-    if (!parent || parent === contentRoot) return null;
-    return parent.id || null;
-  }
-
   private getUserGroupParentId(elementId: string): string | null {
     const svg = this.svg.getSVGInstance();
     if (!svg) return null;
     const node = svg.findOne(`#${elementId}`)?.node as Element | undefined;
     if (!node) return null;
-    const contentRoot = this.getContentRoot();
+    const contentRoot =
+      (svg.findOne('[data-editor-content-group]')?.node as Element | null) ?? null;
     let current: Element | null = node.parentElement;
     while (current && current !== contentRoot) {
       if (
@@ -649,15 +414,6 @@ export class LayersPanelComponent {
       current = current.parentElement;
     }
     return null;
-  }
-
-  private isStrictAncestor(ancestorId: string, descendantId: string): boolean {
-    const svg = this.svg.getSVGInstance();
-    if (!svg) return false;
-    const anc = svg.findOne(`#${ancestorId}`)?.node as Element | undefined;
-    const desc = svg.findOne(`#${descendantId}`)?.node as Element | undefined;
-    if (!anc || !desc) return false;
-    return anc !== desc && anc.contains(desc);
   }
 
   private createPreviewDataUrl(layer: PreviewPaintData): string {

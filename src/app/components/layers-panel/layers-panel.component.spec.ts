@@ -729,7 +729,7 @@ describe('LayersPanelComponent', () => {
     expect(intent.action).toEqual({ kind: 'addToGroup', targetGroupId: 'g1' });
 
     if (intent.valid && intent.action) {
-      fixture.componentInstance['executeDropAction']('r1', intent.action);
+      fixture.componentInstance['dnd'].executeDropAction('r1', intent.action);
     }
 
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
@@ -782,7 +782,7 @@ describe('LayersPanelComponent', () => {
     expect(intent.valid).toBe(true);
     expect(intent.action?.kind).toBe('reparentToParent');
     if (intent.valid && intent.action) {
-      fixture.componentInstance['executeDropAction']('child-1', intent.action);
+      fixture.componentInstance['dnd'].executeDropAction('child-1', intent.action);
     }
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReparentElementsCommand);
@@ -818,7 +818,7 @@ describe('LayersPanelComponent', () => {
     expect(intent.valid).toBe(true);
     expect(intent.action?.kind).toBe('reorderBeforeSibling');
     if (intent.valid && intent.action) {
-      fixture.componentInstance['executeDropAction']('a', intent.action);
+      fixture.componentInstance['dnd'].executeDropAction('a', intent.action);
     }
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReorderBeforeSiblingCommand);
