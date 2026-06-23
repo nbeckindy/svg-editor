@@ -194,19 +194,6 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
     return;
   }
 
-  if (event.key === 'Enter') {
-    if (ctx.getCurrentTool() === 'pen' && ctx.isPenSessionActive()) {
-      ctx.penTool.tryFinishPenPath(false);
-      event.preventDefault();
-      return;
-    }
-  }
-
-  if (event.key === 'Backspace' && ctx.penTool.tryPenBackspaceShortcut()) {
-    event.preventDefault();
-    return;
-  }
-
   if (tryEditorToolShortcut(event, editorTool, ctx.cdr)) {
     return;
   }

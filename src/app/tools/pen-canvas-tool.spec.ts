@@ -80,4 +80,44 @@ describe('createPenCanvasTool', () => {
     registry.register(createPenCanvasTool(makePenDeps()));
     expect(registry.has('pen')).toBe(true);
   });
+
+  it('finishes pen path on Enter when session is active', () => {
+    const tryFinishPenPath = vi.fn();
+    const penTool = {
+      isPenSessionActive: true,
+      tryFinishPenPath,
+      tryPenBackspaceShortcut: vi.fn(() => false)
+    } as unknown as PenToolSession;
+    const tool = createPenCanvasTool(makePenDeps({ getPenTool: () => penTool }));
+    const event = { key: 'Enter' } as KeyboardEvent;
+
+    expect(tool.onKeyDown?.(event)).toBe(true);
+    expect(tryFinishPenPath).toHaveBeenCalledWith(false);
+  });
+
+  it('ignores Enter when pen session is idle', () => {
+    const tryFinishPenPath = vi.fn();
+    const penTool = {
+      isPenSessionActive: false,
+      tryFinishPenPath,
+      tryPenBackspaceShortcut: vi.fn(() => false)
+    } as unknown as PenToolSession;
+    const tool = createPenCanvasTool(makePenDeps({ getPenTool: () => penTool }));
+
+    expect(tool.onKeyDown?.({ key: 'Enter' } as KeyboardEvent)).toBe(false);
+    expect(tryFinishPenPath).not.toHaveBeenCalled();
+  });
+
+  it('delegates Backspace to pen session shortcut handler', () => {
+    const tryPenBackspaceShortcut = vi.fn(() => true);
+    const penTool = {
+      isPenSessionActive: true,
+      tryPenBackspaceShortcut,
+      tryFinishPenPath: vi.fn()
+    } as unknown as PenToolSession;
+    const tool = createPenCanvasTool(makePenDeps({ getPenTool: () => penTool }));
+
+    expect(tool.onKeyDown?.({ key: 'Backspace' } as KeyboardEvent)).toBe(true);
+    expect(tryPenBackspaceShortcut).toHaveBeenCalled();
+  });
 });

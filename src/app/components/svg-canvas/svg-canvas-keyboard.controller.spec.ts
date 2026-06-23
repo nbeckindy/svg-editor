@@ -5,14 +5,18 @@ import type { EditorTool } from '../../services/editor-tool.service';
 import type { PenToolSession } from './pen-tool-session/pen-tool-session';
 import {
   patchRegisteredCanvasTool,
-  registerAllCanvasToolsForTest
+  registerAllCanvasToolsForTest,
+  type RegisterAllCanvasToolsForTestOptions
 } from '../../tools/register-all-canvas-tools-for-test';
 
 function makeKeyboardContext(
-  over: Partial<SvgCanvasKeyboardContext> & { getCurrentTool?: () => EditorTool }
+  over: Partial<SvgCanvasKeyboardContext> & {
+    getCurrentTool?: () => EditorTool;
+    bootOptions?: RegisterAllCanvasToolsForTestOptions;
+  }
 ): SvgCanvasKeyboardContext {
   const currentTool = signal<EditorTool>(over.getCurrentTool?.() ?? 'selector');
-  const boot = registerAllCanvasToolsForTest();
+  const boot = registerAllCanvasToolsForTest(over.bootOptions);
   const base: SvgCanvasKeyboardContext = {
     gestureRuntime: {} as SvgCanvasKeyboardContext['gestureRuntime'],
     svgManipulation: {} as SvgCanvasKeyboardContext['svgManipulation'],
@@ -28,10 +32,7 @@ function makeKeyboardContext(
     rotate: { cancel: vi.fn() } as unknown as SvgCanvasKeyboardContext['rotate'],
     selectionMarquee: {} as SvgCanvasKeyboardContext['selectionMarquee'],
     zoomMarquee: {} as SvgCanvasKeyboardContext['zoomMarquee'],
-    penTool: {
-      tryPenBackspaceShortcut: vi.fn(() => false),
-      isPenInsertOnPathDragActive: false
-    } as unknown as PenToolSession,
+    penTool: boot.penTool,
     toolRegistry: boot.registry,
     getSvgContent: () => '<svg/>',
     getCurrentTool: () => currentTool(),
@@ -122,6 +123,49 @@ describe('handleSvgCanvasKeyDown', () => {
     handleSvgCanvasKeyDown(ctx, event, editorTool);
 
     expect(editorTool.getCurrentTool()).toBe('rect');
+    expect(event.preventDefault).toHaveBeenCalled();
+  });
+
+  it('dispatches pen Enter through registered tool onKeyDown', () => {
+    const tryFinishPenPath = vi.fn();
+    const penTool = {
+      isPenSessionActive: true,
+      tryFinishPenPath,
+      tryPenBackspaceShortcut: vi.fn(() => false),
+      isPenInsertOnPathDragActive: false,
+      clearDrawingState: vi.fn()
+    } as unknown as PenToolSession;
+    const ctx = makeKeyboardContext({
+      getCurrentTool: () => 'pen',
+      isPenSessionActive: () => true,
+      bootOptions: { penTool }
+    });
+    const event = { key: 'Enter', preventDefault: vi.fn() } as unknown as KeyboardEvent;
+
+    handleSvgCanvasKeyDown(ctx, event, editorTool);
+
+    expect(tryFinishPenPath).toHaveBeenCalledWith(false);
+    expect(event.preventDefault).toHaveBeenCalled();
+  });
+
+  it('dispatches pen Backspace through registered tool onKeyDown', () => {
+    const tryPenBackspaceShortcut = vi.fn(() => true);
+    const penTool = {
+      isPenSessionActive: true,
+      tryPenBackspaceShortcut,
+      tryFinishPenPath: vi.fn(),
+      isPenInsertOnPathDragActive: false,
+      clearDrawingState: vi.fn()
+    } as unknown as PenToolSession;
+    const ctx = makeKeyboardContext({
+      getCurrentTool: () => 'pen',
+      bootOptions: { penTool }
+    });
+    const event = { key: 'Backspace', preventDefault: vi.fn() } as unknown as KeyboardEvent;
+
+    handleSvgCanvasKeyDown(ctx, event, editorTool);
+
+    expect(tryPenBackspaceShortcut).toHaveBeenCalled();
     expect(event.preventDefault).toHaveBeenCalled();
   });
 });
