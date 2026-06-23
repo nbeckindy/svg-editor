@@ -1,6 +1,65 @@
 # Angular SVG Editor - Architecture Plan
 
-## Project Overview
+> **See also:** [Hexagonal architecture & extensibility epic](./epics/hexagonal-architecture-extensibility.md) (beads `svg-editor-j61`, completed 2026-06-23).
+
+## Current architecture notes (2026-06)
+
+The editor has grown well beyond the original scaffold below. This section records **recent structural changes** and where to extend the app today.
+
+### Hexagonal posture
+
+The codebase is **partially hexagonal**: narrow **ports** (`*SvgPort`, `PenToolSessionPorts`, `CanvasToolHost`) and **commands** (`EditorCommand` → `EditorHistoryService`) separate intent from SVG mutation. The main canvas adapter (`SvgCanvasComponent`) and `ChromeEditorApplyService` remain large integration surfaces.
+
+### Tool plugin seam (j61.1–j61.3)
+
+New tools can register on the canvas without editing `PointerGestureRouter` for every pointer phase:
+
+| Piece | Path |
+|-------|------|
+| Tool contract | `src/app/tools/canvas-tool.interface.ts` |
+| Host seam | `src/app/tools/canvas-tool-host.interface.ts` |
+| Registry | `src/app/tools/tool-registry.service.ts` |
+| Creation adapters | `src/app/tools/creation-canvas-tool.ts` |
+
+`PointerGestureRouter` and `onCanvasClick` consult the registry first; **rect / ellipse / line** are fully adapter-driven. Other tools still use legacy gesture/session paths until wrapped.
+
+### UI composition (j61.4–j61.6)
+
+| Piece | Path |
+|-------|------|
+| Design tokens | `src/styles/tokens.scss` (`--editor-*` custom properties) |
+| Dock panel registry | `src/app/panels/dock-panel-registry.service.ts` |
+| Default panels | `src/app/panels/register-default-dock-panels.ts` (wired in `app.config.ts`) |
+| Right dock | `src/app/components/editor-right-dock/` — tabs/panels from registry |
+| Selection overlay | `src/app/components/svg-canvas/overlays/selection-overlay.component.*` |
+| Path-node overlay | `src/app/components/svg-canvas/overlays/path-node-overlay.component.*` |
+
+`EditorDockPanel` is a `string` panel id. Adding a dock panel: implement component → `registry.register({ … })` in startup — no right-dock template edits.
+
+### Editor shell (actual layout)
+
+```
+app.html
+├── editor-top-bar
+├── editor-tool-context-bar
+└── workspace (CSS grid: left rail | canvas column | right dock)
+    ├── editor-left-rail (tool strip, file upload, dev assets)
+    ├── svg-canvas (+ debug strip overlay)
+    └── editor-right-dock (registry-driven inspector tabs)
+```
+
+State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistoryService`, panel registries). No NgRx. No routing.
+
+### Still centralized (extension touchpoints)
+
+- **Unregistered tools** — selector, pen, zoom, pan, text, eyedropper: add `CanvasTool` adapters or extend legacy branches.
+- **Canvas template** — pen previews, grid, smart guides, rulers, creation ghosts still in `svg-canvas.component.html`.
+- **Chrome apply** — `ChromeEditorApplyService` dispatches many panel actions; candidate for domain-specific adapters.
+- **Tool strip** — hardcoded buttons in `tool-strip.component.html` (could read from `ToolRegistryService` later).
+
+---
+
+## Project Overview (original scaffold — largely superseded)
 An Angular application for basic SVG file editing with the ability to open, preview, and modify SVG shapes. The application will use SVG.js for low-level SVG manipulation and Vitest for testing.
 
 ## Technology Stack
@@ -306,14 +365,17 @@ svg-editor/
 ```
 
 ## Future Enhancements (Out of Scope)
-- Add more shape manipulation tools (rotate, scale, transform)
-- Support for adding new shapes
-- Undo/redo functionality
-- Save SVG to local storage or download
-- Multi-shape selection
-- Layer management
-- Text editing within SVG
-- Filter and effects application
+- ~~Add more shape manipulation tools (rotate, scale, transform)~~ — implemented (shape transforms epic)
+- ~~Support for adding new shapes~~ — rect/ellipse/line/pen/text
+- ~~Undo/redo functionality~~ — `EditorHistoryService` + commands
+- ~~Save SVG to local storage or download~~ — export in top bar
+- ~~Multi-shape selection~~ — marquee + shift-click
+- ~~Layer management~~ — layers panel + group DnD
+- ~~Text editing within SVG~~ — inline text edit on canvas
+- Wrap remaining tools in `CanvasTool` registry; split `ChromeEditorApplyService`
+- `EditorLayoutService` for shell layout modes
+- Extract ruler / grid / smart-guide overlays from canvas
+- Symbols and reusable instances (see [symbols epic](./epics/symbols-reusable-instances.md))
 
 ## Development Workflow
 
