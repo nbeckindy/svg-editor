@@ -1597,6 +1597,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   // --- Mouse event orchestration ---
   onDocumentMouseMove(event: MouseEvent): void {
     this.pointerGestureRouter.onDocumentMouseMove(this, event);
+    this.recordInsertAnchorFromClient(event.clientX, event.clientY);
     this.refreshPointerIntentDebug(event.clientX, event.clientY);
   }
 

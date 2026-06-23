@@ -17,9 +17,29 @@ import {
   type CanvasToolsTestHostState
 } from '../../../tools/register-all-canvas-tools-for-test';
 
-function applyHostOverridesToTestState(
+function applyHostStateOverrides(
   hostState: CanvasToolsTestHostState,
-  over: Partial<SvgCanvasPointerGestureHost>
+  over: {
+    isSelectionMarquee?: boolean;
+    isZoomMarquee?: boolean;
+    isResizingSelection?: boolean;
+    isSkewingSelection?: boolean;
+    isRotatingSelection?: boolean;
+    isPanning?: boolean;
+    isDraggingShape?: boolean;
+    hasPathNodeEditState?: boolean;
+    tryStartPathNodeDrag?: (target: Element, event: MouseEvent) => boolean;
+    isEditorContentShapeTarget?: (target: Element) => boolean;
+    isShapeSelected?: (id: string) => boolean;
+    getNearestGroupAncestorId?: (id: string) => string | null;
+    getSelectedShapeIds?: () => string[];
+    beginPanSession?: (event: MouseEvent) => void;
+    applyPanDragFromEvent?: (event: MouseEvent) => void;
+    clearPanningFlag?: () => void;
+    commitZoomMarquee?: () => void;
+    updateTextToolPreviewFromClient?: (clientX: number, clientY: number) => void;
+    isCanvasReady?: boolean;
+  }
 ): void {
   if (over.isSelectionMarquee !== undefined) hostState.isSelectionMarquee = over.isSelectionMarquee;
   if (over.isZoomMarquee !== undefined) hostState.isZoomMarquee = over.isZoomMarquee;
@@ -28,12 +48,8 @@ function applyHostOverridesToTestState(
   if (over.isRotatingSelection !== undefined) hostState.isRotatingSelection = over.isRotatingSelection;
   if (over.isPanning !== undefined) hostState.isPanning = over.isPanning;
   if (over.isDraggingShape !== undefined) hostState.isDraggingShape = over.isDraggingShape;
-  if (over.hasPathNodeEditState !== undefined) {
-    hostState.hasPathNodeEditState = over.hasPathNodeEditState();
-  }
-  if (over.tryStartPathNodeDrag !== undefined) {
-    hostState.tryStartPathNodeDrag = over.tryStartPathNodeDrag;
-  }
+  if (over.hasPathNodeEditState !== undefined) hostState.hasPathNodeEditState = over.hasPathNodeEditState;
+  if (over.tryStartPathNodeDrag !== undefined) hostState.tryStartPathNodeDrag = over.tryStartPathNodeDrag;
   if (over.isEditorContentShapeTarget !== undefined) {
     hostState.isEditorContentShapeTarget = over.isEditorContentShapeTarget;
   }
@@ -49,44 +65,24 @@ function applyHostOverridesToTestState(
   if (over.updateTextToolPreviewFromClient !== undefined) {
     hostState.updateTextToolPreviewFromClient = over.updateTextToolPreviewFromClient;
   }
-  if (over.canvasViewInitialized === false) hostState.isCanvasReady = false;
+  if (over.isCanvasReady === false) hostState.isCanvasReady = false;
 }
 
 function makeHost(
-  over: Partial<SvgCanvasPointerGestureHost>,
+  over: Partial<SvgCanvasPointerGestureHost> & {
+    getPathNodeDragSession?: () => unknown | null;
+    updatePathNodeDrag?: (clientX: number, clientY: number) => void;
+    finishPathNodeDrag?: () => void;
+  } = {},
   hostState?: CanvasToolsTestHostState
 ): SvgCanvasPointerGestureHost {
-  if (hostState) applyHostOverridesToTestState(hostState, over);
+  if (hostState) applyHostStateOverrides(hostState, over as Parameters<typeof applyHostStateOverrides>[1]);
   const base: SvgCanvasPointerGestureHost = {
-    gestureRuntime: emptyRt,
-    isCreatingShape: false,
     getPathNodeDragSession: () => null,
     updatePathNodeDrag: vi.fn(),
-    isSelectionMarquee: false,
-    isZoomMarquee: false,
-    isResizingSelection: false,
-    isSkewingSelection: false,
-    isRotatingSelection: false,
-    isPanning: false,
-    applyPanDragFromEvent: vi.fn(),
-    isDraggingShape: false,
-    updateTextToolPreviewFromClient: vi.fn(),
-    recordInsertAnchorFromClient: vi.fn(),
     finishPathNodeDrag: vi.fn(),
-    commitZoomMarquee: vi.fn(),
-    clearPanningFlag: vi.fn(),
-    svgContentValue: '',
-    canvasViewInitialized: true,
-    beginPanSession: vi.fn(),
-    isCreationToolActive: () => false,
     getCurrentTool: () => 'selector',
-    hasPathNodeEditState: () => false,
-    tryStartPathNodeDrag: () => false,
-    isEditorContentShapeTarget: () => true,
-    clientToEditorSvgPointForDrag: () => ({ x: 0, y: 0 }),
-    isShapeSelected: () => true,
-    getNearestGroupAncestorId: () => null,
-    getSelectedShapeIds: () => ['a']
+    clientToEditorSvgPointForDrag: () => ({ x: 0, y: 0 })
   };
   return { ...base, ...over };
 }
@@ -132,27 +128,22 @@ describe('PointerGestureRouter', () => {
     hostState = boot.hostState;
     emptyRt = boot.runtime;
 
-    router = new PointerGestureRouter(
-      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
-      cdr as ChangeDetectorRef,
-      registry
-    );
+    router = new PointerGestureRouter(registry);
   });
 
   it('onDocumentMouseMove prefers creation over selection marquee', () => {
-    const host = makeHost({ isCreatingShape: true, isSelectionMarquee: true, getCurrentTool: () => 'rect' }, hostState);
+    const host = makeHost({ getCurrentTool: () => 'rect' }, hostState);
+    hostState.isSelectionMarquee = true;
     router.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
     expect(creation.move).toHaveBeenCalled();
     expect(selectionMarquee.move).not.toHaveBeenCalled();
   });
 
-  it('onDocumentMouseMove prefers registered tool onPointerMove over legacy creation when creating', () => {
+  it('onDocumentMouseMove prefers registered tool onPointerMove over default creation move', () => {
     const onPointerMove = vi.fn();
     patchRegisteredCanvasTool(registry, 'rect', { onPointerMove });
-    const host = makeHost(
-      { isCreatingShape: true, isSelectionMarquee: true, getCurrentTool: () => 'rect' },
-      hostState
-    );
+    const host = makeHost({ getCurrentTool: () => 'rect' }, hostState);
+    hostState.isSelectionMarquee = true;
     router.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
     expect(onPointerMove).toHaveBeenCalled();
     expect(creation.move).not.toHaveBeenCalled();
@@ -160,18 +151,20 @@ describe('PointerGestureRouter', () => {
   });
 
   it('onDocumentMouseMove routes to selection marquee when active', () => {
-    const host = makeHost({ isSelectionMarquee: true }, hostState);
+    const host = makeHost({}, hostState);
+    hostState.isSelectionMarquee = true;
     router.onDocumentMouseMove(host, { clientX: 5, clientY: 6, shiftKey: false } as MouseEvent);
     expect(selectionMarquee.move).toHaveBeenCalledWith(5, 6, emptyRt);
   });
 
   it('onDocumentMouseUp prefers path node drag over creation', () => {
+    const finishPathNodeDrag = vi.fn();
     const host = makeHost({
       getPathNodeDragSession: () => ({}),
-      isCreatingShape: true
+      finishPathNodeDrag
     });
     router.onDocumentMouseUp(host, { button: 0 } as MouseEvent);
-    expect(host.finishPathNodeDrag).toHaveBeenCalled();
+    expect(finishPathNodeDrag).toHaveBeenCalled();
     expect(creation.end).not.toHaveBeenCalled();
   });
 
@@ -185,13 +178,14 @@ describe('PointerGestureRouter', () => {
   });
 
   it('onDocumentMouseMove prefers path node drag session over selector marquee', () => {
+    const updatePathNodeDrag = vi.fn();
     const host = makeHost({
       getPathNodeDragSession: () => ({}),
-      isSelectionMarquee: true,
-      updatePathNodeDrag: vi.fn()
+      updatePathNodeDrag
     });
+    hostState.isSelectionMarquee = true;
     router.onDocumentMouseMove(host, { clientX: 3, clientY: 4, shiftKey: false } as MouseEvent);
-    expect(host.updatePathNodeDrag).toHaveBeenCalledWith(3, 4);
+    expect(updatePathNodeDrag).toHaveBeenCalledWith(3, 4);
     expect(selectionMarquee.move).not.toHaveBeenCalled();
   });
 
@@ -207,11 +201,7 @@ describe('PointerGestureRouter', () => {
       penTool,
       detectChanges: cdr.detectChanges
     });
-    const penRouter = new PointerGestureRouter(
-      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
-      cdr as ChangeDetectorRef,
-      boot.registry
-    );
+    const penRouter = new PointerGestureRouter(boot.registry);
     const host = makeHost({ getCurrentTool: () => 'pen' }, boot.hostState);
     penRouter.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
     expect(onDocumentMouseMovePen).toHaveBeenCalled();
@@ -229,19 +219,17 @@ describe('PointerGestureRouter', () => {
       penTool,
       detectChanges: cdr.detectChanges
     });
-    const penRouter = new PointerGestureRouter(
-      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
-      cdr as ChangeDetectorRef,
-      boot.registry
-    );
-    const host = makeHost({ getCurrentTool: () => 'pen', isSelectionMarquee: true }, boot.hostState);
+    const penRouter = new PointerGestureRouter(boot.registry);
+    const host = makeHost({ getCurrentTool: () => 'pen' }, boot.hostState);
+    boot.hostState.isSelectionMarquee = true;
     penRouter.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
     expect(onDocumentMouseMovePen).toHaveBeenCalled();
     expect(selectionMarquee.move).not.toHaveBeenCalled();
   });
 
   it('onDocumentMouseMove calls zoomMarquee.move and detectChanges when zoom marquee is active', () => {
-    const host = makeHost({ getCurrentTool: () => 'zoom', isZoomMarquee: true }, hostState);
+    const host = makeHost({ getCurrentTool: () => 'zoom' }, hostState);
+    hostState.isZoomMarquee = true;
     router.onDocumentMouseMove(host, { clientX: 7, clientY: 8, shiftKey: false } as MouseEvent);
     expect(zoomMarquee.move).toHaveBeenCalledWith(7, 8);
     expect(cdr.detectChanges).toHaveBeenCalled();
@@ -250,17 +238,13 @@ describe('PointerGestureRouter', () => {
   it('onDocumentMouseMove routes to resize before skew, rotate, pan, and drag', () => {
     const ev = { clientX: 1, clientY: 2, altKey: true, shiftKey: true } as MouseEvent;
     const applyPanDragFromEvent = vi.fn();
-    const host = makeHost(
-      {
-        isResizingSelection: true,
-        isSkewingSelection: true,
-        isRotatingSelection: true,
-        isPanning: true,
-        isDraggingShape: true,
-        applyPanDragFromEvent
-      },
-      hostState
-    );
+    const host = makeHost({}, hostState);
+    hostState.isResizingSelection = true;
+    hostState.isSkewingSelection = true;
+    hostState.isRotatingSelection = true;
+    hostState.isPanning = true;
+    hostState.isDraggingShape = true;
+    hostState.applyPanDragFromEvent = applyPanDragFromEvent;
     router.onDocumentMouseMove(host, ev);
     expect(resize.move).toHaveBeenCalledWith(emptyRt, 1, 2, true, true);
     expect(skew.move).not.toHaveBeenCalled();
@@ -270,85 +254,81 @@ describe('PointerGestureRouter', () => {
 
   it('onDocumentMouseMove calls pan drag when panning and not resizing', () => {
     const applyPanDragFromEvent = vi.fn();
-    const host = makeHost(
-      { getCurrentTool: () => 'pan', isPanning: true, applyPanDragFromEvent },
-      hostState
-    );
+    const host = makeHost({ getCurrentTool: () => 'pan' }, hostState);
+    hostState.isPanning = true;
+    hostState.applyPanDragFromEvent = applyPanDragFromEvent;
     router.onDocumentMouseMove(host, { clientX: 0, clientY: 0, shiftKey: false } as MouseEvent);
     expect(applyPanDragFromEvent).toHaveBeenCalled();
     expect(drag.move).not.toHaveBeenCalled();
   });
 
   it('onDocumentMouseMove calls drag when dragging shape and not panning', () => {
-    const host = makeHost({ isDraggingShape: true }, hostState);
+    const host = makeHost({}, hostState);
+    hostState.isDraggingShape = true;
     router.onDocumentMouseMove(host, { clientX: 9, clientY: 10, shiftKey: true } as MouseEvent);
     expect(drag.move).toHaveBeenCalledWith(emptyRt, 9, 10, true);
   });
 
-  it('onDocumentMouseMove always asks host to update text tool preview', () => {
+  it('onDocumentMouseMove asks hostState to update text tool preview via registered text tool', () => {
     const updateTextToolPreviewFromClient = vi.fn();
-    const host = makeHost(
-      { getCurrentTool: () => 'text', updateTextToolPreviewFromClient },
-      hostState
-    );
+    const host = makeHost({ getCurrentTool: () => 'text' }, hostState);
+    hostState.updateTextToolPreviewFromClient = updateTextToolPreviewFromClient;
     router.onDocumentMouseMove(host, { clientX: 11, clientY: 12, shiftKey: false } as MouseEvent);
     expect(updateTextToolPreviewFromClient).toHaveBeenCalledWith(11, 12);
   });
 
-  it('onDocumentMouseMove always asks host to record insert anchor', () => {
-    const recordInsertAnchorFromClient = vi.fn();
-    const host = makeHost({ recordInsertAnchorFromClient });
-    router.onDocumentMouseMove(host, { clientX: 3, clientY: 4, shiftKey: false } as MouseEvent);
-    expect(recordInsertAnchorFromClient).toHaveBeenCalledWith(3, 4);
-  });
-
   it('onDocumentMouseUp ignores non-primary button', () => {
     vi.spyOn(drag, 'end');
-    const host = makeHost({ isDraggingShape: true, getPathNodeDragSession: () => null }, hostState);
+    const host = makeHost({ getPathNodeDragSession: () => null }, hostState);
+    hostState.isDraggingShape = true;
     router.onDocumentMouseUp(host, { button: 1 } as MouseEvent);
     expect(drag.end).not.toHaveBeenCalled();
-    expect(host.clearPanningFlag).not.toHaveBeenCalled();
+    expect(hostState.clearPanningFlag).not.toHaveBeenCalled();
   });
 
   it('onDocumentMouseUp ends resize when resizing with selector tool', () => {
     vi.spyOn(resize, 'end');
-    const host = makeHost({ isResizingSelection: true }, hostState);
+    const host = makeHost({}, hostState);
+    hostState.isResizingSelection = true;
     router.onDocumentMouseUp(host, { button: 0, altKey: true } as MouseEvent);
     expect(resize.end).toHaveBeenCalledWith(emptyRt, true);
-    expect(host.clearPanningFlag).not.toHaveBeenCalled();
+    expect(hostState.clearPanningFlag).not.toHaveBeenCalled();
   });
 
   it('onDocumentMouseUp ends skew and rotate when active', () => {
     vi.spyOn(skew, 'end');
     vi.spyOn(rotate, 'end');
-    router.onDocumentMouseUp(makeHost({ isSkewingSelection: true }, hostState), { button: 0 } as MouseEvent);
+    hostState.isSkewingSelection = true;
+    router.onDocumentMouseUp(makeHost({}, hostState), { button: 0 } as MouseEvent);
     expect(skew.end).toHaveBeenCalledWith(emptyRt);
     hostState.isSkewingSelection = false;
-    router.onDocumentMouseUp(makeHost({ isRotatingSelection: true }, hostState), { button: 0 } as MouseEvent);
+    hostState.isRotatingSelection = true;
+    router.onDocumentMouseUp(makeHost({}, hostState), { button: 0 } as MouseEvent);
     expect(rotate.end).toHaveBeenCalledWith(emptyRt);
   });
 
   it('onDocumentMouseUp ends drag when dragging shape', () => {
     vi.spyOn(drag, 'end');
-    const host = makeHost({ isDraggingShape: true }, hostState);
+    const host = makeHost({}, hostState);
+    hostState.isDraggingShape = true;
     router.onDocumentMouseUp(host, { button: 0, clientX: 4, clientY: 5, shiftKey: false } as MouseEvent);
     expect(drag.end).toHaveBeenCalledWith(emptyRt, 4, 5, false);
   });
 
   it('onDocumentMouseUp commits zoom marquee before clearPanningFlag branch', () => {
     const commitZoomMarquee = vi.fn();
-    const host = makeHost(
-      { getCurrentTool: () => 'zoom', isZoomMarquee: true, commitZoomMarquee },
-      hostState
-    );
+    const host = makeHost({ getCurrentTool: () => 'zoom' }, hostState);
+    hostState.isZoomMarquee = true;
+    hostState.commitZoomMarquee = commitZoomMarquee;
     router.onDocumentMouseUp(host, { button: 0 } as MouseEvent);
     expect(commitZoomMarquee).toHaveBeenCalled();
-    expect(host.clearPanningFlag).not.toHaveBeenCalled();
+    expect(hostState.clearPanningFlag).not.toHaveBeenCalled();
   });
 
   it('onCanvasMouseDownPrimary begins pan when pan tool is active', () => {
     const beginPanSession = vi.fn();
-    const host = makeHost({ getCurrentTool: () => 'pan', beginPanSession }, hostState);
+    const host = makeHost({ getCurrentTool: () => 'pan' }, hostState);
+    hostState.beginPanSession = beginPanSession;
     const ev = { button: 0, preventDefault: vi.fn() } as unknown as MouseEvent;
     router.onCanvasMouseDownPrimary(host, ev);
     expect(beginPanSession).toHaveBeenCalledWith(ev);
@@ -358,14 +338,8 @@ describe('PointerGestureRouter', () => {
   it('onCanvasMouseDownPrimary starts selection marquee on background hit with selector tool', () => {
     vi.spyOn(selectionMarquee, 'startAt');
     const bg = document.createElementNS('http://www.w3.org/2000/svg', 'svg');
-    const host = makeHost(
-      {
-        svgContentValue: '<svg/>',
-        canvasViewInitialized: true,
-        isEditorContentShapeTarget: () => false
-      },
-      hostState
-    );
+    const host = makeHost({}, hostState);
+    hostState.isEditorContentShapeTarget = () => false;
     const ev = {
       button: 0,
       clientX: 2,
@@ -382,14 +356,7 @@ describe('PointerGestureRouter', () => {
     vi.spyOn(resize, 'start').mockReturnValue(true);
     const handle = document.createElement('div');
     handle.setAttribute('data-resize-handle', 'se');
-    const host = makeHost(
-      {
-        svgContentValue: 'x',
-        canvasViewInitialized: true,
-        getCurrentTool: () => 'selector'
-      },
-      hostState
-    );
+    const host = makeHost({ getCurrentTool: () => 'selector' }, hostState);
     const ev = {
       button: 0,
       target: handle,
@@ -405,14 +372,7 @@ describe('PointerGestureRouter', () => {
     vi.spyOn(skew, 'start').mockReturnValue(true);
     const handle = document.createElement('div');
     handle.setAttribute('data-skew-handle', 'n');
-    const host = makeHost(
-      {
-        svgContentValue: 'x',
-        canvasViewInitialized: true,
-        getCurrentTool: () => 'selector'
-      },
-      hostState
-    );
+    const host = makeHost({ getCurrentTool: () => 'selector' }, hostState);
     const ev = {
       button: 0,
       target: handle,
@@ -427,14 +387,7 @@ describe('PointerGestureRouter', () => {
     vi.spyOn(rotate, 'start').mockReturnValue(true);
     const handle = document.createElement('div');
     handle.setAttribute('data-rotate-handle', '1');
-    const host = makeHost(
-      {
-        svgContentValue: 'x',
-        canvasViewInitialized: true,
-        getCurrentTool: () => 'selector'
-      },
-      hostState
-    );
+    const host = makeHost({ getCurrentTool: () => 'selector' }, hostState);
     const ev = {
       button: 0,
       target: handle,
@@ -460,11 +413,7 @@ describe('PointerGestureRouter', () => {
       hostState: { tryStartPathNodeDrag, hasPathNodeEditState: true },
       detectChanges: cdr.detectChanges
     });
-    const penRouter = new PointerGestureRouter(
-      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
-      cdr as ChangeDetectorRef,
-      boot.registry
-    );
+    const penRouter = new PointerGestureRouter(boot.registry);
     const host = makeHost({ getCurrentTool: () => 'pen' }, boot.hostState);
     const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     anchor.setAttribute('data-path-node-anchor-index', '0');
@@ -495,11 +444,7 @@ describe('PointerGestureRouter', () => {
       hostState: { tryStartPathNodeDrag, hasPathNodeEditState: true },
       detectChanges: cdr.detectChanges
     });
-    const penRouter = new PointerGestureRouter(
-      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
-      cdr as ChangeDetectorRef,
-      boot.registry
-    );
+    const penRouter = new PointerGestureRouter(boot.registry);
     const host = makeHost({ getCurrentTool: () => 'pen' }, boot.hostState);
     const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     anchor.setAttribute('data-path-node-anchor-index', '0');
@@ -515,7 +460,7 @@ describe('PointerGestureRouter', () => {
     expect(ev.preventDefault).toHaveBeenCalled();
   });
 
-  it('onCanvasMouseDownPrimary dispatches to registered tool before legacy zoom routing', () => {
+  it('onCanvasMouseDownPrimary dispatches to registered tool onPointerDown', () => {
     const onPointerDown = vi.fn(() => true);
     patchRegisteredCanvasTool(registry, 'zoom', { onPointerDown });
     vi.spyOn(zoomMarquee, 'startAt');
@@ -533,7 +478,6 @@ describe('PointerGestureRouter', () => {
     const host = makeHost({ getCurrentTool: () => 'rect' }, hostState);
     router.onDocumentMouseMove(host, { clientX: 3, clientY: 4, shiftKey: false } as MouseEvent);
     expect(onPointerMove).toHaveBeenCalled();
-    expect(host.updateTextToolPreviewFromClient).not.toHaveBeenCalled();
   });
 
   it('onDocumentMouseMove passes document SVG coordinates to registered tool onPointerMove', () => {
@@ -579,15 +523,5 @@ describe('PointerGestureRouter', () => {
     router.onDocumentMouseUp(host, event);
     expect(clientToEditorSvgPointForDrag).toHaveBeenCalledWith(1, 2);
     expect(onPointerUp).toHaveBeenCalledWith(event, { x: 51, y: 62 });
-  });
-
-  it('routes through legacy creation when tool is not registered', () => {
-    const legacyRouter = new PointerGestureRouter(
-      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
-      cdr as ChangeDetectorRef
-    );
-    const host = makeHost({ isCreatingShape: true, getCurrentTool: () => 'rect' });
-    legacyRouter.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
-    expect(creation.move).toHaveBeenCalled();
   });
 });

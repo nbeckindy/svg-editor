@@ -132,19 +132,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     }
   };
 
-  const pointerGestureRouter = new PointerGestureRouter(
-    {
-      creation,
-      selectionMarquee,
-      zoomMarquee,
-      resize,
-      skew,
-      rotate,
-      drag
-    },
-    args.cdr,
-    args.toolRegistry
-  );
+  const pointerGestureRouter = new PointerGestureRouter(args.toolRegistry);
 
   const penTool = new PenToolSession(args.createPenToolSessionPorts());
 
