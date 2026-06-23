@@ -47,6 +47,7 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 24 | Layer–group drag-and-drop | [layers-groups-dnd](./epics/layers-groups-dnd.md) | `TBD` | `PLANNED` | Reparent rows in/out of **Group**s, intra-group order; depends on epic 23 panel DnD |
 | 25 | Path primitives and node topology | [path-primitives-and-node-topology](./epics/path-primitives-and-node-topology.md) | `TBD` | `PLANNED` | **Outline to path**, add/remove **Path node**s, **Corner node** ↔ **Smooth node** |
 | 26 | Pen and shape tool interaction UX | [pen-shape-tool-ux](./epics/pen-shape-tool-ux.md) | `TBD` | `PLANNED` | Pen clicks place nodes over existing shapes; auto-switch to select after shape draw |
+| 27 | Gradient paint popover and stroke gradients | [gradient-paint-popover](./epics/gradient-paint-popover.md) | `svg-editor-qpk` | `OPEN` | Unified paint swatch popover; stroke gradient parity; gradient removal + def GC; follow-on `qpk.6` visual editor |
 
 ## Free-standing issues
 
@@ -66,6 +67,12 @@ All items below are **closed in `bd`** (audit trail); there are **no open** road
 ## Boolean path operations (new epic)
 
 Plan: [boolean-path-operations](./epics/boolean-path-operations.md). Epic bead: `svg-editor-0zh` (`bd show svg-editor-0zh`).
+
+## Gradient paint popover (new epic)
+
+Plan: [gradient-paint-popover](./epics/gradient-paint-popover.md). Epic bead: `svg-editor-qpk` (`bd show svg-editor-qpk`).
+
+Children: `svg-editor-qpk.1` (popover component) · `qpk.2` (chrome apply) · `qpk.3` (stroke editor) · `qpk.4` (panel wiring) · `qpk.5` (tests) · `qpk.6` (visual on-canvas editor — future).
 
 ## Elliptical arc shape tool (new epic)
 
