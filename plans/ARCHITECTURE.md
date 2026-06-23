@@ -24,11 +24,40 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~4.3k lines) orches
 |-------|------|
 | Tool contract | `src/app/tools/canvas-tool.interface.ts` |
 | Host seam | `src/app/tools/canvas-tool-host.interface.ts` |
+| UI metadata | `src/app/tools/tool-descriptor.ts` + `register-default-tool-descriptors.ts` |
 | Registry | `src/app/tools/tool-registry.service.ts` |
-| Bootstrap | `src/app/tools/register-default-tools.ts` (wired in `app.config.ts`) |
-| Adapters | creation, selector, pen, zoom, pan, text, eyedropper, … |
+| Bootstrap | `register-default-tools.ts` → descriptors at startup; `CanvasBoundToolRegistrar` when canvas is ready |
+| Adapters | `*-canvas-tool.ts` factories (creation, selector, pen, zoom, pan, text, eyedropper, …) |
+| Orchestrator ports | e.g. `PenToolSessionPorts` + `PenToolSessionSvgPort` (narrow slices of the canvas adapter) |
 
-`PointerGestureRouter` and keyboard controller consult the registry first. Tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)).
+`PointerGestureRouter` and the keyboard controller consult the registry first. The tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)). Dock panels can declare `relevantTools` so the right dock auto-shows for the active tool.
+
+#### Adding a canvas tool (ports/adapters)
+
+Prefer this stack for every new **Tool** — do not grow `SvgCanvasComponent` with tool-specific branches.
+
+1. **Descriptor** — add a `ToolDescriptor` in `register-default-tool-descriptors.ts` (strip label, icon, `interactionKind`, optional `relevantTools` on a dock panel).
+2. **Orchestrator (optional)** — if the tool has non-trivial session state (like pen), put policy in a dedicated class and inject **narrow ports** (`*HistoryPort`, `*SvgPort`, `*SelectionPort`) defined next to the orchestrator — not the full `SvgManipulationService`.
+3. **CanvasTool adapter** — factory in `src/app/tools/<name>-canvas-tool.ts` with a `*CanvasToolDeps` getter; map pointer/keyboard events to the orchestrator; return `true` when the event is consumed.
+4. **Canvas adapter wiring** — register via `CanvasBoundToolRegistrar` from `SvgCanvasComponent` (or pointer-stack factory); pass only the deps the adapter needs (coordinate mapping, readiness checks, gesture handles).
+5. **Mutations** — committed edits go through `EditorCommand` + `EditorHistoryService` (see [`.cursor/rules/editor-commands.mdc`](../.cursor/rules/editor-commands.mdc)); use existing command ports or add a new `*.port.ts` under `history/` or `services/shape-content/`.
+6. **Chrome writes** — inspector / dock actions go through `ChromeEditorApplyService` → `chrome-apply/*`, not direct DOM from the tool.
+
+```text
+Tool strip / keyboard
+       ↓
+ToolRegistryService → CanvasTool adapter (*-canvas-tool.ts)
+       ↓                      ↓
+PointerGestureRouter    optional orchestrator (e.g. PenToolSession)
+                               ↓
+                         narrow *Ports (history, svg, selection, confirm)
+                               ↓
+                         EditorCommand / svg.js via port impl (canvas adapter)
+```
+
+**Reference implementations:** `pen-canvas-tool.ts` + `PenToolSession` + `pen-tool-session-ports.ts` (orchestrator + ports); `selector-canvas-tool.ts` (gesture delegation via deps); `creation-canvas-tool.ts` (thin adapter over `CreationGesture`).
+
+**Anti-patterns:** importing `SvgCanvasComponent` from a tool; calling `SvgManipulationService` methods that are not on a declared port; adding tool `if` branches in `PointerGestureRouter` when a registered `CanvasTool` can handle the event.
 
 ### UI composition
 
@@ -75,9 +104,16 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 
 ### Still centralized (extension touchpoints)
 
-- **`SvgCanvasComponent`** — pen previews, inline text edit, keyboard routing glue, document init.
-- **`SvgManipulationService`** — wide façade; prefer narrow ports at new panel/tool boundaries.
-- **Residual pointer fallbacks** — legacy branches in `PointerGestureRouter` when a tool is not yet registered (tests / partial bootstrap).
+- **`SvgCanvasComponent`** — pen previews, inline text edit, keyboard routing glue, document init. New tools should **not** add logic here; extract orchestrators + ports and register a `CanvasTool` adapter instead.
+- **`SvgManipulationService`** — wide façade; at new panel/tool boundaries inject a **narrow port** (pattern: `PenToolSessionSvgPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`).
+- **Residual pointer fallbacks** — legacy branches in `PointerGestureRouter` when a tool is not yet registered (tests / partial bootstrap). Production tools should always register via `CanvasBoundToolRegistrar`.
+
+### Next seams (future work)
+
+- Extract **inline text edit** and remaining pen preview DOM into orchestrator + ports (mirror `PenToolSession`).
+- Introduce **`*ToolSessionPorts`** interfaces for any tool that outgrows a thin `CanvasTool` adapter.
+- Shrink **`CanvasToolHost`** — today it still exposes `SvgManipulationService`; new adapters should depend on typed deps getters, not the host directly.
+- Optional **Phase 3** epic: finish canvas adapter slim-down and remove pointer-router fallbacks once all tools are registered in tests.
 
 ---
 

@@ -196,12 +196,24 @@ Informal pen-review labels for a cubic leg: **P0** = segment start anchor, **P1*
 _Avoid_: Treating P-labels as separate **Path node** types; using P2/P3 interchangeably across quadratic (`Q`) segments without saying so.
 
 **Ports**:
-Narrow dependencies injected into **PenToolSession** (and similar tool orchestrators) so they can push **History**, update **Selection**, ask for user confirm, and apply svg.js mutations without importing the full component graph.
-_Avoid_: “Dependencies” with no qualifier; calling every Angular provider a **Port**—here it means the explicit seam for a tool session.
+Narrow TypeScript interfaces (`*Port`, `*SvgPort`, `*ReadPort`) that decouple orchestrators, commands, and panels from wide services. A port exposes only the methods a caller needs — e.g. `PenToolSessionPorts`, `HistoryPaintPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`. Implementations usually live on `SvgManipulationService`, shape-content services, or the **Canvas adapter**.
+_Avoid_: “Dependencies” with no qualifier; calling every Angular `@Injectable` a **Port**—here it means an explicit, named seam with a small surface; don’t inject `SvgManipulationService` where a port type exists.
 
 **Canvas adapter**:
-The `svg-canvas` (and kin) responsibility: map DOM events to document coordinates on the **Canvas**, invoke **Tool** / **Pen authoring session** logic, then apply side effects to the **Live tree** and services.
-_Avoid_: Using **Canvas adapter** when you mean the **Canvas** viewport alone; naming the whole editor panel “the adapter” when you mean **Chrome** plus **Canvas**.
+The `svg-canvas` component’s role as the **Canvas** boundary: map DOM events to document coordinates, dispatch to **ToolRegistryService** / **CanvasTool** adapters, implement port interfaces for tool orchestrators, and apply side effects to the **Live tree** via commands and services. The adapter **implements** ports; tool code **depends on** ports.
+_Avoid_: Using **Canvas adapter** when you mean the **Canvas** viewport alone; naming the whole editor panel “the adapter” when you mean **Chrome** plus **Canvas**; putting tool policy inside the adapter instead of an orchestrator behind ports.
+
+**CanvasTool**:
+The pointer/keyboard contract (`CanvasTool` interface) a registered **Tool** implements — `onActivate`, `onPointerDown`, `onKeyDown`, etc. Adapters live in `src/app/tools/*-canvas-tool.ts` and stay thin: delegate to an orchestrator or gesture, consume events by returning `true`.
+_Avoid_: Calling the whole **Canvas adapter** a **CanvasTool**; conflating with **ToolDescriptor** (UI metadata only).
+
+**Tool registry**:
+`ToolRegistryService` — holds registered **CanvasTool** instances and **ToolDescriptor** metadata; `PointerGestureRouter` and keyboard routing consult it first; the tool strip reads `stripGroups()`.
+_Avoid_: Hardcoding tool buttons in templates when a descriptor + registry entry exists; bypassing the registry for new tools.
+
+**Tool descriptor**:
+UI metadata for a **Tool** (`ToolDescriptor`: label, icon, strip group, `interactionKind`, selector flags) registered alongside its **CanvasTool**. Mirrors the dock-panel descriptor pattern.
+_Avoid_: Duplicating strip labels in HTML; using descriptor fields for runtime tool behavior (behavior belongs in the **CanvasTool** adapter or orchestrator).
 
 ## Relationships
 
@@ -225,7 +237,8 @@ _Avoid_: Using **Canvas adapter** when you mean the **Canvas** viewport alone; n
 - **Boolean preview** is **Editor chrome** on the **Canvas**; **Path ops panel** is **Chrome** in the right dock—preview ghost is not artwork in the **Live tree** until Apply.
 - **Make compound path** and **Path boolean operation** Apply both push one **History** command that removes operands and inserts the result path.
 - **Node-edit tool** is still a **Tool** variant: it changes pointer routing on the **Canvas** like other tools and cooperates with **Editor chrome** overlays for knots and handles.
-- The pen **Tool** routes through a **Canvas adapter** into **PenToolSession**, which owns **Pen authoring session** policy while mutating or reading a **PenSession** model; **PenToolSession** uses **Ports** to touch **History**, **Selection**, and svg.js—not the full widget tree.
+- Every registered **Tool** is a **CanvasTool** adapter in `ToolRegistryService`; pointer and keyboard input hit the registry before legacy canvas branches.
+- The pen **Tool** routes through a **Canvas adapter** into **PenToolSession**, which owns **Pen authoring session** policy while mutating or reading a **PenSession** model; **PenToolSession** uses **Ports** to touch **History**, **Selection**, and svg.js—not the full widget tree. New complex tools should follow the same orchestrator + **Ports** pattern rather than expanding **Canvas adapter** inline logic.
 - **Pen-over-shape input** is a hit-test priority policy in the **Canvas adapter** / pen stack, not a separate **Tool** name.
 - **Pending segment** and **First-anchor P3 draft** are in-session draft states in **Pen authoring session**; neither is a **Path node** until committed to the **Live tree**.
 - **Join tolerance** is shared by **Single-click close**, **Close target** affordances, **Open path continuation**, and **Path finish join**; failed screen mapping must not merge paths.
@@ -250,6 +263,8 @@ The workspace **Chrome** around the **Canvas** includes intentionally shallow co
 **When to deepen**
 
 Revisit tool strip / context bar seams (e.g. mirror the right-dock `input`/`output` style, or a tiny chrome-facing slice next to **`EditorToolService`**) only when a **second adapter** needs the same tool or pen-option contract—reuse in another route, compact layout, or tests that must mock **Tool** state at the template boundary without providing the full service graph.
+
+For **new canvas tools**, deepen via **orchestrator + Ports** (pen pattern) rather than growing **`SvgCanvasComponent`** — see [plans/ARCHITECTURE.md](plans/ARCHITECTURE.md) § Adding a canvas tool.
 
 **Stable anchors**
 
@@ -301,6 +316,12 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 
 > **Dev:** "Where does the blue boolean ghost live?"
 > **Contributor:** "**Boolean preview** — **Editor chrome** on the **Canvas**; cleared on Apply or Cancel. **Path ops panel** buttons live in right-dock **Chrome**."
+
+> **Dev:** "I'm adding a gradient tool — do I put logic in `SvgCanvasComponent`?"
+> **Contributor:** "No — add a **Tool descriptor**, a **CanvasTool** adapter, and if it has session state, an orchestrator with **Ports** the **Canvas adapter** implements. See ARCHITECTURE.md § Adding a canvas tool."
+
+> **Dev:** "Can my tool call `SvgManipulationService` directly?"
+> **Contributor:** "Only through a declared **Port** type if one exists; otherwise define a narrow `*SvgPort` and implement it on the canvas adapter or an existing service — don't widen the façade from tool code."
 
 ## Flagged ambiguities
 

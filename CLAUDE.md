@@ -52,18 +52,26 @@ bd close <id>         # Complete work
 
 ## Build & Test
 
-_Add your build and test commands here_
-
 ```bash
-# Example:
-# npm install
-# npm test
+npm test          # Vitest unit tests
+npm run build     # Production build
 ```
 
 ## Architecture Overview
 
-_Add a brief overview of your project architecture_
+Angular SVG editor with a **partially hexagonal** layout: narrow **ports**, **EditorCommand** undo/redo, **ToolRegistryService** + **CanvasTool** adapters, and registry-driven dock/tool strip UI.
+
+| Doc | Purpose |
+|-----|---------|
+| [CONTEXT.md](CONTEXT.md) | Editor-runtime vocabulary (**Tool**, **Ports**, **Canvas adapter**, …) |
+| [plans/ARCHITECTURE.md](plans/ARCHITECTURE.md) | Current seams, gravity wells, **adding a canvas tool** checklist |
+| [plans/epics/hexagonal-architecture-extensibility.md](plans/epics/hexagonal-architecture-extensibility.md) | Phase 1–2 epic history and remaining gaps |
 
 ## Conventions & Patterns
 
-_Add your project-specific conventions here_
+- **New tools:** `ToolDescriptor` + `*-canvas-tool.ts` factory + optional orchestrator with **ports**; register via `CanvasBoundToolRegistrar`. See ARCHITECTURE.md § “Adding a canvas tool”.
+- **Mutations:** `EditorHistoryService.pushAndExecute(cmd)` with domain commands under `history/commands/` (`.cursor/rules/editor-commands.mdc`).
+- **Chrome → document:** `ChromeEditorApplyService` façade → `chrome-apply/*` slices.
+- **SVG:** svg.js only — `SvgManipulationService.getSVGInstance()` (`.cursor/rules/svg-js.mdc`).
+- **State:** Angular signals over observables for editor state (`.cursor/rules/angular-signals.mdc`).
+- **Issues:** `bd` (beads) for all task tracking — run `bd prime` for workflow.

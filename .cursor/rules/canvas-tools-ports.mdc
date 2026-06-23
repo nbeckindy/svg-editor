@@ -1,0 +1,48 @@
+---
+description: Register canvas tools via CanvasTool adapters and narrow ports — not SvgCanvasComponent branches
+globs: src/app/tools/**/*.ts,src/app/components/svg-canvas/**/*.ts,src/app/components/svg-canvas/pen-tool-session/**/*.ts
+alwaysApply: false
+---
+
+# Canvas tools — ports and adapters
+
+New **Tool** behavior must plug into `ToolRegistryService`, not add `if (tool === …)` branches in `SvgCanvasComponent` or `PointerGestureRouter`.
+
+## Checklist
+
+1. **`ToolDescriptor`** — add entry in [`register-default-tool-descriptors.ts`](src/app/tools/register-default-tool-descriptors.ts) (label, icon, `stripGroup`, `interactionKind`).
+2. **`CanvasTool` adapter** — factory in `src/app/tools/<name>-canvas-tool.ts` with a `*CanvasToolDeps` getter passed from the canvas adapter. Handlers return `true` when the event is consumed.
+3. **Register** — call `register<Name>CanvasTool` from [`CanvasBoundToolRegistrar`](src/app/tools/canvas-bound-tool-registrar.service.ts) when the canvas pointer stack is ready (same pattern as pen/selector).
+4. **Orchestrator + ports (when needed)** — non-trivial session state belongs in a dedicated class (see [`PenToolSession`](src/app/components/svg-canvas/pen-tool-session/pen-tool-session.ts)). Define narrow interfaces in `*-ports.ts` / `*-svg.port.ts`; the canvas adapter implements them. Orchestrators must not import `SvgCanvasComponent`.
+5. **Mutations** — committed edits use `EditorCommand` + [`EditorHistoryService`](src/app/services/editor-history.service.ts). Add or reuse ports under `history/` or `services/shape-content/` — see [editor-commands.mdc](editor-commands.mdc).
+6. **Dock relevance** — if the tool needs a right-dock panel, set `relevantTools` on the [`DockPanelDescriptor`](src/app/panels/dock-panel-descriptor.ts).
+
+## Deps pattern
+
+Adapters receive a lazy `getDeps: () => *CanvasToolDeps` so registration can happen before the canvas view exists:
+
+```typescript
+export interface MyCanvasToolDeps {
+  isCanvasReady: () => boolean;
+  clientToEditorSvgPoint: (clientX: number, clientY: number) => CanvasSvgPoint | null;
+  // only what this tool needs — not the whole component
+}
+```
+
+Prefer typed deps over reading [`CanvasToolHost`](src/app/tools/canvas-tool-host.interface.ts) directly; the host still exposes wide services and is a legacy seam.
+
+## Reference files
+
+| Pattern | Example |
+|---------|---------|
+| Orchestrator + ports | `pen-tool-session-ports.ts`, `pen-tool-session-svg.port.ts` |
+| Thin gesture delegate | `selector-canvas-tool.ts`, `creation-canvas-tool.ts` |
+| View utility | `zoom-canvas-tool.ts`, `pan-canvas-tool.ts` |
+| UI metadata | `tool-descriptor.ts`, `register-default-tool-descriptors.ts` |
+
+## Anti-patterns
+
+- Importing `SvgCanvasComponent` from tool code
+- Injecting `SvgManipulationService` where a narrower `*SvgPort` already exists
+- Mutating the **Live tree** outside `EditorCommand` (except ephemeral preview geometry in overlay SVG)
+- Hardcoding tool strip buttons instead of registry-driven descriptors

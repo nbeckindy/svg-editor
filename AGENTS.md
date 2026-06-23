@@ -22,6 +22,20 @@ bd update <id> --claim   # Claim before making code changes
 bd close <id>            # Close when acceptance criteria are met
 ```
 
+## Architecture (ports, tools, commands)
+
+Read **[CONTEXT.md](CONTEXT.md)** for editor vocabulary and **[plans/ARCHITECTURE.md](plans/ARCHITECTURE.md)** for current seams.
+
+When adding or changing a **Tool**:
+
+1. Register a **`ToolDescriptor`** + **`CanvasTool`** adapter (`src/app/tools/`) — do not add tool branches to `SvgCanvasComponent` or `PointerGestureRouter`.
+2. For non-trivial session state, extract an orchestrator and define **narrow ports** (`*Ports`, `*SvgPort`) the **Canvas adapter** implements — see `PenToolSession` / `pen-tool-session-ports.ts`.
+3. Committed **Live tree** mutations go through **`EditorCommand`** + **`EditorHistoryService`** (`.cursor/rules/editor-commands.mdc`); inject command ports, not raw DOM.
+4. Inspector / dock writes use **`ChromeEditorApplyService`** → `chrome-apply/*`.
+5. SVG mutations use **svg.js** via **`SvgManipulationService.getSVGInstance()`** (`.cursor/rules/svg-js.mdc`).
+
+Track work with **`bd`**, not markdown TODO lists.
+
 ## Non-Interactive Shell Commands
 
 **ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
