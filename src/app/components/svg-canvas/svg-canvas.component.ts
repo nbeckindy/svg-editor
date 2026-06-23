@@ -104,6 +104,8 @@ import {
   inlineTextEditorFontShorthand,
   resolveInlineTextEditorTypography
 } from '../../utils/svg-inline-text-typography';
+import { SelectionOverlayComponent } from './overlays/selection-overlay.component';
+import { PathNodeOverlayComponent } from './overlays/path-node-overlay.component';
 import { SnapCandidateShape } from '../../services/snap.service';
 
 /**
@@ -264,7 +266,7 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
 @Component({
   selector: 'app-svg-canvas',
   standalone: true,
-  imports: [],
+  imports: [SelectionOverlayComponent, PathNodeOverlayComponent],
   templateUrl: './svg-canvas.component.html',
   styleUrl: './svg-canvas.component.css',
   host: {
@@ -1029,6 +1031,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     });
     return `rotate(${radiansToDegrees(this.rotate.accumulatedRad)},${po.x},${po.y})`;
   }
+
+  readonly selectionRotateHighlightTransformFn = (hr: { x: number; y: number; width: number; height: number }) =>
+    this.selectionRotateHighlightTransform(hr);
 
   private _viewBoxOverlayRect: { x: number; y: number; width: number; height: number } | null = null;
   get viewBoxOverlayRect(): { x: number; y: number; width: number; height: number } | null {

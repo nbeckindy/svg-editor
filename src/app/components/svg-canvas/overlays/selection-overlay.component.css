@@ -1,0 +1,66 @@
+.selection-resize-handle {
+  pointer-events: all;
+  fill: #ffffff;
+  stroke: #2196f3;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.selection-resize-nw {
+  cursor: nw-resize;
+}
+
+.selection-resize-ne {
+  cursor: ne-resize;
+}
+
+.selection-resize-sw {
+  cursor: sw-resize;
+}
+
+.selection-resize-se {
+  cursor: se-resize;
+}
+
+.selection-resize-edge-n,
+.selection-resize-edge-s {
+  cursor: ns-resize;
+}
+
+.selection-resize-edge-e,
+.selection-resize-edge-w {
+  cursor: ew-resize;
+}
+
+.selection-skew-handle {
+  pointer-events: all;
+  fill: #ffffff;
+  stroke: #9c27b0;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+}
+
+.selection-skew-n,
+.selection-skew-s {
+  cursor: ew-resize;
+}
+
+.selection-skew-e,
+.selection-skew-w {
+  cursor: ns-resize;
+}
+
+.selection-rotate-stem {
+  stroke: #2196f3;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.selection-rotate-handle {
+  pointer-events: all;
+  fill: #ffffff;
+  stroke: #2196f3;
+  stroke-width: 2;
+  vector-effect: non-scaling-stroke;
+  cursor: grab;
+}

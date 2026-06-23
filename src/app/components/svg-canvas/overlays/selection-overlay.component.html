@@ -1,0 +1,141 @@
+@if (!hideHighlight() && highlightRect(); as hr) {
+  @if (isRotatingSelection()) {
+    <g [attr.transform]="selectionRotateHighlightTransform()(hr)">
+      <rect
+        [attr.x]="hr.x"
+        [attr.y]="hr.y"
+        [attr.width]="hr.width"
+        [attr.height]="hr.height"
+        fill="none"
+        stroke="#2196F3"
+        stroke-width="2"
+        vector-effect="non-scaling-stroke"/>
+    </g>
+  } @else if (multiSelectionOutlineRects().length >= 2) {
+    @for (r of multiSelectionOutlineRects(); track r.id) {
+      <rect
+        [attr.x]="r.x"
+        [attr.y]="r.y"
+        [attr.width]="r.width"
+        [attr.height]="r.height"
+        fill="none"
+        stroke="#2196F3"
+        stroke-width="1.5"
+        stroke-dasharray="4 3"
+        vector-effect="non-scaling-stroke"/>
+    }
+  } @else {
+    <rect
+      [attr.x]="hr.x"
+      [attr.y]="hr.y"
+      [attr.width]="hr.width"
+      [attr.height]="hr.height"
+      fill="none"
+      stroke="#2196F3"
+      stroke-width="2"
+      vector-effect="non-scaling-stroke"/>
+  }
+}
+@if (showResizeHandles() && highlightRect(); as hr) {
+  @if (showSkewHandles()) {
+    <circle
+      class="selection-skew-handle selection-skew-n"
+      [attr.r]="handleRadius()"
+      data-skew-handle="n"
+      data-testid="canvas-handle-skew-n"
+      [attr.cx]="hr.x + hr.width / 2"
+      [attr.cy]="hr.y - skewEdgeOutset()"/>
+    <circle
+      class="selection-skew-handle selection-skew-s"
+      [attr.r]="handleRadius()"
+      data-skew-handle="s"
+      data-testid="canvas-handle-skew-s"
+      [attr.cx]="hr.x + hr.width / 2"
+      [attr.cy]="hr.y + hr.height + skewEdgeOutset()"/>
+    <circle
+      class="selection-skew-handle selection-skew-w"
+      [attr.r]="handleRadius()"
+      data-skew-handle="w"
+      data-testid="canvas-handle-skew-w"
+      [attr.cx]="hr.x - skewEdgeOutset()"
+      [attr.cy]="hr.y + hr.height / 2"/>
+    <circle
+      class="selection-skew-handle selection-skew-e"
+      [attr.r]="handleRadius()"
+      data-skew-handle="e"
+      data-testid="canvas-handle-skew-e"
+      [attr.cx]="hr.x + hr.width + skewEdgeOutset()"
+      [attr.cy]="hr.y + hr.height / 2"/>
+  }
+  <circle
+    class="selection-resize-handle selection-resize-edge-n"
+    [attr.r]="handleRadius()"
+    data-resize-handle="n"
+    data-testid="canvas-handle-resize-n"
+    [attr.cx]="hr.x + hr.width / 2"
+    [attr.cy]="hr.y"/>
+  <circle
+    class="selection-resize-handle selection-resize-edge-s"
+    [attr.r]="handleRadius()"
+    data-resize-handle="s"
+    data-testid="canvas-handle-resize-s"
+    [attr.cx]="hr.x + hr.width / 2"
+    [attr.cy]="hr.y + hr.height"/>
+  <circle
+    class="selection-resize-handle selection-resize-edge-e"
+    [attr.r]="handleRadius()"
+    data-resize-handle="e"
+    data-testid="canvas-handle-resize-e"
+    [attr.cx]="hr.x + hr.width"
+    [attr.cy]="hr.y + hr.height / 2"/>
+  <circle
+    class="selection-resize-handle selection-resize-edge-w"
+    [attr.r]="handleRadius()"
+    data-resize-handle="w"
+    data-testid="canvas-handle-resize-w"
+    [attr.cx]="hr.x"
+    [attr.cy]="hr.y + hr.height / 2"/>
+  <circle
+    class="selection-resize-handle selection-resize-nw"
+    [attr.r]="handleRadius()"
+    data-resize-handle="nw"
+    data-testid="canvas-handle-resize-nw"
+    [attr.cx]="hr.x"
+    [attr.cy]="hr.y"/>
+  <circle
+    class="selection-resize-handle selection-resize-ne"
+    [attr.r]="handleRadius()"
+    data-resize-handle="ne"
+    data-testid="canvas-handle-resize-ne"
+    [attr.cx]="hr.x + hr.width"
+    [attr.cy]="hr.y"/>
+  <circle
+    class="selection-resize-handle selection-resize-sw"
+    [attr.r]="handleRadius()"
+    data-resize-handle="sw"
+    data-testid="canvas-handle-resize-sw"
+    [attr.cx]="hr.x"
+    [attr.cy]="hr.y + hr.height"/>
+  <circle
+    class="selection-resize-handle selection-resize-se"
+    [attr.r]="handleRadius()"
+    data-resize-handle="se"
+    data-testid="canvas-handle-resize-se"
+    [attr.cx]="hr.x + hr.width"
+    [attr.cy]="hr.y + hr.height"/>
+  <line
+    class="selection-rotate-stem"
+    data-testid="canvas-rotate-stem"
+    [attr.x1]="hr.x + hr.width / 2"
+    [attr.y1]="hr.y"
+    [attr.x2]="hr.x + hr.width / 2"
+    [attr.y2]="hr.y - rotateHandleOffset()"
+    pointer-events="none"/>
+  <circle
+    class="selection-rotate-handle"
+    [attr.r]="handleRadius()"
+    data-rotate-handle=""
+    data-testid="canvas-handle-rotate"
+    [attr.cx]="hr.x + hr.width / 2"
+    [attr.cy]="hr.y - rotateHandleOffset()"/>
+}

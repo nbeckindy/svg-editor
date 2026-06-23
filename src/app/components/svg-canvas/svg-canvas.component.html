@@ -160,44 +160,18 @@
               vector-effect="non-scaling-stroke"
               filter="url(#editor-artboard-boundary-shadow)" />
           }
-          @if (!editorChrome.hideSelectionHighlightOverlay && editorChrome.highlightRect; as hr) {
-            @if (editorChrome.isRotatingSelection) {
-              <g [attr.transform]="editorChrome.selectionRotateHighlightTransform(hr)">
-                <rect
-                  [attr.x]="hr.x"
-                  [attr.y]="hr.y"
-                  [attr.width]="hr.width"
-                  [attr.height]="hr.height"
-                  fill="none"
-                  stroke="#2196F3"
-                  stroke-width="2"
-                  vector-effect="non-scaling-stroke"/>
-              </g>
-            } @else if (editorChrome.multiSelectionOutlineRects.length >= 2) {
-              @for (r of editorChrome.multiSelectionOutlineRects; track r.id) {
-                <rect
-                  [attr.x]="r.x"
-                  [attr.y]="r.y"
-                  [attr.width]="r.width"
-                  [attr.height]="r.height"
-                  fill="none"
-                  stroke="#2196F3"
-                  stroke-width="1.5"
-                  stroke-dasharray="4 3"
-                  vector-effect="non-scaling-stroke"/>
-              }
-            } @else {
-              <rect
-                [attr.x]="hr.x"
-                [attr.y]="hr.y"
-                [attr.width]="hr.width"
-                [attr.height]="hr.height"
-                fill="none"
-                stroke="#2196F3"
-                stroke-width="2"
-                vector-effect="non-scaling-stroke"/>
-            }
-          }
+          <g
+            app-selection-overlay
+            [hideHighlight]="editorChrome.hideSelectionHighlightOverlay"
+            [highlightRect]="editorChrome.highlightRect"
+            [isRotatingSelection]="editorChrome.isRotatingSelection"
+            [multiSelectionOutlineRects]="editorChrome.multiSelectionOutlineRects"
+            [selectionRotateHighlightTransform]="selectionRotateHighlightTransformFn"
+            [showResizeHandles]="editorChrome.showResizeHandles"
+            [showSkewHandles]="editorChrome.showSelectionSkewHandles"
+            [handleRadius]="editorChrome.selectionHandleRadiusOverlay"
+            [skewEdgeOutset]="editorChrome.selectionSkewEdgeOutset"
+            [rotateHandleOffset]="editorChrome.rotateHandleOffset"/>
           @if (editorChrome.creationGhostRect; as ghost) {
             @if (editorChrome.creationShapeType === 'ellipse') {
               <ellipse
@@ -250,44 +224,18 @@
               [attr.stroke]="drawingDefaults.stroke()"
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
-            @if (editorChrome.penInsertOnPathNodeAffordanceOverlay; as insAff) {
-              @for (ln of insAff.lines; track $index) {
-                <line
-                  class="path-node-control-line pen-insert-on-path-affordance"
-                  data-testid="canvas-pen-insert-on-path-control-line"
-                  [attr.x1]="ln.x1"
-                  [attr.y1]="ln.y1"
-                  [attr.x2]="ln.x2"
-                  [attr.y2]="ln.y2"
-                  stroke="#43A047"
-                  stroke-width="1.5"
-                  stroke-dasharray="3 2"
-                  vector-effect="non-scaling-stroke"/>
-              }
-              @for (kn of insAff.knobs; track $index) {
-                <circle
-                  class="path-node-control-handle pen-insert-on-path-affordance"
-                  data-testid="canvas-pen-insert-on-path-control-handle"
-                  [attr.cx]="kn.cx"
-                  [attr.cy]="kn.cy"
-                  r="3.5"
-                  fill="#ffffff"
-                  stroke="#43A047"
-                  stroke-width="1.5"
-                  vector-effect="non-scaling-stroke"/>
-              }
-              <circle
-                class="path-node-anchor path-node-anchor-selected pen-insert-on-path-affordance"
-                data-testid="canvas-pen-insert-on-path-planted-anchor"
-                [attr.cx]="insAff.plantedAnchor.cx"
-                [attr.cy]="insAff.plantedAnchor.cy"
-                r="4"
-                fill="#ffffff"
-                stroke="#1E88E5"
-                stroke-width="2"
-                vector-effect="non-scaling-stroke"/>
-            }
           }
+          <g
+            app-path-node-overlay
+            [insertAffordance]="editorChrome.penInsertOnPathPreviewPathD ? editorChrome.penInsertOnPathNodeAffordanceOverlay : null"
+            [penSessionNodes]="editorChrome.penSessionPathNodeOverlays"
+            [penSessionPathOutlineD]="editorChrome.penSessionPathOutlineOverlayD"
+            [showPathNodeEditOverlays]="editorChrome.showPathNodeEditOverlays"
+            [pathSelectionOutlines]="editorChrome.pathSelectionOutlineOverlays"
+            [controlHandles]="editorChrome.pathNodeControlHandleOverlays"
+            [anchors]="editorChrome.pathNodeAnchorOverlays"
+            [pendingCurveHandleGuides]="editorChrome.penPendingCurveHandleGuideOverlays"
+            [showPendingCurveHandleGuides]="!!(editorChrome.penCurvePreviewPathD || editorChrome.penFirstAnchorMirroredHandleDragActive || editorChrome.penColocatedTipMirroredHandleDragActive)"/>
           @if (editorChrome.penSessionPreviewPathD; as pfull) {
             <path
               class="creation-ghost-shape"
@@ -298,43 +246,6 @@
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
           }
-          @if (editorChrome.penSessionPathNodeOverlays; as penNodes) {
-            @for (handle of penNodes.handles; track $index) {
-              <line
-                class="path-node-control-line pen-session-path-node-affordance"
-                data-testid="canvas-pen-session-path-node-control-line"
-                [attr.x1]="handle.x1"
-                [attr.y1]="handle.y1"
-                [attr.x2]="handle.x2"
-                [attr.y2]="handle.y2"
-                stroke="#43A047"
-                stroke-width="1.5"
-                stroke-dasharray="3 2"
-                vector-effect="non-scaling-stroke"/>
-              <circle
-                class="path-node-control-handle pen-session-path-node-affordance"
-                data-testid="canvas-pen-session-path-node-control-handle"
-                [attr.cx]="handle.cx"
-                [attr.cy]="handle.cy"
-                r="3.5"
-                fill="#ffffff"
-                stroke="#43A047"
-                stroke-width="1.5"
-                vector-effect="non-scaling-stroke"/>
-            }
-            @for (pt of penNodes.anchors; track $index) {
-              <circle
-                class="path-node-anchor pen-session-path-node-affordance"
-                data-testid="canvas-pen-session-path-node-anchor"
-                [attr.cx]="pt.cx"
-                [attr.cy]="pt.cy"
-                r="4"
-                fill="#ffffff"
-                stroke="#1E88E5"
-                stroke-width="2"
-                vector-effect="non-scaling-stroke"/>
-            }
-          }
           @if (editorChrome.penCurvePreviewPathD; as pcurve) {
             <path
               class="creation-ghost-shape"
@@ -343,16 +254,6 @@
               fill="none"
               [attr.stroke]="drawingDefaults.stroke()"
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
-              vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.penSessionPathOutlineOverlayD; as penOutlineD) {
-            <path
-              class="path-selection-outline"
-              data-testid="canvas-pen-session-path-outline"
-              [attr.d]="penOutlineD"
-              fill="none"
-              stroke="#1E88E5"
-              stroke-width="1.5"
               vector-effect="non-scaling-stroke"/>
           }
           @if (editorChrome.pathBooleanPreviewOverlayD; as booleanPreviewD) {
@@ -376,19 +277,6 @@
                 fill="#ffffff"
                 stroke="#2196f3"
                 stroke-width="1.5"
-                vector-effect="non-scaling-stroke"/>
-            }
-            @for (ln of editorChrome.penPendingCurveHandleGuideOverlays; track $index; let idx = $index) {
-              <line
-                class="path-node-control-line pen-insert-on-path-affordance"
-                [attr.data-testid]="'canvas-pen-pending-curve-handle-guide-' + idx"
-                [attr.x1]="ln.x1"
-                [attr.y1]="ln.y1"
-                [attr.x2]="ln.x2"
-                [attr.y2]="ln.y2"
-                stroke="#43A047"
-                stroke-width="1.5"
-                stroke-dasharray="3 2"
                 vector-effect="non-scaling-stroke"/>
             }
           }
@@ -465,166 +353,6 @@
               stroke-width="2"
               stroke-dasharray="4 3"
               vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.showPathNodeEditOverlays) {
-            @for (outline of editorChrome.pathSelectionOutlineOverlays; track outline.pathId) {
-              <path
-                class="path-selection-outline"
-                data-testid="canvas-path-selection-outline"
-                [attr.data-path-selection-outline-path-id]="outline.pathId"
-                [attr.d]="outline.d"
-                fill="none"
-                stroke="#1E88E5"
-                stroke-width="1.5"
-                vector-effect="non-scaling-stroke"/>
-            }
-            @for (handle of editorChrome.pathNodeControlHandleOverlays; track $index) {
-              <line
-                class="path-node-control-line"
-                data-path-node-edit-target="true"
-                data-testid="canvas-path-node-control-line"
-                [attr.x1]="handle.x1"
-                [attr.y1]="handle.y1"
-                [attr.x2]="handle.x2"
-                [attr.y2]="handle.y2"
-                stroke="#43A047"
-                stroke-width="1.5"
-                stroke-dasharray="3 2"
-                vector-effect="non-scaling-stroke"/>
-              <circle
-                class="path-node-control-handle"
-                data-path-node-edit-target="true"
-                [attr.data-path-node-handle-index]="handle.handleIndex"
-                [attr.data-path-node-path-id]="handle.pathId"
-                data-testid="canvas-path-node-control-handle"
-                [attr.cx]="handle.cx"
-                [attr.cy]="handle.cy"
-                r="3.5"
-                fill="#ffffff"
-                stroke="#43A047"
-                stroke-width="1.5"
-                vector-effect="non-scaling-stroke"/>
-            }
-            @for (anchor of editorChrome.pathNodeAnchorOverlays; track $index) {
-              <circle
-                class="path-node-anchor"
-                [class.path-node-anchor-selected]="anchor.selected"
-                data-path-node-edit-target="true"
-                [attr.data-path-node-anchor-index]="anchor.anchorIndex"
-                [attr.data-path-node-path-id]="anchor.pathId"
-                data-testid="canvas-path-node-anchor"
-                [attr.cx]="anchor.cx"
-                [attr.cy]="anchor.cy"
-                r="4"
-                fill="#ffffff"
-                stroke="#1E88E5"
-                stroke-width="2"
-                vector-effect="non-scaling-stroke"/>
-            }
-          }
-          @if (editorChrome.showResizeHandles && editorChrome.highlightRect; as hr) {
-            <!-- Skew first (below): discs extend inward and must not steal hits from edge-scale / corners above. -->
-            @if (editorChrome.showSelectionSkewHandles) {
-            <circle
-              class="selection-skew-handle selection-skew-n"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-skew-handle="n"
-              data-testid="canvas-handle-skew-n"
-              [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y - editorChrome.selectionSkewEdgeOutset"/>
-            <circle
-              class="selection-skew-handle selection-skew-s"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-skew-handle="s"
-              data-testid="canvas-handle-skew-s"
-              [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y + hr.height + editorChrome.selectionSkewEdgeOutset"/>
-            <circle
-              class="selection-skew-handle selection-skew-w"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-skew-handle="w"
-              data-testid="canvas-handle-skew-w"
-              [attr.cx]="hr.x - editorChrome.selectionSkewEdgeOutset"
-              [attr.cy]="hr.y + hr.height / 2"/>
-            <circle
-              class="selection-skew-handle selection-skew-e"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-skew-handle="e"
-              data-testid="canvas-handle-skew-e"
-              [attr.cx]="hr.x + hr.width + editorChrome.selectionSkewEdgeOutset"
-              [attr.cy]="hr.y + hr.height / 2"/>
-            }
-            <circle
-              class="selection-resize-handle selection-resize-edge-n"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-resize-handle="n"
-              data-testid="canvas-handle-resize-n"
-              [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y"/>
-            <circle
-              class="selection-resize-handle selection-resize-edge-s"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-resize-handle="s"
-              data-testid="canvas-handle-resize-s"
-              [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y + hr.height"/>
-            <circle
-              class="selection-resize-handle selection-resize-edge-e"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-resize-handle="e"
-              data-testid="canvas-handle-resize-e"
-              [attr.cx]="hr.x + hr.width"
-              [attr.cy]="hr.y + hr.height / 2"/>
-            <circle
-              class="selection-resize-handle selection-resize-edge-w"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-resize-handle="w"
-              data-testid="canvas-handle-resize-w"
-              [attr.cx]="hr.x"
-              [attr.cy]="hr.y + hr.height / 2"/>
-            <circle
-              class="selection-resize-handle selection-resize-nw"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-resize-handle="nw"
-              data-testid="canvas-handle-resize-nw"
-              [attr.cx]="hr.x"
-              [attr.cy]="hr.y"/>
-            <circle
-              class="selection-resize-handle selection-resize-ne"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-resize-handle="ne"
-              data-testid="canvas-handle-resize-ne"
-              [attr.cx]="hr.x + hr.width"
-              [attr.cy]="hr.y"/>
-            <circle
-              class="selection-resize-handle selection-resize-sw"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-resize-handle="sw"
-              data-testid="canvas-handle-resize-sw"
-              [attr.cx]="hr.x"
-              [attr.cy]="hr.y + hr.height"/>
-            <circle
-              class="selection-resize-handle selection-resize-se"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-resize-handle="se"
-              data-testid="canvas-handle-resize-se"
-              [attr.cx]="hr.x + hr.width"
-              [attr.cy]="hr.y + hr.height"/>
-            <line
-              class="selection-rotate-stem"
-              data-testid="canvas-rotate-stem"
-              [attr.x1]="hr.x + hr.width / 2"
-              [attr.y1]="hr.y"
-              [attr.x2]="hr.x + hr.width / 2"
-              [attr.y2]="hr.y - editorChrome.rotateHandleOffset"
-              pointer-events="none"/>
-            <circle
-              class="selection-rotate-handle"
-              [attr.r]="editorChrome.selectionHandleRadiusOverlay"
-              data-rotate-handle=""
-              data-testid="canvas-handle-rotate"
-              [attr.cx]="hr.x + hr.width / 2"
-              [attr.cy]="hr.y - editorChrome.rotateHandleOffset"/>
           }
         </svg>
       </div>

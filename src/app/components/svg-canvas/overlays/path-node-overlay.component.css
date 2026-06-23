@@ -1,0 +1,25 @@
+.path-selection-outline {
+  pointer-events: none;
+}
+
+.path-node-control-line {
+  pointer-events: none;
+}
+
+.path-node-control-handle,
+.path-node-anchor {
+  pointer-events: auto;
+  cursor: move;
+}
+
+.pen-insert-on-path-affordance {
+  pointer-events: none;
+}
+
+.pen-session-path-node-affordance {
+  pointer-events: none;
+}
+
+.path-node-anchor.path-node-anchor-selected {
+  fill: #1e88e5;
+}
