@@ -10,9 +10,11 @@ import {
 import {
   CONTENT_SHAPE_SELECTOR,
   EDITOR_CONTENT_GROUP_ID,
+  EDITOR_DOCUMENT_DEFS_ATTR,
   EDITOR_OUTSIDE_RECT_ATTR,
   EDITOR_VIEWBOX_RECT_ATTR,
-  OUTSIDE_VIEWBOX_FILL
+  OUTSIDE_VIEWBOX_FILL,
+  SVG_NS
 } from './svg-editor-stage.constants';
 import type { ImageHrefExportClass, SvgExportImagePolicyResult } from '../utils/svg-export-image-href-policy';
 import {
@@ -51,6 +53,17 @@ export class SvgEditorDocumentService {
 
   getSVGInstance(): Svg | null {
     return this.svgInstance;
+  }
+
+  /**
+   * Canonical document `<defs>` inside `[data-editor-content-group]`.
+   * Creates the element when missing (e.g. before authoring a gradient).
+   */
+  getDocumentDefsNode(): SVGDefsElement | null {
+    if (!this.svgInstance) return null;
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`)?.node as Element | null;
+    if (!contentGroup) return null;
+    return this.ensureDocumentDefsInContentGroup(contentGroup, true);
   }
 
   getDocumentViewBox(): string {
@@ -273,8 +286,77 @@ export class SvgEditorDocumentService {
     });
 
     this.svgInstance = SVG(container.firstElementChild as SVGSVGElement);
+    this.consolidateDocumentDefsAfterMount();
     this.makeShapesClickable();
     this.bumpDocumentRevision();
+  }
+
+  private consolidateDocumentDefsAfterMount(): void {
+    if (!this.svgInstance) return;
+    const contentGroup = this.svgInstance.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`)?.node as Element | null;
+    if (!contentGroup) return;
+    this.ensureDocumentDefsInContentGroup(contentGroup, false);
+    this.migrateRootLevelDefsIntoDocument(contentGroup);
+  }
+
+  private ensureDocumentDefsInContentGroup(
+    contentGroup: Element,
+    createIfMissing: boolean
+  ): SVGDefsElement | null {
+    const ownerDoc = contentGroup.ownerDocument;
+    if (!ownerDoc) {
+      throw new Error('content group has no ownerDocument');
+    }
+
+    let canonical = contentGroup.querySelector(
+      `[${EDITOR_DOCUMENT_DEFS_ATTR}="true"]`
+    ) as SVGDefsElement | null;
+
+    const directDefs = Array.from(contentGroup.children).filter(
+      (c) => c.tagName.toLowerCase() === 'defs'
+    ) as SVGDefsElement[];
+
+    if (!canonical && directDefs.length > 0) {
+      canonical = directDefs[0];
+      canonical.setAttribute(EDITOR_DOCUMENT_DEFS_ATTR, 'true');
+    }
+
+    if (!canonical) {
+      if (!createIfMissing) return null;
+      canonical = ownerDoc.createElementNS(SVG_NS, 'defs') as SVGDefsElement;
+      canonical.setAttribute(EDITOR_DOCUMENT_DEFS_ATTR, 'true');
+      contentGroup.insertBefore(canonical, contentGroup.firstChild);
+    }
+
+    for (const defs of directDefs) {
+      if (defs === canonical) continue;
+      while (defs.firstChild) {
+        canonical.appendChild(defs.firstChild);
+      }
+      defs.remove();
+    }
+
+    if (contentGroup.firstChild !== canonical) {
+      contentGroup.insertBefore(canonical, contentGroup.firstChild);
+    }
+
+    return canonical;
+  }
+
+  /** Move legacy root-level `<defs>` (e.g. from SVG.js `.defs()`) into the exported content group. */
+  private migrateRootLevelDefsIntoDocument(contentGroup: Element): void {
+    if (!this.svgInstance) return;
+    const root = this.svgInstance.node as SVGSVGElement;
+    const rootDefs = Array.from(root.children).find((c) => c.tagName.toLowerCase() === 'defs') as
+      | SVGDefsElement
+      | undefined;
+    if (!rootDefs) return;
+    const documentDefs = this.ensureDocumentDefsInContentGroup(contentGroup, true);
+    if (!documentDefs) return;
+    while (rootDefs.firstChild) {
+      documentDefs.appendChild(rootDefs.firstChild);
+    }
+    rootDefs.remove();
   }
 
   private computeContentBbox(svgElement: Element): { x: number; y: number; width: number; height: number } {

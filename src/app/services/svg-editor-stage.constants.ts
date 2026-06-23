@@ -1,5 +1,7 @@
 /** Class name for the editor content group (shapes live here). */
 export const EDITOR_CONTENT_GROUP_ID = 'data-editor-content-group';
+/** Marks the single canonical `<defs>` inside the content group (included in export). */
+export const EDITOR_DOCUMENT_DEFS_ATTR = 'data-editor-document-defs';
 export const CONTENT_SHAPE_SELECTOR =
   'circle, rect, path, polygon, ellipse, line, polyline, text, image, use';
 /** Attribute to mark the viewBox rect (white fill, thin black stroke). */

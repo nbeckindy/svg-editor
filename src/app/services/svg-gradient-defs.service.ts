@@ -10,7 +10,7 @@ import {
   type PaintGradientSnapshot
 } from '../models/svg-gradient';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
-import { CONTENT_SHAPE_SELECTOR, EDITOR_CONTENT_GROUP_ID, SVG_NS } from './svg-editor-stage.constants';
+import { CONTENT_SHAPE_SELECTOR, EDITOR_CONTENT_GROUP_ID, EDITOR_DOCUMENT_DEFS_ATTR, SVG_NS } from './svg-editor-stage.constants';
 import type { SvgGradientDefsPort } from './svg-gradient-defs.port';
 
 @Injectable({
@@ -18,6 +18,10 @@ import type { SvgGradientDefsPort } from './svg-gradient-defs.port';
 })
 export class SvgGradientDefsService implements SvgGradientDefsPort {
   private readonly doc = inject(SvgEditorDocumentService);
+
+  private documentDefsNode(): SVGDefsElement | null {
+    return this.doc.getDocumentDefsNode();
+  }
 
   allocateUniqueDefId(prefix: string): string {
     if (!this.doc.getSVGInstance()) return `${prefix}-fallback`;
@@ -59,14 +63,53 @@ export class SvgGradientDefsService implements SvgGradientDefsPort {
 
   removeGradientDefById(gradientId: string): void {
     if (!this.doc.getSVGInstance()) return;
-    const defs = this.doc.getSVGInstance()!.defs().node;
-    const old = defs.querySelector(`#${SvgGradientDefsService.cssEscapeSelector(gradientId)}`);
-    if (old?.parentNode === defs) {
-      const tag = old.tagName.toLowerCase();
-      if (tag === 'lineargradient' || tag === 'radialgradient') {
-        defs.removeChild(old);
-        this.doc.bumpDocumentRevision();
-      }
+    const el = this.findGradientDomElement(gradientId);
+    if (!el?.parentElement) return;
+    const parent = el.parentElement;
+    if (parent.tagName.toLowerCase() !== 'defs') return;
+    const contentGroup = this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`)?.node;
+    if (!contentGroup?.contains(parent)) return;
+    parent.removeChild(el);
+    this.maybeRemoveEmptyDocumentDefs();
+    this.doc.bumpDocumentRevision();
+  }
+
+  purgeGradientDefIfUnreferenced(defId: string | null | undefined): void {
+    if (!defId || !this.findGradientDomElement(defId)) return;
+    if (this.countPaintUrlReferencesToDefId(defId) === 0) {
+      this.removeGradientDefById(defId);
+    }
+  }
+
+  purgeGradientDefForReleasedPaintAttr(paintAttr: string | null | undefined): void {
+    const id = parsePaintReferenceId(paintAttr ?? undefined);
+    this.purgeGradientDefIfUnreferenced(id);
+  }
+
+  purgeUnreferencedGradientDefs(): void {
+    const defs = this.documentDefsNode();
+    if (!defs) return;
+    const gradientIds = Array.from(defs.children)
+      .filter((el) => {
+        const tag = el.tagName.toLowerCase();
+        return tag === 'lineargradient' || tag === 'radialgradient';
+      })
+      .map((el) => el.getAttribute('id'))
+      .filter((id): id is string => !!id);
+    for (const id of gradientIds) {
+      this.purgeGradientDefIfUnreferenced(id);
+    }
+  }
+
+  private maybeRemoveEmptyDocumentDefs(): void {
+    if (!this.doc.getSVGInstance()) return;
+    const contentGroup = this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`)?.node as
+      | Element
+      | null;
+    if (!contentGroup) return;
+    const defs = contentGroup.querySelector(`:scope > defs[${EDITOR_DOCUMENT_DEFS_ATTR}="true"]`);
+    if (defs && defs.childElementCount === 0) {
+      defs.remove();
     }
   }
 
@@ -122,7 +165,8 @@ export class SvgGradientDefsService implements SvgGradientDefsPort {
     const newId = this.allocateUniqueDefId('grad');
     const clone = gradEl.cloneNode(true) as SVGLinearGradientElement | SVGRadialGradientElement;
     clone.setAttribute('id', newId);
-    const defs = this.doc.getSVGInstance()!.defs().node;
+    const defs = this.documentDefsNode();
+    if (!defs) return null;
     defs.appendChild(clone);
     shape.attr(paintProperty, `url(#${newId})`);
     this.doc.bumpDocumentRevision();
@@ -152,7 +196,9 @@ export class SvgGradientDefsService implements SvgGradientDefsPort {
     if (!this.doc.getSVGInstance()) return;
     const shape = this.doc.getSVGInstance()!.findOne(`#${shapeId}`) as SvgJsElement | undefined;
     if (!shape) return;
-    const defs = this.doc.getSVGInstance()!.defs().node;
+    const previousPaintAttr = (shape.attr(paintProperty) as string | null) ?? null;
+    const defs = this.documentDefsNode();
+    if (!defs) return;
 
     const idsToRemove = new Set<string>();
     if (snapshot.gradientId) idsToRemove.add(snapshot.gradientId);
@@ -161,7 +207,9 @@ export class SvgGradientDefsService implements SvgGradientDefsPort {
       if (m) idsToRemove.add(m[1]);
     }
     for (const rid of idsToRemove) {
-      const old = defs.querySelector(`#${SvgGradientDefsService.cssEscapeSelector(rid)}`);
+      const old: Element | null = defs.querySelector(
+        `#${SvgGradientDefsService.cssEscapeSelector(rid)}`
+      );
       if (old?.parentNode === defs) defs.removeChild(old);
     }
 
@@ -183,18 +231,19 @@ export class SvgGradientDefsService implements SvgGradientDefsPort {
       shape.attr(paintProperty, snapshot.shapePaintAttr);
     }
 
+    this.purgeGradientDefForReleasedPaintAttr(previousPaintAttr);
     this.doc.bumpDocumentRevision();
   }
 
   writeEditableGradientModel(model: EditableGradientModel): void {
     if (!this.doc.getSVGInstance()) return;
     let el = this.findGradientDomElement(model.id);
-    const defs = this.doc.getSVGInstance()!.defs().node;
-    const ownerDoc = defs.ownerDocument;
-    if (!ownerDoc) return;
+    const defs = this.documentDefsNode();
+    const ownerDoc = defs?.ownerDocument;
+    if (!defs || !ownerDoc) return;
 
     if (!el || el.tagName.toLowerCase() !== (model.kind === 'linear' ? 'lineargradient' : 'radialgradient')) {
-      if (el?.parentNode === defs) defs.removeChild(el);
+      if (el?.parentNode) el.parentNode.removeChild(el);
       const tag = model.kind === 'linear' ? 'linearGradient' : 'radialGradient';
       const nu = ownerDoc.createElementNS(SVG_NS, tag);
       nu.setAttribute('id', model.id);
@@ -208,14 +257,17 @@ export class SvgGradientDefsService implements SvgGradientDefsPort {
     if (!this.doc.getSVGInstance()) return '';
     const id = this.allocateUniqueDefId('grad');
     const model = defaultLinearGradientModel(id, fromColor, toColor);
-    const ownerDoc = this.doc.getSVGInstance()!.defs().node.ownerDocument;
-    if (!ownerDoc) return id;
+    const defs = this.documentDefsNode();
+    const ownerDoc = defs?.ownerDocument;
+    if (!defs || !ownerDoc) return id;
+    const shape = this.doc.getSVGInstance()!.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    const previousFill = (shape?.attr('fill') as string | null) ?? null;
     const nu = ownerDoc.createElementNS(SVG_NS, 'linearGradient');
     nu.setAttribute('id', id);
-    this.doc.getSVGInstance()!.defs().node.appendChild(nu);
+    defs.appendChild(nu);
     applyEditableGradientModelToElement(nu, model);
-    const shape = this.doc.getSVGInstance()!.findOne(`#${shapeId}`) as SvgJsElement | undefined;
     shape?.fill(`url(#${id})`);
+    this.purgeGradientDefForReleasedPaintAttr(previousFill);
     this.doc.bumpDocumentRevision();
     return id;
   }
@@ -228,12 +280,14 @@ export class SvgGradientDefsService implements SvgGradientDefsPort {
     if (!this.doc.getSVGInstance()) return;
     this.writeEditableGradientModel(model);
     const shape = this.doc.getSVGInstance()!.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    const previousPaintAttr = (shape?.attr(paintProperty) as string | null) ?? null;
     const url = `url(#${model.id})`;
     if (paintProperty === 'fill') {
       shape?.fill(url);
     } else {
       shape?.attr('stroke', url);
     }
+    this.purgeGradientDefForReleasedPaintAttr(previousPaintAttr);
     this.doc.bumpDocumentRevision();
   }
 
@@ -272,11 +326,11 @@ export class SvgGradientDefsService implements SvgGradientDefsPort {
       };
     }
     if (!this.doc.getSVGInstance()) return model;
-    const defs = this.doc.getSVGInstance()!.defs().node;
+    const defs = this.documentDefsNode();
     const old = this.findGradientDomElement(id);
-    if (old?.parentNode === defs) defs.removeChild(old);
-    const ownerDoc = defs.ownerDocument;
-    if (!ownerDoc) return model;
+    if (old?.parentNode) old.parentNode.removeChild(old);
+    const ownerDoc = defs?.ownerDocument;
+    if (!defs || !ownerDoc) return model;
     const tag = kind === 'linear' ? 'linearGradient' : 'radialGradient';
     const nu = ownerDoc.createElementNS(SVG_NS, tag);
     nu.setAttribute('id', id);

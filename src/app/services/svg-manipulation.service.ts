@@ -116,19 +116,27 @@ export class SvgManipulationService
   }
 
   updateFillColor(shapeId: string, color: string): void {
+    const previous = this.readShapePaintAttr(shapeId, 'fill');
     this.shapes.updateFillColor(shapeId, color);
+    this.gradients.purgeGradientDefForReleasedPaintAttr(previous);
   }
 
   addStroke(shapeId: string, color: string, width: number): void {
+    const previous = this.readShapePaintAttr(shapeId, 'stroke');
     this.shapes.addStroke(shapeId, color, width);
+    this.gradients.purgeGradientDefForReleasedPaintAttr(previous);
   }
 
   removeStroke(shapeId: string): void {
+    const previous = this.readShapePaintAttr(shapeId, 'stroke');
     this.shapes.removeStroke(shapeId);
+    this.gradients.purgeGradientDefForReleasedPaintAttr(previous);
   }
 
   updateStrokeColor(shapeId: string, color: string): void {
+    const previous = this.readShapePaintAttr(shapeId, 'stroke');
     this.shapes.updateStrokeColor(shapeId, color);
+    this.gradients.purgeGradientDefForReleasedPaintAttr(previous);
   }
 
   updateStrokeDasharray(shapeId: string, dasharray: string): void {
@@ -331,6 +339,7 @@ export class SvgManipulationService
 
   removeShapes(shapeIds: string[]): void {
     this.shapes.removeShapes(shapeIds);
+    this.gradients.purgeUnreferencedGradientDefs();
   }
 
   addShape(type: CreatableShapeType, attrs: ShapeCreationAttrs): string | null {
@@ -351,6 +360,7 @@ export class SvgManipulationService
 
   removeShape(shapeId: string): void {
     this.shapes.removeShape(shapeId);
+    this.gradients.purgeUnreferencedGradientDefs();
   }
 
   insertShapeMarkup(markup: string, insertionIndex?: number): void {
@@ -496,6 +506,23 @@ export class SvgManipulationService
 
   removeGradientDefById(gradientId: string): void {
     this.gradients.removeGradientDefById(gradientId);
+  }
+
+  purgeGradientDefIfUnreferenced(defId: string | null | undefined): void {
+    this.gradients.purgeGradientDefIfUnreferenced(defId);
+  }
+
+  purgeGradientDefForReleasedPaintAttr(paintAttr: string | null | undefined): void {
+    this.gradients.purgeGradientDefForReleasedPaintAttr(paintAttr);
+  }
+
+  purgeUnreferencedGradientDefs(): void {
+    this.gradients.purgeUnreferencedGradientDefs();
+  }
+
+  private readShapePaintAttr(shapeId: string, paintProperty: 'fill' | 'stroke'): string | null {
+    const shape = this.doc.getSVGInstance()?.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    return (shape?.attr(paintProperty) as string | null) ?? null;
   }
 
   countContentShapesReferencingPaintDef(defId: string): number {

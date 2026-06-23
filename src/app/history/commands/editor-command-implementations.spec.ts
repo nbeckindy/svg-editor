@@ -209,6 +209,27 @@ describe('GradientFillSnapshotCommand', () => {
     expect(remove).toHaveBeenCalledWith('g1');
   });
 
+  it('execute purges before gradient def when switching to solid via snapshot', () => {
+    const apply = vi.fn();
+    const count = vi.fn().mockReturnValue(0);
+    const remove = vi.fn();
+    const svc = mockSvc({
+      applyPaintGradientSnapshot: apply,
+      countPaintUrlReferencesToDefId: count,
+      removeGradientDefById: remove
+    });
+    const before = {
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    };
+    const after = { gradientId: null, shapePaintAttr: '#000000', gradientOuterHtml: null };
+    const cmd = new GradientFillSnapshotCommand(svc, 'r1', 'fill', before, after);
+    cmd.execute();
+    expect(count).toHaveBeenCalledWith('g1');
+    expect(remove).toHaveBeenCalledWith('g1');
+  });
+
   it('undo does not remove def when still referenced', () => {
     const apply = vi.fn();
     const count = vi.fn().mockReturnValue(1);

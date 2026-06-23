@@ -66,6 +66,10 @@ export class GradientFillSnapshotCommand implements CoalesceableCommand {
 
   execute(): void {
     this.svc.applyPaintGradientSnapshot(this.shapeId, this.paintProperty, this.after);
+    const gid = this.before.gradientId;
+    if (gid && this.svc.countPaintUrlReferencesToDefId(gid) === 0) {
+      this.svc.removeGradientDefById(gid);
+    }
   }
 
   undo(): void {

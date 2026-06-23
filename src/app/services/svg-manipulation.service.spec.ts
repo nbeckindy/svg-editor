@@ -1788,6 +1788,27 @@ describe('SvgManipulationService', () => {
       expect(service.findGradientDomElement(gradId)).not.toBeNull();
     });
 
+    it('exportSVG includes editor-created gradient defs from content group', () => {
+      const svgContent = `<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="50" height="50" fill="#808080"/></svg>`;
+      service.initializeSVG(container, svgContent);
+      const gradId = service.createLinearGradientFillForShape('r1', '#808080', '#ffffff');
+      const exported = service.exportSVG();
+      expect(exported).toContain('<linearGradient');
+      expect(exported).toContain(`id="${gradId}"`);
+      expect(exported).toContain(`url(#${gradId})`);
+    });
+
+    it('updateFillColor to solid purges orphaned gradient def from export', () => {
+      const svgContent = `<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="50" height="50" fill="#808080"/></svg>`;
+      service.initializeSVG(container, svgContent);
+      const gradId = service.createLinearGradientFillForShape('r1', '#808080', '#ffffff');
+      service.updateFillColor('r1', '#123456');
+      expect(service.findGradientDomElement(gradId)).toBeNull();
+      const exported = service.exportSVG();
+      expect(exported).not.toContain('linearGradient');
+      expect(exported).not.toContain(gradId);
+    });
+
     it('ensureDedicatedPaintGradient clones when two shapes share a gradient', () => {
       const svgContent = `<svg viewBox="0 0 100 100">
         <defs>

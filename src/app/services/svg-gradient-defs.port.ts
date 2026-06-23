@@ -8,6 +8,12 @@ export interface SvgGradientDefsPort {
   allocateUniqueDefId(prefix: string): string;
   countPaintUrlReferencesToDefId(defId: string): number;
   removeGradientDefById(gradientId: string): void;
+  /** Remove a gradient def when no element references it via `url(#id)` paint. */
+  purgeGradientDefIfUnreferenced(defId: string | null | undefined): void;
+  /** After releasing a fill/stroke value, drop its gradient def if nothing else references it. */
+  purgeGradientDefForReleasedPaintAttr(paintAttr: string | null | undefined): void;
+  /** Scan document defs and remove every unreferenced linear/radial gradient. */
+  purgeUnreferencedGradientDefs(): void;
   countContentShapesReferencingPaintDef(defId: string): number;
   findGradientDomElement(gradientId: string): SVGLinearGradientElement | SVGRadialGradientElement | null;
   readEditableGradientModelById(gradientId: string): EditableGradientModel | null;
