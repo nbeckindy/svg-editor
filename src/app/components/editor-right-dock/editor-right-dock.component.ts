@@ -1,7 +1,8 @@
-import { Component, computed, inject, input, output } from '@angular/core';
+import { Component, computed, inject } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
 import { EditorDockPanel } from '../editor-dock-panel';
 import { DockPanelRegistryService } from '../../panels/dock-panel-registry.service';
+import { EditorLayoutService } from '../../services/editor-layout.service';
 
 @Component({
   selector: 'app-editor-right-dock',
@@ -10,13 +11,8 @@ import { DockPanelRegistryService } from '../../panels/dock-panel-registry.servi
   styleUrl: './editor-right-dock.component.css'
 })
 export class EditorRightDockComponent {
+  protected readonly layout = inject(EditorLayoutService);
   private readonly dockPanelRegistry = inject(DockPanelRegistryService);
-
-  readonly activeDockPanel = input.required<EditorDockPanel>();
-  readonly activeDockPanelChange = output<EditorDockPanel>();
-
-  readonly dockCollapsed = input<boolean>(false);
-  readonly dockCollapsedChange = output<boolean>();
 
   readonly dockPanels = this.dockPanelRegistry.panels;
 
@@ -26,14 +22,6 @@ export class EditorRightDockComponent {
   });
 
   isPanelInactive(panelId: EditorDockPanel): boolean {
-    return this.activeDockPanel() !== panelId;
-  }
-
-  collapseDock(): void {
-    this.dockCollapsedChange.emit(true);
-  }
-
-  expandDock(): void {
-    this.dockCollapsedChange.emit(false);
+    return this.layout.activeDockPanel() !== panelId;
   }
 }

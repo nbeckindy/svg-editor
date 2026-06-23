@@ -7,6 +7,7 @@ import { SvgManipulationService } from './services/svg-manipulation.service';
 import { ShapeSelectionService } from './services/shape-selection.service';
 import { EditorHistoryService } from './services/editor-history.service';
 import { EditorToolService } from './services/editor-tool.service';
+import { EditorLayoutService } from './services/editor-layout.service';
 import { DockPanelRegistryService } from './panels/dock-panel-registry.service';
 import { registerDefaultDockPanels } from './panels/register-default-dock-panels';
 import { routes } from './app.routes';
@@ -63,7 +64,7 @@ describe('AppComponent', () => {
 
   it('auto-shows path ops when two paths are selected in selector mode', () => {
     const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
+    const layout = TestBed.inject(EditorLayoutService);
     const shapeSelection = TestBed.inject(ShapeSelectionService);
     const editorTool = TestBed.inject(EditorToolService);
     fixture.detectChanges();
@@ -75,12 +76,12 @@ describe('AppComponent', () => {
     ]);
     fixture.detectChanges();
 
-    expect(app.activeDockPanel()).toBe('pathOps');
+    expect(layout.activeDockPanel()).toBe('pathOps');
   });
 
   it('preserves manual dock tab choice until selection changes', () => {
     const fixture = TestBed.createComponent(AppComponent);
-    const app = fixture.componentInstance;
+    const layout = TestBed.inject(EditorLayoutService);
     const shapeSelection = TestBed.inject(ShapeSelectionService);
     const editorTool = TestBed.inject(EditorToolService);
     fixture.detectChanges();
@@ -91,15 +92,15 @@ describe('AppComponent', () => {
       { id: 'p2', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
     ]);
     fixture.detectChanges();
-    expect(app.activeDockPanel()).toBe('pathOps');
+    expect(layout.activeDockPanel()).toBe('pathOps');
 
     const layersTab = fixture.nativeElement.querySelector('[data-testid="dock-tab-layers"]') as HTMLButtonElement;
     layersTab.click();
     fixture.detectChanges();
-    expect(app.activeDockPanel()).toBe('layers');
+    expect(layout.activeDockPanel()).toBe('layers');
 
     fixture.detectChanges();
-    expect(app.activeDockPanel()).toBe('layers');
+    expect(layout.activeDockPanel()).toBe('layers');
   });
 
   it('should update svgContent when onSVGLoaded is called', () => {

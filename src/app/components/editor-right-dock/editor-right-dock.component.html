@@ -2,7 +2,7 @@
   <div
     class="dock-expanded"
     data-testid="dock-expanded-region"
-    [hidden]="dockCollapsed()">
+    [hidden]="layout.dockCollapsed()">
     <div class="dock-tab-row">
       <div
         class="dock-tabs"
@@ -15,9 +15,9 @@
             role="tab"
             class="dock-tab"
             [attr.data-testid]="panel.tabTestId"
-            [class.active]="activeDockPanel() === panel.id"
-            [attr.aria-selected]="activeDockPanel() === panel.id"
-            (click)="activeDockPanelChange.emit(panel.id)">
+            [class.active]="layout.activeDockPanel() === panel.id"
+            [attr.aria-selected]="layout.activeDockPanel() === panel.id"
+            (click)="layout.selectDockPanel(panel.id)">
             {{ panel.label }}
           </button>
         }
@@ -27,7 +27,7 @@
         class="dock-collapse-btn"
         data-testid="dock-collapse"
         aria-label="Collapse inspector"
-        (click)="collapseDock()">
+        (click)="layout.collapseDock()">
         <span class="dock-collapse-glyph" aria-hidden="true">⟩</span>
       </button>
     </div>
@@ -50,8 +50,8 @@
     class="dock-expand-handle"
     data-testid="dock-expand-handle"
     aria-label="Expand inspector"
-    [hidden]="!dockCollapsed()"
-    (click)="expandDock()">
+    [hidden]="!layout.dockCollapsed()"
+    (click)="layout.expandDock()">
     <span class="dock-expand-glyph" aria-hidden="true">⟨</span>
   </button>
 </aside>

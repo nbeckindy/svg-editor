@@ -25,6 +25,14 @@
     var(--editor-left-rail-width) minmax(0, 1fr) var(--editor-right-dock-collapsed-width);
 }
 
+.workspace.workspace--left-rail-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) var(--editor-right-dock-width);
+}
+
+.workspace.workspace--left-rail-collapsed.workspace--dock-collapsed {
+  grid-template-columns: 0 minmax(0, 1fr) var(--editor-right-dock-collapsed-width);
+}
+
 .canvas-column {
   position: relative;
   min-height: 0;

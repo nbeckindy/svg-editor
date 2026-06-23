@@ -1,8 +1,7 @@
-import { Component, effect, inject, signal } from '@angular/core';
+import { Component, inject } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { SvgCanvasComponent } from './components/svg-canvas/svg-canvas.component';
 import { SvgDebugPanelComponent } from './components/svg-debug-panel/svg-debug-panel.component';
-import { EditorDockPanel } from './components/editor-dock-panel';
 import { EditorTopBarComponent } from './components/editor-top-bar/editor-top-bar.component';
 import { EditorToolContextBarComponent } from './components/editor-tool-context-bar/editor-tool-context-bar.component';
 import { EditorLeftRailComponent } from './components/editor-left-rail/editor-left-rail.component';
@@ -11,7 +10,7 @@ import type { AppRootSvgManipulationPort } from './history/editor-chrome-svg.por
 import { SvgManipulationService } from './services/svg-manipulation.service';
 import { ShapeSelectionService } from './services/shape-selection.service';
 import { EditorHistoryService } from './services/editor-history.service';
-import { DockPanelAutoShowService } from './panels/dock-panel-auto-show.service';
+import { EditorLayoutService } from './services/editor-layout.service';
 
 @Component({
   selector: 'app-root',
@@ -34,29 +33,11 @@ export class AppComponent {
   private readonly svg: AppRootSvgManipulationPort = inject(SvgManipulationService);
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly editorHistory = inject(EditorHistoryService);
-  private readonly dockAutoShow = inject(DockPanelAutoShowService);
+  protected readonly layout = inject(EditorLayoutService);
 
   /** Blank 800×600 document on first paint and on full page reload. */
   svgContent: string = AppComponent.DEFAULT_SVG;
   uploadedFileName: string = '';
-  readonly activeDockPanel = signal<EditorDockPanel>('properties');
-  /** Session-only; resets on full page reload (expanded). */
-  readonly dockCollapsed = signal(false);
-
-  constructor() {
-    effect(() => {
-      const suggested = this.dockAutoShow.suggestedPanelId();
-      const current = this.activeDockPanel();
-      if (suggested && this.dockAutoShow.shouldAutoSwitch(current, suggested)) {
-        this.activeDockPanel.set(suggested);
-      }
-    });
-  }
-
-  onDockPanelChange(panel: EditorDockPanel): void {
-    this.activeDockPanel.set(panel);
-    this.dockAutoShow.recordManualSelection(panel);
-  }
 
   onNewCanvas(): void {
     if (this.editorHistory.canUndo() &&
