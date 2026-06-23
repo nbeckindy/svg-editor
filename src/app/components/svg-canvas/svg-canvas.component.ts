@@ -96,10 +96,8 @@ import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.ser
 import { GroupStructureChangeService } from '../../services/chrome-apply/group-structure-change.service';
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
 import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-command-bridge.service';
-import {
-  EditorPointerIntentDebugService,
-  type EditorPointerIntentSnapshot
-} from '../../services/editor-pointer-intent-debug.service';
+import { EditorPointerIntentDebugService } from '../../services/editor-pointer-intent-debug.service';
+import { buildPointerIntentSnapshot } from './gestures/pointer-intent-debug';
 import { sampleSolidComputedPaint } from '../../utils/svg-computed-color-sample';
 import {
   inlineTextEditorFontShorthand,
@@ -3760,10 +3758,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     return `Expected cursor: default (${tool})`;
   }
 
-  /**
-   * Debug HUD: predicted primary-button effect on the canvas at the last pointer sample.
-   * Best-effort mirror of {@link PointerGestureRouter.onCanvasMouseDownPrimary} + pen session rules.
-   */
+  /** Debug HUD: high-level pointer sample for the dev strip (see {@link buildPointerIntentSnapshot}). */
   private refreshPointerIntentDebug(clientX: number, clientY: number): void {
     const tool = this.editorTool.getCurrentTool();
     const vpEl = this.canvasViewport()?.nativeElement;
@@ -3773,176 +3768,31 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         : null;
     const overCanvas = !!(hitTarget && vpEl && typeof vpEl.contains === 'function' && vpEl.contains(hitTarget));
 
-    const lines: string[] = [`tool=${tool}`];
-    const publish = (primaryLine: string, detailLines: string[]): void => {
-      const expectedCursorLine = this.computeExpectedCursorHint(clientX, clientY, hitTarget, overCanvas);
-      const snap: EditorPointerIntentSnapshot = {
+    this.pointerIntentDebug.publish(
+      buildPointerIntentSnapshot({
+        tool,
         clientX,
         clientY,
+        hitTarget,
+        overCanvas,
+        expectedCursorLine: this.computeExpectedCursorHint(clientX, clientY, hitTarget, overCanvas),
         sampledAtMs: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-        expectedCursorLine,
-        primaryLine,
-        detailLines
-      };
-      this.pointerIntentDebug.publish(snap);
-    };
-
-    if (this.creation.isActive) {
-      publish('Creation in progress (mousemove shapes object)', lines.concat('primary click semantics N/A until creation ends'));
-      return;
-    }
-    if (this.pathNodeDragSession) {
-      publish('Path node drag in progress', lines.concat(`pathId=${this.pathNodeDragSession.pathId}`));
-      return;
-    }
-    if (this.isPenInsertOnPathDragActive()) {
-      publish('Pen insert-on-path drag (mouseup commits)', lines.concat('see pen session'));
-      return;
-    }
-    if (tool === 'pen' && this.isPenToolWithActiveSession()) {
-      const pen = this.penTool.describePenPrimaryMouseDownIntent(hitTarget, clientX, clientY, (cx, cy, s) =>
-        this.getSnappedPenPoint(cx, cy, s)
-      );
-      publish(`Pen session active → ${pen.headline}`, lines.concat(pen.details));
-      return;
-    }
-    if (this.isSelectionMarquee) {
-      publish('Selection marquee drag', lines);
-      return;
-    }
-    if (this.isZoomMarquee) {
-      publish('Zoom marquee drag', lines);
-      return;
-    }
-    if (this.isResizingSelection) {
-      publish('Resize drag', lines);
-      return;
-    }
-    if (this.isSkewingSelection) {
-      publish('Skew drag', lines);
-      return;
-    }
-    if (this.isRotatingSelection) {
-      publish('Rotate drag', lines);
-      return;
-    }
-    if (this.isPanning) {
-      publish('Pan drag', lines);
-      return;
-    }
-    if (this.isDraggingShape) {
-      publish('Shape drag', lines);
-      return;
-    }
-
-    lines.push(`overCanvasViewport=${overCanvas}`);
-    if (hitTarget) {
-      const tid = hitTarget.id ? `#${hitTarget.id}` : '';
-      lines.push(`elementFromPoint=${hitTarget.tagName.toLowerCase()}${tid}`);
-    } else {
-      lines.push('elementFromPoint=null');
-    }
-
-    if (!overCanvas) {
-      publish(`${tool}: pointer not on canvas (no primary-canvas prediction)`, lines);
-      return;
-    }
-
-    if (tool === 'zoom') {
-      publish('Zoom tool: primary mousedown starts zoom marquee', lines);
-      return;
-    }
-    if (tool === 'pan') {
-      publish('Pan tool: primary mousedown starts pan', lines);
-      return;
-    }
-    if (tool === 'pen') {
-      const pen = this.penTool.describePenPrimaryMouseDownIntent(hitTarget, clientX, clientY, (cx, cy, s) =>
-        this.getSnappedPenPoint(cx, cy, s)
-      );
-      publish(pen.headline, lines.concat(pen.details));
-      return;
-    }
-    if (this.isCreationToolActive()) {
-      if (!this.svgContent() || !this.canvasView.isInitialized()) {
-        publish(`${tool}: creation tool but canvas not ready`, lines);
-        return;
-      }
-      publish(`${tool}: primary mousedown may start creation gesture`, lines.concat('see CreationGesture'));
-      return;
-    }
-    if (tool === 'eyedropper') {
-      publish('Eyedropper: primary mousedown samples color', lines);
-      return;
-    }
-    if (tool === 'text') {
-      publish('Text tool: primary mousedown places / edits text (see text handlers)', lines);
-      return;
-    }
-    if (!this.isSelectorInteractionTool(tool) || !this.svgContent() || !this.canvasView.isInitialized()) {
-      publish(`${tool}: primary canvas click not routed here`, lines);
-      return;
-    }
-
-    if (!hitTarget) {
-      publish('Selector: no target', lines);
-      return;
-    }
-
-    if (this.hasPathNodeEditState()) {
-      const anchorEl = hitTarget.closest?.('[data-path-node-anchor-index]') as Element | null;
-      const handleEl = hitTarget.closest?.('[data-path-node-handle-index]') as Element | null;
-      if (anchorEl) {
-        publish('Node-edit: drag anchor', lines.concat(`anchor index attr=${anchorEl.getAttribute('data-path-node-anchor-index')}`));
-        return;
-      }
-      if (handleEl) {
-        publish('Node-edit: drag control handle', lines.concat(`handle index attr=${handleEl.getAttribute('data-path-node-handle-index')}`));
-        return;
-      }
-    }
-
-    const resizeEl = hitTarget.closest?.('[data-resize-handle]');
-    if (resizeEl) {
-      const h = resizeEl.getAttribute('data-resize-handle');
-      publish(`Selector: resize (${h ?? '?'})`, lines);
-      return;
-    }
-    const skewEl = hitTarget.closest?.('[data-skew-handle]');
-    if (skewEl) {
-      const e = skewEl.getAttribute('data-skew-handle');
-      publish(`Selector: skew (${e ?? '?'})`, lines);
-      return;
-    }
-    const rotateEl = hitTarget.closest?.('[data-rotate-handle]');
-    if (rotateEl) {
-      publish('Selector: rotate selection', lines);
-      return;
-    }
-
-    if (!this.isEditorContentShapeTarget(hitTarget)) {
-      publish('Selector: primary mousedown starts selection marquee', lines.concat('missed editable shape'));
-      return;
-    }
-
-    if (hitTarget.tagName === 'svg' || !hitTarget.id) {
-      publish('Selector: click on svg chrome / no id — likely no-op', lines);
-      return;
-    }
-
-    let effectiveDragId = hitTarget.id;
-    if (!this.isShapeSelected(hitTarget.id)) {
-      const nearestGroupId = this.getNearestGroupAncestorId(hitTarget.id);
-      if (nearestGroupId && this.isShapeSelected(nearestGroupId)) {
-        effectiveDragId = nearestGroupId;
-        lines.push(`group drill-in: drag effective id=${effectiveDragId}`);
-      } else {
-        publish('Selector: click on shape but not selected — primary down may no-op (selection policy)', lines);
-        return;
-      }
-    }
-
-    publish(`Selector: drag selected shape(s) from ${effectiveDragId}`, lines.concat('unless shift/ctrl/meta held'));
+        isCreationInProgress: this.creation.isActive,
+        pathNodeDragPathId: this.pathNodeDragSession?.pathId ?? null,
+        isPenInsertOnPathDragActive: this.isPenInsertOnPathDragActive(),
+        isPenSessionActive: tool === 'pen' && this.isPenToolWithActiveSession(),
+        isSelectionMarquee: this.isSelectionMarquee,
+        isZoomMarquee: this.isZoomMarquee,
+        isResizingSelection: this.isResizingSelection,
+        isSkewingSelection: this.isSkewingSelection,
+        isRotatingSelection: this.isRotatingSelection,
+        isPanning: this.isPanning,
+        isDraggingShape: this.isDraggingShape,
+        isCanvasReady: !!(this.svgContent() && this.canvasView.isInitialized()),
+        getDescriptor: (id) => this.toolRegistry.getDescriptor(id),
+        hasRegisteredTool: (id) => this.toolRegistry.has(id)
+      })
+    );
   }
 
   private isValidNodeEditSerializedPath(pathData: string): boolean {
