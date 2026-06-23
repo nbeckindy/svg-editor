@@ -5,7 +5,7 @@
 }
 
 .path-ops-panel {
-  background: #f8f8f8;
+  background: var(--editor-surface-muted);
   height: 100%;
   min-height: 0;
   display: flex;
@@ -14,30 +14,30 @@
 }
 
 .panel-header {
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
+  padding: var(--editor-spacing-lg) var(--editor-spacing-xl);
+  background: var(--editor-surface);
+  border-bottom: 1px solid var(--editor-border-strong);
 }
 
 .panel-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--editor-font-size-xl);
   font-weight: 600;
-  color: #333;
+  color: var(--editor-text-heading);
 }
 
 .panel-body {
   flex: 1;
   min-height: 0;
   overflow: auto;
-  padding: 12px 16px;
+  padding: var(--editor-spacing-lg) var(--editor-spacing-xl);
 }
 
 .operand-summary {
-  margin: 0 0 8px;
-  font-size: 13px;
+  margin: 0 0 var(--editor-spacing-md);
+  font-size: var(--editor-font-size-md);
   font-weight: 600;
-  color: #334155;
+  color: var(--editor-text-secondary);
 }
 
 .operand-count {
@@ -45,19 +45,19 @@
 }
 
 .operand-list {
-  margin: 0 0 12px;
+  margin: 0 0 var(--editor-spacing-lg);
   padding: 0;
   list-style: none;
-  font-size: 12px;
-  color: #475569;
+  font-size: var(--editor-font-size-sm);
+  color: var(--editor-text-muted);
 }
 
 .operand-item {
-  padding: 4px 8px;
-  border-radius: 4px;
-  background: #fff;
-  border: 1px solid #e2e8f0;
-  margin-bottom: 4px;
+  padding: var(--editor-spacing-xs) var(--editor-spacing-md);
+  border-radius: var(--editor-radius-sm);
+  background: var(--editor-surface);
+  border: 1px solid var(--editor-border);
+  margin-bottom: var(--editor-spacing-xs);
   font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   overflow: hidden;
   text-overflow: ellipsis;
@@ -66,8 +66,8 @@
 
 .empty-hint,
 .status-hint {
-  margin: 0 0 12px;
-  font-size: 13px;
+  margin: 0 0 var(--editor-spacing-lg);
+  font-size: var(--editor-font-size-md);
   color: #64748b;
   line-height: 1.4;
 }
@@ -79,33 +79,33 @@
 .ops-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
+  gap: var(--editor-spacing-md);
 }
 
 .compound-toolbar {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 8px;
-  padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
+  gap: var(--editor-spacing-md);
+  margin-top: var(--editor-spacing-md);
+  padding-top: var(--editor-spacing-lg);
+  border-top: 1px solid var(--editor-border);
 }
 
 .op-btn {
-  border: 1px solid #c2cadb;
-  background: #f8fafc;
-  color: #334155;
-  border-radius: 6px;
-  font-size: 12px;
+  border: 1px solid var(--editor-border-control);
+  background: var(--editor-surface-subtle);
+  color: var(--editor-text-secondary);
+  border-radius: var(--editor-radius-md);
+  font-size: var(--editor-font-size-sm);
   font-weight: 600;
-  padding: 8px 12px;
+  padding: var(--editor-spacing-md) var(--editor-spacing-lg);
   cursor: pointer;
 }
 
 .op-btn:hover:not(:disabled) {
-  background: #eff6ff;
-  border-color: #93c5fd;
-  color: #1d4ed8;
+  background: var(--editor-accent-surface);
+  border-color: var(--editor-accent-border);
+  color: var(--editor-accent-text);
 }
 
 .op-btn:disabled {
@@ -114,28 +114,28 @@
 }
 
 .op-btn.active {
-  color: #1d4ed8;
-  border-color: #93c5fd;
-  background: #eff6ff;
+  color: var(--editor-accent-text);
+  border-color: var(--editor-accent-border);
+  background: var(--editor-accent-surface);
 }
 
 .preview-actions {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 12px;
-  padding-top: 12px;
-  border-top: 1px solid #e2e8f0;
+  gap: var(--editor-spacing-md);
+  margin-top: var(--editor-spacing-lg);
+  padding-top: var(--editor-spacing-lg);
+  border-top: 1px solid var(--editor-border);
 }
 
 .op-btn-primary {
-  background: #2563eb;
-  border-color: #2563eb;
-  color: #fff;
+  background: var(--editor-accent);
+  border-color: var(--editor-accent);
+  color: var(--editor-text-on-accent);
 }
 
 .op-btn-primary:hover:not(:disabled) {
-  background: #1d4ed8;
-  border-color: #1d4ed8;
-  color: #fff;
+  background: var(--editor-accent-text);
+  border-color: var(--editor-accent-text);
+  color: var(--editor-text-on-accent);
 }

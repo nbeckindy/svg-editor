@@ -25,44 +25,44 @@
   display: grid;
   grid-template-columns: minmax(0, 1fr) auto;
   align-items: stretch;
-  gap: 4px;
-  padding: 6px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: var(--editor-spacing-xs);
+  padding: var(--editor-spacing-sm);
+  border-bottom: 1px solid var(--editor-border-subtle);
 }
 
 .dock-tabs {
   display: grid;
   grid-template-columns: 1fr 1fr 1fr;
-  gap: 6px;
+  gap: var(--editor-spacing-sm);
   min-width: 0;
 }
 
 .dock-tab {
-  border: 1px solid #c2cadb;
-  background: #f8fafc;
-  color: #334155;
-  border-radius: 6px;
-  font-size: 12px;
+  border: 1px solid var(--editor-border-control);
+  background: var(--editor-surface-subtle);
+  color: var(--editor-text-secondary);
+  border-radius: var(--editor-radius-md);
+  font-size: var(--editor-font-size-sm);
   font-weight: 600;
-  padding: 6px 8px;
+  padding: var(--editor-spacing-sm) var(--editor-spacing-md);
   cursor: pointer;
 }
 
 .dock-tab.active {
-  color: #1d4ed8;
-  border-color: #93c5fd;
-  background: #eff6ff;
+  color: var(--editor-accent-text);
+  border-color: var(--editor-accent-border);
+  background: var(--editor-accent-surface);
 }
 
 .dock-collapse-btn {
   flex-shrink: 0;
   width: 32px;
-  border: 1px solid #c2cadb;
-  border-radius: 6px;
-  background: #f8fafc;
-  color: #475569;
+  border: 1px solid var(--editor-border-control);
+  border-radius: var(--editor-radius-md);
+  background: var(--editor-surface-subtle);
+  color: var(--editor-text-muted);
   cursor: pointer;
-  font-size: 16px;
+  font-size: var(--editor-font-size-lg);
   line-height: 1;
   padding: 0;
   display: flex;
@@ -71,7 +71,7 @@
 }
 
 .dock-collapse-btn:hover {
-  background: #eef2f7;
+  background: var(--editor-surface-accent-hover);
 }
 
 .dock-collapse-glyph {
@@ -98,18 +98,26 @@
   width: 100%;
   border: none;
   border-left: 1px solid var(--editor-border);
-  background: linear-gradient(to left, #eef2ff 0%, #f8fafc 100%);
-  color: #334155;
+  background: linear-gradient(
+    to left,
+    var(--editor-surface-accent-gradient-end) 0%,
+    var(--editor-surface-subtle) 100%
+  );
+  color: var(--editor-text-secondary);
   cursor: pointer;
   padding: 0;
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 18px;
+  font-size: var(--editor-font-size-xl);
 }
 
 .dock-expand-handle:hover {
-  background: linear-gradient(to left, #e0e7ff 0%, #f1f5f9 100%);
+  background: linear-gradient(
+    to left,
+    var(--editor-accent-gradient-hover-end) 0%,
+    var(--editor-accent-gradient-hover-start) 100%
+  );
 }
 
 .dock-expand-handle[hidden] {

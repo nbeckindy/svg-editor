@@ -1,4 +1,4 @@
-@use './editor-layout-tokens';
+@use './styles/tokens';
 
 *,
 *::before,
@@ -11,29 +11,29 @@ body {
   margin: 0;
   height: 100%;
   font-family: Inter, -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-  color: #1f2937;
+  color: var(--editor-text);
 }
 
 /* Layers panel context menu — rendered in CDK overlay outside component host */
 .layer-context-menu-panel.mat-mdc-menu-panel {
-  --mat-menu-container-color: #ffffff;
-  --mat-sys-surface-container: #ffffff;
-  --mat-sys-on-surface: #1f2937;
+  --mat-menu-container-color: var(--editor-surface);
+  --mat-sys-surface-container: var(--editor-surface);
+  --mat-sys-on-surface: var(--editor-text);
   --mat-sys-hover-state-layer-opacity: 0.08;
-  --mat-menu-item-hover-state-layer-color: rgba(25, 118, 210, 0.1);
+  --mat-menu-item-hover-state-layer-color: var(--editor-accent-surface-hover);
   --mat-menu-item-focus-state-layer-color: transparent;
-  background-color: #ffffff;
-  box-shadow: 0 2px 8px rgba(0, 0, 0, 0.15);
+  background-color: var(--editor-surface);
+  box-shadow: var(--editor-shadow-menu);
 }
 
 .layer-context-menu-panel .mat-mdc-menu-content {
-  background-color: #ffffff;
+  background-color: var(--editor-surface);
 }
 
 .layer-context-menu-panel .mat-mdc-menu-item:not([disabled]):hover {
-  background-color: rgba(25, 118, 210, 0.1);
+  background-color: var(--editor-accent-surface-hover);
 }
 
 .layer-context-menu-panel .mat-mdc-menu-item:not([disabled]).cdk-keyboard-focused {
-  background-color: rgba(25, 118, 210, 0.16);
+  background-color: var(--editor-accent-surface-focus);
 }

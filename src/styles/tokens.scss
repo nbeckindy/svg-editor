@@ -1,0 +1,89 @@
+/* Design tokens for the editor shell — surfaces, spacing, typography, and layout tracks. */
+:root {
+  /* Surfaces */
+  --editor-surface: #ffffff;
+  --editor-surface-subtle: #f8fafc;
+  --editor-surface-muted: #f8f8f8;
+  --editor-surface-panel: #f5f5f5;
+  --editor-surface-hover: #f5f5f5;
+  --editor-surface-accent: #eff6ff;
+  --editor-surface-accent-hover: #eef2f7;
+  --editor-surface-accent-gradient-end: #eef2ff;
+  --editor-canvas-bg: #f4f6fb;
+
+  /* Borders */
+  --editor-border: #d5dceb;
+  --editor-border-strong: #dddddd;
+  --editor-border-subtle: #e5e7eb;
+  --editor-border-control: #c2cadb;
+  --editor-border-hover: #999999;
+
+  /* Text */
+  --editor-text: #1f2937;
+  --editor-text-heading: #333333;
+  --editor-text-secondary: #334155;
+  --editor-text-muted: #475569;
+  --editor-text-on-accent: #ffffff;
+
+  /* Accent / interactive */
+  --editor-accent: #2563eb;
+  --editor-accent-strong: #1976d2;
+  --editor-accent-text: #1d4ed8;
+  --editor-accent-text-dark: #1565c0;
+  --editor-accent-border: #93c5fd;
+  --editor-accent-surface: #eff6ff;
+  --editor-accent-surface-hover: rgba(25, 118, 210, 0.1);
+  --editor-accent-surface-active: rgba(25, 118, 210, 0.08);
+  --editor-accent-surface-focus: rgba(25, 118, 210, 0.16);
+  --editor-accent-badge-bg: #dbeafe;
+  --editor-accent-badge-border: #bfdbfe;
+  --editor-accent-gradient-hover-end: #e0e7ff;
+  --editor-accent-gradient-hover-start: #f1f5f9;
+
+  /* Spacing */
+  --editor-spacing-xs: 4px;
+  --editor-spacing-sm: 6px;
+  --editor-spacing-md: 8px;
+  --editor-spacing-lg: 12px;
+  --editor-spacing-xl: 16px;
+
+  /* Radii */
+  --editor-radius-sm: 4px;
+  --editor-radius-md: 6px;
+  --editor-radius-lg: 8px;
+  --editor-radius-pill: 999px;
+
+  /* Layout tracks */
+  --editor-left-rail-width: 72px;
+  --editor-right-dock-width: 320px;
+  --editor-right-dock-collapsed-width: 36px;
+  --editor-context-bar-height: 40px;
+  --editor-rail-control-size: 40px;
+  --editor-tool-btn-size: 40px;
+
+  /* Shadows */
+  --editor-shadow-popover: 0 8px 24px rgba(15, 23, 42, 0.12);
+  --editor-shadow-menu: 0 2px 8px rgba(0, 0, 0, 0.15);
+  --editor-shadow-debug-strip: 0 -6px 18px rgba(15, 23, 42, 0.12);
+
+  /* Typography */
+  --editor-font-size-xs: 10px;
+  --editor-font-size-sm: 12px;
+  --editor-font-size-md: 13px;
+  --editor-font-size-lg: 16px;
+  --editor-font-size-xl: 18px;
+}
+
+@media (max-width: 1280px) {
+  :root {
+    --editor-right-dock-width: 290px;
+  }
+}
+
+@media (max-width: 1040px) {
+  :root {
+    --editor-left-rail-width: 66px;
+    --editor-right-dock-width: 52px;
+    --editor-tool-btn-size: 36px;
+  }
+}

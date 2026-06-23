@@ -1,7 +1,7 @@
 .tool-strip {
   display: flex;
   flex-direction: column;
-  gap: 8px;
+  gap: var(--editor-spacing-md);
   align-items: center;
   padding: 10px 0;
 }
@@ -10,28 +10,28 @@
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  width: 40px;
-  height: 40px;
-  min-height: 40px;
+  width: var(--editor-tool-btn-size);
+  height: var(--editor-tool-btn-size);
+  min-height: var(--editor-tool-btn-size);
   padding: 0;
-  font-size: 12px;
-  border: 1px solid #ddd;
-  border-radius: 6px;
-  background: #fff;
-  color: #333;
+  font-size: var(--editor-font-size-sm);
+  border: 1px solid var(--editor-border-strong);
+  border-radius: var(--editor-radius-md);
+  background: var(--editor-surface);
+  color: var(--editor-text-heading);
   cursor: pointer;
   transition: background 0.2s ease, border-color 0.2s ease;
 }
 
 .tool-btn:hover {
-  background: #f5f5f5;
-  border-color: #999;
+  background: var(--editor-surface-hover);
+  border-color: var(--editor-border-hover);
 }
 
 .tool-btn.active {
-  background: #1976d2;
-  border-color: #1976d2;
-  color: white;
+  background: var(--editor-accent-strong);
+  border-color: var(--editor-accent-strong);
+  color: var(--editor-text-on-accent);
 }
 
 .tool-btn-icon {
@@ -65,9 +65,9 @@
   display: flex;
   flex-direction: column;
   align-items: center;
-  gap: 6px;
-  padding-bottom: 8px;
-  border-bottom: 1px solid #e5e7eb;
+  gap: var(--editor-spacing-sm);
+  padding-bottom: var(--editor-spacing-md);
+  border-bottom: 1px solid var(--editor-border-subtle);
   width: 100%;
 }
 
@@ -78,13 +78,7 @@
 
 @media (max-width: 1040px) {
   .tool-strip {
-    padding: 8px 0;
-  }
-
-  .tool-btn {
-    width: 36px;
-    height: 36px;
-    min-height: 36px;
+    padding: var(--editor-spacing-md) 0;
   }
 }
 

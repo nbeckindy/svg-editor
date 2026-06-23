@@ -5,7 +5,7 @@
 }
 
 .layers-panel {
-  background: #f8f8f8;
+  background: var(--editor-surface-muted);
   height: 100%;
   min-height: 0;
   display: flex;
@@ -14,9 +14,9 @@
 }
 
 .panel-header {
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
+  padding: var(--editor-spacing-lg) var(--editor-spacing-xl);
+  background: var(--editor-surface);
+  border-bottom: 1px solid var(--editor-border-strong);
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -24,14 +24,14 @@
 
 .panel-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--editor-font-size-xl);
   font-weight: 600;
-  color: #333;
+  color: var(--editor-text-heading);
 }
 
 .panel-actions {
   display: flex;
-  gap: 4px;
+  gap: var(--editor-spacing-xs);
 }
 
 .panel-action-btn {
@@ -42,10 +42,10 @@
   height: 28px;
   padding: 0;
   margin: 0;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #fff;
-  color: #333;
+  border: 1px solid var(--editor-border-strong);
+  border-radius: var(--editor-radius-sm);
+  background: var(--editor-surface);
+  color: var(--editor-text-heading);
   font-size: 16px;
   cursor: pointer;
   transition: background 0.15s, border-color 0.15s;
@@ -65,14 +65,14 @@
   flex: 1;
   min-height: 0;
   overflow-y: auto;
-  padding: 8px;
+  padding: var(--editor-spacing-md);
 }
 
 .layer-row {
   position: relative;
   display: flex;
   align-items: center;
-  gap: 6px;
+  gap: var(--editor-spacing-sm);
   width: 100%;
   padding: 4px 6px;
   margin: 0;
@@ -118,7 +118,7 @@
   left: calc(12px + var(--drop-depth, 0) * 16px);
   right: 6px;
   height: 2px;
-  background: #1976d2;
+  background: var(--editor-accent-strong);
   border-radius: 1px;
   pointer-events: none;
   animation: layer-drop-line-pulse 1s ease-in-out infinite;
@@ -134,7 +134,7 @@
 
 .layer-row.drop-into-group {
   background: rgba(25, 118, 210, 0.1);
-  border-color: #1976d2;
+  border-color: var(--editor-accent-strong);
   box-shadow: inset 0 0 0 1px rgba(25, 118, 210, 0.35);
 }
 
@@ -214,7 +214,7 @@
 
 .layer-drag-handle:hover {
   background: rgba(0, 0, 0, 0.06);
-  color: #333;
+  color: var(--editor-text-heading);
 }
 
 .group-chevron {
@@ -290,7 +290,7 @@
 .layer-preview {
   width: 32px;
   height: 24px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 4px;
   background: #fff;
   object-fit: contain;

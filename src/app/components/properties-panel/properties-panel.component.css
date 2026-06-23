@@ -5,8 +5,8 @@
 }
 
 .properties-panel {
-  background: #f5f5f5;
-  border-left: 1px solid #ddd;
+  background: var(--editor-surface-panel);
+  border-left: 1px solid var(--editor-border-strong);
   height: 100%;
   min-height: 0;
   display: flex;
@@ -16,16 +16,16 @@
 
 .panel-header {
   flex-shrink: 0;
-  padding: 16px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
+  padding: var(--editor-spacing-xl);
+  background: var(--editor-surface);
+  border-bottom: 1px solid var(--editor-border-strong);
 }
 
 .panel-header h3 {
   margin: 0;
-  font-size: 18px;
+  font-size: var(--editor-font-size-xl);
   font-weight: 600;
-  color: #333;
+  color: var(--editor-text-heading);
 }
 
 .panel-scroll {
@@ -38,13 +38,13 @@
 
 .paint-segment {
   flex-shrink: 0;
-  padding: 12px 16px 10px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
+  padding: var(--editor-spacing-lg) var(--editor-spacing-xl) 10px;
+  background: var(--editor-surface);
+  border-bottom: 1px solid var(--editor-border-strong);
 }
 
 .paint-segment-group {
-  margin-bottom: 12px;
+  margin-bottom: var(--editor-spacing-lg);
 }
 
 .paint-segment-group:last-child {
@@ -54,7 +54,7 @@
 .paint-swatches-row {
   display: grid;
   grid-template-columns: 1fr;
-  gap: 12px;
+  gap: var(--editor-spacing-lg);
 }
 
 @media (min-width: 340px) {
@@ -176,7 +176,7 @@
   min-height: 30px;
   padding: 6px 8px;
   font-size: 12px;
-  color: #333;
+  color: var(--editor-text-heading);
   border: 1px solid #ccc;
   border-radius: 4px;
   background: #fff;
@@ -275,10 +275,10 @@
 .property-value {
   padding: 8px 12px;
   background: #fff;
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 4px;
   font-size: 14px;
-  color: #333;
+  color: var(--editor-text-heading);
 }
 
 .property-value.readonly {
@@ -331,7 +331,7 @@
   font-size: 12px;
   padding: 2px 6px;
   background: #f0f0f0;
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 3px;
 }
 
@@ -353,7 +353,7 @@
 }
 
 .gradient-fill-details {
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 4px;
   padding: 4px 8px 8px;
   background: #fafafa;
@@ -363,7 +363,7 @@
   cursor: pointer;
   font-size: 13px;
   font-weight: 600;
-  color: #333;
+  color: var(--editor-text-heading);
   padding: 4px 0;
 }
 
@@ -374,7 +374,7 @@
   border: 1px solid #ccc;
   border-radius: 4px;
   cursor: pointer;
-  color: #333;
+  color: var(--editor-text-heading);
 }
 
 .btn-set-paint:hover {
@@ -385,7 +385,7 @@
 .color-picker {
   width: 50px;
   height: 38px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 4px;
   cursor: pointer;
   padding: 2px;
@@ -394,7 +394,7 @@
 .color-text {
   flex: 1;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 4px;
   font-size: 14px;
   font-family: 'Courier New', monospace;
@@ -403,10 +403,10 @@
 .dash-select {
   width: 100%;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 4px;
   font-size: 14px;
-  color: #333;
+  color: var(--editor-text-heading);
   background: #fff;
   cursor: pointer;
 }
@@ -419,11 +419,11 @@
   width: 100%;
   margin-top: 8px;
   padding: 8px 12px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 4px;
   font-size: 14px;
   font-family: 'Courier New', monospace;
-  color: #333;
+  color: var(--editor-text-heading);
 }
 
 .dash-custom-input:invalid,
@@ -441,7 +441,7 @@
   flex: 1;
   height: 6px;
   border-radius: 3px;
-  background: #ddd;
+  background: var(--editor-border-strong);
   outline: none;
   -webkit-appearance: none;
 }
@@ -468,7 +468,7 @@
 .range-number {
   width: 70px;
   padding: 8px;
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 4px;
   font-size: 14px;
   text-align: center;
@@ -477,13 +477,13 @@
 .panel-actions {
   margin-top: 24px;
   padding-top: 16px;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--editor-border-strong);
 }
 
 .document-settings-inline {
   display: block;
   margin-top: 24px;
-  border-top: 1px solid #ddd;
+  border-top: 1px solid var(--editor-border-strong);
   padding-top: 8px;
 }
 
@@ -492,7 +492,7 @@
   padding: 10px 16px;
   background: #fff;
   color: #666;
-  border: 1px solid #ddd;
+  border: 1px solid var(--editor-border-strong);
   border-radius: 4px;
   cursor: pointer;
   font-size: 14px;
@@ -503,7 +503,7 @@
 .btn-secondary:hover {
   background: #f5f5f5;
   border-color: #999;
-  color: #333;
+  color: var(--editor-text-heading);
 }
 
 .empty-state {
