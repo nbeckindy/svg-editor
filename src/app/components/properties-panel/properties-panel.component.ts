@@ -12,6 +12,7 @@ import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaul
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import type { LayerLockReadPort } from '../../history/layer-lock-read.port';
 import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-node-anchor-tools.component';
 
 @Component({
@@ -44,7 +45,7 @@ export class PropertiesPanelComponent {
   private editorTool = inject(EditorToolService);
   private chromeApply = inject(ChromeEditorApplyService);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
-  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly layerLock = inject(SvgManipulationService) as LayerLockReadPort;
   readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
   readonly selectionTransformReadout = this.transformReadoutSvc.selectionTransformReadout;
   readonly selectionBBoxFieldModel = this.transformReadoutSvc.selectionBBoxFieldModel;
@@ -57,7 +58,7 @@ export class PropertiesPanelComponent {
    */
   readonly anySelectedShapeLocked = computed(() => {
     const shapes = this.shapeSelectionService.getSelectedShapes();
-    return shapes.some((s) => this.svgManipulation.isElementOrAncestorLocked(s.id));
+    return shapes.some((s) => this.layerLock.isElementOrAncestorLocked(s.id));
   });
   /**
    * True when selected `<text>` nodes include any that are under a lock
@@ -65,7 +66,7 @@ export class PropertiesPanelComponent {
    */
   readonly textSelectionTouchesLocked = computed(() => {
     const texts = this.shapeSelectionService.getSelectedShapes().filter((s) => s.type === 'text');
-    return texts.length > 0 && texts.some((t) => this.svgManipulation.isElementOrAncestorLocked(t.id));
+    return texts.length > 0 && texts.some((t) => this.layerLock.isElementOrAncestorLocked(t.id));
   });
   /** Text tool active: typography controls edit placement defaults when nothing is selected. */
   readonly textToolPlacementMode = computed(() => this.editorTool.currentTool() === 'text');

@@ -3,8 +3,8 @@ import { evaluatePathBooleanSelection, evaluatePathCompoundSelection, type Boole
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
+import { PathBooleanSelectionReadService } from '../../services/path-boolean-selection-read.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
 
 @Component({
   selector: 'app-boolean-path-panel',
@@ -15,7 +15,7 @@ import { SvgManipulationService } from '../../services/svg-manipulation.service'
 export class BooleanPathPanelComponent {
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly editorTool = inject(EditorToolService);
-  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly pathSelectionRead = inject(PathBooleanSelectionReadService);
   private readonly chromeApply = inject(ChromeEditorApplyService);
   private readonly preview = inject(PathBooleanPreviewService);
 
@@ -26,12 +26,8 @@ export class BooleanPathPanelComponent {
     return evaluatePathBooleanSelection(
       this.editorTool.currentTool() === 'selector',
       shapes,
-      (id) => this.svgManipulation.isElementOrAncestorLocked(id),
-      (id) => {
-        const svg = this.svgManipulation.getSVGInstance();
-        const el = svg?.findOne(`#${id}`)?.node as Element | undefined;
-        return el?.getAttribute('d') ?? null;
-      }
+      (id) => this.pathSelectionRead.isElementOrAncestorLocked(id),
+      (id) => this.pathSelectionRead.getPathD(id)
     );
   });
 
@@ -40,11 +36,8 @@ export class BooleanPathPanelComponent {
     return evaluatePathCompoundSelection(
       this.editorTool.currentTool() === 'selector',
       shapes,
-      (id) => this.svgManipulation.isElementOrAncestorLocked(id),
-      (id) => {
-        const svg = this.svgManipulation.getSVGInstance();
-        return (svg?.findOne(`#${id}`)?.node as Element | undefined) ?? null;
-      }
+      (id) => this.pathSelectionRead.isElementOrAncestorLocked(id),
+      (id) => this.pathSelectionRead.getCompoundOperandElement(id)
     );
   });
 

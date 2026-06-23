@@ -4,10 +4,9 @@ import { vi } from 'vitest';
 import { BooleanPathPanelComponent } from './boolean-path-panel.component';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
-import { PathBooleanGeometryService } from '../../services/path-boolean-geometry.service';
+import { PathBooleanSelectionReadService } from '../../services/path-boolean-selection-read.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 
 describe('BooleanPathPanelComponent', () => {
@@ -40,48 +39,37 @@ describe('BooleanPathPanelComponent', () => {
           useValue: { currentTool }
         },
         {
-          provide: SvgManipulationService,
+          provide: PathBooleanSelectionReadService,
           useValue: {
             isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
-            getSVGInstance: vi.fn(() => ({
-              findOne: vi.fn((sel: string) => {
-                const id = sel.replace('#', '');
-                const shape = selectedShapes().find((s) => s.id === id);
-                if (!shape) return undefined;
-                if (shape.type === 'rect') {
-                  return {
-                    node: {
-                      tagName: 'rect',
-                      getAttribute: (attr: string) => {
-                        const attrs: Record<string, string> = {
-                          x: '0',
-                          y: '0',
-                          width: '10',
-                          height: '10'
-                        };
-                        return attrs[attr] ?? null;
-                      }
-                    }
-                  };
-                }
+            getPathD: vi.fn((id: string) => {
+              const shape = selectedShapes().find((s) => s.id === id);
+              if (!shape || shape.type !== 'path') return null;
+              return 'M 0 0 L 10 0 L 10 10 L 0 10 Z';
+            }),
+            getCompoundOperandElement: vi.fn((id: string) => {
+              const shape = selectedShapes().find((s) => s.id === id);
+              if (!shape) return null;
+              if (shape.type === 'rect') {
                 return {
-                  node: {
-                    tagName: 'path',
-                    getAttribute: (attr: string) =>
-                      attr === 'd' ? 'M 0 0 L 10 0 L 10 10 L 0 10 Z' : null
+                  tagName: 'rect',
+                  getAttribute: (attr: string) => {
+                    const attrs: Record<string, string> = {
+                      x: '0',
+                      y: '0',
+                      width: '10',
+                      height: '10'
+                    };
+                    return attrs[attr] ?? null;
                   }
-                };
-              })
-            }))
-          }
-        },
-        {
-          provide: PathBooleanGeometryService,
-          useValue: {
-            createGeometryPort: () => ({}),
-            unionLocalD: () => 'M 0 0 L 10 0 L 10 10 L 0 10 Z',
-            subtractLocalD: () => 'M 0 0 L 10 0 L 10 10 L 0 10 Z',
-            intersectLocalD: () => 'M 0 0 L 10 0 L 10 10 L 0 10 Z'
+                } as Element;
+              }
+              return {
+                tagName: 'path',
+                getAttribute: (attr: string) =>
+                  attr === 'd' ? 'M 0 0 L 10 0 L 10 10 L 0 10 Z' : null
+              } as Element;
+            })
           }
         },
         {
