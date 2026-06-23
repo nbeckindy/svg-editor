@@ -12,9 +12,9 @@ export interface CanvasTool {
   onActivate(host: CanvasToolHost): void;
   onDeactivate(): void;
 
-  onPointerDown?(event: PointerEvent, svgPoint: CanvasSvgPoint): boolean;
-  onPointerMove?(event: PointerEvent, svgPoint: CanvasSvgPoint): void;
-  onPointerUp?(event: PointerEvent, svgPoint: CanvasSvgPoint): void;
+  onPointerDown?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;
+  onPointerMove?(event: MouseEvent, svgPoint: CanvasSvgPoint): void;
+  onPointerUp?(event: MouseEvent, svgPoint: CanvasSvgPoint): void;
   onClick?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;
   onKeyDown?(event: KeyboardEvent): boolean;
 

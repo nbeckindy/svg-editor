@@ -9,6 +9,8 @@ import { ResizeGesture } from './resize-gesture';
 import { SkewGesture } from './skew-gesture';
 import { RotateGesture } from './rotate-gesture';
 import { DragGesture } from './drag-gesture';
+import { ToolRegistryService } from '../../../tools/tool-registry.service';
+import type { CanvasTool } from '../../../tools/canvas-tool.interface';
 
 const emptyRt = {
   pointer: {} as GestureRuntimeContext['pointer'],
@@ -396,5 +398,67 @@ describe('PointerGestureRouter', () => {
     expect(tryStartPathNodeDrag).toHaveBeenCalledWith(anchor, ev);
     expect(onCanvasPenPrimaryMouseDown).not.toHaveBeenCalled();
     expect(ev.preventDefault).toHaveBeenCalled();
+  });
+
+  it('onCanvasMouseDownPrimary dispatches to registered tool before legacy zoom routing', () => {
+    const registry = new ToolRegistryService();
+    const onPointerDown = vi.fn(() => true);
+    const tool: CanvasTool = {
+      toolId: 'zoom',
+      onActivate: () => {},
+      onDeactivate: () => {},
+      onPointerDown
+    };
+    registry.register(tool);
+    router = new PointerGestureRouter(
+      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
+      cdr as ChangeDetectorRef,
+      registry
+    );
+    vi.spyOn(zoomMarquee, 'startAt');
+    const host = makeHost({ getCurrentTool: () => 'zoom' });
+    const ev = { button: 0, clientX: 10, clientY: 20, preventDefault: vi.fn() } as unknown as MouseEvent;
+    router.onCanvasMouseDownPrimary(host, ev);
+    expect(onPointerDown).toHaveBeenCalled();
+    expect(zoomMarquee.startAt).not.toHaveBeenCalled();
+    expect(ev.preventDefault).toHaveBeenCalled();
+  });
+
+  it('onDocumentMouseMove dispatches to registered tool onPointerMove', () => {
+    const registry = new ToolRegistryService();
+    const onPointerMove = vi.fn();
+    registry.register({
+      toolId: 'rect',
+      onActivate: () => {},
+      onDeactivate: () => {},
+      onPointerMove
+    });
+    router = new PointerGestureRouter(
+      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
+      cdr as ChangeDetectorRef,
+      registry
+    );
+    const host = makeHost({ getCurrentTool: () => 'rect' });
+    router.onDocumentMouseMove(host, { clientX: 3, clientY: 4, shiftKey: false } as MouseEvent);
+    expect(onPointerMove).toHaveBeenCalled();
+    expect(host.updateTextToolPreviewFromClient).not.toHaveBeenCalled();
+  });
+
+  it('onDocumentMouseUp dispatches to registered tool onPointerUp', () => {
+    const registry = new ToolRegistryService();
+    const onPointerUp = vi.fn();
+    registry.register({
+      toolId: 'rect',
+      onActivate: () => {},
+      onDeactivate: () => {},
+      onPointerUp
+    });
+    router = new PointerGestureRouter(
+      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
+      cdr as ChangeDetectorRef,
+      registry
+    );
+    router.onDocumentMouseUp(makeHost({ getCurrentTool: () => 'rect' }), { button: 0, clientX: 1, clientY: 2 } as MouseEvent);
+    expect(onPointerUp).toHaveBeenCalled();
   });
 });

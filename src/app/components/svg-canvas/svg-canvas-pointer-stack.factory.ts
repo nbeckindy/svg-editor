@@ -9,6 +9,7 @@ import type { SvgManipulationService } from '../../services/svg-manipulation.ser
 import type { ShapeSelectionService } from '../../services/shape-selection.service';
 import type { EditorHistoryService } from '../../services/editor-history.service';
 import type { SnapCandidateShape, SnapService } from '../../services/snap.service';
+import type { ToolRegistryService } from '../../tools/tool-registry.service';
 import type { GestureRuntimeContext } from './gestures/gesture-context';
 import type { Rect } from './gestures/gesture-context';
 import { createDefaultTransformGestureDoc } from './gestures/transform-gesture-doc.port';
@@ -51,6 +52,7 @@ export interface CreateSvgCanvasPointerStackArgs {
   getSmartGuideCandidates: () => SnapCandidateShape[];
   isSnapTemporarilyDisabled: () => boolean;
   createPenToolSessionPorts: () => PenToolSessionPorts;
+  toolRegistry: ToolRegistryService;
 }
 
 export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArgs): SvgCanvasPointerStack {
@@ -101,7 +103,8 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
       rotate,
       drag
     },
-    args.cdr
+    args.cdr,
+    args.toolRegistry
   );
 
   const penTool = new PenToolSession(args.createPenToolSessionPorts());

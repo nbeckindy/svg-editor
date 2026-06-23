@@ -1,5 +1,7 @@
 import { ChangeDetectorRef } from '@angular/core';
 import type { EditorTool } from '../../../services/editor-tool.service';
+import type { CanvasSvgPoint } from '../../../tools/canvas-tool-host.interface';
+import type { ToolRegistryService } from '../../../tools/tool-registry.service';
 import type { ResizeHandle } from '../../../utils/selection-resize';
 import type { SkewEdge } from '../../../utils/selection-skew';
 import type { GestureRuntimeContext } from './gesture-context';
@@ -80,8 +82,42 @@ type GesturePack = {
 export class PointerGestureRouter {
   constructor(
     private readonly g: GesturePack,
-    private readonly cdr: ChangeDetectorRef
+    private readonly cdr: ChangeDetectorRef,
+    private readonly toolRegistry?: ToolRegistryService
   ) {}
+
+  private svgPointFromEvent(
+    host: SvgCanvasPointerGestureHost,
+    event: MouseEvent
+  ): CanvasSvgPoint | null {
+    return host.clientToEditorSvgPointForDrag(event.clientX, event.clientY);
+  }
+
+  private dispatchRegisteredPointerDown(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
+    const tool = this.toolRegistry?.get(host.getCurrentTool());
+    if (!tool?.onPointerDown) return false;
+    const svgPoint = this.svgPointFromEvent(host, event);
+    if (!svgPoint) return false;
+    return tool.onPointerDown(event, svgPoint);
+  }
+
+  private dispatchRegisteredPointerMove(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
+    const tool = this.toolRegistry?.get(host.getCurrentTool());
+    if (!tool?.onPointerMove) return false;
+    const svgPoint = this.svgPointFromEvent(host, event);
+    if (!svgPoint) return false;
+    tool.onPointerMove(event, svgPoint);
+    return true;
+  }
+
+  private dispatchRegisteredPointerUp(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
+    const tool = this.toolRegistry?.get(host.getCurrentTool());
+    if (!tool?.onPointerUp) return false;
+    const svgPoint = this.svgPointFromEvent(host, event);
+    if (!svgPoint) return false;
+    tool.onPointerUp(event, svgPoint);
+    return true;
+  }
 
   onDocumentMouseMove(host: SvgCanvasPointerGestureHost, event: MouseEvent): void {
     if (host.isCreatingShape) {
@@ -94,6 +130,9 @@ export class PointerGestureRouter {
     }
     if (host.getCurrentTool() === 'pen' && (host.isPenToolWithActiveSession() || host.isPenInsertOnPathDragActive())) {
       host.onPenDocumentMouseMove(event);
+      return;
+    }
+    if (this.dispatchRegisteredPointerMove(host, event)) {
       return;
     }
     if (host.getCurrentTool() === 'pen') {
@@ -139,6 +178,9 @@ export class PointerGestureRouter {
       host.onPenDocumentMouseUp(event);
       return;
     }
+    if (this.dispatchRegisteredPointerUp(host, event)) {
+      return;
+    }
     if (host.isCreatingShape) {
       this.g.creation.end(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
       return;
@@ -173,6 +215,10 @@ export class PointerGestureRouter {
    * Primary-button canvas mousedown after right-button pen handling; `event.button === 0`.
    */
   onCanvasMouseDownPrimary(host: SvgCanvasPointerGestureHost, event: MouseEvent): void {
+    if (this.dispatchRegisteredPointerDown(host, event)) {
+      event.preventDefault();
+      return;
+    }
     if (host.getCurrentTool() === 'zoom') {
       this.g.zoomMarquee.startAt(event.clientX, event.clientY);
       event.preventDefault();

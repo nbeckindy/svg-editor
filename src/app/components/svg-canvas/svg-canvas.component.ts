@@ -58,6 +58,8 @@ import {
 } from './gestures';
 import { PenToolSession, type PenToolSessionPorts } from './pen-tool-session/pen-tool-session';
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
+import { ToolRegistryService } from '../../tools/tool-registry.service';
+import type { CanvasToolHost } from '../../tools/canvas-tool-host.interface';
 import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createSvgCanvasPointerStack } from './svg-canvas-pointer-stack.factory';
 import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
@@ -1643,7 +1645,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     protected drawingDefaults: DrawingStyleDefaultsService,
     private chromeEditorApply: ChromeEditorApplyService,
     private pathNodeEditBridge: PathNodeEditCommandBridgeService,
-    private pathBooleanPreview: PathBooleanPreviewService
+    private pathBooleanPreview: PathBooleanPreviewService,
+    private toolRegistry: ToolRegistryService
   ) {
     const pointerStack = createSvgCanvasPointerStack({
       cdr: this.cdr,
@@ -1662,7 +1665,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       },
       getSmartGuideCandidates: () => this.getSmartGuideCandidates(),
       isSnapTemporarilyDisabled: () => this.altKeyPressed,
-      createPenToolSessionPorts: () => this.createPenToolSessionPorts()
+      createPenToolSessionPorts: () => this.createPenToolSessionPorts(),
+      toolRegistry: this.toolRegistry
     });
     this.drag = pointerStack.drag;
     this.resize = pointerStack.resize;
@@ -1722,6 +1726,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       }
       if (currentTool !== 'pen') {
         this.penTool.clearDrawingState();
+      }
+      if (previousTool !== currentTool) {
+        this.toolRegistry.get(previousTool)?.onDeactivate();
+        this.toolRegistry.get(currentTool)?.onActivate(this.createCanvasToolHost());
       }
       if (!this.toolKeepsOrBuildsPathNodeTopology(currentTool)) {
         this.exitPathNodeEditMode();
@@ -1866,6 +1874,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     // Cover trailing primary `click` / `dblclick` after close (mousedown-only double-close, slow frames).
     this.penClosePostNodeEditEmptyClickClearUntilMs = now + 320;
+  }
+
+  private createCanvasToolHost(): CanvasToolHost {
+    return {
+      markForCheck: () => this.cdr.markForCheck(),
+      getCurrentTool: () => this.editorTool.getCurrentTool(),
+      setTool: (tool) => this.editorTool.setTool(tool),
+      clientToEditorSvgPoint: (clientX, clientY) => this.clientToEditorSvgPoint(clientX, clientY),
+      getMainSvgElement: () =>
+        this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null,
+      isEditorContentShapeTarget: (target) => !!(target && this.isEditorContentShapeTarget(target)),
+      svgManipulation: this.svgManipulation,
+      shapeSelection: this.shapeSelection,
+      editorHistory: this.editorHistory
+    };
   }
 
   private createPenToolSessionPorts(): PenToolSessionPorts {
@@ -2238,6 +2261,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     return (dt.files?.length ?? 0) > 0;
   }
 
+  private tryDispatchRegisteredCanvasClick(event: MouseEvent): boolean {
+    const tool = this.toolRegistry.get(this.editorTool.getCurrentTool());
+    if (!tool?.onClick) return false;
+    const svgPoint = this.clientToEditorSvgPoint(event.clientX, event.clientY);
+    if (!svgPoint) return false;
+    return tool.onClick(event, svgPoint);
+  }
+
   onCanvasMouseDown(event: MouseEvent): void {
     if (this.editorTool.getCurrentTool() === 'pen' && event.button === 2) {
       this.penTool.onPenRightMouseDown();
@@ -2279,6 +2310,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
           this.exitPathNodeEditMode();
         }
       }
+    }
+    if (this.tryDispatchRegisteredCanvasClick(event)) {
+      return;
     }
     if (this.editorTool.getCurrentTool() === 'pan') {
       return;
