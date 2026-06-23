@@ -1,44 +1,65 @@
 # Angular SVG Editor - Architecture Plan
 
-> **See also:** [Hexagonal architecture & extensibility epic](./epics/hexagonal-architecture-extensibility.md) (beads `svg-editor-j61`, completed 2026-06-23).
+> **Epics:** [Phase 1 — j61](./epics/hexagonal-architecture-extensibility.md#phase-1--svg-editor-j61-closed) (closed 2026-06-23) · [Phase 2 — hnv](./epics/hexagonal-architecture-extensibility.md#phase-2--svg-editor-hnv-deepen-seams) (16/18 closed)  
+> **Vocabulary:** [CONTEXT.md](../CONTEXT.md)
 
-## Current architecture notes (2026-06)
+## Current architecture (2026-06)
 
-The editor has grown well beyond the original scaffold below. This section records **recent structural changes** and where to extend the app today.
+The editor is a **partially hexagonal** Angular app: narrow **ports**, **commands**, and **registries** separate intent from SVG mutation. Two architecture epics tracked the work: **`svg-editor-j61`** (foundations) and **`svg-editor-hnv`** (deepen seams).
 
 ### Hexagonal posture
 
-The codebase is **partially hexagonal**: narrow **ports** (`*SvgPort`, `PenToolSessionPorts`, `CanvasToolHost`) and **commands** (`EditorCommand` → `EditorHistoryService`) separate intent from SVG mutation. The main canvas adapter (`SvgCanvasComponent`) and `ChromeEditorApplyService` remain large integration surfaces.
+| Layer | Role |
+|-------|------|
+| **Ports** | `*SvgPort`, `LayerLockReadPort`, `PathBooleanSelectionReadPort`, `GroupStructureChangePort`, `PenToolSessionPorts`, … |
+| **Commands** | `EditorCommand` → `EditorHistoryService`; implementations in `history/commands/{paint,transform,layers,document,path}/` |
+| **Adapters** | `SvgManipulationService` (façade), `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` |
+| **Registries** | `ToolRegistryService` + `registerDefaultTools()`, `DockPanelRegistryService` + `registerDefaultDockPanels()` |
 
-### Tool plugin seam (j61.1–j61.3)
+Large **integration surfaces** remain: `SvgCanvasComponent` (~4.3k lines) orchestrates tools, keyboard, pen session, and inline text.
 
-New tools can register on the canvas without editing `PointerGestureRouter` for every pointer phase:
+### Tool plugin seam
 
 | Piece | Path |
 |-------|------|
 | Tool contract | `src/app/tools/canvas-tool.interface.ts` |
 | Host seam | `src/app/tools/canvas-tool-host.interface.ts` |
 | Registry | `src/app/tools/tool-registry.service.ts` |
-| Creation adapters | `src/app/tools/creation-canvas-tool.ts` |
+| Bootstrap | `src/app/tools/register-default-tools.ts` (wired in `app.config.ts`) |
+| Adapters | creation, selector, pen, zoom, pan, text, eyedropper, … |
 
-`PointerGestureRouter` and `onCanvasClick` consult the registry first; **rect / ellipse / line** are fully adapter-driven. Other tools still use legacy gesture/session paths until wrapped.
+`PointerGestureRouter` and keyboard controller consult the registry first. **Open:** drive tool strip from registry metadata ([hnv.4](./epics/hexagonal-architecture-extensibility.md)).
 
-### UI composition (j61.4–j61.6)
+### UI composition
 
 | Piece | Path |
 |-------|------|
-| Design tokens | `src/styles/tokens.scss` (`--editor-*` custom properties) |
-| Dock panel registry | `src/app/panels/dock-panel-registry.service.ts` |
-| Default panels | `src/app/panels/register-default-dock-panels.ts` (wired in `app.config.ts`) |
-| Right dock | `src/app/components/editor-right-dock/` — tabs/panels from registry |
-| Selection overlay | `src/app/components/svg-canvas/overlays/selection-overlay.component.*` |
-| Path-node overlay | `src/app/components/svg-canvas/overlays/path-node-overlay.component.*` |
+| Design tokens | `src/styles/tokens.scss` |
+| Dock registry | `src/app/panels/dock-panel-registry.service.ts` |
+| Dock auto-show | `src/app/panels/dock-panel-auto-show.service.ts` (`relevantTools`) |
+| Shell layout | `src/app/services/editor-layout.service.ts` |
+| Right dock | `src/app/components/editor-right-dock/` |
+| Canvas overlays | `src/app/components/svg-canvas/overlays/` — selection, path-node, ruler, grid, smart-guide |
 
-**Overlay template convention:** child components hosted on `<g app-*-overlay>` inside the highlight SVG must use `svg:`-prefixed tags and `[attr.*]` presentation bindings in their templates, or affordances render in the XHTML namespace and stay invisible. See [`.cursor/rules/svg-overlay-components.mdc`](../.cursor/rules/svg-overlay-components.mdc).
+**Overlay convention:** child components on `<g app-*-overlay>` must use `svg:`-prefixed tags — see [`.cursor/rules/svg-overlay-components.mdc`](../.cursor/rules/svg-overlay-components.mdc).
 
-`EditorDockPanel` is a `string` panel id. Adding a dock panel: implement component → `registry.register({ … })` in startup — no right-dock template edits.
+### Chrome write path
 
-### Editor shell (actual layout)
+Inspector and layers panel actions go through **`ChromeEditorApplyService`** (thin façade) → **`chrome-apply/{paint,transform,layers,path-ops}`** → `EditorCommand`s.
+
+Group membership changes notify **`GroupStructureChangeService`** (signal port); canvas drill-in listens via `effect()` — no imperative callback on chrome apply.
+
+### Domain slices (gravity wells — split)
+
+| Module | Location | Notes |
+|--------|----------|-------|
+| Command implementations | `src/app/history/commands/` | paint, transform, layers, document, path |
+| Shape content | `src/app/services/shape-content/` | paint, path-data, text ports |
+| Chrome apply | `src/app/services/chrome-apply/` | paint, transform, layers, path-ops |
+| Layers DnD | `src/app/components/layers-panel/layers-panel-dnd.service.ts` | intent resolution + drop apply |
+| Path boolean reads | `src/app/services/path-boolean-selection-read.service.ts` | panel + geometry port |
+
+### Editor shell (layout)
 
 ```
 app.html
@@ -46,22 +67,27 @@ app.html
 ├── editor-tool-context-bar
 └── workspace (CSS grid: left rail | canvas column | right dock)
     ├── editor-left-rail (tool strip, file upload, dev assets)
-    ├── svg-canvas (+ debug strip overlay)
+    ├── svg-canvas (+ overlay children, debug strip)
     └── editor-right-dock (registry-driven inspector tabs)
 ```
 
-State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistoryService`, panel registries). No NgRx. No routing.
+State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistoryService`, `EditorLayoutService`, registries). No NgRx. No routing.
 
 ### Still centralized (extension touchpoints)
 
-- **Unregistered tools** — selector, pen, zoom, pan, text, eyedropper: add `CanvasTool` adapters or extend legacy branches.
-- **Canvas template** — pen previews, grid, smart guides, rulers, creation ghosts still in `svg-canvas.component.html`.
-- **Chrome apply** — `ChromeEditorApplyService` dispatches many panel actions; candidate for domain-specific adapters.
-- **Tool strip** — hardcoded buttons in `tool-strip.component.html` (could read from `ToolRegistryService` later).
+- **`SvgCanvasComponent`** — pen previews, inline text edit, keyboard routing glue, document init.
+- **Tool strip** — hardcoded buttons until hnv.4 (registry-driven strip).
+- **`SvgManipulationService`** — wide façade; prefer narrow ports at new panel/tool boundaries.
+- **Residual pointer fallbacks** — some legacy branches in `PointerGestureRouter` for unmigrated paths.
 
 ---
 
-## Project Overview (original scaffold — largely superseded)
+## Original 2024 scaffold (archived)
+
+<details>
+<summary>Click to expand — initial project plan (largely superseded)</summary>
+
+## Project Overview
 An Angular application for basic SVG file editing with the ability to open, preview, and modify SVG shapes. The application will use SVG.js for low-level SVG manipulation and Vitest for testing.
 
 ## Technology Stack
@@ -374,9 +400,10 @@ svg-editor/
 - ~~Multi-shape selection~~ — marquee + shift-click
 - ~~Layer management~~ — layers panel + group DnD
 - ~~Text editing within SVG~~ — inline text edit on canvas
-- Wrap remaining tools in `CanvasTool` registry; split `ChromeEditorApplyService`
-- `EditorLayoutService` for shell layout modes
-- Extract ruler / grid / smart-guide overlays from canvas
+- ~~Wrap remaining tools in `CanvasTool` registry; split `ChromeEditorApplyService`~~ — done in `svg-editor-hnv`
+- ~~`EditorLayoutService` for shell layout modes~~ — done (`hnv.8`)
+- ~~Extract ruler / grid / smart-guide overlays from canvas~~ — done (`hnv.12`)
+- Registry-driven tool strip ([hnv.4](./epics/hexagonal-architecture-extensibility.md))
 - Symbols and reusable instances (see [symbols epic](./epics/symbols-reusable-instances.md))
 
 ## Development Workflow
@@ -402,3 +429,5 @@ svg-editor/
 1. Add styling and responsive design
 2. Error handling and user feedback
 3. Documentation and README
+
+</details>

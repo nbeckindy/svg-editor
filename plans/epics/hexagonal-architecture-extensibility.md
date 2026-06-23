@@ -1,6 +1,11 @@
 # Epic: Hexagonal architecture — tool plugin system & UI composition
 
-**Beads epic:** `svg-editor-j61` (closed 2026-06-23)
+| Phase | Beads epic | Status |
+|-------|------------|--------|
+| **1** | [`svg-editor-j61`](../../) | Closed 2026-06-23 |
+| **2** | [`svg-editor-hnv`](../../) | In progress — 16/18 children closed (see [Phase 2](#phase-2--svg-editor-hnv-deepen-seams) below) |
+
+**Handoff docs:** [ARCHITECTURE.md](../ARCHITECTURE.md) (current seams + gravity wells) · [CONTEXT.md](../../CONTEXT.md) (editor vocabulary)
 
 ## Goal
 
@@ -8,136 +13,182 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 
 ## Does it follow hexagonal architecture?
 
-**Partially — the bones were there; j61 strengthened the seams.**
+**Mostly at the seams — j61 laid foundations; hnv deepened them.**
 
-### Existing strengths (unchanged)
+### Existing strengths
 
-- **Ports** — `PenToolSessionPorts`, `LayersPanelSvgPort`, `TransformGestureSvgPort`, `ChromeEditorApplySvgPort`, etc.
-- **`SvgManipulationService`** — façade implementing many ports over sub-services.
-- **`EditorCommand` / `EditorHistoryService`** — intent vs execution; undoable mutations.
+- **Ports** — `PenToolSessionPorts`, `LayersPanelSvgPort`, `TransformGestureSvgPort`, `LayerLockReadPort`, `PathBooleanSelectionReadPort`, `GroupStructureChangePort`, etc.
+- **`SvgManipulationService`** — façade implementing many ports over sub-services (`shape-content/*`, layer structure, gradient defs, …).
+- **`EditorCommand` / `EditorHistoryService`** — intent vs execution; undoable mutations; implementations split under `history/commands/{paint,transform,layers,document,path}/`.
 - **`PenToolSession` + ports** — testable without the full canvas.
+- **`ToolRegistryService` + `CanvasTool`** — all editor tools registered; pointer and keyboard dispatch consult registry first.
+- **Thin chrome apply façade** — `ChromeEditorApplyService` delegates to `chrome-apply/*` domain slices; group-structure notifications use `GroupStructureChangeService` (no canvas callback on chrome apply).
 
-### Remaining gaps
+### Remaining gaps (post–phase 2)
 
-| Problem | Where |
-|---|---|
-| **Large canvas adapter** | `SvgCanvasComponent` is still ~4200 lines TS (template slimmed). Pen, selector, rulers, keyboard, inline text remain inline. |
-| **Legacy tool routing** | `PointerGestureRouter` still has `if (tool === …)` fallbacks for unregistered tools (selector, pen, zoom, pan, etc.). |
-| **Angular in domain** | Services remain `@Injectable({ providedIn: 'root' })`. |
-| **`ChromeEditorApplyService` mega-facade** | Paint, stroke, align, layer ops, boolean ops in one service. |
-| **Partial overlay extraction** | Grid, smart guides, rulers, pen previews still in canvas template. |
+| Problem | Where | Notes |
+|---|---|---|
+| **Large canvas adapter** | `SvgCanvasComponent` (~4.3k lines TS) | Overlays extracted; pen previews / inline text / keyboard glue remain inline. |
+| **Legacy tool routing** | `PointerGestureRouter` | Residual `if (tool === …)` fallbacks for unmigrated pointer paths (creation tools fully on registry). |
+| **Tool strip not registry-driven** | `tool-strip.component.html` | [`hnv.4`](../../) — `ToolDescriptor` metadata + strip from registry still open. |
+| **Angular in domain** | Most services | `@Injectable({ providedIn: 'root' })` — acceptable for this app; not pure hexagonal isolation. |
+| **`SvgManipulationService` breadth** | Central façade | Narrow ports at panel boundaries (properties, boolean path, layers DnD); façade still wide for history commands. |
+
+**Resolved in phase 2 (no longer gaps):**
+
+| Was | Now |
+|-----|-----|
+| `ChromeEditorApplyService` mega-facade (~950 lines) | `chrome-apply/{paint,transform,layers,path-ops}` + support + `GroupStructureChangeService` |
+| `editor-command-implementations.ts` monolith | `history/commands/*` by domain + barrel re-export |
+| `svg-shape-content.service.ts` monolith | `shape-content/{paint,path-data,text}` + thin façade |
+| Rulers / grid / smart guides in canvas template | `overlays/{ruler,grid,smart-guide}-overlay.component.*` |
+| `afterGroupStructureChange` imperative callback | `GroupStructureChangeService` signal port |
+| Layers panel DnD inline (~200 lines) | `LayersPanelDndService` |
+| Duplicate path boolean DOM reads | `PathBooleanSelectionReadService` shared by panel + geometry |
+| Unregistered selector / pen / zoom / pan / text / eyedropper | `CanvasTool` adapters + `registerDefaultTools()` in `app.config.ts` |
+| Dock auto-show / shell layout ad hoc | `DockPanelAutoShowService`, `EditorLayoutService` |
 
 ---
 
-## Track 1 — Tool plugin system
+## Phase 1 — `svg-editor-j61` (closed)
 
-### Implemented (j61.1–j61.3)
+### Track 1 — Tool plugin system (j61.1–j61.3)
 
 | Bead | Deliverable |
 |------|-------------|
 | j61.1 | [`CanvasTool`](../../src/app/tools/canvas-tool.interface.ts), [`CanvasToolHost`](../../src/app/tools/canvas-tool-host.interface.ts) |
-| j61.2 | [`ToolRegistryService`](../../src/app/tools/tool-registry.service.ts); dispatch in [`PointerGestureRouter`](../../src/app/components/svg-canvas/gestures/pointer-gesture-router.ts) and `SvgCanvasComponent.onCanvasClick`; activate/deactivate on tool switch |
-| j61.3 | [`creation-canvas-tool.ts`](../../src/app/tools/creation-canvas-tool.ts) — `rect` / `ellipse` / `line` wrapped as `CanvasTool` adapters over `CreationGesture` |
+| j61.2 | [`ToolRegistryService`](../../src/app/tools/tool-registry.service.ts); dispatch in [`PointerGestureRouter`](../../src/app/components/svg-canvas/gestures/pointer-gesture-router.ts) and `SvgCanvasComponent.onCanvasClick` |
+| j61.3 | [`creation-canvas-tool.ts`](../../src/app/tools/creation-canvas-tool.ts) — `rect` / `ellipse` / `line` adapters |
 
-**Pattern:** registry lookup runs first; registered handler returning `true` consumes the event; legacy gesture paths remain as fallback until each tool is migrated.
-
-```typescript
-// src/app/tools/canvas-tool.interface.ts (summary)
-export interface CanvasTool {
-  readonly toolId: EditorTool;
-  onActivate(host: CanvasToolHost): void;
-  onDeactivate(): void;
-  onPointerDown?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;
-  onPointerMove?(event: MouseEvent, svgPoint: CanvasSvgPoint): void;
-  onPointerUp?(event: MouseEvent, svgPoint: CanvasSvgPoint): void;
-  onClick?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;
-  onKeyDown?(event: KeyboardEvent): boolean;
-}
-```
-
-### Not yet done
-
-- Wrap `selector`, `pen`, `zoom`, `pan`, `text`, `eyedropper` as `CanvasTool` adapters.
-- Drive tool strip from registry metadata.
-- Optional `onKeyDown` dispatch in keyboard controller.
-
----
-
-## Track 2 — UI composition layer
-
-### Implemented (j61.4–j61.6)
+### Track 2 — UI composition (j61.4–j61.6)
 
 | Bead | Deliverable |
 |------|-------------|
-| j61.4 | [`src/styles/tokens.scss`](../../src/styles/tokens.scss) — `--editor-*` design tokens; shell components migrated |
-| j61.5 | [`DockPanelRegistryService`](../../src/app/panels/dock-panel-registry.service.ts), [`registerDefaultDockPanels()`](../../src/app/panels/register-default-dock-panels.ts); [`EditorRightDockComponent`](../../src/app/components/editor-right-dock/) registry-driven via `NgComponentOutlet` |
-| j61.6 | [`SelectionOverlayComponent`](../../src/app/components/svg-canvas/overlays/selection-overlay.component.ts), [`PathNodeOverlayComponent`](../../src/app/components/svg-canvas/overlays/path-node-overlay.component.ts) — canvas template ~676 → ~403 lines |
-
-`EditorDockPanel` is now `string` (panel id from registry).
-
-### Not yet done
-
-- `EditorLayoutService` (panel widths, collapse, layout modes as signals).
-- Extract `RulerComponent`, grid/smart-guide overlays from canvas.
-- Split `ChromeEditorApplyService` into focused per-domain adapters.
+| j61.4 | [`src/styles/tokens.scss`](../../src/styles/tokens.scss) — `--editor-*` design tokens |
+| j61.5 | [`DockPanelRegistryService`](../../src/app/panels/dock-panel-registry.service.ts), [`registerDefaultDockPanels()`](../../src/app/panels/register-default-dock-panels.ts) |
+| j61.6 | [`SelectionOverlayComponent`](../../src/app/components/svg-canvas/overlays/selection-overlay.component.ts), [`PathNodeOverlayComponent`](../../src/app/components/svg-canvas/overlays/path-node-overlay.component.ts) |
 
 ---
 
-## Target architecture
+## Phase 2 — `svg-editor-hnv` (deepen seams)
+
+**Epic:** `svg-editor-hnv` · **Plan source:** architecture improvement review (handoff `improve-codebase-architecture` 2026-05-22)
+
+### Children (bead status)
+
+| Bead | ARCH | Summary | Status |
+|------|------|---------|--------|
+| hnv.1 | ARCH-7 | Tool registry foundation — creation routing | ✓ |
+| hnv.2 | ARCH-8 | `registerDefaultTools()` in `app.config.ts` | ✓ |
+| hnv.3 | ARCH-9 | `ToolRegistry` `onKeyDown` in keyboard controller | ✓ |
+| hnv.4 | ARCH-10 | `ToolDescriptor` metadata + registry-driven tool strip | ○ open |
+| hnv.5 | ARCH-11 | `PenToolSession` as `CanvasTool` adapter | ✓ |
+| hnv.6 | ARCH-12 | Selector as `CanvasTool` adapter | ✓ |
+| hnv.7 | ARCH-13 | `DockPanelDescriptor.relevantTools` auto-show | ✓ |
+| hnv.8 | ARCH-14 | `EditorLayoutService` shell layout signals | ✓ |
+| hnv.9 | ARCH-15 | Split `editor-command-implementations` by domain | ✓ |
+| hnv.10 | ARCH-16 | Split `svg-shape-content` by domain | ✓ |
+| hnv.11 | ARCH-20 | Split `ChromeEditorApplyService` + `GroupStructureChangePort` | ✓ |
+| hnv.12 | ARCH-21 | Ruler / grid / smart-guide overlay components | ✓ |
+| hnv.13 | ARCH-19 | Narrow ports at properties + boolean path panels | ✓ |
+| hnv.14 | ARCH-17 | `LayersPanelDndService` | ✓ |
+| hnv.15 | ARCH-22 | `PathBooleanSelectionReadPort` shared read model | ✓ |
+| hnv.16 | ARCH-23 | Tool classification in registry metadata | ✓ |
+| hnv.17 | ARCH-24 | Remaining tools as `CanvasTool` (zoom, pan, text, eyedropper, …) | ✓ |
+| hnv.18 | ARCH-25 | Update architecture docs (this file + ARCHITECTURE.md) | ○ in progress |
+
+### Phase 2 deliverables (by area)
+
+**Tools**
+
+- [`register-default-tools.ts`](../../src/app/tools/register-default-tools.ts) — bootstrap all `CanvasTool` adapters at app startup.
+- Adapters: creation, selector, pen, zoom, pan, text, eyedropper (+ node-edit where applicable).
+
+**Commands & content**
+
+- [`history/commands/`](../../src/app/history/commands/) — paint, transform, layers, document, path command implementations.
+- [`shape-content/`](../../src/app/services/shape-content/) — paint, path-data, text slices behind `SvgShapeContentService` façade.
+
+**Chrome apply**
+
+- [`chrome-apply/`](../../src/app/services/chrome-apply/) — paint / transform / layers / path-ops apply services.
+- [`GroupStructureChangeService`](../../src/app/services/chrome-apply/group-structure-change.service.ts) — canvas drill-in sync via signal (replaces `afterGroupStructureChange`).
+
+**UI composition**
+
+- [`EditorLayoutService`](../../src/app/services/editor-layout.service.ts) — dock tab, collapse, rail/dock width signals.
+- [`DockPanelAutoShowService`](../../src/app/panels/dock-panel-auto-show.service.ts) — `relevantTools` panel suggestions.
+- Overlays: ruler, grid, smart-guide child components under `svg-canvas/overlays/`.
+- [`LayersPanelDndService`](../../src/app/components/layers-panel/layers-panel-dnd.service.ts) — layer drag-and-drop intent + apply.
+
+**Typed ports (panel boundaries)**
+
+- [`LayerLockReadPort`](../../src/app/history/layer-lock-read.port.ts) — properties panel lock readout.
+- [`PathBooleanSelectionReadPort`](../../src/app/history/path-boolean-selection-read.port.ts) — path ops panel + `PathBooleanGeometryService`.
+
+---
+
+## Target architecture (current)
 
 ```mermaid
 flowchart TB
   subgraph Shell["Editor Shell"]
     TopBar[EditorTopBar]
-    LeftRail[EditorLeftRail]
+    LeftRail[EditorLeftRail + tool strip]
     Canvas[SvgCanvasComponent]
-    RightDock["EditorRightDock registry-driven"]
+    RightDock["EditorRightDock + EditorLayoutService"]
   end
 
   subgraph Overlays["Canvas Overlays"]
-    SelOverlay[SelectionOverlayComponent]
-    NodeOverlay[PathNodeOverlayComponent]
-    Rulers[RulerComponent - future]
+    SelOverlay[SelectionOverlay]
+    NodeOverlay[PathNodeOverlay]
+    Rulers[RulerOverlay]
+    Grid[GridOverlay]
+    Guides[SmartGuideOverlay]
   end
 
   subgraph ToolLayer["Tool Layer"]
     Registry[ToolRegistryService]
-    CreationTools[rect / ellipse / line adapters]
-    LegacyTools["selector, pen, … legacy paths"]
+    DefaultTools["registerDefaultTools — all CanvasTool adapters"]
+  end
+
+  subgraph ChromeApply["Chrome write path"]
+    ApplyFacade[ChromeEditorApplyService]
+    ApplySlices["chrome-apply/*"]
+    GroupChange[GroupStructureChangeService]
   end
 
   subgraph Domain["Domain Core"]
-    Commands[EditorCommand]
+    Commands["EditorCommand + history/commands/*"]
     Ports["*Port interfaces"]
   end
 
   subgraph SVG["SVG Adapter"]
     Manip[SvgManipulationService]
+    ShapeContent["shape-content/*"]
     SvgJs["@svgdotjs/svg.js"]
   end
 
   Canvas --> Registry
-  Registry --> CreationTools
-  Registry -.-> LegacyTools
+  Registry --> DefaultTools
   Canvas --> Overlays
   RightDock --> DockRegistry[DockPanelRegistryService]
+  ApplyFacade --> ApplySlices --> Commands
+  ApplySlices --> GroupChange
   Commands --> Ports --> Manip --> SvgJs
+  Manip --> ShapeContent
 ```
 
 ---
 
-## Recommended follow-up sequence
+## Recommended next steps
 
-1. Wrap `selector` and `pen` as `CanvasTool` adapters (highest traffic tools).
-2. `EditorLayoutService` for shell layout iteration.
-3. Extract ruler + grid/guide overlays.
-4. Split `ChromeEditorApplyService` by domain (fill, transform, layers).
+1. **hnv.4** — registry-driven tool strip (`ToolDescriptor` + `interactionKind`).
+2. Shrink `SvgCanvasComponent` further — pen preview / inline text extraction (if warranted).
+3. Optional: `InjectionToken` per port for explicit DI at remaining call sites.
 
-## Commits (master, 2026-06)
+## Commits reference
 
-- `736e7fb` — CanvasTool + CanvasToolHost interfaces
-- `49c1b80` — ToolRegistryService + dispatch wiring
-- `7c7adee` — Creation tool adapters
-- `d448a5a` — Design tokens
-- `472ac2d` — Dock panel registry
-- `8afe5a0` — Selection + path-node overlay components
+**Phase 1 (j61, 2026-06):** `736e7fb`, `49c1b80`, `7c7adee`, `d448a5a`, `472ac2d`, `8afe5a0`
+
+**Phase 2 (hnv, 2026-06):** see `git log --oneline --grep=hnv` on `master` — includes command/shape-content/chrome-apply splits, overlay extraction, `GroupStructureChangeService`, layers DnD, path boolean read port, typed panel ports.
