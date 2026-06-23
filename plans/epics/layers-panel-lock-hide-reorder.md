@@ -26,8 +26,13 @@
 
 - **Lock model**: `data-editor-locked="true"` on layer row elements (`EDITOR_LAYER_LOCKED_ATTR`); `ToggleLayerLockCommand`; `LayerTreeNode.locked`; `SvgLayerStructureService` / port helpers `isElementOrAncestorLocked`, `setLayerLocked`.
 - **Guards**: `ChromeEditorApplyService` blocks inspector mutations when selection touches a locked subtree; **panel** actions remain: visibility, lock toggle, reorder (buttons + DnD), `group`/`ungroup` blocked when locked; canvas **drag / resize / rotate / skew** start blocked via `gesture-layer-lock.ts` + `TransformGestureDocPort.isElementOrAncestorLocked`; keyboard delete; `svg-canvas` align / distribute / duplicate / group / ungroup.
-- **DnD**: Native HTML5 drag from `.layer-drag-handle`; drop on row — upper half = move before target’s following sibling (toward front), lower half = `insertBefore` target; `ReorderBeforeSiblingCommand` + `moveElementBeforeNextSibling` (same parent only).
+- **DnD (original)**: Native HTML5 drag from `.layer-drag-handle`; drop on row — upper half = move before target’s following sibling (toward front), lower half = `insertBefore` target; `ReorderBeforeSiblingCommand` + `moveElementBeforeNextSibling` (same parent only).
 - **Tests**: `ToggleLayerLockCommand` / `ReorderBeforeSiblingCommand` command specs; layers panel lock button spec; `getLayerTree` locked attribute spec; gesture spec mocks extended.
+
+### Updates (2026-06)
+
+- **DnD migration:** Panel drag-and-drop migrated to **`@angular/cdk/drag-drop`** for animated placeholder preview and consistent Angular integration. Drop zone rules unchanged (top/bottom/middle zones; group-in via middle 50% of group row). See [layers-groups-dnd](./layers-groups-dnd.md).
+- **Reorder UI:** Per-row ⇈↑⇊↓ buttons removed; same commands exposed via layer row right-click context menu (`MatMenu`).
 
 ## Child issues (local LL refs — historical)
 

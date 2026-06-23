@@ -34,21 +34,35 @@
   </div>
 
   @if (flattenedLayers().length > 0) {
-    <div class="layers-list" data-testid="layers-list">
+    <div
+      class="layers-list"
+      data-testid="layers-list"
+      cdkDropList
+      cdkDropListLockAxis="y"
+      [cdkDropListData]="flattenedLayers()"
+      (cdkDropListDropped)="onLayerListDropped($event)">
       @for (layer of flattenedLayers(); track layer.id) {
         <div
           class="layer-row"
+          cdkDrag
+          [cdkDragData]="layer"
+          [cdkDragDisabled]="isLayerDragDisabled(layer)"
+          (cdkDragMoved)="onLayerDragMoved($event)"
+          (cdkDragEnded)="onLayerDragEnded()"
           [class.selected]="layer.selected"
           [class.group-row]="layer.isGroup"
           [class.hidden-layer]="!layer.visible"
           [class.locked-layer]="layer.locked"
+          [class.drop-before]="dropPreview()?.targetId === layer.id && dropPreview()?.zone === 'before'"
+          [class.drop-after]="dropPreview()?.targetId === layer.id && dropPreview()?.zone === 'after'"
+          [class.drop-into-group]="dropPreview()?.targetId === layer.id && dropPreview()?.zone === 'intoGroup'"
           [style.padding-left.px]="12 + layer.depth * 16"
+          [style.--drop-depth]="layer.depth"
           [title]="layer.name"
           [attr.data-testid]="'layer-row-' + layer.id"
           [attr.aria-label]="layer.name + ' (' + layer.type + ')'"
-          (dragover)="onLayerRowDragOver(layer.id, $event)"
-          (drop)="onLayerRowDrop(layer.id, $event)"
-          (click)="onLayerClick(layer.id, $event)">
+          (click)="onLayerClick(layer.id, $event)"
+          (contextmenu)="onLayerContextMenu(layer.id, $event)">
 
           @if (layer.isGroup) {
             <span class="group-chevron"
@@ -60,11 +74,10 @@
 
           <span
             class="layer-drag-handle"
-            draggable="true"
+            cdkDragHandle
             [attr.data-testid]="'layer-drag-handle-' + layer.id"
             title="Drag to reorder"
             aria-hidden="true"
-            (dragstart)="onLayerDragStart(layer.id, $event); $event.stopPropagation()"
             (click)="$event.stopPropagation()">⋮⋮</span>
 
           <button type="button" class="visibility-toggle"
@@ -93,25 +106,6 @@
             <div class="layer-name">{{ layer.name }}</div>
             <div class="layer-type">{{ layer.type }}</div>
           </div>
-
-          <div class="reorder-controls" (click)="$event.stopPropagation()">
-            <button type="button" class="reorder-btn" title="Bring to front"
-                    [attr.data-testid]="'layer-to-front-' + layer.id"
-                    aria-label="Bring layer to front"
-                    (click)="onMoveToFront(layer.id)">⇈</button>
-            <button type="button" class="reorder-btn" title="Move forward"
-                    [attr.data-testid]="'layer-forward-' + layer.id"
-                    aria-label="Move layer forward"
-                    (click)="onMoveForward(layer.id)">↑</button>
-            <button type="button" class="reorder-btn" title="Send to back"
-                    [attr.data-testid]="'layer-to-back-' + layer.id"
-                    aria-label="Send layer to back"
-                    (click)="onMoveToBack(layer.id)">⇊</button>
-            <button type="button" class="reorder-btn" title="Move backward"
-                    [attr.data-testid]="'layer-backward-' + layer.id"
-                    aria-label="Move layer backward"
-                    (click)="onMoveBackward(layer.id)">↓</button>
-          </div>
         </div>
       }
     </div>
@@ -121,4 +115,47 @@
       <p class="hint">Load an SVG to inspect stack order</p>
     </div>
   }
+
+  <button
+    type="button"
+    class="layer-context-menu-trigger"
+    aria-hidden="true"
+    tabindex="-1"
+    [matMenuTriggerFor]="layerContextMenu"
+    #contextMenuTrigger="matMenuTrigger"></button>
+
+  <mat-menu #layerContextMenu="matMenu" class="layer-context-menu-panel">
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="layer-context-menu-to-front"
+      [disabled]="isLayerReorderDisabled(contextMenuLayerId())"
+      (click)="onContextMenuMoveToFront()">
+      Bring to front
+    </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="layer-context-menu-forward"
+      [disabled]="isLayerReorderDisabled(contextMenuLayerId())"
+      (click)="onContextMenuMoveForward()">
+      Move forward
+    </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="layer-context-menu-backward"
+      [disabled]="isLayerReorderDisabled(contextMenuLayerId())"
+      (click)="onContextMenuMoveBackward()">
+      Move backward
+    </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="layer-context-menu-to-back"
+      [disabled]="isLayerReorderDisabled(contextMenuLayerId())"
+      (click)="onContextMenuMoveToBack()">
+      Send to back
+    </button>
+  </mat-menu>
 </div>

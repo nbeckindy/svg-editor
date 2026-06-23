@@ -1,6 +1,7 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { signal, WritableSignal } from '@angular/core';
+import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { vi } from 'vitest';
 import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
 import { LayersPanelComponent } from './layers-panel.component';
@@ -15,7 +16,8 @@ import {
   GroupCommand,
   UngroupCommand,
   UngroupElementsCommand,
-  ReparentElementsCommand
+  ReparentElementsCommand,
+  ReorderBeforeSiblingCommand
 } from '../../models/editor-commands';
 
 describe('LayersPanelComponent', () => {
@@ -46,6 +48,7 @@ describe('LayersPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [LayersPanelComponent],
       providers: [
+        provideNoopAnimations(),
         ...mdiIconHttpTestProviders,
         {
           provide: SvgManipulationService,
@@ -309,7 +312,7 @@ describe('LayersPanelComponent', () => {
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ToggleLayerLockCommand);
   });
 
-  it('reorder forward button dispatches ReorderCommand', () => {
+  it('context menu move forward dispatches ReorderCommand', () => {
     getLayerTree.mockReturnValue([
       { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
         locked: false, elementMarkup: '<rect id="rect-1" />' }
@@ -317,15 +320,14 @@ describe('LayersPanelComponent', () => {
     documentRevision.set(1);
     fixture.detectChanges();
 
-    const fwdBtn = (fixture.nativeElement as HTMLElement)
-      .querySelector('[data-testid="layer-forward-rect-1"]') as HTMLButtonElement;
-    fwdBtn.click();
+    fixture.componentInstance.contextMenuLayerId.set('rect-1');
+    fixture.componentInstance.onContextMenuMoveForward();
 
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReorderCommand);
   });
 
-  it('reorder backward button dispatches ReorderCommand', () => {
+  it('context menu move backward dispatches ReorderCommand', () => {
     getLayerTree.mockReturnValue([
       { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
         locked: false, elementMarkup: '<rect id="rect-1" />' }
@@ -333,15 +335,14 @@ describe('LayersPanelComponent', () => {
     documentRevision.set(1);
     fixture.detectChanges();
 
-    const bwdBtn = (fixture.nativeElement as HTMLElement)
-      .querySelector('[data-testid="layer-backward-rect-1"]') as HTMLButtonElement;
-    bwdBtn.click();
+    fixture.componentInstance.contextMenuLayerId.set('rect-1');
+    fixture.componentInstance.onContextMenuMoveBackward();
 
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReorderCommand);
   });
 
-  it('bring to front button dispatches ReorderCommand with front direction', () => {
+  it('context menu bring to front dispatches ReorderCommand with front direction', () => {
     const node = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     node.id = 'rect-1';
     const parent = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -356,9 +357,8 @@ describe('LayersPanelComponent', () => {
     documentRevision.set(1);
     fixture.detectChanges();
 
-    const btn = (fixture.nativeElement as HTMLElement)
-      .querySelector('[data-testid="layer-to-front-rect-1"]') as HTMLButtonElement;
-    btn.click();
+    fixture.componentInstance.contextMenuLayerId.set('rect-1');
+    fixture.componentInstance.onContextMenuMoveToFront();
 
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
     const cmd = pushAndExecute.mock.calls[0][0] as ReorderCommand;
@@ -366,7 +366,7 @@ describe('LayersPanelComponent', () => {
     expect(cmd.description).toContain('front');
   });
 
-  it('send to back button dispatches ReorderCommand with back direction', () => {
+  it('context menu send to back dispatches ReorderCommand with back direction', () => {
     const node = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     node.id = 'rect-1';
     const parent = document.createElementNS('http://www.w3.org/2000/svg', 'g');
@@ -381,14 +381,26 @@ describe('LayersPanelComponent', () => {
     documentRevision.set(1);
     fixture.detectChanges();
 
-    const btn = (fixture.nativeElement as HTMLElement)
-      .querySelector('[data-testid="layer-to-back-rect-1"]') as HTMLButtonElement;
-    btn.click();
+    fixture.componentInstance.contextMenuLayerId.set('rect-1');
+    fixture.componentInstance.onContextMenuMoveToBack();
 
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
     const cmd = pushAndExecute.mock.calls[0][0] as ReorderCommand;
     expect(cmd).toBeInstanceOf(ReorderCommand);
     expect(cmd.description).toContain('back');
+  });
+
+  it('does not render per-row reorder buttons', () => {
+    getLayerTree.mockReturnValue([
+      { id: 'rect-1', type: 'rect', name: 'rect-1', visible: true,
+        locked: false, elementMarkup: '<rect id="rect-1" />' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('.reorder-controls')).toBeNull();
+    expect(el.querySelector('[data-testid="layer-forward-rect-1"]')).toBeNull();
   });
 
   it('group button is disabled when < 2 shapes selected', () => {
@@ -711,23 +723,296 @@ describe('LayersPanelComponent', () => {
     documentRevision.set(1);
     fixture.detectChanges();
 
-    const groupRow = (fixture.nativeElement as HTMLElement).querySelector(
-      '[data-testid="layer-row-g1"]'
-    ) as HTMLElement;
-    const dropEvent = {
-      preventDefault: vi.fn(),
-      dataTransfer: {
-        getData: (type: string) =>
-          type.includes('layer') || type === 'text/plain' ? 'r1' : ''
-      },
-      offsetY: 20,
-      currentTarget: { clientHeight: 40 }
-    } as unknown as DragEvent;
-    fixture.componentInstance.onLayerRowDrop('g1', dropEvent);
+    const intent = fixture.componentInstance.resolveLayerDropIntent('r1', 'g1', 0.5);
+    expect(intent.valid).toBe(true);
+    expect(intent.zone).toBe('intoGroup');
+    expect(intent.action).toEqual({ kind: 'addToGroup', targetGroupId: 'g1' });
+
+    if (intent.valid && intent.action) {
+      fixture.componentInstance['executeDropAction']('r1', intent.action);
+    }
 
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
     const cmd = pushAndExecute.mock.calls[0][0] as ReparentElementsCommand;
     expect(cmd).toBeInstanceOf(ReparentElementsCommand);
     expect(cmd.description).toBe('Add to group');
+  });
+
+  it('pull child out of group by dropping on root row resolves reparentToParent', () => {
+    const contentRoot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    contentRoot.setAttribute('data-editor-content-group', 'true');
+    const groupEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    groupEl.id = 'g1';
+    contentRoot.appendChild(groupEl);
+    const childEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    childEl.id = 'child-1';
+    groupEl.appendChild(childEl);
+    const rootRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rootRect.id = 'root-1';
+    contentRoot.appendChild(rootRect);
+
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '[data-editor-content-group]') return { node: contentRoot };
+        if (sel === '#g1') return { node: groupEl };
+        if (sel === '#child-1') return { node: childEl };
+        if (sel === '#root-1') return { node: rootRect };
+        return null;
+      })
+    });
+
+    getLayerTree.mockReturnValue([
+      {
+        id: 'g1',
+        type: 'g',
+        name: 'g1',
+        visible: true,
+        locked: false,
+        elementMarkup: '<g id="g1"><rect id="child-1"/></g>',
+        children: [
+          { id: 'child-1', type: 'rect', name: 'child-1', visible: true, locked: false, elementMarkup: '<rect id="child-1"/>' }
+        ]
+      },
+      { id: 'root-1', type: 'rect', name: 'root-1', visible: true, locked: false, elementMarkup: '<rect id="root-1"/>' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const intent = fixture.componentInstance.resolveLayerDropIntent('child-1', 'root-1', 0.2);
+    expect(intent.valid).toBe(true);
+    expect(intent.action?.kind).toBe('reparentToParent');
+    if (intent.valid && intent.action) {
+      fixture.componentInstance['executeDropAction']('child-1', intent.action);
+    }
+    expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReparentElementsCommand);
+  });
+
+  it('same-parent drop resolves reorderBeforeSibling', () => {
+    const contentRoot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    contentRoot.setAttribute('data-editor-content-group', 'true');
+    const a = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    a.id = 'a';
+    const b = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    b.id = 'b';
+    contentRoot.appendChild(a);
+    contentRoot.appendChild(b);
+
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '[data-editor-content-group]') return { node: contentRoot };
+        if (sel === '#a') return { node: a };
+        if (sel === '#b') return { node: b };
+        return null;
+      })
+    });
+
+    getLayerTree.mockReturnValue([
+      { id: 'b', type: 'rect', name: 'b', visible: true, locked: false, elementMarkup: '<rect id="b"/>' },
+      { id: 'a', type: 'rect', name: 'a', visible: true, locked: false, elementMarkup: '<rect id="a"/>' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const intent = fixture.componentInstance.resolveLayerDropIntent('a', 'b', 0.2);
+    expect(intent.valid).toBe(true);
+    expect(intent.action?.kind).toBe('reorderBeforeSibling');
+    if (intent.valid && intent.action) {
+      fixture.componentInstance['executeDropAction']('a', intent.action);
+    }
+    expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReorderBeforeSiblingCommand);
+  });
+
+  it('updateDropPreview keeps pendingDropIntent when pointer briefly hits invalid target', () => {
+    const contentRoot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    contentRoot.setAttribute('data-editor-content-group', 'true');
+    const a = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    a.id = 'a';
+    const b = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    b.id = 'b';
+    contentRoot.appendChild(a);
+    contentRoot.appendChild(b);
+
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '[data-editor-content-group]') return { node: contentRoot };
+        if (sel === '#a') return { node: a };
+        if (sel === '#b') return { node: b };
+        return null;
+      })
+    });
+
+    getLayerTree.mockReturnValue([
+      { id: 'b', type: 'rect', name: 'b', visible: true, locked: false, elementMarkup: '<rect id="b"/>' },
+      { id: 'a', type: 'rect', name: 'a', visible: true, locked: false, elementMarkup: '<rect id="a"/>' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const validIntent = {
+      ...fixture.componentInstance.resolveLayerDropIntent('a', 'b', 0.2),
+      targetId: 'b'
+    };
+    fixture.componentInstance.pendingDropIntent.set(validIntent);
+
+    const host = fixture.nativeElement as HTMLElement;
+    const list = host.querySelector('[data-testid="layers-list"]')!;
+    const rowA = document.createElement('div');
+    rowA.setAttribute('data-testid', 'layer-row-a');
+    rowA.classList.add('cdk-drag-placeholder');
+    rowA.getBoundingClientRect = () =>
+      ({
+        top: 0,
+        height: 40,
+        left: 0,
+        right: 100,
+        bottom: 40,
+        width: 100,
+        x: 0,
+        y: 0,
+        toJSON: () => ({})
+      }) as DOMRect;
+    list.appendChild(rowA);
+
+    fixture.componentInstance['updateDropPreview']('a', { x: 10, y: 10 });
+
+    expect(fixture.componentInstance.pendingDropIntent()).toEqual(validIntent);
+    expect(fixture.componentInstance.dropPreview()).toBeNull();
+  });
+
+  it('updateDropPreview sets dropPreview when pointer is over a valid target row', () => {
+    const contentRoot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    contentRoot.setAttribute('data-editor-content-group', 'true');
+    const a = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    a.id = 'a';
+    const b = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    b.id = 'b';
+    contentRoot.appendChild(a);
+    contentRoot.appendChild(b);
+
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '[data-editor-content-group]') return { node: contentRoot };
+        if (sel === '#a') return { node: a };
+        if (sel === '#b') return { node: b };
+        return null;
+      })
+    });
+
+    getLayerTree.mockReturnValue([
+      { id: 'b', type: 'rect', name: 'b', visible: true, locked: false, elementMarkup: '<rect id="b"/>' },
+      { id: 'a', type: 'rect', name: 'a', visible: true, locked: false, elementMarkup: '<rect id="a"/>' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const host = fixture.nativeElement as HTMLElement;
+    const rowB = host.querySelector('[data-testid="layer-row-b"]') as HTMLElement;
+    rowB.getBoundingClientRect = () =>
+      ({
+        top: 50,
+        height: 40,
+        left: 0,
+        right: 100,
+        bottom: 90,
+        width: 100,
+        x: 0,
+        y: 50,
+        toJSON: () => ({})
+      }) as DOMRect;
+
+    fixture.componentInstance['updateDropPreview']('a', { x: 10, y: 60 });
+
+    expect(fixture.componentInstance.dropPreview()).toEqual({
+      targetId: 'b',
+      zone: 'before',
+      valid: true
+    });
+  });
+
+  it('onLayerDragEnded does not clear pendingDropIntent before drop handler runs', () => {
+    const intent = { valid: true, zone: 'before' as const, action: { kind: 'reorderBeforeSibling' as const, referenceNextSiblingId: 'b' } };
+    fixture.componentInstance.pendingDropIntent.set(intent);
+    fixture.componentInstance.onLayerDragEnded();
+    expect(fixture.componentInstance.pendingDropIntent()).toEqual(intent);
+  });
+
+  it('onLayerListDropped uses cached pendingDropIntent from drag preview', () => {
+    const contentRoot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    contentRoot.setAttribute('data-editor-content-group', 'true');
+    const a = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    a.id = 'a';
+    const b = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    b.id = 'b';
+    contentRoot.appendChild(a);
+    contentRoot.appendChild(b);
+
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '[data-editor-content-group]') return { node: contentRoot };
+        if (sel === '#a') return { node: a };
+        if (sel === '#b') return { node: b };
+        return null;
+      })
+    });
+
+    getLayerTree.mockReturnValue([
+      { id: 'b', type: 'rect', name: 'b', visible: true, locked: false, elementMarkup: '<rect id="b"/>' },
+      { id: 'a', type: 'rect', name: 'a', visible: true, locked: false, elementMarkup: '<rect id="a"/>' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const intent = fixture.componentInstance.resolveLayerDropIntent('a', 'b', 0.2);
+    fixture.componentInstance.pendingDropIntent.set(intent);
+
+    fixture.componentInstance.onLayerListDropped({
+      item: { data: { id: 'a' } },
+      dropPoint: { x: 0, y: 0 }
+    } as never);
+
+    expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReorderBeforeSiblingCommand);
+  });
+
+  it('resolveLayerDropIntent sets dropPreview zone for group middle', () => {
+    const contentRoot = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    contentRoot.setAttribute('data-editor-content-group', 'true');
+    const groupEl = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+    groupEl.id = 'g1';
+    contentRoot.appendChild(groupEl);
+    const rectEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+    rectEl.id = 'r1';
+    contentRoot.appendChild(rectEl);
+
+    getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => {
+        if (sel === '[data-editor-content-group]') return { node: contentRoot };
+        if (sel === '#g1') return { node: groupEl };
+        if (sel === '#r1') return { node: rectEl };
+        return null;
+      })
+    });
+
+    getLayerTree.mockReturnValue([
+      { id: 'g1', type: 'g', name: 'g1', visible: true, locked: false, elementMarkup: '<g id="g1"/>', children: [] },
+      { id: 'r1', type: 'rect', name: 'r1', visible: true, locked: false, elementMarkup: '<rect id="r1"/>' }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const intent = fixture.componentInstance.resolveLayerDropIntent('r1', 'g1', 0.5);
+    fixture.componentInstance.dropPreview.set({
+      targetId: 'g1',
+      zone: intent.zone,
+      valid: intent.valid
+    });
+    fixture.detectChanges();
+
+    const groupRow = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="layer-row-g1"]'
+    );
+    expect(groupRow?.classList.contains('drop-into-group')).toBe(true);
   });
 });
