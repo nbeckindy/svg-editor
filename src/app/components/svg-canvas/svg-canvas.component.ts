@@ -1,4 +1,4 @@
-import { Component, input, viewChild, AfterViewInit, ElementRef, OnInit, OnDestroy, ChangeDetectorRef, effect, signal, inject } from '@angular/core';
+import { Component, input, viewChild, AfterViewInit, ElementRef, OnDestroy, ChangeDetectorRef, effect, signal, inject } from '@angular/core';
 import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -93,6 +93,7 @@ import {
   TEXT_TOOL_PREVIEW_DATA_ATTR
 } from '../../utils/text-typography-from-defaults';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
+import { GroupStructureChangeService } from '../../services/chrome-apply/group-structure-change.service';
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
 import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-command-bridge.service';
 import {
@@ -269,7 +270,7 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
     '(document:mouseup)': 'onDocumentMouseUp($event)'
   }
 })
-export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, SvgCanvasPointerGestureHost {
+export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPointerGestureHost {
   private readonly rasterInsertAnchor = inject(RasterInsertAnchorStore);
   private readonly rasterImageInsert = inject(RasterImageInsertService);
   readonly RULER_SIZE = 24;
@@ -279,6 +280,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
   readonly highlightOverlayContainer = viewChild<ElementRef<HTMLElement>>('highlightOverlayContainer');
   readonly canvasViewport = viewChild<ElementRef<HTMLElement>>('canvasViewport');
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
+  private readonly groupStructureChange = inject(GroupStructureChangeService);
   readonly rulerOverlay = viewChild(RulerOverlayComponent);
   readonly inlineTextEditor = viewChild<ElementRef<HTMLTextAreaElement>>('inlineTextEditor');
   altKeyPressed = false;
@@ -1889,17 +1891,18 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       void this.editorHistory.revision();
       this.syncPathNodeEditBridgeChrome();
     });
+    effect(() => {
+      this.groupStructureChange.changeRevision();
+      const payload = this.groupStructureChange.lastChange();
+      if (payload) {
+        this.syncDrillAfterGroupStructureChange(payload);
+      }
+    });
   }
 
   private boundOnWheel = this.onWheel.bind(this);
 
-  ngOnInit(): void {
-    this.chromeEditorApply.afterGroupStructureChange = (payload) =>
-      this.syncDrillAfterGroupStructureChange(payload);
-  }
-
   ngOnDestroy(): void {
-    this.chromeEditorApply.afterGroupStructureChange = null;
     if (this.penInsertCursorRaf !== 0) {
       window.cancelAnimationFrame(this.penInsertCursorRaf);
       this.penInsertCursorRaf = 0;
