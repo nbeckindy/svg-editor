@@ -32,7 +32,6 @@
 
 .dock-tabs {
   display: grid;
-  grid-template-columns: 1fr 1fr 1fr;
   gap: var(--editor-spacing-sm);
   min-width: 0;
 }

@@ -4,37 +4,23 @@
     data-testid="dock-expanded-region"
     [hidden]="dockCollapsed()">
     <div class="dock-tab-row">
-      <div class="dock-tabs" role="tablist" aria-label="Inspector panels">
-        <button
-          type="button"
-          role="tab"
-          class="dock-tab"
-          data-testid="dock-tab-properties"
-          [class.active]="activeDockPanel() === 'properties'"
-          [attr.aria-selected]="activeDockPanel() === 'properties'"
-          (click)="activeDockPanelChange.emit('properties')">
-          Properties
-        </button>
-        <button
-          type="button"
-          role="tab"
-          class="dock-tab"
-          data-testid="dock-tab-layers"
-          [class.active]="activeDockPanel() === 'layers'"
-          [attr.aria-selected]="activeDockPanel() === 'layers'"
-          (click)="activeDockPanelChange.emit('layers')">
-          Layers
-        </button>
-        <button
-          type="button"
-          role="tab"
-          class="dock-tab"
-          data-testid="dock-tab-path-ops"
-          [class.active]="activeDockPanel() === 'pathOps'"
-          [attr.aria-selected]="activeDockPanel() === 'pathOps'"
-          (click)="activeDockPanelChange.emit('pathOps')">
-          Path ops
-        </button>
+      <div
+        class="dock-tabs"
+        role="tablist"
+        aria-label="Inspector panels"
+        [style.grid-template-columns]="tabGridColumns()">
+        @for (panel of dockPanels(); track panel.id) {
+          <button
+            type="button"
+            role="tab"
+            class="dock-tab"
+            [attr.data-testid]="panel.tabTestId"
+            [class.active]="activeDockPanel() === panel.id"
+            [attr.aria-selected]="activeDockPanel() === panel.id"
+            (click)="activeDockPanelChange.emit(panel.id)">
+            {{ panel.label }}
+          </button>
+        }
       </div>
       <button
         type="button"
@@ -46,35 +32,17 @@
       </button>
     </div>
 
-    <section
-      class="dock-panel properties-panel"
-      data-testid="editor-properties-area"
-      [hidden]="propertiesInactive()"
-      [attr.inert]="propertiesInactive() ? '' : null"
-      role="tabpanel"
-      aria-label="Properties">
-      <app-properties-panel data-testid="editor-properties-panel"></app-properties-panel>
-    </section>
-
-    <section
-      class="dock-panel layers-panel"
-      data-testid="editor-layers-area"
-      [hidden]="layersInactive()"
-      [attr.inert]="layersInactive() ? '' : null"
-      role="tabpanel"
-      aria-label="Layers">
-      <app-layers-panel data-testid="editor-layers-panel"></app-layers-panel>
-    </section>
-
-    <section
-      class="dock-panel path-ops-panel-host"
-      data-testid="editor-path-ops-area"
-      [hidden]="pathOpsInactive()"
-      [attr.inert]="pathOpsInactive() ? '' : null"
-      role="tabpanel"
-      aria-label="Path operations">
-      <app-boolean-path-panel data-testid="editor-path-ops-panel"></app-boolean-path-panel>
-    </section>
+    @for (panel of dockPanels(); track panel.id) {
+      <section
+        [class]="panel.panelClass ? 'dock-panel ' + panel.panelClass : 'dock-panel'"
+        [attr.data-testid]="panel.areaTestId"
+        [hidden]="isPanelInactive(panel.id)"
+        [attr.inert]="isPanelInactive(panel.id) ? '' : null"
+        role="tabpanel"
+        [attr.aria-label]="panel.ariaLabel">
+        <ng-container *ngComponentOutlet="panel.component" />
+      </section>
+    }
   </div>
 
   <button

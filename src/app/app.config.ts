@@ -6,6 +6,8 @@ import { DomSanitizer } from '@angular/platform-browser';
 import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 
 import { routes } from './app.routes';
+import { DockPanelRegistryService } from './panels/dock-panel-registry.service';
+import { registerDefaultDockPanels } from './panels/register-default-dock-panels';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -19,6 +21,9 @@ export const appConfig: ApplicationConfig = {
       matIconRegistry.addSvgIconSet(
         domSanitizer.bypassSecurityTrustResourceUrl('assets/mdi.svg')
       );
+    }),
+    provideAppInitializer(() => {
+      registerDefaultDockPanels(inject(DockPanelRegistryService));
     })
   ]
 };
