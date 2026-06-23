@@ -1,0 +1,57 @@
+---
+description: SVG namespace and attributes for canvas overlay child components
+globs: src/app/components/svg-canvas/overlays/**/*.html
+alwaysApply: false
+---
+
+# SVG overlay child components
+
+**Editor chrome** overlays (`SelectionOverlayComponent`, `PathNodeOverlayComponent`, and future extractees) are Angular child components hosted on SVG `<g>` inside the highlight overlay. The host `<g>` is created in the parent canvas template and is in the SVG namespace; **template children of the child component are not** — Angular compiles them as XHTML unless you prefix tags with `svg:`.
+
+Without `svg:`, elements exist in the DOM but do not paint (zero bounding box, handles invisible). This regressed when overlays were extracted in commit `8afe5a0`.
+
+## Component shape
+
+- Host selector on an SVG group: `selector: 'g[app-*-overlay]'`
+- `NO_ERRORS_SCHEMA` on the component (SVG tags in template)
+- Presentation logic stays in the overlay; geometry/state comes from canvas via `input()` and typed models (e.g. `path-node-overlay.model.ts`)
+- Bind through `SvgCanvasEditorChromeFacade` in `svg-canvas.component.html`, not new domain services
+
+## Template rules
+
+1. **Prefix every SVG element** in the child template with `svg:` (`svg:circle`, `svg:line`, `svg:rect`, `svg:path`, `svg:g`).
+2. **Bind presentation attributes** with `[attr.*]` (`[attr.fill]`, `[attr.stroke]`, `[attr.r]`, `[attr.cx]`, etc.) — not bare `fill="..."` / `r="4"`.
+3. **Stacking**: keep overlay `<g app-*-overlay>` after pen previews/ghosts in `svg-canvas.component.html` so affordances paint on top.
+
+```html
+<!-- ❌ BAD — XHTML namespace; invisible in overlay SVG -->
+<circle
+  class="selection-resize-handle"
+  [attr.cx]="hr.x"
+  [attr.cy]="hr.y"
+  r="6"
+  fill="#ffffff"/>
+
+<!-- ✅ GOOD -->
+<svg:circle
+  class="selection-resize-handle"
+  [attr.cx]="hr.x"
+  [attr.cy]="hr.y"
+  [attr.r]="handleRadius()"
+  [attr.fill]="'#ffffff'"
+  [attr.stroke]="'#2196F3'"
+  [attr.stroke-width]="2"
+  [attr.vector-effect]="'non-scaling-stroke'"/>
+```
+
+Markup **directly** in `svg-canvas.component.html` inside `<svg class="highlight-overlay">` does not need `svg:` — only **child component** templates do.
+
+## Tests
+
+Add or extend a namespace probe spec when creating a new overlay component:
+
+```typescript
+expect(handle?.namespaceURI).toBe('http://www.w3.org/2000/svg');
+```
+
+See `selection-overlay.namespace.probe.spec.ts` and `path-node-overlay.namespace.probe.spec.ts`.

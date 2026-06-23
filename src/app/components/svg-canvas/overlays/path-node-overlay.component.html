@@ -1,116 +1,118 @@
 @if (insertAffordance(); as insAff) {
   @for (ln of insAff.lines; track $index) {
-    <line
+    <svg:line
       class="path-node-control-line pen-insert-on-path-affordance"
       data-testid="canvas-pen-insert-on-path-control-line"
       [attr.x1]="ln.x1"
       [attr.y1]="ln.y1"
       [attr.x2]="ln.x2"
       [attr.y2]="ln.y2"
-      stroke="#43A047"
-      stroke-width="1.5"
-      stroke-dasharray="3 2"
-      vector-effect="non-scaling-stroke"/>
+      [attr.stroke]="'#43A047'"
+      [attr.stroke-width]="1.5"
+      [attr.stroke-dasharray]="'3 2'"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
   }
   @for (kn of insAff.knobs; track $index) {
-    <circle
+    <svg:circle
       class="path-node-control-handle pen-insert-on-path-affordance"
       data-testid="canvas-pen-insert-on-path-control-handle"
       [attr.cx]="kn.cx"
       [attr.cy]="kn.cy"
-      r="3.5"
-      fill="#ffffff"
-      stroke="#43A047"
-      stroke-width="1.5"
-      vector-effect="non-scaling-stroke"/>
+      [attr.r]="3.5"
+      [attr.fill]="'#ffffff'"
+      [attr.stroke]="'#43A047'"
+      [attr.stroke-width]="1.5"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
   }
-  <circle
+  <svg:circle
     class="path-node-anchor path-node-anchor-selected pen-insert-on-path-affordance"
     data-testid="canvas-pen-insert-on-path-planted-anchor"
     [attr.cx]="insAff.plantedAnchor.cx"
     [attr.cy]="insAff.plantedAnchor.cy"
-    r="4"
-    fill="#ffffff"
-    stroke="#1E88E5"
-    stroke-width="2"
-    vector-effect="non-scaling-stroke"/>
-}
-@if (penSessionNodes(); as penNodes) {
-  @for (handle of penNodes.handles; track $index) {
-    <line
-      class="path-node-control-line pen-session-path-node-affordance"
-      data-testid="canvas-pen-session-path-node-control-line"
-      [attr.x1]="handle.x1"
-      [attr.y1]="handle.y1"
-      [attr.x2]="handle.x2"
-      [attr.y2]="handle.y2"
-      stroke="#43A047"
-      stroke-width="1.5"
-      stroke-dasharray="3 2"
-      vector-effect="non-scaling-stroke"/>
-    <circle
-      class="path-node-control-handle pen-session-path-node-affordance"
-      data-testid="canvas-pen-session-path-node-control-handle"
-      [attr.cx]="handle.cx"
-      [attr.cy]="handle.cy"
-      r="3.5"
-      fill="#ffffff"
-      stroke="#43A047"
-      stroke-width="1.5"
-      vector-effect="non-scaling-stroke"/>
-  }
-  @for (pt of penNodes.anchors; track $index) {
-    <circle
-      class="path-node-anchor pen-session-path-node-affordance"
-      data-testid="canvas-pen-session-path-node-anchor"
-      [attr.cx]="pt.cx"
-      [attr.cy]="pt.cy"
-      r="4"
-      fill="#ffffff"
-      stroke="#1E88E5"
-      stroke-width="2"
-      vector-effect="non-scaling-stroke"/>
-  }
-}
-@if (penSessionPathOutlineD(); as penOutlineD) {
-  <path
-    class="path-selection-outline"
-    data-testid="canvas-pen-session-path-outline"
-    [attr.d]="penOutlineD"
-    fill="none"
-    stroke="#1E88E5"
-    stroke-width="1.5"
-    vector-effect="non-scaling-stroke"/>
+    [attr.r]="4"
+    [attr.fill]="'#ffffff'"
+    [attr.stroke]="'#1E88E5'"
+    [attr.stroke-width]="2"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
 }
 @if (showPendingCurveHandleGuides()) {
   @for (ln of pendingCurveHandleGuides(); track $index; let idx = $index) {
-    <line
+    <svg:line
       class="path-node-control-line pen-insert-on-path-affordance"
       [attr.data-testid]="'canvas-pen-pending-curve-handle-guide-' + idx"
       [attr.x1]="ln.x1"
       [attr.y1]="ln.y1"
       [attr.x2]="ln.x2"
       [attr.y2]="ln.y2"
-      stroke="#43A047"
-      stroke-width="1.5"
-      stroke-dasharray="3 2"
-      vector-effect="non-scaling-stroke"/>
+      [attr.stroke]="'#43A047'"
+      [attr.stroke-width]="1.5"
+      [attr.stroke-dasharray]="'3 2'"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
   }
+}
+@if (penSessionPathOutlineD(); as penOutlineD) {
+  <svg:path
+    class="path-selection-outline"
+    data-testid="canvas-pen-session-path-outline"
+    [attr.d]="penOutlineD"
+    [attr.fill]="'none'"
+    [attr.stroke]="'#1E88E5'"
+    [attr.stroke-width]="1.5"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
 }
 @if (showPathNodeEditOverlays()) {
   @for (outline of pathSelectionOutlines(); track outline.pathId) {
-    <path
+    <svg:path
       class="path-selection-outline"
       data-testid="canvas-path-selection-outline"
       [attr.data-path-selection-outline-path-id]="outline.pathId"
       [attr.d]="outline.d"
-      fill="none"
-      stroke="#1E88E5"
-      stroke-width="1.5"
-      vector-effect="non-scaling-stroke"/>
+      [attr.fill]="'none'"
+      [attr.stroke]="'#1E88E5'"
+      [attr.stroke-width]="1.5"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
   }
+}
+@if (penSessionNodes(); as penNodes) {
+  @for (handle of penNodes.handles; track $index) {
+    <svg:line
+      class="path-node-control-line pen-session-path-node-affordance"
+      data-testid="canvas-pen-session-path-node-control-line"
+      [attr.x1]="handle.x1"
+      [attr.y1]="handle.y1"
+      [attr.x2]="handle.x2"
+      [attr.y2]="handle.y2"
+      [attr.stroke]="'#43A047'"
+      [attr.stroke-width]="1.5"
+      [attr.stroke-dasharray]="'3 2'"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
+    <svg:circle
+      class="path-node-control-handle pen-session-path-node-affordance"
+      data-testid="canvas-pen-session-path-node-control-handle"
+      [attr.cx]="handle.cx"
+      [attr.cy]="handle.cy"
+      [attr.r]="3.5"
+      [attr.fill]="'#ffffff'"
+      [attr.stroke]="'#43A047'"
+      [attr.stroke-width]="1.5"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
+  }
+  @for (pt of penNodes.anchors; track $index) {
+    <svg:circle
+      class="path-node-anchor pen-session-path-node-affordance"
+      data-testid="canvas-pen-session-path-node-anchor"
+      [attr.cx]="pt.cx"
+      [attr.cy]="pt.cy"
+      [attr.r]="4"
+      [attr.fill]="'#ffffff'"
+      [attr.stroke]="'#1E88E5'"
+      [attr.stroke-width]="2"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
+  }
+}
+@if (showPathNodeEditOverlays()) {
   @for (handle of controlHandles(); track $index) {
-    <line
+    <svg:line
       class="path-node-control-line"
       data-path-node-edit-target="true"
       data-testid="canvas-path-node-control-line"
@@ -118,11 +120,11 @@
       [attr.y1]="handle.y1"
       [attr.x2]="handle.x2"
       [attr.y2]="handle.y2"
-      stroke="#43A047"
-      stroke-width="1.5"
-      stroke-dasharray="3 2"
-      vector-effect="non-scaling-stroke"/>
-    <circle
+      [attr.stroke]="'#43A047'"
+      [attr.stroke-width]="1.5"
+      [attr.stroke-dasharray]="'3 2'"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
+    <svg:circle
       class="path-node-control-handle"
       data-path-node-edit-target="true"
       [attr.data-path-node-handle-index]="handle.handleIndex"
@@ -130,14 +132,14 @@
       data-testid="canvas-path-node-control-handle"
       [attr.cx]="handle.cx"
       [attr.cy]="handle.cy"
-      r="3.5"
-      fill="#ffffff"
-      stroke="#43A047"
-      stroke-width="1.5"
-      vector-effect="non-scaling-stroke"/>
+      [attr.r]="3.5"
+      [attr.fill]="'#ffffff'"
+      [attr.stroke]="'#43A047'"
+      [attr.stroke-width]="1.5"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
   }
   @for (anchor of anchors(); track $index) {
-    <circle
+    <svg:circle
       class="path-node-anchor"
       [class.path-node-anchor-selected]="anchor.selected"
       data-path-node-edit-target="true"
@@ -146,10 +148,10 @@
       data-testid="canvas-path-node-anchor"
       [attr.cx]="anchor.cx"
       [attr.cy]="anchor.cy"
-      r="4"
-      fill="#ffffff"
-      stroke="#1E88E5"
-      stroke-width="2"
-      vector-effect="non-scaling-stroke"/>
+      [attr.r]="4"
+      [attr.fill]="'#ffffff'"
+      [attr.stroke]="'#1E88E5'"
+      [attr.stroke-width]="2"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
   }
 }

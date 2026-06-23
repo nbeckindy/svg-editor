@@ -34,6 +34,8 @@ New tools can register on the canvas without editing `PointerGestureRouter` for 
 | Selection overlay | `src/app/components/svg-canvas/overlays/selection-overlay.component.*` |
 | Path-node overlay | `src/app/components/svg-canvas/overlays/path-node-overlay.component.*` |
 
+**Overlay template convention:** child components hosted on `<g app-*-overlay>` inside the highlight SVG must use `svg:`-prefixed tags and `[attr.*]` presentation bindings in their templates, or affordances render in the XHTML namespace and stay invisible. See [`.cursor/rules/svg-overlay-components.mdc`](../.cursor/rules/svg-overlay-components.mdc).
+
 `EditorDockPanel` is a `string` panel id. Adding a dock panel: implement component → `registry.register({ … })` in startup — no right-dock template edits.
 
 ### Editor shell (actual layout)

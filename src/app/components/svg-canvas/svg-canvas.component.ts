@@ -736,7 +736,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
 
   /**
    * While authoring a pen path, node-edit–style anchors and Bézier handles for the current preview
-   * `d` (same geometry as {@link penSessionPreviewPathD}). `null` when inactive or not parseable.
+   * `d` (committed preview plus live curve preview when dragging). `null` when inactive or not parseable.
    * Visual only — template uses class `pen-session-path-node-affordance` so pointer hits pass through.
    */
   get penSessionPathNodeOverlays(): {
@@ -744,7 +744,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     handles: { x1: number; y1: number; x2: number; y2: number; cx: number; cy: number }[];
   } | null {
     if (!this.isPenToolWithActiveSession()) return null;
-    const d = this.penTool.penSessionPreviewPathD;
+    const d = this.penCurvePreviewPathD ?? this.penTool.penSessionPreviewPathD;
     if (!d?.trim()) return null;
     const parsed = this.parsePathDataForNodeEditing(d);
     if (!parsed) return null;

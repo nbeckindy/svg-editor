@@ -225,17 +225,6 @@
               [attr.stroke-width]="drawingDefaults.strokeWidth()"
               vector-effect="non-scaling-stroke"/>
           }
-          <g
-            app-path-node-overlay
-            [insertAffordance]="editorChrome.penInsertOnPathPreviewPathD ? editorChrome.penInsertOnPathNodeAffordanceOverlay : null"
-            [penSessionNodes]="editorChrome.penSessionPathNodeOverlays"
-            [penSessionPathOutlineD]="editorChrome.penSessionPathOutlineOverlayD"
-            [showPathNodeEditOverlays]="editorChrome.showPathNodeEditOverlays"
-            [pathSelectionOutlines]="editorChrome.pathSelectionOutlineOverlays"
-            [controlHandles]="editorChrome.pathNodeControlHandleOverlays"
-            [anchors]="editorChrome.pathNodeAnchorOverlays"
-            [pendingCurveHandleGuides]="editorChrome.penPendingCurveHandleGuideOverlays"
-            [showPendingCurveHandleGuides]="!!(editorChrome.penCurvePreviewPathD || editorChrome.penFirstAnchorMirroredHandleDragActive || editorChrome.penColocatedTipMirroredHandleDragActive)"/>
           @if (editorChrome.penSessionPreviewPathD; as pfull) {
             <path
               class="creation-ghost-shape"
@@ -354,6 +343,17 @@
               stroke-dasharray="4 3"
               vector-effect="non-scaling-stroke"/>
           }
+          <g
+            app-path-node-overlay
+            [insertAffordance]="editorChrome.penInsertOnPathPreviewPathD ? editorChrome.penInsertOnPathNodeAffordanceOverlay : null"
+            [penSessionNodes]="editorChrome.penSessionPathNodeOverlays"
+            [penSessionPathOutlineD]="editorChrome.penSessionPathOutlineOverlayD"
+            [showPathNodeEditOverlays]="editorChrome.showPathNodeEditOverlays"
+            [pathSelectionOutlines]="editorChrome.pathSelectionOutlineOverlays"
+            [controlHandles]="editorChrome.pathNodeControlHandleOverlays"
+            [anchors]="editorChrome.pathNodeAnchorOverlays"
+            [pendingCurveHandleGuides]="editorChrome.penPendingCurveHandleGuideOverlays"
+            [showPendingCurveHandleGuides]="!!(editorChrome.penCurvePreviewPathD || editorChrome.penFirstAnchorMirroredHandleDragActive || editorChrome.penColocatedTipMirroredHandleDragActive)"/>
         </svg>
       </div>
       @if (editorChrome.isInlineTextEditModeActive && editorChrome.inlineTextEditOverlayRect; as textRect) {
