@@ -1691,7 +1691,34 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       isResizingSelection: () => this.isResizingSelection,
       isSkewingSelection: () => this.isSkewingSelection,
       isRotatingSelection: () => this.isRotatingSelection,
-      isDraggingShape: () => this.isDraggingShape
+      isDraggingShape: () => this.isDraggingShape,
+      getZoomMarquee: () => this.zoomMarquee,
+      isZoomMarquee: () => this.isZoomMarquee,
+      commitZoomMarquee: () => this.commitZoomMarquee(),
+      detectChanges: () => this.cdr.detectChanges(),
+      consumeZoomMarqueeJustEnded: () => this.zoomMarquee.consumeJustEnded(),
+      screenToSvgForZoom: (clientX, clientY) => {
+        const rect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
+        if (!rect) return null;
+        return this.canvasView.screenToSvg(clientX, clientY, rect);
+      },
+      zoomInAt: (x, y) => this.canvasView.zoomInAt(x, y),
+      zoomOutAt: (x, y) => this.canvasView.zoomOutAt(x, y),
+      refreshViewAfterZoomClick: () => {
+        setTimeout(() => {
+          this.updateViewBoxOverlayRect();
+          this.cdr.detectChanges();
+        }, 0);
+      },
+      beginPanSession: (event) => this.beginPanSession(event),
+      isPanning: () => this.isPanning,
+      applyPanDragFromEvent: (event) => this.applyPanDragFromEvent(event),
+      clearPanningFlag: () => this.clearPanningFlag(),
+      updateTextToolPreviewFromClient: (clientX, clientY) =>
+        this.updateTextToolPreviewFromClient(clientX, clientY),
+      createTextAtPoint: (clientX, clientY) => this.createTextAtPoint(clientX, clientY),
+      destroyTextToolPreview: () => this.destroyTextToolPreview(),
+      sampleEyedropperAt: (event) => this.tryEyedropperSample(event)
     });
     this.drag = pointerStack.drag;
     this.resize = pointerStack.resize;
@@ -2289,8 +2316,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
   private tryDispatchRegisteredCanvasClick(event: MouseEvent): boolean {
     const tool = this.toolRegistry.get(this.editorTool.getCurrentTool());
     if (!tool?.onClick) return false;
-    const svgPoint = this.clientToEditorSvgPoint(event.clientX, event.clientY);
-    if (!svgPoint) return false;
+    const svgPoint =
+      this.clientToEditorSvgPoint(event.clientX, event.clientY) ?? {
+        x: event.clientX,
+        y: event.clientY
+      };
     return tool.onClick(event, svgPoint);
   }
 
@@ -2339,42 +2369,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     if (this.tryDispatchRegisteredCanvasClick(event)) {
       return;
     }
-    if (this.editorTool.getCurrentTool() === 'pan') {
-      return;
-    }
     if (this.editorTool.getCurrentTool() === 'pen') {
       return;
     }
-    if (this.editorTool.getCurrentTool() === 'text') {
-      this.createTextAtPoint(event.clientX, event.clientY);
-      return;
-    }
     if (this.editorTool.isCreationTool()) {
-      return;
-    }
-    if (this.editorTool.getCurrentTool() === 'zoom') {
-      if (this.zoomMarquee.consumeJustEnded()) {
-        return;
-      }
-      if (!this.svgContent() || !this.canvasView.isInitialized()) return;
-      const rect = this.svgContainer()!.nativeElement.getBoundingClientRect();
-      const point = this.canvasView.screenToSvg(event.clientX, event.clientY, rect);
-      if (point) {
-        if (event.altKey) {
-          this.canvasView.zoomOutAt(point.x, point.y);
-        } else {
-          this.canvasView.zoomInAt(point.x, point.y);
-        }
-        setTimeout(() => {
-          this.updateViewBoxOverlayRect();
-          this.cdr.detectChanges();
-        }, 0);
-      }
-      return;
-    }
-
-    if (this.editorTool.getCurrentTool() === 'eyedropper') {
-      this.tryEyedropperSample(event);
       return;
     }
 

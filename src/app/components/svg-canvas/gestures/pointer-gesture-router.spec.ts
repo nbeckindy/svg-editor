@@ -227,7 +227,7 @@ describe('PointerGestureRouter', () => {
   });
 
   it('onDocumentMouseMove calls zoomMarquee.move and detectChanges when zoom marquee is active', () => {
-    const host = makeHost({ isZoomMarquee: true });
+    const host = makeHost({ getCurrentTool: () => 'zoom', isZoomMarquee: true });
     router.onDocumentMouseMove(host, { clientX: 7, clientY: 8, shiftKey: false } as MouseEvent);
     expect(zoomMarquee.move).toHaveBeenCalledWith(7, 8);
     expect(cdr.detectChanges).toHaveBeenCalled();
@@ -253,7 +253,7 @@ describe('PointerGestureRouter', () => {
 
   it('onDocumentMouseMove calls pan drag when panning and not resizing', () => {
     const applyPanDragFromEvent = vi.fn();
-    const host = makeHost({ isPanning: true, applyPanDragFromEvent });
+    const host = makeHost({ getCurrentTool: () => 'pan', isPanning: true, applyPanDragFromEvent });
     router.onDocumentMouseMove(host, { clientX: 0, clientY: 0, shiftKey: false } as MouseEvent);
     expect(applyPanDragFromEvent).toHaveBeenCalled();
     expect(drag.move).not.toHaveBeenCalled();
@@ -267,7 +267,7 @@ describe('PointerGestureRouter', () => {
 
   it('onDocumentMouseMove always asks host to update text tool preview', () => {
     const updateTextToolPreviewFromClient = vi.fn();
-    const host = makeHost({ updateTextToolPreviewFromClient });
+    const host = makeHost({ getCurrentTool: () => 'text', updateTextToolPreviewFromClient });
     router.onDocumentMouseMove(host, { clientX: 11, clientY: 12, shiftKey: false } as MouseEvent);
     expect(updateTextToolPreviewFromClient).toHaveBeenCalledWith(11, 12);
   });
@@ -312,7 +312,11 @@ describe('PointerGestureRouter', () => {
   });
 
   it('onDocumentMouseUp commits zoom marquee before clearPanningFlag branch', () => {
-    const host = makeHost({ isZoomMarquee: true, commitZoomMarquee: vi.fn() });
+    const host = makeHost({
+      getCurrentTool: () => 'zoom',
+      isZoomMarquee: true,
+      commitZoomMarquee: vi.fn()
+    });
     router.onDocumentMouseUp(host, { button: 0 } as MouseEvent);
     expect(host.commitZoomMarquee).toHaveBeenCalled();
     expect(host.clearPanningFlag).not.toHaveBeenCalled();

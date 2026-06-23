@@ -6,6 +6,7 @@ import { ResizeGesture } from '../components/svg-canvas/gestures/resize-gesture'
 import { RotateGesture } from '../components/svg-canvas/gestures/rotate-gesture';
 import { SelectionMarqueeGesture } from '../components/svg-canvas/gestures/selection-marquee-gesture';
 import { SkewGesture } from '../components/svg-canvas/gestures/skew-gesture';
+import { ZoomMarqueeGesture } from '../components/svg-canvas/gestures/zoom-marquee-gesture';
 import { ToolRegistryService } from './tool-registry.service';
 import type { GestureRuntimeContext } from '../components/svg-canvas/gestures/gesture-context';
 
@@ -108,5 +109,42 @@ describe('CanvasBoundToolRegistrar', () => {
 
     registrar.registerSelectorTools(makeSelectorDeps);
     expect(registry.get('selector')).toBeDefined();
+  });
+
+  it('registers view utility tools once when bound', () => {
+    registrar.registerViewUtilityTools({
+      getZoomDeps: () => ({
+        getZoomMarquee: () => new ZoomMarqueeGesture(),
+        isZoomMarquee: () => false,
+        commitZoomMarquee: vi.fn(),
+        detectChanges: vi.fn(),
+        isCanvasReady: () => true,
+        consumeZoomMarqueeJustEnded: () => false,
+        screenToSvg: () => null,
+        zoomInAt: vi.fn(),
+        zoomOutAt: vi.fn(),
+        refreshViewAfterZoomClick: vi.fn()
+      }),
+      getPanDeps: () => ({
+        beginPanSession: vi.fn(),
+        isPanning: () => false,
+        applyPanDragFromEvent: vi.fn(),
+        clearPanningFlag: vi.fn()
+      }),
+      getTextDeps: () => ({
+        isCanvasReady: () => true,
+        updateTextToolPreviewFromClient: vi.fn(),
+        createTextAtPoint: vi.fn(),
+        destroyTextToolPreview: vi.fn()
+      }),
+      getEyedropperDeps: () => ({
+        isCanvasReady: () => true,
+        sampleAt: vi.fn()
+      })
+    });
+    expect(registry.has('zoom')).toBe(true);
+    expect(registry.has('pan')).toBe(true);
+    expect(registry.has('text')).toBe(true);
+    expect(registry.has('eyedropper')).toBe(true);
   });
 });

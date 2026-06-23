@@ -119,6 +119,24 @@ export class PointerGestureRouter {
     return !this.toolRegistry.has(toolId);
   }
 
+  private shouldUseLegacyZoomRouting(host: SvgCanvasPointerGestureHost): boolean {
+    if (host.getCurrentTool() !== 'zoom') return false;
+    if (!this.toolRegistry) return true;
+    return !this.toolRegistry.has('zoom');
+  }
+
+  private shouldUseLegacyPanRouting(host: SvgCanvasPointerGestureHost): boolean {
+    if (host.getCurrentTool() !== 'pan') return false;
+    if (!this.toolRegistry) return true;
+    return !this.toolRegistry.has('pan');
+  }
+
+  private shouldUseLegacyTextPreview(host: SvgCanvasPointerGestureHost): boolean {
+    if (host.getCurrentTool() !== 'text') return false;
+    if (!this.toolRegistry) return true;
+    return !this.toolRegistry.has('text');
+  }
+
   private routeLegacySelectorPointerMove(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
     if (!this.shouldUseLegacySelectorRouting(host)) return false;
     if (host.isSelectionMarquee) {
@@ -184,15 +202,18 @@ export class PointerGestureRouter {
     if (this.routeLegacySelectorPointerMove(host, event)) {
       return;
     }
-    if (host.isZoomMarquee) {
+    if (this.shouldUseLegacyZoomRouting(host) && host.isZoomMarquee) {
       this.g.zoomMarquee.move(event.clientX, event.clientY);
       this.cdr.detectChanges();
       return;
     }
-    if (host.isPanning) {
+    if (this.shouldUseLegacyPanRouting(host) && host.isPanning) {
       host.applyPanDragFromEvent(event);
+      return;
     }
-    host.updateTextToolPreviewFromClient(event.clientX, event.clientY);
+    if (this.shouldUseLegacyTextPreview(host)) {
+      host.updateTextToolPreviewFromClient(event.clientX, event.clientY);
+    }
     host.recordInsertAnchorFromClient(event.clientX, event.clientY);
   }
 
@@ -212,11 +233,13 @@ export class PointerGestureRouter {
     if (this.routeLegacySelectorPointerUp(host, event)) {
       return;
     }
-    if (host.isZoomMarquee) {
+    if (this.shouldUseLegacyZoomRouting(host) && host.isZoomMarquee) {
       host.commitZoomMarquee();
       return;
     }
-    host.clearPanningFlag();
+    if (this.shouldUseLegacyPanRouting(host)) {
+      host.clearPanningFlag();
+    }
   }
 
   /**
@@ -227,12 +250,12 @@ export class PointerGestureRouter {
       event.preventDefault();
       return;
     }
-    if (host.getCurrentTool() === 'zoom') {
+    if (this.shouldUseLegacyZoomRouting(host)) {
       this.g.zoomMarquee.startAt(event.clientX, event.clientY);
       event.preventDefault();
       return;
     }
-    if (host.getCurrentTool() === 'pan') {
+    if (this.shouldUseLegacyPanRouting(host)) {
       host.beginPanSession(event);
       event.preventDefault();
       return;

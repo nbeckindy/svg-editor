@@ -13,6 +13,10 @@ import type { ToolRegistryService } from '../../tools/tool-registry.service';
 import type { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
 import type { PenCanvasToolDeps } from '../../tools/pen-canvas-tool';
 import type { SelectorCanvasToolDeps } from '../../tools/selector-canvas-tool';
+import type { ZoomCanvasToolDeps } from '../../tools/zoom-canvas-tool';
+import type { PanCanvasToolDeps } from '../../tools/pan-canvas-tool';
+import type { TextCanvasToolDeps } from '../../tools/text-canvas-tool';
+import type { EyedropperCanvasToolDeps } from '../../tools/eyedropper-canvas-tool';
 import type { GestureRuntimeContext } from './gestures/gesture-context';
 import type { Rect } from './gestures/gesture-context';
 import { createDefaultTransformGestureDoc } from './gestures/transform-gesture-doc.port';
@@ -71,6 +75,23 @@ export interface CreateSvgCanvasPointerStackArgs {
   isSkewingSelection: SelectorCanvasToolDeps['isSkewingSelection'];
   isRotatingSelection: SelectorCanvasToolDeps['isRotatingSelection'];
   isDraggingShape: SelectorCanvasToolDeps['isDraggingShape'];
+  getZoomMarquee: ZoomCanvasToolDeps['getZoomMarquee'];
+  isZoomMarquee: ZoomCanvasToolDeps['isZoomMarquee'];
+  commitZoomMarquee: ZoomCanvasToolDeps['commitZoomMarquee'];
+  detectChanges: ZoomCanvasToolDeps['detectChanges'];
+  consumeZoomMarqueeJustEnded: ZoomCanvasToolDeps['consumeZoomMarqueeJustEnded'];
+  screenToSvgForZoom: ZoomCanvasToolDeps['screenToSvg'];
+  zoomInAt: ZoomCanvasToolDeps['zoomInAt'];
+  zoomOutAt: ZoomCanvasToolDeps['zoomOutAt'];
+  refreshViewAfterZoomClick: ZoomCanvasToolDeps['refreshViewAfterZoomClick'];
+  beginPanSession: PanCanvasToolDeps['beginPanSession'];
+  isPanning: PanCanvasToolDeps['isPanning'];
+  applyPanDragFromEvent: PanCanvasToolDeps['applyPanDragFromEvent'];
+  clearPanningFlag: PanCanvasToolDeps['clearPanningFlag'];
+  updateTextToolPreviewFromClient: TextCanvasToolDeps['updateTextToolPreviewFromClient'];
+  createTextAtPoint: TextCanvasToolDeps['createTextAtPoint'];
+  destroyTextToolPreview: TextCanvasToolDeps['destroyTextToolPreview'];
+  sampleEyedropperAt: EyedropperCanvasToolDeps['sampleAt'];
 }
 
 export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArgs): SvgCanvasPointerStack {
@@ -159,6 +180,37 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     isRotatingSelection: args.isRotatingSelection,
     isDraggingShape: args.isDraggingShape
   }));
+
+  args.canvasBoundToolRegistrar.registerViewUtilityTools({
+    getZoomDeps: () => ({
+      getZoomMarquee: args.getZoomMarquee,
+      isZoomMarquee: args.isZoomMarquee,
+      commitZoomMarquee: args.commitZoomMarquee,
+      detectChanges: args.detectChanges,
+      isCanvasReady: args.isCanvasReady,
+      consumeZoomMarqueeJustEnded: args.consumeZoomMarqueeJustEnded,
+      screenToSvg: args.screenToSvgForZoom,
+      zoomInAt: args.zoomInAt,
+      zoomOutAt: args.zoomOutAt,
+      refreshViewAfterZoomClick: args.refreshViewAfterZoomClick
+    }),
+    getPanDeps: () => ({
+      beginPanSession: args.beginPanSession,
+      isPanning: args.isPanning,
+      applyPanDragFromEvent: args.applyPanDragFromEvent,
+      clearPanningFlag: args.clearPanningFlag
+    }),
+    getTextDeps: () => ({
+      isCanvasReady: args.isCanvasReady,
+      updateTextToolPreviewFromClient: args.updateTextToolPreviewFromClient,
+      createTextAtPoint: args.createTextAtPoint,
+      destroyTextToolPreview: args.destroyTextToolPreview
+    }),
+    getEyedropperDeps: () => ({
+      isCanvasReady: args.isCanvasReady,
+      sampleAt: args.sampleEyedropperAt
+    })
+  });
 
   return {
     gestureRuntime,
