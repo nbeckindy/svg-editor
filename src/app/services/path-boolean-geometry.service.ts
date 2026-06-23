@@ -20,6 +20,7 @@ import {
   type PathBooleanGeometryPort
 } from '../models/path-boolean';
 import { SvgManipulationService } from './svg-manipulation.service';
+import { PathBooleanSelectionReadService } from './path-boolean-selection-read.service';
 
 export interface PathBooleanResult {
   resultId: string;
@@ -36,27 +37,15 @@ export type PathBooleanUnionResult = PathBooleanResult;
 })
 export class PathBooleanGeometryService {
   private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly selectionRead = inject(PathBooleanSelectionReadService);
 
   createGeometryPort(): PathBooleanGeometryPort | null {
-    const svg = this.svgManipulation.getSVGInstance();
-    if (!svg) return null;
+    if (!this.svgManipulation.getSVGInstance()) return null;
+    const read = this.selectionRead;
     return {
-      getPathElement: (id) => {
-        const node = svg.findOne(`#${id}`)?.node as Element | undefined;
-        return node?.tagName.toLowerCase() === 'path' ? node : null;
-      },
-      getCompoundOperandElement: (id) => {
-        const node = svg.findOne(`#${id}`)?.node as Element | undefined;
-        const tag = node?.tagName.toLowerCase();
-        if (tag === 'path' || tag === 'rect' || tag === 'circle' || tag === 'ellipse') {
-          return node ?? null;
-        }
-        return null;
-      },
-      getPathD: (id) => {
-        const el = svg.findOne(`#${id}`)?.node as Element | undefined;
-        return el?.tagName.toLowerCase() === 'path' ? el.getAttribute('d') : null;
-      },
+      getPathElement: (id) => read.getPathElement(id),
+      getCompoundOperandElement: (id) => read.getCompoundOperandElement(id),
+      getPathD: (id) => read.getPathD(id),
       mapPathLocalToRootUser: (id, lx, ly) =>
         this.svgManipulation.mapPathLocalToRootUser(id, lx, ly),
       mapRootUserToPathLocal: (id, rx, ry) =>

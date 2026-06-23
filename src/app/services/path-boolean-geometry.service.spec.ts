@@ -3,6 +3,7 @@ import { describe, expect, it, vi } from 'vitest';
 import { PathBooleanGeometryService } from './path-boolean-geometry.service';
 import type { PathBooleanGeometryPort } from '../models/path-boolean';
 import { SvgManipulationService } from './svg-manipulation.service';
+import { PathBooleanSelectionReadService } from './path-boolean-selection-read.service';
 
 describe('PathBooleanGeometryService', () => {
   let service: PathBooleanGeometryService;
@@ -11,6 +12,7 @@ describe('PathBooleanGeometryService', () => {
     TestBed.configureTestingModule({
       providers: [
         PathBooleanGeometryService,
+        PathBooleanSelectionReadService,
         {
           provide: SvgManipulationService,
           useValue: {
@@ -146,5 +148,22 @@ describe('PathBooleanGeometryService', () => {
 
     rectNode.remove();
     circleNode.remove();
+  });
+
+  it('createGeometryPort delegates DOM reads to PathBooleanSelectionReadService', () => {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.id = 'p1';
+    path.setAttribute('d', 'M 0 0 L 10 0 L 10 10 L 0 10 Z');
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      getSVGInstance: ReturnType<typeof vi.fn>;
+    };
+    manip.getSVGInstance.mockReturnValue({
+      findOne: vi.fn((sel: string) => (sel === '#p1' ? { node: path } : undefined))
+    });
+
+    const port = service.createGeometryPort();
+    expect(port).not.toBeNull();
+    expect(port!.getPathD('p1')).toBe('M 0 0 L 10 0 L 10 10 L 0 10 Z');
+    expect(port!.getPathElement('p1')).toBe(path);
   });
 });
