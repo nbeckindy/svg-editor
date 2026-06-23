@@ -4,6 +4,7 @@
 |-------|------------|--------|
 | **1** | [`svg-editor-j61`](../../) | Closed 2026-06-23 |
 | **2** | [`svg-editor-hnv`](../../) | Closed 2026-06-23 (18/18 children) |
+| **3** | [`svg-editor-ywh`](../../) | Closed 2026-06-23 (7/7 children) |
 
 **Handoff docs:** [ARCHITECTURE.md](../ARCHITECTURE.md) (current seams + gravity wells) · [CONTEXT.md](../../CONTEXT.md) (editor vocabulary)
 
@@ -183,9 +184,47 @@ flowchart TB
 
 ## Recommended next steps
 
+See **Phase 3 — `svg-editor-ywh`** below (dedup legacy routing, unified tool bundles). After that:
+
 1. Shrink `SvgCanvasComponent` further — pen preview / inline text extraction (if warranted).
 2. Optional: `InjectionToken` per port for explicit DI at remaining call sites.
 3. Optional: drive tool context bar from `ToolDescriptor.contextBarComponent`.
+
+---
+
+## Phase 3 — `svg-editor-ywh` (dedup & unify)
+
+**Epic:** `svg-editor-ywh` · **Plan source:** post–Phase 2 architecture review (2026-06-23)
+
+Phase 2 introduced `CanvasTool` adapters but kept parallel **legacy** paths in `PointerGestureRouter` for tests, scattered tool metadata across 4+ files, and duplicate keyboard/HUD routing. Phase 3 removes that debt so new tools have one registration path.
+
+### Children (bead status)
+
+| Bead | ARCH | Summary | Depends on | Priority |
+|------|------|---------|------------|----------|
+| ywh.1 | ARCH-26 | Shared test helper registers full default `CanvasTool` set | — | P2 | ✓ |
+| ywh.2 | ARCH-28 | Remove dead pen Enter/Backspace keyboard fallbacks | — | P2 | ✓ |
+| ywh.3 | ARCH-29 | Fix `CanvasSvgPoint` mapping on pointer move/up | — | P2 | ✓ |
+| ywh.4 | ARCH-30 | Unified tool bundle (descriptor + adapter + shortcut) | — | P2 | ✓ |
+| ywh.5 | ARCH-27 | Remove `PointerGestureRouter` legacy routing paths | ywh.1 | P2 | ✓ |
+| ywh.6 | ARCH-31 | Pointer-intent debug HUD uses registry routing | ywh.5 | P3 | ✓ |
+| ywh.7 | ARCH-32 | Consolidate canvas host context interfaces | — | P4 | ✓ |
+
+### Suggested grab order
+
+1. **ywh.1** (test helper) — unblocks legacy router removal  
+2. **ywh.2**, **ywh.3**, **ywh.4** — parallel quick wins  
+3. **ywh.5** — delete ~200 lines of duplicated routing  
+4. **ywh.6** — trim debug HUD third copy  
+5. **ywh.7** — optional host-interface consolidation  
+
+### Out of scope (defer)
+
+- Pen preview / inline text extraction from `SvgCanvasComponent`
+- Removing `SvgShapeContentService` / `ChromeEditorApplyService` façade pass-throughs (stable panel APIs)
+- `InjectionToken` per port
+
+---
 
 ## Commits reference
 

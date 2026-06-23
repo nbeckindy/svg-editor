@@ -1,11 +1,11 @@
 # Angular SVG Editor - Architecture Plan
 
-> **Epics:** [Phase 1 — j61](./epics/hexagonal-architecture-extensibility.md#phase-1--svg-editor-j61-closed) (closed 2026-06-23) · [Phase 2 — hnv](./epics/hexagonal-architecture-extensibility.md#phase-2--svg-editor-hnv-deepen-seams) (closed 2026-06-23)  
+> **Epics:** [Phase 1 — j61](./epics/hexagonal-architecture-extensibility.md#phase-1--svg-editor-j61-closed) (closed 2026-06-23) · [Phase 2 — hnv](./epics/hexagonal-architecture-extensibility.md#phase-2--svg-editor-hnv-deepen-seams) (closed 2026-06-23) · [Phase 3 — ywh](./epics/hexagonal-architecture-extensibility.md#phase-3--svg-editor-ywh-dedup--unify) (closed 2026-06-23)
 > **Vocabulary:** [CONTEXT.md](../CONTEXT.md)
 
 ## Current architecture (2026-06)
 
-The editor is a **partially hexagonal** Angular app: narrow **ports**, **commands**, and **registries** separate intent from SVG mutation. Two architecture epics tracked the work: **`svg-editor-j61`** (foundations) and **`svg-editor-hnv`** (deepen seams).
+The editor is a **partially hexagonal** Angular app: narrow **ports**, **commands**, and **registries** separate intent from SVG mutation. Architecture epics: **`svg-editor-j61`** (foundations), **`svg-editor-hnv`** (deepen seams), **`svg-editor-ywh`** (dedup routing + unified tool bundles).
 
 ### Hexagonal posture
 
@@ -24,7 +24,7 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~4.3k lines) orches
 |-------|------|
 | Tool contract | `src/app/tools/canvas-tool.interface.ts` |
 | Host seam | `src/app/tools/canvas-tool-host.interface.ts` |
-| UI metadata | `src/app/tools/tool-descriptor.ts` + `register-default-tool-descriptors.ts` |
+| UI metadata | `src/app/tools/tool-bundles.ts` (descriptor + shortcut + registration group) |
 | Registry | `src/app/tools/tool-registry.service.ts` |
 | Bootstrap | `register-default-tools.ts` → descriptors at startup; `CanvasBoundToolRegistrar` when canvas is ready |
 | Adapters | `*-canvas-tool.ts` factories (creation, selector, pen, zoom, pan, text, eyedropper, …) |
@@ -39,7 +39,7 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~4.3k lines) orches
 
 Prefer this stack for every new **Tool** — do not grow `SvgCanvasComponent` with tool-specific branches.
 
-1. **Descriptor** — add a `ToolDescriptor` in `register-default-tool-descriptors.ts` (strip label, icon, `interactionKind`, optional `relevantTools` on a dock panel).
+1. **Bundle** — add a `ToolBundle` entry in `tool-bundles.ts` (descriptor, `canvasRegistrationGroup`, optional shortcut key).
 2. **Orchestrator (optional)** — if the tool has non-trivial session state (like pen), put policy in a dedicated class and inject **narrow ports** (`*HistoryPort`, `*SvgPort`, `*SelectionPort`) defined next to the orchestrator — not the full `SvgManipulationService`.
 3. **CanvasTool adapter** — factory in `src/app/tools/<name>-canvas-tool.ts` with a `*CanvasToolDeps` getter; map pointer/keyboard events to the orchestrator; return `true` when the event is consumed.
 4. **Canvas adapter wiring** — register via `CanvasBoundToolRegistrar` from `SvgCanvasComponent` (or pointer-stack factory); pass only the deps the adapter needs (coordinate mapping, readiness checks, gesture handles).
@@ -109,14 +109,11 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 
 - **`SvgCanvasComponent`** — pen previews, inline text edit, keyboard routing glue, document init. New tools should **not** add logic here; extract orchestrators + ports and register a `CanvasTool` adapter instead.
 - **`SvgManipulationService`** — wide façade; at new panel/tool boundaries inject a **narrow port** (pattern: `PenToolSessionSvgPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`).
-- **Residual pointer fallbacks** — legacy branches in `PointerGestureRouter` when a tool is not yet registered (tests / partial bootstrap). Production tools should always register via `CanvasBoundToolRegistrar`.
 
 ### Next seams (future work)
 
 - Extract **inline text edit** and remaining pen preview DOM into orchestrator + ports (mirror `PenToolSession`).
-- Introduce **`*ToolSessionPorts`** interfaces for any tool that outgrows a thin `CanvasTool` adapter.
-- Shrink **`CanvasToolHost`** — today it still exposes `SvgManipulationService`; new adapters should depend on typed deps getters, not the host directly.
-- Optional **Phase 3** epic: finish canvas adapter slim-down and remove pointer-router fallbacks once all tools are registered in tests.
+- Shrink **`CanvasToolHost`** — prefer typed deps getters over wide service exposure on the host.
 
 ---
 

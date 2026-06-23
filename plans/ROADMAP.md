@@ -49,6 +49,14 @@ Single source of truth for **epic order**, **dependencies**, and **links** to bd
 | 26 | Pen and shape tool interaction UX | [pen-shape-tool-ux](./epics/pen-shape-tool-ux.md) | `TBD` | `PLANNED` | Pen clicks place nodes over existing shapes; auto-switch to select after shape draw |
 | 27 | Gradient paint popover and stroke gradients | [gradient-paint-popover](./epics/gradient-paint-popover.md) | `svg-editor-qpk` | `OPEN` | Unified paint swatch popover; stroke gradient parity; gradient removal + def GC; follow-on `qpk.6` visual editor |
 
+## Infrastructure epics (architecture)
+
+| Phase | Epic | Slug | bd epic ID | Status | Notes |
+|------:|------|------|------------|--------|-------|
+| 1 | Hexagonal architecture — foundations | [hexagonal-architecture-extensibility](./epics/hexagonal-architecture-extensibility.md) | `svg-editor-j61` | `CLOSED` | Tool registry, dock registry, overlays |
+| 2 | Hexagonal architecture — deepen seams | [hexagonal-architecture-extensibility](./epics/hexagonal-architecture-extensibility.md#phase-2--svg-editor-hnv-deepen-seams) | `svg-editor-hnv` | `CLOSED` | Command/chrome splits, `CanvasTool` adapters, layout service |
+| 3 | Canvas adapter dedup + unified tool registry | [hexagonal-architecture-extensibility](./epics/hexagonal-architecture-extensibility.md#phase-3--svg-editor-ywh-dedup--unify) | `svg-editor-ywh` | `CLOSED` | Legacy router removed; `tool-bundles.ts`; `canvas-adapter-context.ts` (7/7) |
+
 ## Free-standing issues
 
 All items below are **closed in `bd`** (audit trail); there are **no open** roadmap freestanding beads as of 2026-05-25.
