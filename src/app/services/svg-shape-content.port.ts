@@ -2,8 +2,9 @@ import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../models/shape-properties.interface';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 import type { ClipboardPayload } from '../models/clipboard-payload';
+import type { SvgShapePaintReadout } from './shape-content/svg-shape-paint.port';
 
-export type CreatableShapeType = 'rect' | 'ellipse' | 'line' | 'text';
+export type { SvgShapePaintReadout } from './shape-content/svg-shape-paint.port';
 
 /** Insert a raster as `<image>` in the editor content group (see ADR 0001). */
 export interface InsertRasterImageAttrs {
@@ -41,13 +42,7 @@ export interface ShapeCreationAttrs {
   strokeWidth?: number;
 }
 
-/** Read model for computed paint on a DOM node (layers panel + stack preview). */
-export interface SvgShapePaintReadout {
-  fill?: string;
-  stroke?: string;
-  strokeWidth?: number;
-  opacity?: number;
-}
+export type CreatableShapeType = 'rect' | 'ellipse' | 'line' | 'text';
 
 /**
  * Shape DOM read/write: properties, paint, text, paths, motion, clipboard, marquee hit-test.
