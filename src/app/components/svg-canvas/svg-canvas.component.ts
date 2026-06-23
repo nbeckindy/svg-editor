@@ -59,8 +59,8 @@ import {
 import { PenToolSession, type PenToolSessionPorts } from './pen-tool-session/pen-tool-session';
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
+import { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
 import type { CanvasToolHost } from '../../tools/canvas-tool-host.interface';
-import { registerCreationCanvasTools } from '../../tools/creation-canvas-tool';
 import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createSvgCanvasPointerStack } from './svg-canvas-pointer-stack.factory';
 import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
@@ -1652,7 +1652,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     private chromeEditorApply: ChromeEditorApplyService,
     private pathNodeEditBridge: PathNodeEditCommandBridgeService,
     private pathBooleanPreview: PathBooleanPreviewService,
-    private toolRegistry: ToolRegistryService
+    private toolRegistry: ToolRegistryService,
+    private canvasBoundToolRegistrar: CanvasBoundToolRegistrar
   ) {
     const pointerStack = createSvgCanvasPointerStack({
       cdr: this.cdr,
@@ -1672,7 +1673,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       getSmartGuideCandidates: () => this.getSmartGuideCandidates(),
       isSnapTemporarilyDisabled: () => this.altKeyPressed,
       createPenToolSessionPorts: () => this.createPenToolSessionPorts(),
-      toolRegistry: this.toolRegistry
+      toolRegistry: this.toolRegistry,
+      canvasBoundToolRegistrar: this.canvasBoundToolRegistrar,
+      isCanvasReady: () => !!(this.svgContent() && this.canvasView.isInitialized())
     });
     this.drag = pointerStack.drag;
     this.resize = pointerStack.resize;
@@ -1684,12 +1687,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     this.gestureRuntime = pointerStack.gestureRuntime;
     this.pointerGestureRouter = pointerStack.pointerGestureRouter;
     this.penTool = pointerStack.penTool;
-    registerCreationCanvasTools(
-      this.toolRegistry,
-      this.creation,
-      () => this.gestureRuntime,
-      () => !!(this.svgContent() && this.canvasView.isInitialized())
-    );
     this.editorChrome = new SvgCanvasEditorChromeFacade(this);
 
     effect(() => {

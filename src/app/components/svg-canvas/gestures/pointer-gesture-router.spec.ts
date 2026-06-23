@@ -105,9 +105,34 @@ describe('PointerGestureRouter', () => {
   });
 
   it('onDocumentMouseMove prefers creation over selection marquee', () => {
-    const host = makeHost({ isCreatingShape: true, isSelectionMarquee: true });
+    const host = makeHost({ isCreatingShape: true, isSelectionMarquee: true, getCurrentTool: () => 'rect' });
     router.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
     expect(creation.move).toHaveBeenCalled();
+    expect(selectionMarquee.move).not.toHaveBeenCalled();
+  });
+
+  it('onDocumentMouseMove prefers registered tool onPointerMove over legacy creation when creating', () => {
+    const registry = new ToolRegistryService();
+    const onPointerMove = vi.fn();
+    registry.register({
+      toolId: 'rect',
+      onActivate: () => {},
+      onDeactivate: () => {},
+      onPointerMove
+    });
+    router = new PointerGestureRouter(
+      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
+      cdr as ChangeDetectorRef,
+      registry
+    );
+    const host = makeHost({
+      isCreatingShape: true,
+      isSelectionMarquee: true,
+      getCurrentTool: () => 'rect'
+    });
+    router.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
+    expect(onPointerMove).toHaveBeenCalled();
+    expect(creation.move).not.toHaveBeenCalled();
     expect(selectionMarquee.move).not.toHaveBeenCalled();
   });
 

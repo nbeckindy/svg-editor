@@ -8,6 +8,9 @@ import { provideAnimationsAsync } from '@angular/platform-browser/animations/asy
 import { routes } from './app.routes';
 import { DockPanelRegistryService } from './panels/dock-panel-registry.service';
 import { registerDefaultDockPanels } from './panels/register-default-dock-panels';
+import { CanvasBoundToolRegistrar } from './tools/canvas-bound-tool-registrar.service';
+import { registerDefaultTools } from './tools/register-default-tools';
+import { ToolRegistryService } from './tools/tool-registry.service';
 
 export const appConfig: ApplicationConfig = {
   providers: [
@@ -24,6 +27,9 @@ export const appConfig: ApplicationConfig = {
     }),
     provideAppInitializer(() => {
       registerDefaultDockPanels(inject(DockPanelRegistryService));
+    }),
+    provideAppInitializer(() => {
+      registerDefaultTools(inject(ToolRegistryService), inject(CanvasBoundToolRegistrar));
     })
   ]
 };

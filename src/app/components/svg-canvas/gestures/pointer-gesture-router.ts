@@ -119,11 +119,15 @@ export class PointerGestureRouter {
     return true;
   }
 
+  private isRegisteredTool(toolId: EditorTool): boolean {
+    return this.toolRegistry?.has(toolId) ?? false;
+  }
+
+  private shouldUseLegacyCreationRouting(host: SvgCanvasPointerGestureHost): boolean {
+    return host.isCreatingShape && !this.isRegisteredTool(host.getCurrentTool());
+  }
+
   onDocumentMouseMove(host: SvgCanvasPointerGestureHost, event: MouseEvent): void {
-    if (host.isCreatingShape) {
-      this.g.creation.move(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
-      return;
-    }
     if (host.getPathNodeDragSession()) {
       host.updatePathNodeDrag(event.clientX, event.clientY);
       return;
@@ -133,6 +137,10 @@ export class PointerGestureRouter {
       return;
     }
     if (this.dispatchRegisteredPointerMove(host, event)) {
+      return;
+    }
+    if (this.shouldUseLegacyCreationRouting(host)) {
+      this.g.creation.move(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
       return;
     }
     if (host.getCurrentTool() === 'pen') {
@@ -181,7 +189,7 @@ export class PointerGestureRouter {
     if (this.dispatchRegisteredPointerUp(host, event)) {
       return;
     }
-    if (host.isCreatingShape) {
+    if (this.shouldUseLegacyCreationRouting(host)) {
       this.g.creation.end(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
       return;
     }
@@ -242,7 +250,10 @@ export class PointerGestureRouter {
       }
       return;
     }
-    if (host.isCreationToolActive()) {
+    if (
+      host.isCreationToolActive() &&
+      !this.isRegisteredTool(host.getCurrentTool())
+    ) {
       if (!host.svgContentValue || !host.canvasViewInitialized) return;
       if (this.g.creation.start(host.gestureRuntime, host.getCurrentTool(), event)) {
         event.preventDefault();
