@@ -89,7 +89,7 @@ export class PointerGestureRouter {
   private dispatchRegisteredPointerMove(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
     const tool = this.toolRegistry?.get(host.getCurrentTool());
     if (!tool?.onPointerMove) return false;
-    const svgPoint: CanvasSvgPoint = { x: event.clientX, y: event.clientY };
+    const svgPoint = this.svgPointFromEvent(host, event) ?? { x: 0, y: 0 };
     const consumed = tool.onPointerMove(event, svgPoint);
     return consumed !== false;
   }
@@ -97,7 +97,7 @@ export class PointerGestureRouter {
   private dispatchRegisteredPointerUp(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
     const tool = this.toolRegistry?.get(host.getCurrentTool());
     if (!tool?.onPointerUp) return false;
-    const svgPoint: CanvasSvgPoint = { x: event.clientX, y: event.clientY };
+    const svgPoint = this.svgPointFromEvent(host, event) ?? { x: 0, y: 0 };
     const consumed = tool.onPointerUp(event, svgPoint);
     return consumed !== false;
   }

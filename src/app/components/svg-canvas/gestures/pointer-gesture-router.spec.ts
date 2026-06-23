@@ -536,6 +536,23 @@ describe('PointerGestureRouter', () => {
     expect(host.updateTextToolPreviewFromClient).not.toHaveBeenCalled();
   });
 
+  it('onDocumentMouseMove passes document SVG coordinates to registered tool onPointerMove', () => {
+    const onPointerMove = vi.fn();
+    patchRegisteredCanvasTool(registry, 'rect', { onPointerMove });
+    const clientToEditorSvgPointForDrag = vi.fn((clientX: number, clientY: number) => ({
+      x: clientX + 100,
+      y: clientY + 200
+    }));
+    const host = makeHost(
+      { getCurrentTool: () => 'rect', clientToEditorSvgPointForDrag },
+      hostState
+    );
+    const event = { clientX: 3, clientY: 4, shiftKey: false } as MouseEvent;
+    router.onDocumentMouseMove(host, event);
+    expect(clientToEditorSvgPointForDrag).toHaveBeenCalledWith(3, 4);
+    expect(onPointerMove).toHaveBeenCalledWith(event, { x: 103, y: 204 });
+  });
+
   it('onDocumentMouseUp dispatches to registered tool onPointerUp', () => {
     const onPointerUp = vi.fn();
     patchRegisteredCanvasTool(registry, 'rect', { onPointerUp });
@@ -545,6 +562,23 @@ describe('PointerGestureRouter', () => {
       clientY: 2
     } as MouseEvent);
     expect(onPointerUp).toHaveBeenCalled();
+  });
+
+  it('onDocumentMouseUp passes document SVG coordinates to registered tool onPointerUp', () => {
+    const onPointerUp = vi.fn();
+    patchRegisteredCanvasTool(registry, 'rect', { onPointerUp });
+    const clientToEditorSvgPointForDrag = vi.fn((clientX: number, clientY: number) => ({
+      x: clientX + 50,
+      y: clientY + 60
+    }));
+    const host = makeHost(
+      { getCurrentTool: () => 'rect', clientToEditorSvgPointForDrag },
+      hostState
+    );
+    const event = { button: 0, clientX: 1, clientY: 2 } as MouseEvent;
+    router.onDocumentMouseUp(host, event);
+    expect(clientToEditorSvgPointForDrag).toHaveBeenCalledWith(1, 2);
+    expect(onPointerUp).toHaveBeenCalledWith(event, { x: 51, y: 62 });
   });
 
   it('routes through legacy creation when tool is not registered', () => {
