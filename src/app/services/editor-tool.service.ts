@@ -69,10 +69,6 @@ export class EditorToolService {
   }
 
   isCreationTool(tool?: EditorTool): boolean {
-    const id = tool ?? this.currentTool();
-    if (this.toolRegistry.getDescriptor(id)) {
-      return this.toolRegistry.isCreationTool(id);
-    }
-    return id === 'rect' || id === 'ellipse' || id === 'line';
+    return this.toolRegistry.isCreationTool(tool ?? this.currentTool());
   }
 }

@@ -4157,18 +4157,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   isSelectorInteractionTool(tool: EditorTool): boolean {
-    if (this.toolRegistry.getDescriptor(tool)) {
-      return this.toolRegistry.isSelectorInteractionTool(tool);
-    }
-    return tool === 'selector' || tool === 'node-edit-selector';
+    return this.toolRegistry.isSelectorInteractionTool(tool);
   }
 
   /** Tools that keep `pathNodeEditState` on switch and may rebuild it from path selection (with node-edit). */
   private toolKeepsOrBuildsPathNodeTopology(tool: EditorTool): boolean {
-    if (this.toolRegistry.getDescriptor(tool)) {
-      return this.toolRegistry.keepsPathNodeTopology(tool);
-    }
-    return tool === 'selector' || tool === 'node-edit-selector' || tool === 'pen';
+    return this.toolRegistry.keepsPathNodeTopology(tool);
   }
 
   private isNodeEditSelectorTool(tool: EditorTool): boolean {

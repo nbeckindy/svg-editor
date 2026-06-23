@@ -3,7 +3,7 @@
 | Phase | Beads epic | Status |
 |-------|------------|--------|
 | **1** | [`svg-editor-j61`](../../) | Closed 2026-06-23 |
-| **2** | [`svg-editor-hnv`](../../) | In progress — 16/18 children closed (see [Phase 2](#phase-2--svg-editor-hnv-deepen-seams) below) |
+| **2** | [`svg-editor-hnv`](../../) | Closed 2026-06-23 (18/18 children) |
 
 **Handoff docs:** [ARCHITECTURE.md](../ARCHITECTURE.md) (current seams + gravity wells) · [CONTEXT.md](../../CONTEXT.md) (editor vocabulary)
 
@@ -29,8 +29,7 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 | Problem | Where | Notes |
 |---|---|---|
 | **Large canvas adapter** | `SvgCanvasComponent` (~4.3k lines TS) | Overlays extracted; pen previews / inline text / keyboard glue remain inline. |
-| **Legacy tool routing** | `PointerGestureRouter` | Residual `if (tool === …)` fallbacks for unmigrated pointer paths (creation tools fully on registry). |
-| **Tool strip not registry-driven** | `tool-strip.component.html` | [`hnv.4`](../../) — `ToolDescriptor` metadata + strip from registry still open. |
+| **Legacy tool routing** | `PointerGestureRouter` | Residual fallbacks when a tool is not registered (e.g. unit tests); production tools use `CanvasTool` adapters. |
 | **Angular in domain** | Most services | `@Injectable({ providedIn: 'root' })` — acceptable for this app; not pure hexagonal isolation. |
 | **`SvgManipulationService` breadth** | Central façade | Narrow ports at panel boundaries (properties, boolean path, layers DnD); façade still wide for history commands. |
 
@@ -47,6 +46,7 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 | Duplicate path boolean DOM reads | `PathBooleanSelectionReadService` shared by panel + geometry |
 | Unregistered selector / pen / zoom / pan / text / eyedropper | `CanvasTool` adapters + `registerDefaultTools()` in `app.config.ts` |
 | Dock auto-show / shell layout ad hoc | `DockPanelAutoShowService`, `EditorLayoutService` |
+| Hardcoded tool strip buttons | `ToolDescriptor` + `registerDefaultToolDescriptors()` + registry-driven strip |
 
 ---
 
@@ -81,7 +81,7 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 | hnv.1 | ARCH-7 | Tool registry foundation — creation routing | ✓ |
 | hnv.2 | ARCH-8 | `registerDefaultTools()` in `app.config.ts` | ✓ |
 | hnv.3 | ARCH-9 | `ToolRegistry` `onKeyDown` in keyboard controller | ✓ |
-| hnv.4 | ARCH-10 | `ToolDescriptor` metadata + registry-driven tool strip | ○ open |
+| hnv.4 | ARCH-10 | `ToolDescriptor` metadata + registry-driven tool strip | ✓ |
 | hnv.5 | ARCH-11 | `PenToolSession` as `CanvasTool` adapter | ✓ |
 | hnv.6 | ARCH-12 | Selector as `CanvasTool` adapter | ✓ |
 | hnv.7 | ARCH-13 | `DockPanelDescriptor.relevantTools` auto-show | ✓ |
@@ -95,7 +95,7 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 | hnv.15 | ARCH-22 | `PathBooleanSelectionReadPort` shared read model | ✓ |
 | hnv.16 | ARCH-23 | Tool classification in registry metadata | ✓ |
 | hnv.17 | ARCH-24 | Remaining tools as `CanvasTool` (zoom, pan, text, eyedropper, …) | ✓ |
-| hnv.18 | ARCH-25 | Update architecture docs (this file + ARCHITECTURE.md) | ○ in progress |
+| hnv.18 | ARCH-25 | Update architecture docs (this file + ARCHITECTURE.md) | ✓ |
 
 ### Phase 2 deliverables (by area)
 
@@ -183,9 +183,9 @@ flowchart TB
 
 ## Recommended next steps
 
-1. **hnv.4** — registry-driven tool strip (`ToolDescriptor` + `interactionKind`).
-2. Shrink `SvgCanvasComponent` further — pen preview / inline text extraction (if warranted).
-3. Optional: `InjectionToken` per port for explicit DI at remaining call sites.
+1. Shrink `SvgCanvasComponent` further — pen preview / inline text extraction (if warranted).
+2. Optional: `InjectionToken` per port for explicit DI at remaining call sites.
+3. Optional: drive tool context bar from `ToolDescriptor.contextBarComponent`.
 
 ## Commits reference
 

@@ -1,6 +1,6 @@
 # Angular SVG Editor - Architecture Plan
 
-> **Epics:** [Phase 1 — j61](./epics/hexagonal-architecture-extensibility.md#phase-1--svg-editor-j61-closed) (closed 2026-06-23) · [Phase 2 — hnv](./epics/hexagonal-architecture-extensibility.md#phase-2--svg-editor-hnv-deepen-seams) (16/18 closed)  
+> **Epics:** [Phase 1 — j61](./epics/hexagonal-architecture-extensibility.md#phase-1--svg-editor-j61-closed) (closed 2026-06-23) · [Phase 2 — hnv](./epics/hexagonal-architecture-extensibility.md#phase-2--svg-editor-hnv-deepen-seams) (closed 2026-06-23)  
 > **Vocabulary:** [CONTEXT.md](../CONTEXT.md)
 
 ## Current architecture (2026-06)
@@ -28,7 +28,7 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~4.3k lines) orches
 | Bootstrap | `src/app/tools/register-default-tools.ts` (wired in `app.config.ts`) |
 | Adapters | creation, selector, pen, zoom, pan, text, eyedropper, … |
 
-`PointerGestureRouter` and keyboard controller consult the registry first. **Open:** drive tool strip from registry metadata ([hnv.4](./epics/hexagonal-architecture-extensibility.md)).
+`PointerGestureRouter` and keyboard controller consult the registry first. Tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)).
 
 ### UI composition
 
@@ -76,9 +76,8 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 ### Still centralized (extension touchpoints)
 
 - **`SvgCanvasComponent`** — pen previews, inline text edit, keyboard routing glue, document init.
-- **Tool strip** — hardcoded buttons until hnv.4 (registry-driven strip).
 - **`SvgManipulationService`** — wide façade; prefer narrow ports at new panel/tool boundaries.
-- **Residual pointer fallbacks** — some legacy branches in `PointerGestureRouter` for unmigrated paths.
+- **Residual pointer fallbacks** — legacy branches in `PointerGestureRouter` when a tool is not yet registered (tests / partial bootstrap).
 
 ---
 
