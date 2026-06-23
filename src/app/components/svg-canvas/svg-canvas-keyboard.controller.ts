@@ -18,6 +18,7 @@ import type { RotateGesture } from './gestures/rotate-gesture';
 import type { SelectionMarqueeGesture } from './gestures/selection-marquee-gesture';
 import type { ZoomMarqueeGesture } from './gestures/zoom-marquee-gesture';
 import type { ToolRegistryService } from '../../tools/tool-registry.service';
+import { buildEditorToolShortcutMap } from '../../tools/tool-bundles';
 import { RemoveShapesCommand, buildReorderToExtremeCommand } from '../../models/editor-commands';
 
 export interface SvgCanvasKeyboardContext {
@@ -89,20 +90,7 @@ function tryEditorToolShortcut(
   if (event.ctrlKey || event.metaKey || event.altKey) return false;
   if (event.key.length !== 1) return false;
   const key = event.key.toLowerCase();
-  const toolByKey: Record<string, EditorTool | 'reserved'> = {
-    v: 'selector',
-    a: 'node-edit-selector',
-    p: 'pen',
-    b: 'reserved',
-    r: 'rect',
-    o: 'ellipse',
-    l: 'line',
-    t: 'text',
-    h: 'pan',
-    z: 'zoom',
-    i: 'eyedropper'
-  };
-  const dest = toolByKey[key];
+  const dest = buildEditorToolShortcutMap()[key];
   if (!dest) return false;
   event.preventDefault();
   if (dest === 'reserved') {

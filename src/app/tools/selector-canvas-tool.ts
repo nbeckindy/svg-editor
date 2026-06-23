@@ -4,15 +4,16 @@ import type { ResizeGesture } from '../components/svg-canvas/gestures/resize-ges
 import type { RotateGesture } from '../components/svg-canvas/gestures/rotate-gesture';
 import type { SelectionMarqueeGesture } from '../components/svg-canvas/gestures/selection-marquee-gesture';
 import type { SkewGesture } from '../components/svg-canvas/gestures/skew-gesture';
-import type { EditorTool } from '../services/editor-tool.service';
 import type { ResizeHandle } from '../utils/selection-resize';
 import type { SkewEdge } from '../utils/selection-skew';
 import type { CanvasTool } from './canvas-tool.interface';
 import type { ToolRegistryService } from './tool-registry.service';
+import {
+  SELECTOR_INTERACTION_TOOL_IDS,
+  type SelectorInteractionToolId
+} from './tool-bundles';
 
-export const SELECTOR_INTERACTION_TOOL_IDS = ['selector', 'node-edit-selector'] as const satisfies readonly EditorTool[];
-
-export type SelectorInteractionToolId = (typeof SELECTOR_INTERACTION_TOOL_IDS)[number];
+export type { SelectorInteractionToolId };
 
 export interface SelectorCanvasToolGestures {
   selectionMarquee: SelectionMarqueeGesture;

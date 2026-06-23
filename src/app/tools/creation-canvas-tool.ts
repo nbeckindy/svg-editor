@@ -1,12 +1,13 @@
 import type { CreationGesture } from '../components/svg-canvas/gestures/creation-gesture';
 import type { GestureRuntimeContext } from '../components/svg-canvas/gestures/gesture-context';
-import type { EditorTool } from '../services/editor-tool.service';
 import type { CanvasTool } from './canvas-tool.interface';
 import type { ToolRegistryService } from './tool-registry.service';
+import {
+  CREATION_TOOL_IDS,
+  type CreationCanvasToolId
+} from './tool-bundles';
 
-const CREATION_TOOL_IDS = ['rect', 'ellipse', 'line'] as const satisfies readonly EditorTool[];
-
-export type CreationCanvasToolId = (typeof CREATION_TOOL_IDS)[number];
+export type { CreationCanvasToolId };
 
 export function createCreationCanvasTool(
   toolId: CreationCanvasToolId,
