@@ -6,6 +6,9 @@ import { AppComponent } from './app';
 import { SvgManipulationService } from './services/svg-manipulation.service';
 import { ShapeSelectionService } from './services/shape-selection.service';
 import { EditorHistoryService } from './services/editor-history.service';
+import { EditorToolService } from './services/editor-tool.service';
+import { DockPanelRegistryService } from './panels/dock-panel-registry.service';
+import { registerDefaultDockPanels } from './panels/register-default-dock-panels';
 import { routes } from './app.routes';
 import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from './testing/mdi-icon-testing';
 
@@ -16,6 +19,7 @@ describe('AppComponent', () => {
       providers: [provideAnimationsAsync(), provideRouter(routes), ...mdiIconHttpTestProviders]
     }).compileComponents();
 
+    registerDefaultDockPanels(TestBed.inject(DockPanelRegistryService));
     registerMdiSvgIconSetForTests();
   });
 
@@ -52,9 +56,50 @@ describe('AppComponent', () => {
     expect(compiled.querySelector('app-editor-left-rail')).toBeTruthy();
     expect(compiled.querySelector('app-svg-canvas')).toBeTruthy();
     expect(compiled.querySelector('app-editor-right-dock')).toBeTruthy();
-    expect(compiled.querySelector('app-layers-panel')).toBeTruthy();
-    expect(compiled.querySelector('app-properties-panel')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="editor-layers-area"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="editor-properties-area"]')).toBeTruthy();
     expect(compiled.querySelector('app-svg-debug-panel')).toBeTruthy();
+  });
+
+  it('auto-shows path ops when two paths are selected in selector mode', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    const shapeSelection = TestBed.inject(ShapeSelectionService);
+    const editorTool = TestBed.inject(EditorToolService);
+    fixture.detectChanges();
+
+    editorTool.setTool('selector');
+    shapeSelection.selectShapes([
+      { id: 'p1', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
+      { id: 'p2', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
+    ]);
+    fixture.detectChanges();
+
+    expect(app.activeDockPanel()).toBe('pathOps');
+  });
+
+  it('preserves manual dock tab choice until selection changes', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const app = fixture.componentInstance;
+    const shapeSelection = TestBed.inject(ShapeSelectionService);
+    const editorTool = TestBed.inject(EditorToolService);
+    fixture.detectChanges();
+
+    editorTool.setTool('selector');
+    shapeSelection.selectShapes([
+      { id: 'p1', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
+      { id: 'p2', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
+    ]);
+    fixture.detectChanges();
+    expect(app.activeDockPanel()).toBe('pathOps');
+
+    const layersTab = fixture.nativeElement.querySelector('[data-testid="dock-tab-layers"]') as HTMLButtonElement;
+    layersTab.click();
+    fixture.detectChanges();
+    expect(app.activeDockPanel()).toBe('layers');
+
+    fixture.detectChanges();
+    expect(app.activeDockPanel()).toBe('layers');
   });
 
   it('should update svgContent when onSVGLoaded is called', () => {

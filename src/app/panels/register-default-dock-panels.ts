@@ -2,6 +2,7 @@ import { BooleanPathPanelComponent } from '../components/boolean-path-panel/bool
 import { LayersPanelComponent } from '../components/layers-panel/layers-panel.component';
 import { PropertiesPanelComponent } from '../components/properties-panel/properties-panel.component';
 import type { DockPanelRegistryService } from './dock-panel-registry.service';
+import { pathOpsMultiPathRelevance } from './dock-panel-relevance';
 
 export function registerDefaultDockPanels(registry: DockPanelRegistryService): void {
   registry.register({
@@ -31,6 +32,8 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
     tabTestId: 'dock-tab-path-ops',
     areaTestId: 'editor-path-ops-area',
     ariaLabel: 'Path operations',
-    panelClass: 'path-ops-panel-host'
+    panelClass: 'path-ops-panel-host',
+    relevantTools: ['selector'],
+    isRelevantWhen: pathOpsMultiPathRelevance
   });
 }

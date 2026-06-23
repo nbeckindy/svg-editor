@@ -25,7 +25,8 @@
     </section>
 
     <app-editor-right-dock
-      [(activeDockPanel)]="activeDockPanel"
+      [activeDockPanel]="activeDockPanel()"
+      (activeDockPanelChange)="onDockPanelChange($event)"
       [dockCollapsed]="dockCollapsed()"
       (dockCollapsedChange)="dockCollapsed.set($event)"
     />
