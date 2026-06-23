@@ -1,0 +1,26 @@
+@if (visible()) {
+  <svg:g data-testid="canvas-grid-overlay">
+    @for (line of verticalLines(); track line.key) {
+      <svg:line
+        data-testid="canvas-grid-line"
+        [attr.x1]="line.x1"
+        [attr.y1]="line.y1"
+        [attr.x2]="line.x2"
+        [attr.y2]="line.y2"
+        [attr.stroke]="line.major ? '#9e9e9e' : '#cfcfcf'"
+        [attr.stroke-width]="1"
+        [attr.vector-effect]="'non-scaling-stroke'"/>
+    }
+    @for (line of horizontalLines(); track line.key) {
+      <svg:line
+        data-testid="canvas-grid-line"
+        [attr.x1]="line.x1"
+        [attr.y1]="line.y1"
+        [attr.x2]="line.x2"
+        [attr.y2]="line.y2"
+        [attr.stroke]="line.major ? '#9e9e9e' : '#cfcfcf'"
+        [attr.stroke-width]="1"
+        [attr.vector-effect]="'non-scaling-stroke'"/>
+    }
+  </svg:g>
+}

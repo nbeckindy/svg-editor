@@ -25,27 +25,11 @@
   }
   <div class="ruler-wrapper" [class.with-rulers]="!!svgContent()">
     @if (svgContent()) {
-      <div class="ruler-corner" aria-hidden="true"></div>
-      <div class="ruler-top" aria-hidden="true">
-        <svg [attr.width]="editorChrome.wrapperWidth" [attr.height]="editorChrome.RULER_SIZE" class="ruler-svg">
-          @for (tick of editorChrome.horizontalRulerTicks; track tick.position + ',' + tick.value) {
-            <line [attr.x1]="tick.position" [attr.y1]="editorChrome.RULER_SIZE" [attr.x2]="tick.position" [attr.y2]="tick.major ? editorChrome.RULER_SIZE - 8 : editorChrome.RULER_SIZE - 4" stroke="#666"/>
-            @if (tick.major) {
-              <text [attr.x]="tick.position" [attr.y]="10" text-anchor="middle" class="ruler-text">{{ tick.value }}</text>
-            }
-          }
-        </svg>
-      </div>
-      <div class="ruler-left" #rulerLeft aria-hidden="true">
-        <svg [attr.width]="editorChrome.RULER_SIZE" class="ruler-svg">
-          @for (tick of editorChrome.verticalRulerTicks; track tick.position + ',' + tick.value) {
-            <line [attr.x1]="editorChrome.RULER_SIZE" [attr.y1]="tick.position" [attr.x2]="tick.major ? editorChrome.RULER_SIZE - 8 : editorChrome.RULER_SIZE - 4" [attr.y2]="tick.position" stroke="#666"/>
-            @if (tick.major) {
-              <text [attr.x]="12" [attr.y]="tick.position" text-anchor="middle" dominant-baseline="middle" class="ruler-text">{{ tick.value }}</text>
-            }
-          }
-        </svg>
-      </div>
+      <app-ruler-overlay
+        [rulerSize]="editorChrome.RULER_SIZE"
+        [wrapperWidth]="editorChrome.wrapperWidth"
+        [horizontalTicks]="editorChrome.horizontalRulerTicks"
+        [verticalTicks]="editorChrome.verticalRulerTicks"/>
     }
     <div
       class="svg-canvas"
@@ -95,58 +79,15 @@
                 flood-color="rgba(0,0,0,0.2)" />
             </filter>
           </defs>
-          @if (editorChrome.showGridOverlay) {
-            <g data-testid="canvas-grid-overlay">
-              @for (line of editorChrome.verticalGridLines; track line.key) {
-                <line
-                  data-testid="canvas-grid-line"
-                  [attr.x1]="line.x1"
-                  [attr.y1]="line.y1"
-                  [attr.x2]="line.x2"
-                  [attr.y2]="line.y2"
-                  [attr.stroke]="line.major ? '#9e9e9e' : '#cfcfcf'"
-                  stroke-width="1"
-                  vector-effect="non-scaling-stroke"/>
-              }
-              @for (line of editorChrome.horizontalGridLines; track line.key) {
-                <line
-                  data-testid="canvas-grid-line"
-                  [attr.x1]="line.x1"
-                  [attr.y1]="line.y1"
-                  [attr.x2]="line.x2"
-                  [attr.y2]="line.y2"
-                  [attr.stroke]="line.major ? '#9e9e9e' : '#cfcfcf'"
-                  stroke-width="1"
-                  vector-effect="non-scaling-stroke"/>
-              }
-            </g>
-          }
-          @if (editorChrome.verticalSmartGuideLines.length > 0 || editorChrome.horizontalSmartGuideLines.length > 0) {
-            <g data-testid="canvas-smart-guides-overlay">
-              @for (line of editorChrome.verticalSmartGuideLines; track line.key) {
-                <line
-                  data-testid="canvas-smart-guide-line"
-                  [attr.x1]="line.x1"
-                  [attr.y1]="line.y1"
-                  [attr.x2]="line.x2"
-                  [attr.y2]="line.y2"
-                  stroke="#ff00ff"
-                  stroke-width="1.5"
-                  vector-effect="non-scaling-stroke"/>
-              }
-              @for (line of editorChrome.horizontalSmartGuideLines; track line.key) {
-                <line
-                  data-testid="canvas-smart-guide-line"
-                  [attr.x1]="line.x1"
-                  [attr.y1]="line.y1"
-                  [attr.x2]="line.x2"
-                  [attr.y2]="line.y2"
-                  stroke="#ff00ff"
-                  stroke-width="1.5"
-                  vector-effect="non-scaling-stroke"/>
-              }
-            </g>
-          }
+          <g
+            app-grid-overlay
+            [visible]="editorChrome.showGridOverlay"
+            [verticalLines]="editorChrome.verticalGridLines"
+            [horizontalLines]="editorChrome.horizontalGridLines"/>
+          <g
+            app-smart-guide-overlay
+            [verticalLines]="editorChrome.verticalSmartGuideLines"
+            [horizontalLines]="editorChrome.horizontalSmartGuideLines"/>
           @if (editorChrome.viewBoxOverlayRect) {
             <rect
               data-testid="canvas-viewbox-boundary-overlay"

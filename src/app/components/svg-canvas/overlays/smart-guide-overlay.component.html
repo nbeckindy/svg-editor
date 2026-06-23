@@ -1,0 +1,26 @@
+@if (verticalLines().length > 0 || horizontalLines().length > 0) {
+  <svg:g data-testid="canvas-smart-guides-overlay">
+    @for (line of verticalLines(); track line.key) {
+      <svg:line
+        data-testid="canvas-smart-guide-line"
+        [attr.x1]="line.x1"
+        [attr.y1]="line.y1"
+        [attr.x2]="line.x2"
+        [attr.y2]="line.y2"
+        [attr.stroke]="'#ff00ff'"
+        [attr.stroke-width]="1.5"
+        [attr.vector-effect]="'non-scaling-stroke'"/>
+    }
+    @for (line of horizontalLines(); track line.key) {
+      <svg:line
+        data-testid="canvas-smart-guide-line"
+        [attr.x1]="line.x1"
+        [attr.y1]="line.y1"
+        [attr.x2]="line.x2"
+        [attr.y2]="line.y2"
+        [attr.stroke]="'#ff00ff'"
+        [attr.stroke-width]="1.5"
+        [attr.vector-effect]="'non-scaling-stroke'"/>
+    }
+  </svg:g>
+}

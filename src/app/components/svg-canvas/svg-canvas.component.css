@@ -32,54 +32,9 @@
   grid-template-rows: 24px 1fr;
 }
 
-.ruler-corner {
-  grid-column: 1;
-  grid-row: 1;
-  background: #e8e8e8;
-  border-right: 1px solid #ccc;
-  border-bottom: 1px solid #ccc;
-}
-
-.ruler-top {
-  grid-column: 2;
-  grid-row: 1;
-  background: #e8e8e8;
-  border-bottom: 1px solid #ccc;
-  overflow: hidden;
-}
-
-.ruler-left {
-  grid-column: 1;
-  grid-row: 2;
-  background: #e8e8e8;
-  border-right: 1px solid #ccc;
-  overflow: hidden;
-  min-height: 0;
-  display: flex;
-  flex-direction: column;
-}
-
-.ruler-left .ruler-svg {
-  flex: 1 1 auto;
-  min-height: 0;
-  width: 100%;
-  height: 100%;
-}
-
 .ruler-wrapper.with-rulers .svg-canvas {
   grid-column: 2;
   grid-row: 2;
-}
-
-.ruler-svg {
-  display: block;
-  overflow: visible;
-}
-
-.ruler-text {
-  font: 10px sans-serif;
-  fill: #444;
-  pointer-events: none;
 }
 
 .svg-canvas {

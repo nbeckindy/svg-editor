@@ -106,6 +106,10 @@ import {
 } from '../../utils/svg-inline-text-typography';
 import { SelectionOverlayComponent } from './overlays/selection-overlay.component';
 import { PathNodeOverlayComponent } from './overlays/path-node-overlay.component';
+import { RulerOverlayComponent } from './overlays/ruler-overlay.component';
+import { GridOverlayComponent } from './overlays/grid-overlay.component';
+import { SmartGuideOverlayComponent } from './overlays/smart-guide-overlay.component';
+import type { GridLineOverlay, SmartGuideLineOverlay } from './overlays/canvas-guide-overlay.model';
 import { SnapCandidateShape } from '../../services/snap.service';
 
 /**
@@ -198,23 +202,6 @@ interface InlineTextEditState {
   originalText: string;
 }
 
-interface GridLineOverlay {
-  key: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-  major: boolean;
-}
-
-interface SmartGuideLineOverlay {
-  key: string;
-  x1: number;
-  y1: number;
-  x2: number;
-  y2: number;
-}
-
 /** Round to nearest "nice" step (1, 2, 5 × 10^n) for readable labels. */
 function roundToNiceStep(value: number): number {
   if (value <= 0 || !Number.isFinite(value)) return 1;
@@ -266,7 +253,13 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
 @Component({
   selector: 'app-svg-canvas',
   standalone: true,
-  imports: [SelectionOverlayComponent, PathNodeOverlayComponent],
+  imports: [
+    SelectionOverlayComponent,
+    PathNodeOverlayComponent,
+    RulerOverlayComponent,
+    GridOverlayComponent,
+    SmartGuideOverlayComponent
+  ],
   templateUrl: './svg-canvas.component.html',
   styleUrl: './svg-canvas.component.css',
   host: {
@@ -286,7 +279,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
   readonly highlightOverlayContainer = viewChild<ElementRef<HTMLElement>>('highlightOverlayContainer');
   readonly canvasViewport = viewChild<ElementRef<HTMLElement>>('canvasViewport');
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
-  readonly rulerLeft = viewChild<ElementRef<HTMLElement>>('rulerLeft');
+  readonly rulerOverlay = viewChild(RulerOverlayComponent);
   readonly inlineTextEditor = viewChild<ElementRef<HTMLTextAreaElement>>('inlineTextEditor');
   altKeyPressed = false;
   isPanning = false;
@@ -2047,7 +2040,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
         : el?.closest('.canvas-container')) as HTMLElement | undefined;
     if (viewportEl && viewportEl.clientWidth > 0 && viewportEl.clientHeight > 0) {
       this.wrapperWidth = viewportEl.clientWidth;
-      const rulerLeftEl = this.rulerLeft()?.nativeElement;
+      const rulerLeftEl = this.rulerOverlay()?.rulerLeftEl()?.nativeElement;
       this.wrapperHeight =
         rulerLeftEl && rulerLeftEl.clientHeight > 0
           ? rulerLeftEl.clientHeight
