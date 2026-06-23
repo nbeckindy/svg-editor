@@ -1,14 +1,18 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { ChangeDetectorRef, signal } from '@angular/core';
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
-import { ToolRegistryService } from '../../tools/tool-registry.service';
 import type { EditorTool } from '../../services/editor-tool.service';
 import type { PenToolSession } from './pen-tool-session/pen-tool-session';
+import {
+  patchRegisteredCanvasTool,
+  registerAllCanvasToolsForTest
+} from '../../tools/register-all-canvas-tools-for-test';
 
 function makeKeyboardContext(
   over: Partial<SvgCanvasKeyboardContext> & { getCurrentTool?: () => EditorTool }
 ): SvgCanvasKeyboardContext {
   const currentTool = signal<EditorTool>(over.getCurrentTool?.() ?? 'selector');
+  const boot = registerAllCanvasToolsForTest();
   const base: SvgCanvasKeyboardContext = {
     gestureRuntime: {} as SvgCanvasKeyboardContext['gestureRuntime'],
     svgManipulation: {} as SvgCanvasKeyboardContext['svgManipulation'],
@@ -28,7 +32,7 @@ function makeKeyboardContext(
       tryPenBackspaceShortcut: vi.fn(() => false),
       isPenInsertOnPathDragActive: false
     } as unknown as PenToolSession,
-    toolRegistry: new ToolRegistryService(),
+    toolRegistry: boot.registry,
     getSvgContent: () => '<svg/>',
     getCurrentTool: () => currentTool(),
     isSelectorActive: () => currentTool() === 'selector',
@@ -81,18 +85,9 @@ describe('handleSvgCanvasKeyDown', () => {
   });
 
   it('dispatches to registered tool onKeyDown before legacy handlers', () => {
-    const registry = new ToolRegistryService();
     const onKeyDown = vi.fn(() => true);
-    registry.register({
-      toolId: 'rect',
-      onActivate: () => {},
-      onDeactivate: () => {},
-      onKeyDown
-    });
-    const ctx = makeKeyboardContext({
-      toolRegistry: registry,
-      getCurrentTool: () => 'rect'
-    });
+    const ctx = makeKeyboardContext({ getCurrentTool: () => 'rect' });
+    patchRegisteredCanvasTool(ctx.toolRegistry, 'rect', { onKeyDown });
     const event = { key: 'Escape', preventDefault: vi.fn() } as unknown as KeyboardEvent;
 
     handleSvgCanvasKeyDown(ctx, event, editorTool);
@@ -102,16 +97,8 @@ describe('handleSvgCanvasKeyDown', () => {
   });
 
   it('falls through to legacy handlers when registered tool does not consume the key', () => {
-    const registry = new ToolRegistryService();
-    registry.register({
-      toolId: 'rect',
-      onActivate: () => {},
-      onDeactivate: () => {},
-      onKeyDown: () => false
-    });
     const clearSelectionAndHighlight = vi.fn();
     const ctx = makeKeyboardContext({
-      toolRegistry: registry,
       getCurrentTool: () => 'rect',
       clearSelectionAndHighlight,
       shapeSelection: {
@@ -119,6 +106,7 @@ describe('handleSvgCanvasKeyDown', () => {
         clearSelection: vi.fn()
       } as unknown as SvgCanvasKeyboardContext['shapeSelection']
     });
+    patchRegisteredCanvasTool(ctx.toolRegistry, 'rect', { onKeyDown: () => false });
     const event = { key: 'Escape', preventDefault: vi.fn() } as unknown as KeyboardEvent;
 
     handleSvgCanvasKeyDown(ctx, event, editorTool);
@@ -128,16 +116,7 @@ describe('handleSvgCanvasKeyDown', () => {
   });
 
   it('still applies global tool shortcut when active tool has no onKeyDown', () => {
-    const registry = new ToolRegistryService();
-    registry.register({
-      toolId: 'selector',
-      onActivate: () => {},
-      onDeactivate: () => {}
-    });
-    const ctx = makeKeyboardContext({
-      toolRegistry: registry,
-      getCurrentTool: () => 'selector'
-    });
+    const ctx = makeKeyboardContext({ getCurrentTool: () => 'selector' });
     const event = { key: 'r', altKey: false, ctrlKey: false, metaKey: false, preventDefault: vi.fn() } as unknown as KeyboardEvent;
 
     handleSvgCanvasKeyDown(ctx, event, editorTool);
