@@ -1190,6 +1190,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       selectionMarquee: this.selectionMarquee,
       zoomMarquee: this.zoomMarquee,
       penTool: this.penTool,
+      toolRegistry: this.toolRegistry,
       getSvgContent: () => this.svgContent(),
       getCurrentTool: () => this.editorTool.getCurrentTool(),
       isSelectorActive: () => this.editorTool.getCurrentTool() === 'selector',

@@ -17,6 +17,7 @@ import type { SkewGesture } from './gestures/skew-gesture';
 import type { RotateGesture } from './gestures/rotate-gesture';
 import type { SelectionMarqueeGesture } from './gestures/selection-marquee-gesture';
 import type { ZoomMarqueeGesture } from './gestures/zoom-marquee-gesture';
+import type { ToolRegistryService } from '../../tools/tool-registry.service';
 import { RemoveShapesCommand, buildReorderToExtremeCommand } from '../../models/editor-commands';
 
 export interface SvgCanvasKeyboardContext {
@@ -32,6 +33,7 @@ export interface SvgCanvasKeyboardContext {
   readonly selectionMarquee: SelectionMarqueeGesture;
   readonly zoomMarquee: ZoomMarqueeGesture;
   readonly penTool: PenToolSession;
+  readonly toolRegistry: ToolRegistryService;
 
   /** Current `svgContent` input string (empty means many shortcuts no-op). */
   getSvgContent(): string | null | undefined;
@@ -111,6 +113,14 @@ function tryEditorToolShortcut(
   return true;
 }
 
+function dispatchRegisteredKeyDown(
+  ctx: SvgCanvasKeyboardContext,
+  event: KeyboardEvent
+): boolean {
+  const tool = ctx.toolRegistry.get(ctx.getCurrentTool());
+  return tool?.onKeyDown?.(event) ?? false;
+}
+
 /**
  * Handles `document:keydown` policy for the **Editor runtime** on the **Canvas**.
  * Mutates `event` (preventDefault) when a binding consumes the key.
@@ -121,6 +131,10 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
     return;
   }
   if (ctx.shouldIgnoreKeyboardShortcuts(event)) return;
+
+  if (dispatchRegisteredKeyDown(ctx, event)) {
+    return;
+  }
 
   const selectorActive = ctx.isSelectorActive();
 
