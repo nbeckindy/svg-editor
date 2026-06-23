@@ -106,8 +106,8 @@ export class PointerGestureRouter {
     if (!tool?.onPointerMove) return false;
     const svgPoint = this.svgPointFromEvent(host, event);
     if (!svgPoint) return false;
-    tool.onPointerMove(event, svgPoint);
-    return true;
+    const consumed = tool.onPointerMove(event, svgPoint);
+    return consumed !== false;
   }
 
   private dispatchRegisteredPointerUp(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
@@ -115,8 +115,8 @@ export class PointerGestureRouter {
     if (!tool?.onPointerUp) return false;
     const svgPoint = this.svgPointFromEvent(host, event);
     if (!svgPoint) return false;
-    tool.onPointerUp(event, svgPoint);
-    return true;
+    const consumed = tool.onPointerUp(event, svgPoint);
+    return consumed !== false;
   }
 
   private isRegisteredTool(toolId: EditorTool): boolean {
@@ -132,19 +132,12 @@ export class PointerGestureRouter {
       host.updatePathNodeDrag(event.clientX, event.clientY);
       return;
     }
-    if (host.getCurrentTool() === 'pen' && (host.isPenToolWithActiveSession() || host.isPenInsertOnPathDragActive())) {
-      host.onPenDocumentMouseMove(event);
-      return;
-    }
     if (this.dispatchRegisteredPointerMove(host, event)) {
       return;
     }
     if (this.shouldUseLegacyCreationRouting(host)) {
       this.g.creation.move(host.gestureRuntime, event.clientX, event.clientY, event.shiftKey);
       return;
-    }
-    if (host.getCurrentTool() === 'pen') {
-      host.schedulePenInsertHoverCursorHitTest(event.clientX, event.clientY);
     }
     if (host.isSelectionMarquee) {
       this.g.selectionMarquee.move(event.clientX, event.clientY, host.gestureRuntime);
@@ -180,10 +173,6 @@ export class PointerGestureRouter {
     if (event.button !== 0) return;
     if (host.getPathNodeDragSession()) {
       host.finishPathNodeDrag();
-      return;
-    }
-    if (host.isPenToolWithActiveSession() || host.isPenInsertOnPathDragActive()) {
-      host.onPenDocumentMouseUp(event);
       return;
     }
     if (this.dispatchRegisteredPointerUp(host, event)) {
@@ -235,19 +224,6 @@ export class PointerGestureRouter {
     if (host.getCurrentTool() === 'pan') {
       host.beginPanSession(event);
       event.preventDefault();
-      return;
-    }
-    if (host.getCurrentTool() === 'pen') {
-      const target = event.target as Element;
-      const penIdle = !host.isPenToolWithActiveSession() && !host.isPenInsertOnPathDragActive();
-      const openPathPickup = penIdle && host.wouldPickUpPenOpenPathContinuationAt(event);
-      if (!openPathPickup && host.hasPathNodeEditState() && host.tryStartPathNodeDrag(target, event)) {
-        event.preventDefault();
-        return;
-      }
-      if (host.onCanvasPenPrimaryMouseDown(event)) {
-        event.preventDefault();
-      }
       return;
     }
     if (

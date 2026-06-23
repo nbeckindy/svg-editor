@@ -1,7 +1,9 @@
-import type { SvgManipulationService } from '../../../services/svg-manipulation.service';
-import type { ShapeSelectionService } from '../../../services/shape-selection.service';
-import type { EditorHistoryService } from '../../../services/editor-history.service';
 import type { EditorTool } from '../../../services/editor-tool.service';
+import type {
+  PenToolSessionHistoryPort,
+  PenToolSessionShapeSelectionPort,
+  PenToolSessionSvgPort
+} from './pen-tool-session-svg.port';
 
 export type PenDiscardReason = 'tool switch' | 'document replace/load';
 
@@ -26,9 +28,9 @@ export interface PenToolSessionPorts {
   getMainSvgElement(): SVGSVGElement | null;
   /** `window.confirm` for discarding in-progress pen path. */
   confirmDiscardInProgressPath(reason: PenDiscardReason): boolean;
-  svgManipulation: SvgManipulationService;
-  shapeSelection: ShapeSelectionService;
-  editorHistory: EditorHistoryService;
+  svgManipulation: PenToolSessionSvgPort;
+  shapeSelection: PenToolSessionShapeSelectionPort;
+  editorHistory: PenToolSessionHistoryPort;
   penBackspaceShortcutShouldDefer(): boolean;
   setLastBbox(bbox: { x: number; y: number; width: number; height: number } | null): void;
   clearHighlightRectCache(): void;

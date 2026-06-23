@@ -11,6 +11,7 @@ import type { EditorHistoryService } from '../../services/editor-history.service
 import type { SnapCandidateShape, SnapService } from '../../services/snap.service';
 import type { ToolRegistryService } from '../../tools/tool-registry.service';
 import type { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
+import type { PenCanvasToolDeps } from '../../tools/pen-canvas-tool';
 import type { GestureRuntimeContext } from './gestures/gesture-context';
 import type { Rect } from './gestures/gesture-context';
 import { createDefaultTransformGestureDoc } from './gestures/transform-gesture-doc.port';
@@ -56,6 +57,10 @@ export interface CreateSvgCanvasPointerStackArgs {
   toolRegistry: ToolRegistryService;
   canvasBoundToolRegistrar: CanvasBoundToolRegistrar;
   isCanvasReady: () => boolean;
+  getSnappedPenPoint: PenCanvasToolDeps['getSnappedPenPoint'];
+  hasPathNodeEditState: PenCanvasToolDeps['hasPathNodeEditState'];
+  tryStartPathNodeDrag: PenCanvasToolDeps['tryStartPathNodeDrag'];
+  scheduleInsertHoverCursorHitTest: PenCanvasToolDeps['scheduleInsertHoverCursorHitTest'];
 }
 
 export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArgs): SvgCanvasPointerStack {
@@ -117,6 +122,15 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     () => gestureRuntime,
     args.isCanvasReady
   );
+
+  args.canvasBoundToolRegistrar.registerPenTool(() => ({
+    getPenTool: () => penTool,
+    getSnappedPenPoint: args.getSnappedPenPoint,
+    hasPathNodeEditState: args.hasPathNodeEditState,
+    tryStartPathNodeDrag: args.tryStartPathNodeDrag,
+    isCanvasReady: args.isCanvasReady,
+    scheduleInsertHoverCursorHitTest: args.scheduleInsertHoverCursorHitTest
+  }));
 
   return {
     gestureRuntime,

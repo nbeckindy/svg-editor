@@ -1,5 +1,6 @@
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { AddPathCommand, EditPathNodesCommand } from '../../../models/editor-commands';
+import type { EditorShapeLifecycleSvgPort } from '../../../history/editor-shape-lifecycle-svg.port';
 import { penPathSegmentsToD, type PenPathSegment } from '../../../models/pen-path';
 import type { EditorTool } from '../../../services/editor-tool.service';
 import type { PenToolSessionPorts } from './pen-tool-session-ports';
@@ -171,7 +172,11 @@ export function applyPenFinishedPathDocumentEffects(
     closePath,
     clearDrawingState,
     pushHistory: () => {
-      const cmd = new AddPathCommand(ports.svgManipulation, id, ports.shapeSelection);
+      const cmd = new AddPathCommand(
+        ports.svgManipulation as unknown as EditorShapeLifecycleSvgPort,
+        id,
+        ports.shapeSelection
+      );
       ports.editorHistory.pushAndExecute(cmd);
     }
   });

@@ -2,6 +2,7 @@ import { Injectable } from '@angular/core';
 import type { CreationGesture } from '../components/svg-canvas/gestures/creation-gesture';
 import type { GestureRuntimeContext } from '../components/svg-canvas/gestures/gesture-context';
 import { registerCreationCanvasTools } from './creation-canvas-tool';
+import { registerPenCanvasTool, type PenCanvasToolDeps } from './pen-canvas-tool';
 import { ToolRegistryService } from './tool-registry.service';
 
 /**
@@ -14,6 +15,7 @@ import { ToolRegistryService } from './tool-registry.service';
 export class CanvasBoundToolRegistrar {
   private registry: ToolRegistryService;
   private creationToolsRegistered = false;
+  private penToolRegistered = false;
 
   constructor(registry: ToolRegistryService) {
     this.registry = registry;
@@ -32,5 +34,11 @@ export class CanvasBoundToolRegistrar {
     if (this.creationToolsRegistered) return;
     registerCreationCanvasTools(this.registry, creation, getRuntime, isCanvasReady);
     this.creationToolsRegistered = true;
+  }
+
+  registerPenTool(getDeps: () => PenCanvasToolDeps): void {
+    if (this.penToolRegistered) return;
+    registerPenCanvasTool(this.registry, getDeps);
+    this.penToolRegistered = true;
   }
 }

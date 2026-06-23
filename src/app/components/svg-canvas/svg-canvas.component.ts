@@ -1676,7 +1676,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
       createPenToolSessionPorts: () => this.createPenToolSessionPorts(),
       toolRegistry: this.toolRegistry,
       canvasBoundToolRegistrar: this.canvasBoundToolRegistrar,
-      isCanvasReady: () => !!(this.svgContent() && this.canvasView.isInitialized())
+      isCanvasReady: () => !!(this.svgContent() && this.canvasView.isInitialized()),
+      getSnappedPenPoint: (clientX, clientY, shiftKey) =>
+        this.getSnappedPenPoint(clientX, clientY, shiftKey),
+      hasPathNodeEditState: () => this.hasPathNodeEditState(),
+      tryStartPathNodeDrag: (target, event) => this.tryStartPathNodeDrag(target, event),
+      scheduleInsertHoverCursorHitTest: (clientX, clientY) =>
+        this.schedulePenInsertHoverCursorHitTest(clientX, clientY)
     });
     this.drag = pointerStack.drag;
     this.resize = pointerStack.resize;

@@ -13,8 +13,10 @@ export interface CanvasTool {
   onDeactivate(): void;
 
   onPointerDown?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;
-  onPointerMove?(event: MouseEvent, svgPoint: CanvasSvgPoint): void;
-  onPointerUp?(event: MouseEvent, svgPoint: CanvasSvgPoint): void;
+  /** Return `false` to allow router fall-through (e.g. idle pen hover cursor). */
+  onPointerMove?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean | void;
+  /** Return `false` when the tool did not handle the event. */
+  onPointerUp?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean | void;
   onClick?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;
   onKeyDown?(event: KeyboardEvent): boolean;
 

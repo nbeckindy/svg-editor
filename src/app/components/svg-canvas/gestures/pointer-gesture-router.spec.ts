@@ -11,6 +11,8 @@ import { RotateGesture } from './rotate-gesture';
 import { DragGesture } from './drag-gesture';
 import { ToolRegistryService } from '../../../tools/tool-registry.service';
 import type { CanvasTool } from '../../../tools/canvas-tool.interface';
+import { createPenCanvasTool } from '../../../tools/pen-canvas-tool';
+import type { PenToolSession } from '../pen-tool-session/pen-tool-session';
 
 const emptyRt = {
   pointer: {} as GestureRuntimeContext['pointer'],
@@ -174,27 +176,63 @@ describe('PointerGestureRouter', () => {
     expect(selectionMarquee.move).not.toHaveBeenCalled();
   });
 
-  it('onDocumentMouseMove routes pen when active session is moveto-only (first-segment pending)', () => {
-    const onPenDocumentMouseMove = vi.fn();
-    const host = makeHost({
-      getCurrentTool: () => 'pen',
-      isPenToolWithActiveSession: () => true,
-      isPenInsertOnPathDragActive: () => false,
-      onPenDocumentMouseMove
-    });
+  it('onDocumentMouseMove routes registered pen when active session is moveto-only (first-segment pending)', () => {
+    const registry = new ToolRegistryService();
+    const onDocumentMouseMovePen = vi.fn();
+    const penTool = {
+      isPenSessionActive: true,
+      isPenInsertOnPathDragActive: false,
+      onDocumentMouseMovePen
+    } as unknown as PenToolSession;
+    registry.register(
+      createPenCanvasTool(() => ({
+        getPenTool: () => penTool,
+        getSnappedPenPoint: (clientX, clientY) => ({ x: clientX, y: clientY }),
+        hasPathNodeEditState: () => false,
+        tryStartPathNodeDrag: () => false,
+        isCanvasReady: () => true,
+        scheduleInsertHoverCursorHitTest: vi.fn()
+      }))
+    );
+    router = new PointerGestureRouter(
+      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
+      cdr as ChangeDetectorRef,
+      registry
+    );
+    const host = makeHost({ getCurrentTool: () => 'pen' });
     router.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
-    expect(onPenDocumentMouseMove).toHaveBeenCalled();
+    expect(onDocumentMouseMovePen).toHaveBeenCalled();
   });
 
-  it('onDocumentMouseMove prefers pen session over selection marquee', () => {
+  it('onDocumentMouseMove prefers registered pen session over selection marquee', () => {
+    const registry = new ToolRegistryService();
+    const onDocumentMouseMovePen = vi.fn();
+    const penTool = {
+      isPenSessionActive: true,
+      isPenInsertOnPathDragActive: false,
+      onDocumentMouseMovePen
+    } as unknown as PenToolSession;
+    registry.register(
+      createPenCanvasTool(() => ({
+        getPenTool: () => penTool,
+        getSnappedPenPoint: (clientX, clientY) => ({ x: clientX, y: clientY }),
+        hasPathNodeEditState: () => false,
+        tryStartPathNodeDrag: () => false,
+        isCanvasReady: () => true,
+        scheduleInsertHoverCursorHitTest: vi.fn()
+      }))
+    );
+    router = new PointerGestureRouter(
+      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
+      cdr as ChangeDetectorRef,
+      registry
+    );
     const host = makeHost({
       getCurrentTool: () => 'pen',
-      isPenToolWithActiveSession: () => true,
-      isSelectionMarquee: true,
-      onPenDocumentMouseMove: vi.fn()
+      isSelectionMarquee: true
     });
     router.onDocumentMouseMove(host, { clientX: 1, clientY: 2, shiftKey: false } as MouseEvent);
-    expect(host.onPenDocumentMouseMove).toHaveBeenCalled();
+    expect(onDocumentMouseMovePen).toHaveBeenCalled();
     expect(selectionMarquee.move).not.toHaveBeenCalled();
   });
 
@@ -377,16 +415,32 @@ describe('PointerGestureRouter', () => {
     expect(rotate.start).toHaveBeenCalledWith(emptyRt, ev);
   });
 
-  it('onCanvasMouseDownPrimary with pen prefers open-path continuation over path node drag', () => {
+  it('onCanvasMouseDownPrimary with registered pen prefers open-path continuation over path node drag', () => {
+    const registry = new ToolRegistryService();
     const tryStartPathNodeDrag = vi.fn(() => true);
     const onCanvasPenPrimaryMouseDown = vi.fn(() => true);
-    const host = makeHost({
-      getCurrentTool: () => 'pen',
-      hasPathNodeEditState: () => true,
+    const penTool = {
+      isPenSessionActive: false,
+      isPenInsertOnPathDragActive: false,
       wouldPickUpPenOpenPathContinuationAt: () => true,
-      tryStartPathNodeDrag,
       onCanvasPenPrimaryMouseDown
-    });
+    } as unknown as PenToolSession;
+    registry.register(
+      createPenCanvasTool(() => ({
+        getPenTool: () => penTool,
+        getSnappedPenPoint: (clientX, clientY) => ({ x: clientX, y: clientY }),
+        hasPathNodeEditState: () => true,
+        tryStartPathNodeDrag,
+        isCanvasReady: () => true,
+        scheduleInsertHoverCursorHitTest: vi.fn()
+      }))
+    );
+    router = new PointerGestureRouter(
+      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
+      cdr as ChangeDetectorRef,
+      registry
+    );
+    const host = makeHost({ getCurrentTool: () => 'pen' });
     const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     anchor.setAttribute('data-path-node-anchor-index', '0');
     anchor.setAttribute('data-path-node-path-id', 'path-a');
@@ -397,20 +451,36 @@ describe('PointerGestureRouter', () => {
     } as unknown as MouseEvent;
     router.onCanvasMouseDownPrimary(host, ev);
     expect(tryStartPathNodeDrag).not.toHaveBeenCalled();
-    expect(onCanvasPenPrimaryMouseDown).toHaveBeenCalledWith(ev);
+    expect(onCanvasPenPrimaryMouseDown).toHaveBeenCalledWith(ev, expect.any(Function));
     expect(ev.preventDefault).toHaveBeenCalled();
   });
 
-  it('onCanvasMouseDownPrimary with pen tries path node drag before pen mousedown when not open-path pickup', () => {
+  it('onCanvasMouseDownPrimary with registered pen tries path node drag before pen mousedown when not open-path pickup', () => {
+    const registry = new ToolRegistryService();
     const tryStartPathNodeDrag = vi.fn(() => true);
     const onCanvasPenPrimaryMouseDown = vi.fn(() => false);
-    const host = makeHost({
-      getCurrentTool: () => 'pen',
-      hasPathNodeEditState: () => true,
+    const penTool = {
+      isPenSessionActive: false,
+      isPenInsertOnPathDragActive: false,
       wouldPickUpPenOpenPathContinuationAt: () => false,
-      tryStartPathNodeDrag,
       onCanvasPenPrimaryMouseDown
-    });
+    } as unknown as PenToolSession;
+    registry.register(
+      createPenCanvasTool(() => ({
+        getPenTool: () => penTool,
+        getSnappedPenPoint: (clientX, clientY) => ({ x: clientX, y: clientY }),
+        hasPathNodeEditState: () => true,
+        tryStartPathNodeDrag,
+        isCanvasReady: () => true,
+        scheduleInsertHoverCursorHitTest: vi.fn()
+      }))
+    );
+    router = new PointerGestureRouter(
+      { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
+      cdr as ChangeDetectorRef,
+      registry
+    );
+    const host = makeHost({ getCurrentTool: () => 'pen' });
     const anchor = document.createElementNS('http://www.w3.org/2000/svg', 'circle');
     anchor.setAttribute('data-path-node-anchor-index', '0');
     anchor.setAttribute('data-path-node-path-id', 'path-a');

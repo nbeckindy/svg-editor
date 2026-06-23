@@ -133,6 +133,7 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
   if (ctx.shouldIgnoreKeyboardShortcuts(event)) return;
 
   if (dispatchRegisteredKeyDown(ctx, event)) {
+    event.preventDefault();
     return;
   }
 

@@ -47,4 +47,26 @@ describe('CanvasBoundToolRegistrar', () => {
     tool?.onPointerMove?.({ clientX: 4, clientY: 5, shiftKey: true } as MouseEvent, { x: 0, y: 0 });
     expect(creation.move).toHaveBeenCalledWith(emptyRt, 4, 5, true);
   });
+
+  it('registers pen tool once when bound', () => {
+    registrar.registerPenTool(() => ({
+      getPenTool: () => ({}) as never,
+      getSnappedPenPoint: (x, y) => ({ x, y }),
+      hasPathNodeEditState: () => false,
+      tryStartPathNodeDrag: () => false,
+      isCanvasReady: () => true,
+      scheduleInsertHoverCursorHitTest: vi.fn()
+    }));
+    expect(registry.has('pen')).toBe(true);
+
+    registrar.registerPenTool(() => ({
+      getPenTool: () => ({}) as never,
+      getSnappedPenPoint: (x, y) => ({ x, y }),
+      hasPathNodeEditState: () => false,
+      tryStartPathNodeDrag: () => false,
+      isCanvasReady: () => true,
+      scheduleInsertHoverCursorHitTest: vi.fn()
+    }));
+    expect(registry.get('pen')).toBeDefined();
+  });
 });
