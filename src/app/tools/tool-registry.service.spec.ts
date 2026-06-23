@@ -1,5 +1,6 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolRegistryService } from './tool-registry.service';
+import type { ToolDescriptor } from './tool-descriptor';
 import type { CanvasTool } from './canvas-tool.interface';
 import type { CanvasToolHost } from './canvas-tool-host.interface';
 
@@ -8,6 +9,24 @@ function makeTool(toolId: CanvasTool['toolId']): CanvasTool {
     toolId,
     onActivate: () => {},
     onDeactivate: () => {}
+  };
+}
+
+import { registerDefaultToolDescriptors } from './register-default-tool-descriptors';
+
+function makeDescriptor(id: ToolDescriptor['id'], over: Partial<ToolDescriptor> = {}): ToolDescriptor {
+  return {
+    id,
+    label: id,
+    title: id,
+    icon: 'cursor-default-outline',
+    stripTestId: `tool-${id}`,
+    ariaLabel: id,
+    stripGroup: 'selection-view',
+    stripGroupLabel: 'Selection and view',
+    order: 0,
+    interactionKind: 'navigation',
+    ...over
   };
 }
 
@@ -45,5 +64,31 @@ describe('ToolRegistryService', () => {
     registry.register(first);
     registry.register(second);
     expect(registry.get('rect')).toBe(second);
+  });
+
+  it('exposes strip groups sorted by order', () => {
+    registerDefaultToolDescriptors(registry);
+    const groups = registry.stripGroups();
+    expect(groups.length).toBe(2);
+    expect(groups[0]?.id).toBe('selection-view');
+    expect(groups[0]?.descriptors.length).toBe(5);
+    expect(groups[1]?.id).toBe('creation');
+    expect(groups[1]?.descriptors.map((d) => d.id)).toEqual([
+      'rect',
+      'ellipse',
+      'line',
+      'text',
+      'pen'
+    ]);
+  });
+
+  it('classifies tools via descriptor metadata', () => {
+    registry.registerDescriptor(makeDescriptor('rect', { interactionKind: 'creation' }));
+    registry.registerDescriptor(
+      makeDescriptor('selector', { selectorInteraction: true, keepsPathNodeTopology: true })
+    );
+    expect(registry.isCreationTool('rect')).toBe(true);
+    expect(registry.isSelectorInteractionTool('selector')).toBe(true);
+    expect(registry.keepsPathNodeTopology('selector')).toBe(true);
   });
 });

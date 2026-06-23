@@ -1,14 +1,17 @@
 import { TestBed } from '@angular/core/testing';
 import { describe, it, expect, beforeEach } from 'vitest';
 import { EditorToolService } from './editor-tool.service';
+import { registerDefaultToolDescriptors } from '../tools/register-default-tool-descriptors';
+import { ToolRegistryService } from '../tools/tool-registry.service';
 
 describe('EditorToolService', () => {
   let service: EditorToolService;
 
   beforeEach(() => {
     TestBed.configureTestingModule({
-      providers: [EditorToolService]
+      providers: [EditorToolService, ToolRegistryService]
     });
+    registerDefaultToolDescriptors(TestBed.inject(ToolRegistryService));
     service = TestBed.inject(EditorToolService);
     service.currentTool.set('selector');
     service.penAltCurveMode.set(true);

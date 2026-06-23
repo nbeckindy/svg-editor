@@ -1,4 +1,5 @@
-import { Injectable, signal } from '@angular/core';
+import { Injectable, inject, signal } from '@angular/core';
+import { ToolRegistryService } from '../tools/tool-registry.service';
 
 export type EditorTool =
   | 'selector'
@@ -12,12 +13,12 @@ export type EditorTool =
   | 'text'
   | 'pen';
 
-const CREATION_TOOLS: ReadonlySet<EditorTool> = new Set(['rect', 'ellipse', 'line']);
-
 @Injectable({
   providedIn: 'root'
 })
 export class EditorToolService {
+  private readonly toolRegistry = inject(ToolRegistryService);
+
   readonly currentTool = signal<EditorTool>('selector');
   readonly gridSnapEnabled = signal<boolean>(false);
   readonly shapeSnapEnabled = signal<boolean>(false);
@@ -68,6 +69,10 @@ export class EditorToolService {
   }
 
   isCreationTool(tool?: EditorTool): boolean {
-    return CREATION_TOOLS.has(tool ?? this.currentTool());
+    const id = tool ?? this.currentTool();
+    if (this.toolRegistry.getDescriptor(id)) {
+      return this.toolRegistry.isCreationTool(id);
+    }
+    return id === 'rect' || id === 'ellipse' || id === 'line';
   }
 }

@@ -2,6 +2,8 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal } from '@angular/core';
 import { ToolStripComponent } from './tool-strip.component';
 import { EditorToolService } from '../../services/editor-tool.service';
+import { registerDefaultToolDescriptors } from '../../tools/register-default-tool-descriptors';
+import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
@@ -33,6 +35,7 @@ describe('ToolStripComponent', () => {
       providers: [
         ...mdiIconHttpTestProviders,
         EditorToolService,
+        ToolRegistryService,
         { provide: SvgManipulationService, useValue: svgManipulationMock },
         { provide: ShapeSelectionService, useValue: { selectShape: vi.fn() } },
         { provide: EditorHistoryService, useValue: { pushAndExecute: vi.fn() } },
@@ -42,6 +45,8 @@ describe('ToolStripComponent', () => {
     }).compileComponents();
 
     registerMdiSvgIconSetForTests();
+
+    registerDefaultToolDescriptors(TestBed.inject(ToolRegistryService));
 
     fixture = TestBed.createComponent(ToolStripComponent);
     editorToolService = TestBed.inject(EditorToolService);

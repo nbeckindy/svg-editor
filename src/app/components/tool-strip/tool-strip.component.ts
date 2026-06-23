@@ -1,6 +1,7 @@
 import { Component, ElementRef, computed, inject, viewChild } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { EditorToolService, EditorTool } from '../../services/editor-tool.service';
+import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
 import { RasterImageInsertService } from '../../services/raster-image-insert.service';
@@ -15,6 +16,7 @@ import { parseRootViewBox } from '../../utils/raster-insert-layout';
 })
 export class ToolStripComponent {
   readonly editorTool = inject(EditorToolService);
+  readonly toolRegistry = inject(ToolRegistryService);
   private readonly svgManipulation = inject(SvgManipulationService);
   private readonly rasterInsertAnchor = inject(RasterInsertAnchorStore);
   private readonly rasterImageInsert = inject(RasterImageInsertService);

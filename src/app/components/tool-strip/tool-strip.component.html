@@ -1,159 +1,45 @@
 <div class="tool-strip" data-testid="tool-strip" role="toolbar" aria-label="Editor tools">
-  <div class="tool-group" aria-label="Selection and view">
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-selector"
-      [class.active]="editorTool.currentTool() === 'selector'"
-      (click)="setTool('selector')"
-      title="Selector"
-      aria-label="Selector"
-      [attr.aria-pressed]="editorTool.currentTool() === 'selector'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="cursor-default-outline"></mat-icon>
-      </span>
-    </button>
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-node-edit-selector"
-      [class.active]="editorTool.currentTool() === 'node-edit-selector'"
-      (click)="setTool('node-edit-selector')"
-      title="Node edit"
-      aria-label="Node edit"
-      [attr.aria-pressed]="editorTool.currentTool() === 'node-edit-selector'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="vector-polyline-edit"></mat-icon>
-      </span>
-    </button>
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-eyedropper"
-      [class.active]="editorTool.currentTool() === 'eyedropper'"
-      (click)="setTool('eyedropper')"
-      title="Eyedropper (click: fill, Shift+click: stroke)"
-      aria-label="Eyedropper"
-      [attr.aria-pressed]="editorTool.currentTool() === 'eyedropper'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="eyedropper"></mat-icon>
-      </span>
-    </button>
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-zoom"
-      [class.active]="editorTool.currentTool() === 'zoom'"
-      (click)="setTool('zoom')"
-      title="Zoom (Alt+click to zoom out)"
-      aria-label="Zoom"
-      [attr.aria-pressed]="editorTool.currentTool() === 'zoom'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="magnify"></mat-icon>
-      </span>
-    </button>
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-pan"
-      [class.active]="editorTool.currentTool() === 'pan'"
-      (click)="setTool('pan')"
-      title="Pan"
-      aria-label="Pan"
-      [attr.aria-pressed]="editorTool.currentTool() === 'pan'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="pan"></mat-icon>
-      </span>
-    </button>
-  </div>
-
-  <div class="tool-group" aria-label="Creation tools">
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-rect"
-      [class.active]="editorTool.currentTool() === 'rect'"
-      (click)="setTool('rect')"
-      title="Rectangle"
-      aria-label="Rectangle"
-      [attr.aria-pressed]="editorTool.currentTool() === 'rect'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="rectangle-outline"></mat-icon>
-      </span>
-    </button>
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-ellipse"
-      [class.active]="editorTool.currentTool() === 'ellipse'"
-      (click)="setTool('ellipse')"
-      title="Ellipse"
-      aria-label="Ellipse"
-      [attr.aria-pressed]="editorTool.currentTool() === 'ellipse'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="ellipse-outline"></mat-icon>
-      </span>
-    </button>
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-line"
-      [class.active]="editorTool.currentTool() === 'line'"
-      (click)="setTool('line')"
-      title="Line"
-      aria-label="Line"
-      [attr.aria-pressed]="editorTool.currentTool() === 'line'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="vector-line"></mat-icon>
-      </span>
-    </button>
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-text"
-      [class.active]="editorTool.currentTool() === 'text'"
-      (click)="setTool('text')"
-      title="Text"
-      aria-label="Text"
-      [attr.aria-pressed]="editorTool.currentTool() === 'text'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="format-text"></mat-icon>
-      </span>
-    </button>
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-pen"
-      [class.active]="editorTool.currentTool() === 'pen'"
-      (click)="setTool('pen')"
-      title="Pen"
-      aria-label="Pen"
-      [attr.aria-pressed]="editorTool.currentTool() === 'pen'">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="fountain-pen"></mat-icon>
-      </span>
-    </button>
-    <input
-      #imageFileInput
-      type="file"
-      class="tool-strip-file-input"
-      data-testid="input-insert-image-file"
-      accept="image/*"
-      aria-hidden="true"
-      tabindex="-1"
-      (change)="onRasterImageFileChosen($event)"
-    />
-    <button
-      type="button"
-      class="tool-btn tool-btn-icon"
-      data-testid="tool-insert-image"
-      [disabled]="insertImageDisabled()"
-      (click)="openInsertImagePicker()"
-      title="Insert image"
-      aria-label="Insert image">
-      <span class="tool-icon" aria-hidden="true">
-        <mat-icon class="tool-mdi" svgIcon="image-outline"></mat-icon>
-      </span>
-    </button>
-  </div>
+  @for (group of toolRegistry.stripGroups(); track group.id) {
+    <div class="tool-group" [attr.aria-label]="group.ariaLabel">
+      @for (tool of group.descriptors; track tool.id) {
+        <button
+          type="button"
+          class="tool-btn tool-btn-icon"
+          [attr.data-testid]="tool.stripTestId"
+          [class.active]="editorTool.currentTool() === tool.id"
+          (click)="setTool(tool.id)"
+          [title]="tool.title"
+          [attr.aria-label]="tool.ariaLabel"
+          [attr.aria-pressed]="editorTool.currentTool() === tool.id">
+          <span class="tool-icon" aria-hidden="true">
+            <mat-icon class="tool-mdi" [svgIcon]="tool.icon"></mat-icon>
+          </span>
+        </button>
+      }
+      @if (group.id === 'creation') {
+        <input
+          #imageFileInput
+          type="file"
+          class="tool-strip-file-input"
+          data-testid="input-insert-image-file"
+          accept="image/*"
+          aria-hidden="true"
+          tabindex="-1"
+          (change)="onRasterImageFileChosen($event)"
+        />
+        <button
+          type="button"
+          class="tool-btn tool-btn-icon"
+          data-testid="tool-insert-image"
+          [disabled]="insertImageDisabled()"
+          (click)="openInsertImagePicker()"
+          title="Insert image"
+          aria-label="Insert image">
+          <span class="tool-icon" aria-hidden="true">
+            <mat-icon class="tool-mdi" svgIcon="image-outline"></mat-icon>
+          </span>
+        </button>
+      }
+    </div>
+  }
 </div>
