@@ -160,6 +160,11 @@ export class CreationGesture {
     return false;
   }
 
+  /** Abandon in-progress creation without committing a shape (e.g. tool deactivate). */
+  abort(): void {
+    this.reset();
+  }
+
   private reset(): void {
     this.isActive = false;
     this.startClient = null;

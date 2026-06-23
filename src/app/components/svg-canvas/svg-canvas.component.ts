@@ -60,6 +60,7 @@ import { PenToolSession, type PenToolSessionPorts } from './pen-tool-session/pen
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import type { CanvasToolHost } from '../../tools/canvas-tool-host.interface';
+import { registerCreationCanvasTools } from '../../tools/creation-canvas-tool';
 import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createSvgCanvasPointerStack } from './svg-canvas-pointer-stack.factory';
 import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
@@ -1678,6 +1679,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnInit, OnDestroy, Svg
     this.gestureRuntime = pointerStack.gestureRuntime;
     this.pointerGestureRouter = pointerStack.pointerGestureRouter;
     this.penTool = pointerStack.penTool;
+    registerCreationCanvasTools(
+      this.toolRegistry,
+      this.creation,
+      () => this.gestureRuntime,
+      () => !!(this.svgContent() && this.canvasView.isInitialized())
+    );
     this.editorChrome = new SvgCanvasEditorChromeFacade(this);
 
     effect(() => {
