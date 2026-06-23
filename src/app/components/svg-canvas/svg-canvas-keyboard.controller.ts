@@ -5,6 +5,7 @@
  * remains DOM wiring and builds a {@link SvgCanvasKeyboardContext} each keydown.
  */
 import type { ChangeDetectorRef } from '@angular/core';
+import type { CanvasAdapterToolState } from '../../tools/canvas-adapter-context';
 import type { EditorTool } from '../../services/editor-tool.service';
 import type { SvgManipulationService } from '../../services/svg-manipulation.service';
 import type { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -21,7 +22,7 @@ import type { ToolRegistryService } from '../../tools/tool-registry.service';
 import { buildEditorToolShortcutMap } from '../../tools/tool-bundles';
 import { RemoveShapesCommand, buildReorderToExtremeCommand } from '../../models/editor-commands';
 
-export interface SvgCanvasKeyboardContext {
+export interface SvgCanvasKeyboardContext extends Pick<CanvasAdapterToolState, 'markForCheck' | 'getCurrentTool' | 'setTool'> {
   readonly gestureRuntime: GestureRuntimeContext;
   readonly svgManipulation: SvgManipulationService;
   readonly shapeSelection: ShapeSelectionService;
@@ -39,7 +40,6 @@ export interface SvgCanvasKeyboardContext {
   /** Current `svgContent` input string (empty means many shortcuts no-op). */
   getSvgContent(): string | null | undefined;
 
-  getCurrentTool(): EditorTool;
   isSelectorActive(): boolean;
 
   commitInlineTextEditIfActive(): boolean;
@@ -57,9 +57,6 @@ export interface SvgCanvasKeyboardContext {
   exitPathNodeEditMode(): boolean;
   clearSelectionAndHighlight(): void;
   setDrilledIntoGroupId(id: string | null): void;
-
-  setTool(tool: EditorTool): void;
-  markForCheck(): void;
 
   selectAllShapesFromDocument(): void;
   copySelectionToClipboard(): boolean;

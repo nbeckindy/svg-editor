@@ -1,4 +1,4 @@
-import type { EditorTool } from '../../../services/editor-tool.service';
+import type { CanvasAdapterContext } from '../../../tools/canvas-adapter-context';
 import type {
   PenToolSessionHistoryPort,
   PenToolSessionShapeSelectionPort,
@@ -11,13 +11,9 @@ export type PenDiscardReason = 'tool switch' | 'document replace/load';
  * Narrow seam for {@link PenToolSession}: DOM/view mapping, **History** / **Selection** / **Live tree**
  * effects, and pen-specific **Chrome** hooks — implemented by the **Canvas adapter**.
  */
-export interface PenToolSessionPorts {
-  markForCheck(): void;
-  getCurrentTool(): EditorTool;
+export interface PenToolSessionPorts extends CanvasAdapterContext {
   isPenAltCurveMode(): boolean;
   setPenAltCurveMode(enabled: boolean): void;
-  setTool(tool: EditorTool): void;
-  clientToEditorSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null;
   svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): {
     x: number;
     y: number;
@@ -25,7 +21,6 @@ export interface PenToolSessionPorts {
     height: number;
   };
   parseOverlayViewBox(): { vbMinX: number; vbMinY: number; vbW: number; vbH: number } | null;
-  getMainSvgElement(): SVGSVGElement | null;
   /** `window.confirm` for discarding in-progress pen path. */
   confirmDiscardInProgressPath(reason: PenDiscardReason): boolean;
   svgManipulation: PenToolSessionSvgPort;
@@ -34,7 +29,6 @@ export interface PenToolSessionPorts {
   penBackspaceShortcutShouldDefer(): boolean;
   setLastBbox(bbox: { x: number; y: number; width: number; height: number } | null): void;
   clearHighlightRectCache(): void;
-  isEditorContentShapeTarget(target: Element | null): boolean;
   getPenPathInsertToleranceSvg(): number;
   getPathDForId(pathId: string): string | null;
   /** Apply committed insert edit (history, selection, overlays). */

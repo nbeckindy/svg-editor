@@ -29,6 +29,9 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~4.3k lines) orches
 | Bootstrap | `register-default-tools.ts` → descriptors at startup; `CanvasBoundToolRegistrar` when canvas is ready |
 | Adapters | `*-canvas-tool.ts` factories (creation, selector, pen, zoom, pan, text, eyedropper, …) |
 | Orchestrator ports | e.g. `PenToolSessionPorts` + `PenToolSessionSvgPort` (narrow slices of the canvas adapter) |
+| Adapter context slices | `canvas-adapter-context.ts` — shared coordinate, tool-state, document-surface, and readiness types consumed by `CanvasToolHost`, pen ports, and pointer/keyboard seams |
+
+`CanvasAdapterContext` composes the coordinate, tool-state, and document-surface slices reused across host interfaces; extend it (or individual slices) rather than re-declaring `clientToEditorSvgPoint` / `getCurrentTool` on each seam.
 
 `PointerGestureRouter` and the keyboard controller consult the registry first. The tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)). Dock panels can declare `relevantTools` so the right dock auto-shows for the active tool.
 

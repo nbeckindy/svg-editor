@@ -1,17 +1,24 @@
-import type { EditorTool } from '../../../services/editor-tool.service';
-import type { CanvasSvgPoint } from '../../../tools/canvas-tool-host.interface';
+import type {
+  CanvasAdapterCoordinates,
+  CanvasAdapterToolState,
+  CanvasSvgPoint
+} from '../../../tools/canvas-adapter-context';
 import type { ToolRegistryService } from '../../../tools/tool-registry.service';
+
+/** Drag-time coordinate mapping (same contract as {@link CanvasAdapterCoordinates}). */
+export interface CanvasAdapterDragCoordinates {
+  clientToEditorSvgPointForDrag(clientX: number, clientY: number): CanvasSvgPoint | null;
+}
 
 /**
  * Narrow surface the canvas exposes for pointer-orchestration (document + canvas
  * routing). Keeps {@link PointerGestureRouter} independent of the full component graph.
  */
-export interface SvgCanvasPointerGestureHost {
+export interface SvgCanvasPointerGestureHost
+  extends Pick<CanvasAdapterToolState, 'getCurrentTool'>, CanvasAdapterDragCoordinates {
   getPathNodeDragSession(): unknown | null;
   updatePathNodeDrag(clientX: number, clientY: number): void;
   finishPathNodeDrag(): void;
-  getCurrentTool(): EditorTool;
-  clientToEditorSvgPointForDrag(clientX: number, clientY: number): { x: number; y: number } | null;
 }
 
 export class PointerGestureRouter {
