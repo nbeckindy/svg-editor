@@ -2,9 +2,20 @@ import { describe, it, expect, vi } from 'vitest';
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import { PenToolSession, type PenToolSessionPorts } from './pen-tool-session';
 
+const noopPathNodeOverlay = (): PenToolSessionPorts['pathNodeOverlay'] => ({
+  parsePathDataForNodeEditing: () => null,
+  collectPathNodeAnchors: () => [],
+  collectPathControlHandles: () => [],
+  pathNodeLocalPointToOverlay: (pathId, lx, ly) => ({ x: lx, y: ly }),
+  penRootUserPointToOverlay: (rx, ry) => ({ x: rx, y: ry }),
+  getPenPostInsertAnchorPathId: () => null,
+  isPathInNodeEditState: () => false
+});
+
 function minimalPorts(overrides: Partial<PenToolSessionPorts> = {}): PenToolSessionPorts {
   const confirmDiscardInProgressPath = vi.fn(() => true);
   return {
+    pathNodeOverlay: noopPathNodeOverlay(),
     markForCheck: vi.fn(),
     getCurrentTool: () => 'pen',
     isPenAltCurveMode: () => false,
@@ -40,7 +51,7 @@ function minimalPorts(overrides: Partial<PenToolSessionPorts> = {}): PenToolSess
     commitPenInsertOnExistingPath: vi.fn(),
     clearPenPostInsertAnchorOverlay: vi.fn(),
     clearSelectionForPenBackgroundStroke: vi.fn(),
-    isCanvasReadyForPenInput: () => true,
+    isCanvasReady: () => true,
     armPenClosePostNodeEditEmptyClickSelectionGuard: vi.fn(),
     ...overrides
   };
@@ -325,6 +336,7 @@ describe('PenToolSession', () => {
     });
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.id = 'filled-rect';
+    path.setAttribute('d', 'M 0 0 L 100 0 L 100 100 L 0 100 Z');
     const session = new PenToolSession(ports);
     const down = new MouseEvent('mousedown', { clientX: 50, clientY: 50, button: 0, detail: 1 });
     vi.spyOn(down, 'target', 'get').mockReturnValue(path);
@@ -343,6 +355,7 @@ describe('PenToolSession', () => {
     });
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.id = 'filled-rect';
+    path.setAttribute('d', 'M 0 0 L 100 0 L 100 100 L 0 100 Z');
     const session = new PenToolSession(ports);
     session.onCanvasPenPrimaryMouseDown(
       new MouseEvent('mousedown', { clientX: 10, clientY: 10, button: 0, detail: 1 }),

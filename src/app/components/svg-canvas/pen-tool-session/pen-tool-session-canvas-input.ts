@@ -85,6 +85,18 @@ export interface PenCanvasInputView {
   isPenSessionActive(): boolean;
 }
 
+/** Closed filled paths allow a new stroke on interior clicks that miss the stroke (insert tolerance). */
+function penPathAllowsDrawOnInteriorMiss(penTarget: Element): boolean {
+  const pathEl =
+    penTarget.tagName?.toLowerCase() === 'path'
+      ? penTarget
+      : (typeof penTarget.closest === 'function' ? penTarget.closest('path') : null);
+  if (!pathEl) return false;
+  if (pathEl.getAttribute('fill') === 'none') return false;
+  const d = pathEl.getAttribute('d') ?? '';
+  return /\bZ\b/i.test(d);
+}
+
 export function handlePenCanvasMouseDownForView(v: PenCanvasInputView, event: MouseEvent, pt: { x: number; y: number }): void {
   if (event.detail >= 2) {
     clearPendingSegmentFields(v);
@@ -272,7 +284,7 @@ export function onCanvasPenPrimaryMouseDownForView(
   getSnappedPenPoint: (clientX: number, clientY: number, suspendSnap: boolean) => { x: number; y: number } | null,
   tryBeginInsert: (penTarget: Element, event: MouseEvent) => boolean
 ): boolean {
-  if (!v.ports.isCanvasReadyForPenInput()) return false;
+  if (!v.ports.isCanvasReady()) return false;
   const outgoingKnob = (event.target as Element | null)?.closest?.('[data-pen-outgoing-handle]');
   if (outgoingKnob && v.isPenSessionActive() && !v.pendingSegment) {
     if (penLastOutgoingHandleSvg(v.penSession.getSegments())) {
@@ -284,6 +296,9 @@ export function onCanvasPenPrimaryMouseDownForView(
   }
   const penTarget = event.target as Element | null;
   if (penTarget && v.ports.isEditorContentShapeTarget(penTarget)) {
+    const onPath =
+      penTarget.tagName?.toLowerCase() === 'path' ||
+      (typeof penTarget.closest === 'function' && !!penTarget.closest('path'));
     if (v.penSession.getSegments().length === 0 && !v.pendingSegment) {
       if (v.tryPickUpPenOpenPathContinuation(event)) {
         return true;
@@ -291,8 +306,13 @@ export function onCanvasPenPrimaryMouseDownForView(
       if (tryBeginInsert(penTarget, event)) {
         return true;
       }
+      if (onPath && !penPathAllowsDrawOnInteriorMiss(penTarget)) {
+        return false;
+      }
+    } else if (onPath && !penPathAllowsDrawOnInteriorMiss(penTarget)) {
+      return false;
     }
-    // No insert/continuation hit — draw on top of the filled shape (same as empty canvas).
+    // No insert/continuation hit on a filled shape — draw on top (same as empty canvas).
   }
   const pt = getSnappedPenPoint(event.clientX, event.clientY, event.altKey || event.metaKey || event.ctrlKey);
   if (!pt) return false;

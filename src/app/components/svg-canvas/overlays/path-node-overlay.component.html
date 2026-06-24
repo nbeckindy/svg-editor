@@ -1,3 +1,17 @@
+@if (postInsertAnchors(); as postAnchors) {
+  @for (pt of postAnchors; track $index) {
+    <svg:circle
+      class="path-node-anchor pen-post-insert-anchor-affordance"
+      data-testid="canvas-pen-post-insert-anchor"
+      [attr.cx]="pt.cx"
+      [attr.cy]="pt.cy"
+      [attr.r]="4"
+      [attr.fill]="'#ffffff'"
+      [attr.stroke]="'#1E88E5'"
+      [attr.stroke-width]="2"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
+  }
+}
 @if (insertAffordance(); as insAff) {
   @for (ln of insAff.lines; track $index) {
     <svg:line

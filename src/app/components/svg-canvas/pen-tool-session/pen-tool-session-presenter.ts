@@ -34,6 +34,12 @@ import {
   penEndpointsWithinJoinTolerance,
   type PenContinuingPathRewrite
 } from './pen-tool-session-path-continuation';
+import {
+  computePenInsertOnPathNodeAffordanceOverlay,
+  computePenPostInsertAnchorOverlays,
+  computePenSessionPathNodeOverlays,
+  computePenSessionPathOutlineOverlayD
+} from './pen-path-node-overlay';
 
 /** Domain slice for {@link PenToolSessionPresenter} (template bindings / editor chrome). */
 export interface PenToolSessionPresenterHost {
@@ -65,6 +71,7 @@ export interface PenToolSessionPresenterHost {
   penCloseAffordanceAllowed(): boolean;
   isPenPointerWithinCloseRadius(clientX: number, clientY: number): boolean;
   penCommittedPathHasVertexBeyondMoveto(): boolean;
+  isPenToolWithActiveSession(): boolean;
 }
 
 /** Editor-chrome bindings for in-progress pen authoring (preview `d`, overlays, insert preview). */
@@ -261,6 +268,40 @@ export class PenToolSessionPresenter {
       st,
       this.host.getInsertOnPathLastClient(),
       this.host.getInsertOnPathPointerSvg()
+    );
+  }
+
+  get penInsertOnPathNodeAffordanceOverlay() {
+    if (!this.host.isPenInsertOnPathDragActive()) return null;
+    return computePenInsertOnPathNodeAffordanceOverlay(
+      this.host.ports.pathNodeOverlay,
+      this.penInsertOnPathPathId,
+      this.penInsertOnPathPreviewPathD,
+      this.penInsertOnPathPlantedAnchorSvg
+    );
+  }
+
+  get penSessionPathNodeOverlays() {
+    const sourceD = this.penCurvePreviewPathD ?? this.penSessionPreviewPathD;
+    return computePenSessionPathNodeOverlays(
+      this.host.ports.pathNodeOverlay,
+      this.host.isPenToolWithActiveSession(),
+      sourceD
+    );
+  }
+
+  get penSessionPathOutlineOverlayD(): string | null {
+    const sourceD = this.penCurvePreviewPathD ?? this.penSessionPreviewPathD;
+    return computePenSessionPathOutlineOverlayD(
+      this.host.ports.pathNodeOverlay,
+      this.host.isPenToolWithActiveSession(),
+      sourceD
+    );
+  }
+
+  get penPostInsertAnchorOverlays(): { cx: number; cy: number }[] {
+    return computePenPostInsertAnchorOverlays(this.host.ports.pathNodeOverlay, (pathId) =>
+      this.host.ports.getPathDForId(pathId)
     );
   }
 

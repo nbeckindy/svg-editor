@@ -4,7 +4,7 @@ import type { PenToolSessionPorts } from './pen-tool-session/pen-tool-session-po
 export type PenPrimaryMouseDownIntentHost = {
   readonly ports: Pick<
     PenToolSessionPorts,
-    'isCanvasReadyForPenInput' | 'isEditorContentShapeTarget'
+    'isCanvasReady' | 'isEditorContentShapeTarget'
   >;
   isPenInsertOnPathDragActive(): boolean;
   getInsertOnPathPathId(): string | null;
@@ -30,7 +30,7 @@ export function describePenPrimaryMouseDownIntent(
     details.push(`pathId=${pathId}`, 'mousemove updates preview; mouseup commits or cancels');
     return { headline: 'Pen: insert-on-path drag in progress', details };
   }
-  if (!host.ports.isCanvasReadyForPenInput()) {
+  if (!host.ports.isCanvasReady()) {
     return { headline: 'Pen: canvas not ready (no SVG / view)', details };
   }
   const outgoingKnob = penTarget?.closest?.('[data-pen-outgoing-handle]');

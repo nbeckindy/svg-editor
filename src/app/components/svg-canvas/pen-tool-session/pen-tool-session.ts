@@ -156,7 +156,8 @@ export class PenToolSession {
         penPathCloseTargetMv: () => s.penPathCloseTargetMv(),
         penCloseAffordanceAllowed: () => s.penCloseAffordanceAllowed(),
         isPenPointerWithinCloseRadius: (clientX, clientY) => s.isPenPointerWithinCloseRadius(clientX, clientY),
-        penCommittedPathHasVertexBeyondMoveto: () => s.penCommittedPathHasVertexBeyondMoveto()
+        penCommittedPathHasVertexBeyondMoveto: () => s.penCommittedPathHasVertexBeyondMoveto(),
+        isPenToolWithActiveSession: () => s.ports.getCurrentTool() === 'pen' && s.isPenSessionActive
       };
     }
     return this.penPresenterHostCache;
@@ -728,6 +729,22 @@ export class PenToolSession {
 
   get penInsertOnPathPreviewPathD(): string | null {
     return this.presenter().penInsertOnPathPreviewPathD;
+  }
+
+  get penInsertOnPathNodeAffordanceOverlay() {
+    return this.presenter().penInsertOnPathNodeAffordanceOverlay;
+  }
+
+  get penSessionPathNodeOverlays() {
+    return this.presenter().penSessionPathNodeOverlays;
+  }
+
+  get penSessionPathOutlineOverlayD(): string | null {
+    return this.presenter().penSessionPathOutlineOverlayD;
+  }
+
+  get penPostInsertAnchorOverlays(): { cx: number; cy: number }[] {
+    return this.presenter().penPostInsertAnchorOverlays;
   }
 
   /**

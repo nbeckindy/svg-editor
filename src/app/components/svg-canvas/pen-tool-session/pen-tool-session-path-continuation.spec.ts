@@ -24,14 +24,23 @@ function makePorts(): PenToolSessionPorts {
   mainSvg.getBoundingClientRect = () => rect as DOMRect;
 
   return {
+    pathNodeOverlay: {
+      parsePathDataForNodeEditing: () => null,
+      collectPathNodeAnchors: () => [],
+      collectPathControlHandles: () => [],
+      pathNodeLocalPointToOverlay: (_pathId, lx, ly) => ({ x: lx, y: ly }),
+      penRootUserPointToOverlay: (rx, ry) => ({ x: rx, y: ry }),
+      getPenPostInsertAnchorPathId: () => null,
+      isPathInNodeEditState: () => false
+    },
     svgManipulation: {
       getSVGInstance: () => ({
         findOne: () => ({ node: { getAttribute: () => OPEN_D } })
       }),
       getLayerStackItems: () => [{ id: 'open-a', type: 'path' as const }]
-    } as PenToolSessionPorts['svgManipulation'],
+    } as unknown as PenToolSessionPorts['svgManipulation'],
     shapeSelection: {} as PenToolSessionPorts['shapeSelection'],
-    editorHistory: { pushAndExecute: () => {} } as PenToolSessionPorts['editorHistory'],
+    editorHistory: { pushAndExecute: () => {} } as unknown as PenToolSessionPorts['editorHistory'],
     getCurrentTool: () => 'pen',
     getMainSvgElement: () => mainSvg,
     parseOverlayViewBox: () => ({ vbMinX: 0, vbMinY: 0, vbW: 100, vbH: 100 }),
@@ -41,13 +50,18 @@ function makePorts(): PenToolSessionPorts {
     clearHighlightRectCache: () => {},
     clearPenPostInsertAnchorOverlay: () => {},
     clearSelectionForPenBackgroundStroke: () => {},
-    isCanvasReadyForPenInput: () => true,
+    isCanvasReady: () => true,
     isEditorContentShapeTarget: () => false,
     clientToEditorSvgPoint: () => null,
     isPenAltCurveMode: () => false,
     setPenAltCurveMode: () => {},
     confirmDiscardInProgressPath: () => true,
-    armPenClosePostNodeEditEmptyClickSelectionGuard: () => {}
+    armPenClosePostNodeEditEmptyClickSelectionGuard: () => {},
+    svgBboxToOverlayPixels: (bbox) => ({ x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height }),
+    penBackspaceShortcutShouldDefer: () => false,
+    getPenPathInsertToleranceSvg: () => 8,
+    getPathDForId: () => OPEN_D,
+    commitPenInsertOnExistingPath: () => {}
   };
 }
 

@@ -4,6 +4,7 @@ import type {
   PathNodeControlHandleOverlay,
   PathNodeInsertAffordanceOverlay,
   PathNodeLineOverlay,
+  PathNodePointOverlay,
   PathNodeSessionOverlay,
   PathSelectionOutlineOverlay
 } from './path-node-overlay.model';
@@ -16,6 +17,7 @@ import type {
   schemas: [NO_ERRORS_SCHEMA]
 })
 export class PathNodeOverlayComponent {
+  readonly postInsertAnchors = input<readonly PathNodePointOverlay[]>([]);
   readonly insertAffordance = input<PathNodeInsertAffordanceOverlay | null>(null);
   readonly penSessionNodes = input<PathNodeSessionOverlay | null>(null);
   readonly penSessionPathOutlineD = input<string | null>(null);

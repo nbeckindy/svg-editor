@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parsePathDForNodeEditing } from './path-d';
+import { parsePathDForNodeEditing, type PathSegment } from './path-d';
 import { applyPenPathInsert, findPenPathInsertHit } from './path-pen-insert';
 import {
   adjustSplitSegmentsForPenInsertDrag,
