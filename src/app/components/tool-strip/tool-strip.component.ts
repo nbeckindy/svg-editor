@@ -2,7 +2,8 @@ import { Component, ElementRef, computed, inject, viewChild } from '@angular/cor
 import { MatIconModule } from '@angular/material/icon';
 import { EditorToolService, EditorTool } from '../../services/editor-tool.service';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import type { DocumentReadinessPort } from '../../history/document-readiness.port';
+import { SvgEditorDocumentService } from '../../services/svg-editor-document.service';
 import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
 import { RasterImageInsertService } from '../../services/raster-image-insert.service';
 import { parseRootViewBox } from '../../utils/raster-insert-layout';
@@ -17,7 +18,8 @@ import { parseRootViewBox } from '../../utils/raster-insert-layout';
 export class ToolStripComponent {
   readonly editorTool = inject(EditorToolService);
   readonly toolRegistry = inject(ToolRegistryService);
-  private readonly svgManipulation = inject(SvgManipulationService);
+  private readonly documentReadiness: DocumentReadinessPort = inject(SvgEditorDocumentService);
+  private readonly editorDocument = inject(SvgEditorDocumentService);
   private readonly rasterInsertAnchor = inject(RasterInsertAnchorStore);
   private readonly rasterImageInsert = inject(RasterImageInsertService);
 
@@ -25,8 +27,8 @@ export class ToolStripComponent {
 
   /** Reactive: canvas may attach the SVG instance after first paint (see documentRevision). */
   readonly insertImageDisabled = computed(() => {
-    this.svgManipulation.documentRevision();
-    return this.svgManipulation.getSVGInstance() == null;
+    this.documentReadiness.documentRevision();
+    return this.documentReadiness.getSVGInstance() == null;
   });
 
   setTool(tool: EditorTool): void {
@@ -56,7 +58,7 @@ export class ToolStripComponent {
     if (last) {
       return { x: last.x, y: last.y };
     }
-    const vb = parseRootViewBox(this.svgManipulation.getDocumentViewBox());
+    const vb = parseRootViewBox(this.editorDocument.getDocumentViewBox());
     if (vb) {
       return { x: vb.minX + vb.width / 2, y: vb.minY + vb.height / 2 };
     }

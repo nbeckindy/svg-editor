@@ -1,4 +1,5 @@
 import { Injectable, signal, computed } from '@angular/core';
+import type { DocumentReadinessPort } from '../history/document-readiness.port';
 import { SVG, Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import {
   ArtboardModel,
@@ -30,7 +31,7 @@ import {
 @Injectable({
   providedIn: 'root'
 })
-export class SvgEditorDocumentService {
+export class SvgEditorDocumentService implements DocumentReadinessPort {
   /** Bumped when logical document content changes (for debug / reactive views). */
   readonly documentRevision = signal(0);
 

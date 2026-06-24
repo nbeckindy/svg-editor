@@ -5,12 +5,22 @@ import { SvgManipulationService } from './svg-manipulation.service';
 import { ShapeSelectionService } from './shape-selection.service';
 import { EditorHistoryService } from './editor-history.service';
 import { EditorToolService } from './editor-tool.service';
+import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { AddImageCommand } from '../models/editor-commands';
-import * as RasterFile from '../utils/raster-insert-file';
+import { stubRasterFileIo } from '../testing/raster-file-io-testing';
+
+/** 1×1 PNG (same payload as other raster tests). */
+function smallPngFile(): File {
+  const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
+  const bin = atob(b64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
+  return new File([bytes], 't.png', { type: 'image/png' });
+}
 
 describe('RasterImageInsertService', () => {
   let service: RasterImageInsertService;
-  const shapeEl = { node: document.createElementNS('http://www.w3.org/2000/svg', 'image') } as SvgJsElement;
+  const shapeEl = { node: document.createElementNS('http://www.w3.org/2000/svg', 'image') } as unknown as SvgJsElement;
 
   const svgManipulationMock = {
     getSVGInstance: vi.fn(),
@@ -19,18 +29,17 @@ describe('RasterImageInsertService', () => {
     getShapeProperties: vi.fn(() => ({ id: 'img-1', type: 'image' as const }))
   };
 
-  afterEach(() => {
-    for (const key of ['readRasterIntrinsicDimensionsFromFile', 'readFileAsDataUrl'] as const) {
-      const fn = RasterFile[key] as unknown as { mockRestore?: () => void };
-      fn.mockRestore?.();
-    }
-  });
+  const documentMock = {
+    getSVGInstance: vi.fn(),
+    documentRevision: vi.fn(() => 1)
+  };
 
   beforeEach(async () => {
-    vi.restoreAllMocks();
-    svgManipulationMock.getSVGInstance.mockReturnValue({
+    const svgInstance = {
       findOne: vi.fn((sel: string) => (sel === '#img-1' ? shapeEl : null))
-    } as unknown);
+    };
+    svgManipulationMock.getSVGInstance.mockReturnValue(svgInstance as unknown);
+    documentMock.getSVGInstance.mockReturnValue(svgInstance as unknown);
     svgManipulationMock.insertRasterImageIntoContentGroup.mockReturnValue('img-1');
     svgManipulationMock.insertRasterImageIntoContentGroup.mockClear();
 
@@ -38,6 +47,7 @@ describe('RasterImageInsertService', () => {
       providers: [
         RasterImageInsertService,
         { provide: SvgManipulationService, useValue: svgManipulationMock },
+        { provide: SvgEditorDocumentService, useValue: documentMock },
         { provide: ShapeSelectionService, useValue: { selectShape: vi.fn() } },
         { provide: EditorHistoryService, useValue: { pushAndExecute: vi.fn() } },
         EditorToolService
@@ -49,27 +59,20 @@ describe('RasterImageInsertService', () => {
 
   it('returns failed when no SVG instance', async () => {
     svgManipulationMock.getSVGInstance.mockReturnValue(null);
-    const file = new File([new Uint8Array([1])], 'x.png', { type: 'image/png' });
-    const r = await service.insertRasterFileAtAnchor(file, { x: 10, y: 20 });
+    documentMock.getSVGInstance.mockReturnValue(null);
+    const r = await service.insertRasterFileAtAnchor(smallPngFile(), { x: 10, y: 20 });
     expect(r.kind).toBe('failed');
     expect(svgManipulationMock.insertRasterImageIntoContentGroup).not.toHaveBeenCalled();
   });
 
   it('inserts, selects, pushes AddImageCommand, and switches to selector', async () => {
-    const dimSpy = vi.spyOn(RasterFile, 'readRasterIntrinsicDimensionsFromFile').mockResolvedValue({ width: 4, height: 2 });
-    const dataSpy = vi.spyOn(RasterFile, 'readFileAsDataUrl').mockResolvedValue('data:image/png;base64,abcd');
+    const restoreIo = stubRasterFileIo({ width: 4, height: 2 });
     try {
-      const b64 = 'iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mP8z8BQDwAEhQGAhKmMIQAAAABJRU5ErkJggg==';
-      const bin = atob(b64);
-      const bytes = new Uint8Array(bin.length);
-      for (let i = 0; i < bin.length; i++) bytes[i] = bin.charCodeAt(i);
-      const file = new File([bytes], 't.png', { type: 'image/png' });
-
       const selection = TestBed.inject(ShapeSelectionService) as unknown as { selectShape: ReturnType<typeof vi.fn> };
       const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
       const editorTool = TestBed.inject(EditorToolService);
 
-      const r = await service.insertRasterFileAtAnchor(file, { x: 50, y: 50 });
+      const r = await service.insertRasterFileAtAnchor(smallPngFile(), { x: 50, y: 50 });
       expect(r.kind).toBe('inserted');
       expect(svgManipulationMock.insertRasterImageIntoContentGroup).toHaveBeenCalled();
       expect(selection.selectShape).toHaveBeenCalled();
@@ -78,8 +81,7 @@ describe('RasterImageInsertService', () => {
       expect(cmd).toBeInstanceOf(AddImageCommand);
       expect(editorTool.getCurrentTool()).toBe('selector');
     } finally {
-      dimSpy.mockRestore();
-      dataSpy.mockRestore();
+      restoreIo();
     }
   });
 

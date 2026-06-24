@@ -18,6 +18,7 @@ import type {
 import type { ChromeEditorApplySvgPort } from '../history/chrome-editor-apply-svg.port';
 import type { SelectionTransformReadoutSvgPort } from '../history/selection-transform-readout-svg.port';
 import type { DocumentSettingsSvgPort } from '../history/document-settings-svg.port';
+import type { DocumentReadinessPort } from '../history/document-readiness.port';
 import type { AppRootSvgManipulationPort, SvgDebugPanelSvgPort } from '../history/editor-chrome-svg.port';
 import type { SvgExportImagePolicyResult } from '../utils/svg-export-image-href-policy';
 import type { GradientFillEditorSvgPort } from '../history/gradient-fill-editor-svg.port';
@@ -42,6 +43,7 @@ export class SvgManipulationService
     DocumentSettingsSvgPort,
     SvgDebugPanelSvgPort,
     AppRootSvgManipulationPort,
+    DocumentReadinessPort,
     GradientFillEditorSvgPort,
     LayersPanelSvgPort,
     PropertiesPanelSvgPort,

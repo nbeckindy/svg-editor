@@ -8,21 +8,13 @@ import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
 import { EditorHistoryService } from './editor-history.service';
 import { EditorToolService } from './editor-tool.service';
 import { SelectionTransformReadoutService } from './selection-transform-readout.service';
+import { BASE_DRAWING_STYLE_DEFAULTS, type DrawingStyleDefaults } from '../models/drawing-style-defaults';
 import { ShapeProperties } from '../models/shape-properties.interface';
 
 describe('ChromeEditorApplyService', () => {
   let service: ChromeEditorApplyService;
   const selectedShapesSignal = signal<ShapeProperties[]>([]);
-  const drawingDefaultsSignal = signal({
-    fill: '#000000',
-    stroke: '#000000',
-    strokeWidth: 2,
-    fontFamily: 'Arial, sans-serif',
-    fontSize: 16,
-    fontWeight: 'normal',
-    fontStyle: 'normal' as const,
-    textAnchor: 'start' as const
-  });
+  const drawingDefaultsSignal = signal<DrawingStyleDefaults>({ ...BASE_DRAWING_STYLE_DEFAULTS });
 
   beforeEach(async () => {
     const shapeSelectionMock = {
@@ -85,20 +77,9 @@ describe('ChromeEditorApplyService', () => {
     const drawingDefaultsMock = {
       defaults: computed(() => drawingDefaultsSignal()),
       strokeWidth: computed(() => drawingDefaultsSignal().strokeWidth),
-      setDefaults: vi.fn(
-        (next: {
-          fill: string;
-          stroke: string;
-          strokeWidth: number;
-          fontFamily: string;
-          fontSize: number;
-          fontWeight: string;
-          fontStyle: 'normal' | 'italic';
-          textAnchor: 'start' | 'middle' | 'end';
-        }) => {
+      setDefaults: vi.fn((next: DrawingStyleDefaults) => {
           drawingDefaultsSignal.set(next);
-        }
-      )
+        })
     };
 
     const historyMock = {

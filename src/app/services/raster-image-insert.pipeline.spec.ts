@@ -4,8 +4,8 @@ import { SvgManipulationService } from './svg-manipulation.service';
 import { EditorHistoryService } from './editor-history.service';
 import { EditorToolService } from './editor-tool.service';
 import { AddImageCommand } from '../models/editor-commands';
-import * as RasterFile from '../utils/raster-insert-file';
 import { RASTER_INSERT_MAX_FILE_BYTES } from '../utils/raster-insert-file';
+import { stubRasterFileIo } from '../testing/raster-file-io-testing';
 
 /** 1×1 PNG (same payload as other raster tests). */
 function smallPngFile(): File {
@@ -35,7 +35,6 @@ describe('RasterImageInsertService pipeline (e4s.8 integration)', () => {
   });
 
   afterEach(() => {
-    vi.restoreAllMocks();
     container.remove();
   });
 
@@ -43,30 +42,26 @@ describe('RasterImageInsertService pipeline (e4s.8 integration)', () => {
     svgManipulation.initializeSVG(container, '<svg viewBox="0 0 100 100"></svg>');
     editorTool.setTool('rect');
 
-    const dimSpy = vi.spyOn(RasterFile, 'readRasterIntrinsicDimensionsFromFile').mockResolvedValue({
-      width: 20,
-      height: 10
-    });
-    const dataSpy = vi.spyOn(RasterFile, 'readFileAsDataUrl').mockResolvedValue('data:image/png;base64,ZZZZ');
+    const restoreIo = stubRasterFileIo({ width: 20, height: 10 }, 'data:image/png;base64,ZZZZ');
     const pushSpy = vi.spyOn(history, 'pushAndExecute');
+    try {
+      const r = await insertService.insertRasterFileAtAnchor(smallPngFile(), { x: 50, y: 50 });
+      expect(r.kind).toBe('inserted');
 
-    const r = await insertService.insertRasterFileAtAnchor(smallPngFile(), { x: 50, y: 50 });
-    expect(r.kind).toBe('inserted');
+      const contentRoot = container.querySelector('[data-editor-content-group]');
+      expect(contentRoot).toBeTruthy();
+      const images = contentRoot!.querySelectorAll('image');
+      expect(images.length).toBe(1);
+      expect(images[0].getAttribute('href')?.startsWith('data:image/png')).toBe(true);
+      expect(images[0].getAttribute('width')).toBeTruthy();
+      expect(images[0].getAttribute('height')).toBeTruthy();
 
-    const contentRoot = container.querySelector('[data-editor-content-group]');
-    expect(contentRoot).toBeTruthy();
-    const images = contentRoot!.querySelectorAll('image');
-    expect(images.length).toBe(1);
-    expect(images[0].getAttribute('href')?.startsWith('data:image/png')).toBe(true);
-    expect(images[0].getAttribute('width')).toBeTruthy();
-    expect(images[0].getAttribute('height')).toBeTruthy();
-
-    expect(pushSpy).toHaveBeenCalledTimes(1);
-    expect(pushSpy.mock.calls[0][0]).toBeInstanceOf(AddImageCommand);
-    expect(editorTool.getCurrentTool()).toBe('selector');
-
-    dimSpy.mockRestore();
-    dataSpy.mockRestore();
+      expect(pushSpy).toHaveBeenCalledTimes(1);
+      expect(pushSpy.mock.calls[0][0]).toBeInstanceOf(AddImageCommand);
+      expect(editorTool.getCurrentTool()).toBe('selector');
+    } finally {
+      restoreIo();
+    }
   });
 
   it('does not insert <image> when file exceeds max bytes', async () => {

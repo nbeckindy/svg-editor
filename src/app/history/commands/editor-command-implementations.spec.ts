@@ -1,4 +1,5 @@
 import { Matrix } from '@svgdotjs/svg.js';
+import { BASE_DRAWING_STYLE_DEFAULTS, type DrawingStyleDefaults } from '../../models/drawing-style-defaults';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import {
   CompositeCommand,
@@ -1766,8 +1767,8 @@ describe('UpdateDrawingDefaultsCommand', () => {
     const defaultsSvc = {
       setDefaults: vi.fn()
     } as unknown as DrawingStyleDefaultsWritePort;
-    const before = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
-    const after = { fill: '#ff0000', stroke: '#00ff00', strokeWidth: 5 };
+    const before: DrawingStyleDefaults = { ...BASE_DRAWING_STYLE_DEFAULTS };
+    const after: DrawingStyleDefaults = { ...BASE_DRAWING_STYLE_DEFAULTS, fill: '#ff0000', stroke: '#00ff00', strokeWidth: 5 };
     const cmd = new UpdateDrawingDefaultsCommand(defaultsSvc, before, after, 'all');
 
     cmd.execute();
@@ -1781,9 +1782,9 @@ describe('UpdateDrawingDefaultsCommand', () => {
     const defaultsSvc = {
       setDefaults: vi.fn()
     } as unknown as DrawingStyleDefaultsWritePort;
-    const before = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
-    const afterA = { fill: '#111111', stroke: '#000000', strokeWidth: 2 };
-    const afterB = { fill: '#222222', stroke: '#000000', strokeWidth: 2 };
+    const before: DrawingStyleDefaults = { ...BASE_DRAWING_STYLE_DEFAULTS };
+    const afterA: DrawingStyleDefaults = { ...BASE_DRAWING_STYLE_DEFAULTS, fill: '#111111' };
+    const afterB: DrawingStyleDefaults = { ...BASE_DRAWING_STYLE_DEFAULTS, fill: '#222222' };
 
     const first = new UpdateDrawingDefaultsCommand(defaultsSvc, before, afterA, 'fill');
     const second = new UpdateDrawingDefaultsCommand(defaultsSvc, afterA, afterB, 'fill');

@@ -4,7 +4,7 @@ import { ToolStripComponent } from './tool-strip.component';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { registerDefaultToolDescriptors } from '../../tools/register-default-tool-descriptors';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { SvgEditorDocumentService } from '../../services/svg-editor-document.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
@@ -15,12 +15,10 @@ import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetFo
 describe('ToolStripComponent', () => {
   let fixture: ComponentFixture<ToolStripComponent>;
   let editorToolService: EditorToolService;
-  const svgManipulationMock = {
+  const editorDocumentMock = {
     documentRevision: signal(0),
     getSVGInstance: vi.fn(() => ({}) as unknown),
-    getDocumentViewBox: vi.fn(() => '0 0 800 600'),
-    insertRasterImageIntoContentGroup: vi.fn(() => 'shape-img'),
-    getShapeProperties: vi.fn(() => ({ id: 'shape-img', type: 'image' }))
+    getDocumentViewBox: vi.fn(() => '0 0 800 600')
   };
 
   const rasterInsertSpy = vi.fn().mockResolvedValue({ kind: 'inserted' as const });
@@ -28,15 +26,14 @@ describe('ToolStripComponent', () => {
   beforeEach(async () => {
     vi.restoreAllMocks();
     rasterInsertSpy.mockResolvedValue({ kind: 'inserted' as const });
-    svgManipulationMock.getSVGInstance.mockReturnValue({} as unknown);
-    svgManipulationMock.insertRasterImageIntoContentGroup.mockReturnValue('shape-img');
+    editorDocumentMock.getSVGInstance.mockReturnValue({} as unknown);
     await TestBed.configureTestingModule({
       imports: [ToolStripComponent],
       providers: [
         ...mdiIconHttpTestProviders,
         EditorToolService,
         ToolRegistryService,
-        { provide: SvgManipulationService, useValue: svgManipulationMock },
+        { provide: SvgEditorDocumentService, useValue: editorDocumentMock },
         { provide: ShapeSelectionService, useValue: { selectShape: vi.fn() } },
         { provide: EditorHistoryService, useValue: { pushAndExecute: vi.fn() } },
         { provide: RasterImageInsertService, useValue: { insertRasterFileAtAnchor: rasterInsertSpy } },
@@ -76,7 +73,7 @@ describe('ToolStripComponent', () => {
   });
 
   it('disables insert image when no SVG instance', () => {
-    svgManipulationMock.getSVGInstance.mockReturnValue(null);
+    editorDocumentMock.getSVGInstance.mockReturnValue(null);
     const f = TestBed.createComponent(ToolStripComponent);
     f.detectChanges();
     flushMdiSvgIfPending();
@@ -85,7 +82,7 @@ describe('ToolStripComponent', () => {
       '[data-testid="tool-insert-image"]'
     ) as HTMLButtonElement;
     expect(btn.disabled).toBe(true);
-    svgManipulationMock.getSVGInstance.mockReturnValue({} as unknown);
+    editorDocumentMock.getSVGInstance.mockReturnValue({} as unknown);
   });
 
   it('should set tool to zoom when Zoom button is clicked', () => {

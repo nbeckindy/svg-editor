@@ -8,6 +8,7 @@ import {
   UnionScaleCommand
 } from '../models/editor-commands';
 import type { DrawingStyleDefaultsWritePort } from '../history/drawing-style-defaults.port';
+import { BASE_DRAWING_STYLE_DEFAULTS, type DrawingStyleDefaults } from '../models/drawing-style-defaults';
 import type { SvgManipulationService } from './svg-manipulation.service';
 
 function makeCommand(description = 'test'): EditorCommand & { executeCalls: number; undoCalls: number } {
@@ -206,9 +207,9 @@ describe('EditorHistoryService', () => {
       }
     };
 
-    let defaults = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
+    let defaults: DrawingStyleDefaults = { ...BASE_DRAWING_STYLE_DEFAULTS };
     const defaultsSvc = {
-      setDefaults: vi.fn((next: typeof defaults) => {
+      setDefaults: vi.fn((next: DrawingStyleDefaults) => {
         defaults = next;
       })
     } as unknown as DrawingStyleDefaultsWritePort;
@@ -408,9 +409,9 @@ describe('EditorHistoryService', () => {
     });
 
     it('coalesces defaults commands by scope and undo restores original defaults', () => {
-      let defaults = { fill: '#000000', stroke: '#000000', strokeWidth: 2 };
+      let defaults: DrawingStyleDefaults = { ...BASE_DRAWING_STYLE_DEFAULTS };
       const defaultsSvc = {
-        setDefaults: vi.fn((next: typeof defaults) => {
+        setDefaults: vi.fn((next: DrawingStyleDefaults) => {
           defaults = next;
         })
       } as unknown as DrawingStyleDefaultsWritePort;

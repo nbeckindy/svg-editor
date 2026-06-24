@@ -1,5 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
+import type { DocumentReadinessPort } from '../history/document-readiness.port';
+import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgManipulationService } from './svg-manipulation.service';
 import { ShapeSelectionService } from './shape-selection.service';
 import { EditorHistoryService } from './editor-history.service';
@@ -34,6 +36,7 @@ export interface InsertRasterFileOptions {
 
 @Injectable({ providedIn: 'root' })
 export class RasterImageInsertService {
+  private readonly documentReadiness: DocumentReadinessPort = inject(SvgEditorDocumentService);
   private readonly svgManipulation = inject(SvgManipulationService);
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly editorHistory = inject(EditorHistoryService);
@@ -54,7 +57,7 @@ export class RasterImageInsertService {
       return { kind: 'failed', message: mimeCheck.message };
     }
 
-    if (this.svgManipulation.getSVGInstance() == null) {
+    if (this.documentReadiness.getSVGInstance() == null) {
       return { kind: 'failed', message: 'No SVG document loaded.' };
     }
 

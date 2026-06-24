@@ -7,15 +7,7 @@ import type {
   ShapeCreationAttrs,
   SvgShapeContentPort
 } from './svg-shape-content.port';
-import type { ClipboardPayload, ClipboardShapeSnapshot } from '../models/clipboard-payload';
-import {
-  axisAlignedRectContains,
-  axisAlignedRectsIntersect,
-  marqueeEdgeSamplePoints,
-  marqueeSamplePoints,
-  type AxisAlignedRect
-} from '../utils/marquee-selection';
-import { getShapeIdsInDomOrderFromSvg } from '../utils/svg-shape-ids-dom-order';
+import type { ClipboardPayload } from '../models/clipboard-payload';
 import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
@@ -23,8 +15,9 @@ import { CONTENT_SHAPE_SELECTOR, EDITOR_CONTENT_GROUP_ID, SVG_NS } from './svg-e
 import { SvgShapePaintService } from './shape-content/svg-shape-paint.service';
 import { SvgShapePathDataService } from './shape-content/svg-shape-path-data.service';
 import { SvgShapeTextService } from './shape-content/svg-shape-text.service';
-
-const URL_REF_RE = /url\(\s*(['"]?)#([^)'"\\s]+)\1\s*\)/g;
+import { SvgSelectionHitTestService } from './shape-content/svg-selection-hit-test.service';
+import { SvgClipboardService } from './shape-content/svg-clipboard.service';
+import type { AxisAlignedRect } from '../utils/marquee-selection';
 
 @Injectable({ providedIn: 'root' })
 export class SvgShapeContentService implements SvgShapeContentPort {
@@ -34,6 +27,8 @@ export class SvgShapeContentService implements SvgShapeContentPort {
   private readonly paint = inject(SvgShapePaintService);
   private readonly pathData = inject(SvgShapePathDataService);
   private readonly text = inject(SvgShapeTextService);
+  private readonly hitTest = inject(SvgSelectionHitTestService);
+  private readonly clipboard = inject(SvgClipboardService);
 
   getRenderedPaint(node: Element) { return this.paint.getRenderedPaint(node); }
   isStrokeVisiblyPainted(node: Element) { return this.paint.isStrokeVisiblyPainted(node); }
@@ -244,130 +239,10 @@ export class SvgShapeContentService implements SvgShapeContentPort {
     }
   }
 
-  /**
-   * @param preferScreenBounds When true (default), use **painted** screen bounds first (clip/mask,
-   *   stroke, letterboxing via root CTM). Falls back to local `getBBox()` ×
-   *   `getTransformToElement(root)`, then SVG.js bbox × `matrixify()` (e.g. hidden during rotate when
-   *   `getBoundingClientRect` is zero).
-   */
-
-  /**
-   * User shapes the marquee should select (`rect` in editor SVG coordinates).
-   * - If the shape bbox is **fully inside** the marquee, it is selected (no paint sampling needed),
-   *   so thin or sparse geometry still selects when fully enclosed.
-   * - Otherwise, requires marquee–bbox overlap and a paint hit on **interior** samples and/or **points
-   *   along the four marquee edges** (`isPointInFill` / `isPointInStroke`) so edges crossing the shape
-   *   select it, while a marquee lying only in a hole (no edge through paint) does not.
-   */
-
   getShapePropertiesIntersectingRect(rect: AxisAlignedRect): ShapeProperties[] {
-    if (!this.doc.getSVGInstance()) return [];
-    const contentGroup = this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    const scope = contentGroup ?? this.doc.getSVGInstance()!;
-    const shapes = scope.find(CONTENT_SHAPE_SELECTOR) as SvgJsElement[];
-    const out: ShapeProperties[] = [];
-    for (const shape of shapes) {
-      const id = shape.id();
-      if (!id) continue;
-      const bbox = this.geometry.getShapeBBox(id);
-      if (!bbox || !axisAlignedRectsIntersect(rect, bbox)) continue;
-      if (axisAlignedRectContains(rect, bbox)) {
-        out.push(this.getShapeProperties(shape));
-        continue;
-      }
-      const node = shape.node as SVGGraphicsElement | undefined;
-      if (!node) continue;
-      // `<image>`: treat as opaque in its layout box. Partial marquee must not depend on
-      // `SVGImageElement.isPointInFill` (often false / inconsistent across UAs vs paths).
-      if (node.tagName?.toLowerCase() === 'image') {
-        out.push(this.getShapeProperties(shape));
-        continue;
-      }
-      if (!this.shapeMarqueeIntersectsPaint(shape, rect)) continue;
-      out.push(this.getShapeProperties(shape));
-    }
-    return out;
+    return this.hitTest.getShapePropertiesIntersectingRect(rect);
   }
 
-  /**
-   * Map marquee sample points from **root SVG user space** (same as `getShapeBBox`) into the
-   * element-local space expected by `isPointInFill` / `isPointInStroke`. Prefer SVG.js `matrixify`
-   * (matches bbox math and works in jsdom); fall back to `getCTM().inverse()` in the browser.
-   */
-  private marqueePointToElementLocal(
-    shape: SvgJsElement,
-    node: SVGGraphicsElement
-  ): (p: { x: number; y: number }) => DOMPointInit {
-    try {
-      if (typeof shape.matrixify === 'function') {
-        const m = shape.matrixify();
-        if (m && typeof m.inverse === 'function') {
-          const inv = m.inverse();
-          const v = inv.valueOf() as { a: number; b: number; c: number; d: number; e: number; f: number };
-          return (p) => ({
-            x: v.a * p.x + v.c * p.y + v.e,
-            y: v.b * p.x + v.d * p.y + v.f
-          });
-        }
-      }
-    } catch {
-      /* try DOM CTM */
-    }
-    try {
-      const ctm = typeof node.getCTM === 'function' ? node.getCTM() : null;
-      if (ctm) {
-        const inv = ctm.inverse();
-        return (p) => ({
-          x: inv.a * p.x + inv.c * p.y + inv.e,
-          y: inv.b * p.x + inv.d * p.y + inv.f
-        });
-      }
-    } catch {
-      /* identity */
-    }
-    return (p) => p;
-  }
-
-  /**
-   * True if some interior or **edge** sample in `marquee` hits the element's fill or stroke.
-   */
-  private shapeMarqueeIntersectsPaint(shape: SvgJsElement, marquee: AxisAlignedRect): boolean {
-    const node = shape.node as SVGGraphicsElement;
-    const points = [...marqueeSamplePoints(marquee), ...marqueeEdgeSamplePoints(marquee)];
-    if (points.length === 0) return false;
-
-    const geom = node as SVGGeometryElement;
-    const hasFill = typeof geom.isPointInFill === 'function';
-    const hasStroke = typeof geom.isPointInStroke === 'function';
-    if (!hasFill && !hasStroke) {
-      return true;
-    }
-
-    const toLocal = this.marqueePointToElementLocal(shape, node);
-
-    for (const p of points) {
-      const pt = toLocal(p);
-      if (hasFill) {
-        try {
-          if (geom.isPointInFill(pt)) return true;
-        } catch {
-          /* ignore */
-        }
-      }
-      if (hasStroke) {
-        try {
-          if (geom.isPointInStroke(pt)) return true;
-        } catch {
-          /* ignore */
-        }
-      }
-    }
-    return false;
-  }
-
-  /**
-   * Clear shape highlight (no-op: overlay is driven by selection state).
-   */
   clearHighlight(): void {}
 
   /**
@@ -543,135 +418,13 @@ export class SvgShapeContentService implements SvgShapeContentPort {
   }
 
   createClipboardPayload(shapeIds: string[]): ClipboardPayload {
-    if (!this.doc.getSVGInstance() || shapeIds.length === 0) return { shapes: [] };
-    const orderedIds = getShapeIdsInDomOrderFromSvg(this.doc.getSVGInstance(), shapeIds);
-    const contentGroup = this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    const contentNode = contentGroup?.node as Element | undefined;
-    const children = contentNode ? Array.from(contentNode.children) : [];
-
-    const shapes: ClipboardShapeSnapshot[] = [];
-    for (const id of orderedIds) {
-      const shape = this.doc.getSVGInstance()!.findOne(`#${id}`) as SvgJsElement | undefined;
-      const node = shape?.node as Element | undefined;
-      if (!node) continue;
-      const insertionIndex = children.indexOf(node);
-      shapes.push({
-        id,
-        markup: node.outerHTML,
-        insertionIndex: insertionIndex >= 0 ? insertionIndex : undefined
-      });
-    }
-    return { shapes };
+    return this.clipboard.createClipboardPayload(shapeIds);
   }
 
   pasteClipboardPayload(
     payload: ClipboardPayload,
     offset: { dx: number; dy: number }
   ): { insertedIds: string[]; insertedMarkup: string[] } {
-    if (!this.doc.getSVGInstance() || payload.shapes.length === 0) {
-      return { insertedIds: [], insertedMarkup: [] };
-    }
-    const contentGroup = this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
-    const contentNode = contentGroup?.node as Element | undefined;
-    if (!contentNode) return { insertedIds: [], insertedMarkup: [] };
-
-    const usedIds = new Set<string>();
-    contentNode.querySelectorAll('[id]').forEach((el: Element) => {
-      const id = el.id;
-      if (id) usedIds.add(id);
-    });
-
-    const insertedIds: string[] = [];
-    const insertedMarkup: string[] = [];
-
-    for (const shape of payload.shapes) {
-      const wrapper = document.createElementNS(SVG_NS, 'g');
-      wrapper.innerHTML = shape.markup;
-      const root = wrapper.firstElementChild;
-      if (!root) continue;
-
-      const idMap = new Map<string, string>();
-      root.querySelectorAll('[id]').forEach((el) => {
-        const oldId = (el as Element).id;
-        if (!oldId) return;
-        const newId = this.generateUniqueShapeId(usedIds, oldId);
-        idMap.set(oldId, newId);
-      });
-      if (root.id) {
-        const newRootId = this.generateUniqueShapeId(usedIds, root.id);
-        idMap.set(root.id, newRootId);
-      }
-
-      root.querySelectorAll('[id]').forEach((el) => {
-        const mapped = idMap.get((el as Element).id);
-        if (mapped) (el as Element).id = mapped;
-      });
-      if (root.id) {
-        const mapped = idMap.get(root.id);
-        if (mapped) root.id = mapped;
-      }
-
-      this.remapInternalReferences(root, idMap);
-
-      const inserted = root.cloneNode(true) as SVGGraphicsElement;
-      if (offset.dx !== 0 || offset.dy !== 0) {
-        const existing = inserted.getAttribute('transform');
-        const translate = `translate(${offset.dx} ${offset.dy})`;
-        inserted.setAttribute('transform', existing ? `${translate} ${existing}` : translate);
-      }
-
-      contentNode.appendChild(inserted);
-      const insertedId = inserted.id;
-      if (insertedId) insertedIds.push(insertedId);
-
-      insertedMarkup.push(inserted.outerHTML);
-    }
-
-    if (insertedIds.length > 0) {
-      this.doc.bumpDocumentRevision();
-    }
-    return { insertedIds, insertedMarkup };
-  }
-
-  private generateUniqueShapeId(usedIds: Set<string>, baseId?: string): string {
-    let newId = '';
-    const normalizedBase = baseId && baseId.trim() ? baseId.trim() : 'shape';
-    do {
-      newId = `${normalizedBase}-copy-${Math.random().toString(36).slice(2, 8)}`;
-    } while (usedIds.has(newId));
-    usedIds.add(newId);
-    return newId;
-  }
-
-  private remapInternalReferences(root: Element, idMap: Map<string, string>): void {
-    const remapValue = (raw: string): string => {
-      let next = raw;
-      next = next.replace(URL_REF_RE, (_match, quote: string, refId: string) => {
-        const mapped = idMap.get(refId);
-        return mapped ? `url(${quote}#${mapped}${quote})` : _match;
-      });
-      if (next.startsWith('#')) {
-        const refId = next.slice(1);
-        const mapped = idMap.get(refId);
-        if (mapped) return `#${mapped}`;
-      }
-      return next;
-    };
-
-    const remapNode = (node: Element): void => {
-      for (const name of node.getAttributeNames()) {
-        const value = node.getAttribute(name);
-        if (!value) continue;
-        const remapped = remapValue(value);
-        if (remapped !== value) {
-          node.setAttribute(name, remapped);
-        }
-      }
-      for (const child of Array.from(node.children)) {
-        remapNode(child);
-      }
-    };
-
-    remapNode(root);
+    return this.clipboard.pasteClipboardPayload(payload, offset);
   }
 }

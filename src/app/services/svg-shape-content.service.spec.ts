@@ -26,7 +26,7 @@ describe('SvgShapeContentService', () => {
     const id = shapes.addShape('rect', { x: 5, y: 5, width: 20, height: 20, fill: '#112233' });
     expect(id).toBeTruthy();
     const el = doc.getSVGInstance()!.findOne(`#${id}`)!;
-    const props = shapes.getShapeProperties(el);
+    const props = shapes.getShapeProperties(el as unknown as import('@svgdotjs/svg.js').Element);
     expect(props.id).toBe(id);
     expect(props.fill).toBe('#112233');
   });
