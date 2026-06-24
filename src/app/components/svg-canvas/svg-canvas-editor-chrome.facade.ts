@@ -122,6 +122,9 @@ export class SvgCanvasEditorChromeFacade {
   get penContinuationGhostPathD(): string | null {
     return this.root.penContinuationGhostPathD;
   }
+  get penPostInsertAnchorOverlays() {
+    return this.root.penPostInsertAnchorOverlays;
+  }
   get penSessionPathNodeOverlays() {
     return this.root.penSessionPathNodeOverlays;
   }
@@ -159,25 +162,25 @@ export class SvgCanvasEditorChromeFacade {
     return this.root.rotateHandleOffset;
   }
   get isInlineTextEditModeActive(): boolean {
-    return this.root.isInlineTextEditModeActive;
+    return this.root.inlineTextEditSession.isActive;
   }
   get inlineTextEditOverlayRect() {
-    return this.root.inlineTextEditOverlayRect;
+    return this.root.inlineTextEditSession.overlayRect;
   }
   get inlineTextEditorHint(): string {
-    return this.root.inlineTextEditorHint;
+    return this.root.inlineTextEditSession.inlineTextEditorHint;
   }
   get inlineTextEditValue(): string {
-    return this.root.inlineTextEditValue;
+    return this.root.inlineTextEditSession.value;
   }
   inlineTextEditorTypographyStyle(): string {
-    return this.root.inlineTextEditorTypographyStyle();
+    return this.root.inlineTextEditSession.typographyStyle();
   }
   inlineTextEditWidthPx(rect: { width: number }): number {
-    return this.root.inlineTextEditWidthPx(rect);
+    return this.root.inlineTextEditSession.overlayWidthPx(rect);
   }
   inlineTextEditHeightPx(rect: { height: number }): number {
-    return this.root.inlineTextEditHeightPx(rect);
+    return this.root.inlineTextEditSession.overlayHeightPx(rect);
   }
   get zoomMarqueeRect() {
     return this.root.zoomMarqueeRect;

@@ -27,7 +27,10 @@ describe('smart guide overlay SVG namespace', () => {
     component.wrapperHeight = 100;
     component.overlayViewBox = '0 0 100 100';
 
-    const resizeHandler = component['resize'] as { isActive: boolean; smartGuides: { vertical: number[]; horizontal: number[] } };
+    const resizeHandler = component['resize'] as unknown as {
+      isActive: boolean;
+      smartGuides: { vertical: number[]; horizontal: number[] };
+    };
     resizeHandler.isActive = true;
     resizeHandler.smartGuides = { vertical: [25], horizontal: [30] };
     fixture.detectChanges();
