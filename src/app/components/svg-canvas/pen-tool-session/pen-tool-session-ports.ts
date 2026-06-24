@@ -1,4 +1,5 @@
 import type { CanvasAdapterContext } from '../../../tools/canvas-adapter-context';
+import type { PenToolSessionPathNodeOverlayPort } from './pen-tool-session-path-node-overlay.port';
 import type {
   PenToolSessionHistoryPort,
   PenToolSessionShapeSelectionPort,
@@ -12,6 +13,7 @@ export type PenDiscardReason = 'tool switch' | 'document replace/load';
  * effects, and pen-specific **Chrome** hooks — implemented by the **Canvas adapter**.
  */
 export interface PenToolSessionPorts extends CanvasAdapterContext {
+  pathNodeOverlay: PenToolSessionPathNodeOverlayPort;
   isPenAltCurveMode(): boolean;
   setPenAltCurveMode(enabled: boolean): void;
   svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): {
@@ -36,8 +38,6 @@ export interface PenToolSessionPorts extends CanvasAdapterContext {
   clearPenPostInsertAnchorOverlay(): void;
   /** Idle pen: user starts a new stroke on empty canvas — clear prior selection so path topology follows. */
   clearSelectionForPenBackgroundStroke(): void;
-  /** True when SVG content is present and the canvas view is ready for pen input. */
-  isCanvasReadyForPenInput(): boolean;
   /**
    * After pen closes into `node-edit-selector`, the gesture still delivers a primary `click` that
    * often targets the root `<svg>` (no `id`); the canvas treats that as an empty hit and clears

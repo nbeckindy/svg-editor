@@ -27,9 +27,10 @@ export interface CanvasAdapterReadiness {
 }
 
 /**
- * Coordinate, tool-state, and document-surface slices shared by `CanvasToolHost`,
+ * Coordinate, tool-state, document-surface, and readiness slices shared by `CanvasToolHost`,
  * `PenToolSessionPorts`, pointer/keyboard seams, and `*CanvasToolDeps` getters.
  */
 export type CanvasAdapterContext = CanvasAdapterToolState &
   CanvasAdapterCoordinates &
-  CanvasAdapterDocumentSurface;
+  CanvasAdapterDocumentSurface &
+  CanvasAdapterReadiness;

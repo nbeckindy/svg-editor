@@ -82,7 +82,7 @@ function makeHost(
     updatePathNodeDrag: vi.fn(),
     finishPathNodeDrag: vi.fn(),
     getCurrentTool: () => 'selector',
-    clientToEditorSvgPointForDrag: () => ({ x: 0, y: 0 })
+    clientToEditorSvgPoint: () => ({ x: 0, y: 0 })
   };
   return { ...base, ...over };
 }
@@ -483,17 +483,17 @@ describe('PointerGestureRouter', () => {
   it('onDocumentMouseMove passes document SVG coordinates to registered tool onPointerMove', () => {
     const onPointerMove = vi.fn();
     patchRegisteredCanvasTool(registry, 'rect', { onPointerMove });
-    const clientToEditorSvgPointForDrag = vi.fn((clientX: number, clientY: number) => ({
+    const clientToEditorSvgPoint = vi.fn((clientX: number, clientY: number) => ({
       x: clientX + 100,
       y: clientY + 200
     }));
     const host = makeHost(
-      { getCurrentTool: () => 'rect', clientToEditorSvgPointForDrag },
+      { getCurrentTool: () => 'rect', clientToEditorSvgPoint },
       hostState
     );
     const event = { clientX: 3, clientY: 4, shiftKey: false } as MouseEvent;
     router.onDocumentMouseMove(host, event);
-    expect(clientToEditorSvgPointForDrag).toHaveBeenCalledWith(3, 4);
+    expect(clientToEditorSvgPoint).toHaveBeenCalledWith(3, 4);
     expect(onPointerMove).toHaveBeenCalledWith(event, { x: 103, y: 204 });
   });
 
@@ -511,17 +511,17 @@ describe('PointerGestureRouter', () => {
   it('onDocumentMouseUp passes document SVG coordinates to registered tool onPointerUp', () => {
     const onPointerUp = vi.fn();
     patchRegisteredCanvasTool(registry, 'rect', { onPointerUp });
-    const clientToEditorSvgPointForDrag = vi.fn((clientX: number, clientY: number) => ({
+    const clientToEditorSvgPoint = vi.fn((clientX: number, clientY: number) => ({
       x: clientX + 50,
       y: clientY + 60
     }));
     const host = makeHost(
-      { getCurrentTool: () => 'rect', clientToEditorSvgPointForDrag },
+      { getCurrentTool: () => 'rect', clientToEditorSvgPoint },
       hostState
     );
     const event = { button: 0, clientX: 1, clientY: 2 } as MouseEvent;
     router.onDocumentMouseUp(host, event);
-    expect(clientToEditorSvgPointForDrag).toHaveBeenCalledWith(1, 2);
+    expect(clientToEditorSvgPoint).toHaveBeenCalledWith(1, 2);
     expect(onPointerUp).toHaveBeenCalledWith(event, { x: 51, y: 62 });
   });
 });

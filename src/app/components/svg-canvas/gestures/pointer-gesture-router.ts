@@ -5,17 +5,12 @@ import type {
 } from '../../../tools/canvas-adapter-context';
 import type { ToolRegistryService } from '../../../tools/tool-registry.service';
 
-/** Drag-time coordinate mapping (same contract as {@link CanvasAdapterCoordinates}). */
-export interface CanvasAdapterDragCoordinates {
-  clientToEditorSvgPointForDrag(clientX: number, clientY: number): CanvasSvgPoint | null;
-}
-
 /**
  * Narrow surface the canvas exposes for pointer-orchestration (document + canvas
  * routing). Keeps {@link PointerGestureRouter} independent of the full component graph.
  */
 export interface SvgCanvasPointerGestureHost
-  extends Pick<CanvasAdapterToolState, 'getCurrentTool'>, CanvasAdapterDragCoordinates {
+  extends Pick<CanvasAdapterToolState, 'getCurrentTool'>, CanvasAdapterCoordinates {
   getPathNodeDragSession(): unknown | null;
   updatePathNodeDrag(clientX: number, clientY: number): void;
   finishPathNodeDrag(): void;
@@ -28,7 +23,7 @@ export class PointerGestureRouter {
     host: SvgCanvasPointerGestureHost,
     event: MouseEvent
   ): CanvasSvgPoint | null {
-    return host.clientToEditorSvgPointForDrag(event.clientX, event.clientY);
+    return host.clientToEditorSvgPoint(event.clientX, event.clientY);
   }
 
   private dispatchRegisteredPointerDown(host: SvgCanvasPointerGestureHost, event: MouseEvent): boolean {
