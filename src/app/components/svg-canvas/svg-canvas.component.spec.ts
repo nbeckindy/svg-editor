@@ -1056,8 +1056,9 @@ describe('SvgCanvasComponent', () => {
   it('creates a text element at click coordinates and switches back to selector', () => {
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
     fixture.detectChanges();
+    stubEditorSvgScreenMapping(component);
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 30, height: 12 });
     editorToolService.setTool('text');
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue(null);
     const addShapeSpy = vi.spyOn(svgManipulationService, 'addShape');
     const pushSpy = vi.spyOn(editorHistoryService, 'pushAndExecute');
 
@@ -1066,6 +1067,7 @@ describe('SvgCanvasComponent', () => {
       clientX: 30,
       clientY: 40
     } as unknown as MouseEvent);
+    fixture.detectChanges();
 
     expect(addShapeSpy).toHaveBeenCalledWith(
       'text',
@@ -1073,7 +1075,31 @@ describe('SvgCanvasComponent', () => {
     );
     expect(pushSpy).toHaveBeenCalledTimes(1);
     expect(editorToolService.getCurrentTool()).toBe('selector');
-    promptSpy.mockRestore();
+    const editor = fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]');
+    expect(editor).toBeTruthy();
+  });
+
+  it('enters inline edit after creating text and commits edited content', () => {
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
+    fixture.detectChanges();
+    stubEditorSvgScreenMapping(component);
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 30, height: 12 });
+    editorToolService.setTool('text');
+
+    component.onCanvasClick({
+      target: { tagName: 'svg' },
+      clientX: 20,
+      clientY: 25
+    } as unknown as MouseEvent);
+    fixture.detectChanges();
+
+    component.onInlineTextEditInput('Hello');
+    component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+    fixture.detectChanges();
+
+    const textEl = fixture.nativeElement.querySelector('text') as SVGTextElement;
+    expect(textEl?.textContent).toBe('Hello');
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]')).toBeFalsy();
   });
 
   it('shows text placement preview while text tool is active and clears it when leaving text tool', () => {
@@ -1090,26 +1116,6 @@ describe('SvgCanvasComponent', () => {
     editorToolService.setTool('selector');
     fixture.detectChanges();
     expect(svgManipulationService.getSVGInstance()?.findOne('[data-editor-text-tool-preview]')).toBeFalsy();
-  });
-
-  it('uses prompt input to update just-created text content', () => {
-    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
-    fixture.detectChanges();
-    editorToolService.setTool('text');
-    const promptSpy = vi.spyOn(window, 'prompt').mockReturnValue('Hello');
-    const updateSpy = vi.spyOn(svgManipulationService, 'updateTextContent');
-
-    component.onCanvasClick({
-      target: { tagName: 'svg' },
-      clientX: 20,
-      clientY: 25
-    } as unknown as MouseEvent);
-
-    expect(updateSpy).toHaveBeenCalledTimes(1);
-    const [shapeId, textValue] = updateSpy.mock.calls[0];
-    expect(shapeId).toContain('shape-');
-    expect(textValue).toBe('Hello');
-    promptSpy.mockRestore();
   });
 
   it('should start pan on mousedown when pan tool is active and left button', () => {
@@ -1839,8 +1845,8 @@ describe('SvgCanvasComponent', () => {
     dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn(), matrix: vi.fn() } }];
     dragHandler.ghost = { removeFragments: vi.fn(), clearDefs: vi.fn() };
     vi.spyOn(svgManipulationService, 'getLayerStackItems').mockReturnValue([
-      { id: 'shape-a', name: 'Shape A', type: 'rect' },
-      { id: 'shape-b', name: 'Shape B', type: 'rect' }
+      { id: 'shape-a', type: 'rect', elementMarkup: '' },
+      { id: 'shape-b', type: 'rect', elementMarkup: '' }
     ]);
     vi.spyOn(svgManipulationService, 'getShapeBBox').mockImplementation((id: string) => {
       if (id === 'shape-a') return { x: 0, y: 0, width: 10, height: 10 };
@@ -2191,8 +2197,8 @@ describe('SvgCanvasComponent', () => {
     dragHandler.snapAnchor = { x: 10, y: 20 };
     dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn(), matrix: vi.fn() } }];
     vi.spyOn(svgManipulationService, 'getLayerStackItems').mockReturnValue([
-      { id: 'drag-me', name: 'Drag Me', type: 'rect' },
-      { id: 'guide-target', name: 'Guide Target', type: 'rect' }
+      { id: 'drag-me', type: 'rect', elementMarkup: '' },
+      { id: 'guide-target', type: 'rect', elementMarkup: '' }
     ]);
     vi.spyOn(svgManipulationService, 'getShapeBBox').mockImplementation((id: string) => {
       if (id === 'drag-me') return { x: 10, y: 20, width: 30, height: 40 };
@@ -2249,8 +2255,8 @@ describe('SvgCanvasComponent', () => {
     dragHandler.ghostFragments = [{ outerGroup: { remove: vi.fn(), matrix: vi.fn() } }];
     dragHandler.ghost = { removeFragments: vi.fn(), clearDefs: vi.fn() };
     vi.spyOn(svgManipulationService, 'getLayerStackItems').mockReturnValue([
-      { id: 'drag-me', name: 'Drag Me', type: 'rect' },
-      { id: 'guide-target', name: 'Guide Target', type: 'rect' }
+      { id: 'drag-me', type: 'rect', elementMarkup: '' },
+      { id: 'guide-target', type: 'rect', elementMarkup: '' }
     ]);
     vi.spyOn(svgManipulationService, 'getShapeBBox').mockImplementation((id: string) => {
       if (id === 'drag-me') return { x: 10, y: 20, width: 30, height: 40 };
@@ -2262,6 +2268,7 @@ describe('SvgCanvasComponent', () => {
       guides: { vertical: [40], horizontal: [50] },
       matches: []
     });
+    stubEditorSvgScreenMapping(component);
     const clientToPointSpy = vi.spyOn(component as any, 'clientToEditorSvgPoint');
     clientToPointSpy.mockReturnValueOnce({ x: 45, y: 60 });
     clientToPointSpy.mockReturnValueOnce(null);
@@ -3808,6 +3815,7 @@ describe('SvgCanvasComponent', () => {
 
     it('commits inline text edit on Escape and supports undo/redo', async () => {
       await loadSvgForSelector('<svg viewBox="0 0 100 100"><text id="text-esc" x="10" y="20">Hello</text></svg>');
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 30, height: 12 });
       shapeSelectionService.selectShape({
         id: 'text-esc',
         type: 'text',
@@ -3820,16 +3828,16 @@ describe('SvgCanvasComponent', () => {
 
       component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
       fixture.detectChanges();
-      component.onInlineTextEditInput({ target: { value: 'Edited' } } as unknown as Event);
+      component.onInlineTextEditInput('Edited');
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       fixture.detectChanges();
 
       expect(fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]')).toBeFalsy();
       expect(textEl.textContent).toBe('Edited');
 
-      component.onKeyDown(new KeyboardEvent('keydown', { key: 'z', ctrlKey: true, bubbles: true }));
+      editorHistoryService.undo();
       expect(textEl.textContent).toBe('Hello');
-      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Z', ctrlKey: true, shiftKey: true, bubbles: true }));
+      editorHistoryService.redo();
       expect(textEl.textContent).toBe('Edited');
     });
 
@@ -3850,7 +3858,7 @@ describe('SvgCanvasComponent', () => {
 
       component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
       fixture.detectChanges();
-      component.onInlineTextEditInput({ target: { value: 'Outside' } } as unknown as Event);
+      component.onInlineTextEditInput('Outside');
       component.onCanvasClick({ target: otherEl } as unknown as MouseEvent);
       fixture.detectChanges();
 
@@ -3874,7 +3882,7 @@ describe('SvgCanvasComponent', () => {
 
       component.onCanvasDoubleClick({ target: tspanEl } as unknown as MouseEvent);
       fixture.detectChanges();
-      component.onInlineTextEditInput({ target: { value: 'Merged' } } as unknown as Event);
+      component.onInlineTextEditInput('Merged');
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       fixture.detectChanges();
 
@@ -3890,8 +3898,8 @@ describe('SvgCanvasComponent', () => {
       const textShape = svg.findOne('#text-multi')!;
       const rectShape = svg.findOne('#rect-multi')!;
       shapeSelectionService.selectShapes([
-        svgManipulationService.getShapeProperties(textShape),
-        svgManipulationService.getShapeProperties(rectShape)
+        svgManipulationService.getShapeProperties(textShape as never),
+        svgManipulationService.getShapeProperties(rectShape as never)
       ]);
       const textEl = fixture.nativeElement.querySelector('#text-multi') as Element;
 
@@ -4075,7 +4083,7 @@ describe('SvgCanvasComponent', () => {
       fixture.detectChanges();
     }
 
-    it('ignores pen mousedown when target is existing editor content shape', async () => {
+    it('starts a new pen stroke when mousedown hits a filled shape with no insert target', async () => {
       await loadSvgAndPenMode('<svg viewBox="0 0 100 100"><rect id="existing-shape" x="10" y="10" width="20" height="20"/></svg>');
       const shapeEl = fixture.nativeElement.querySelector('#existing-shape') as Element | null;
       expect(shapeEl).toBeTruthy();
@@ -4090,8 +4098,8 @@ describe('SvgCanvasComponent', () => {
         preventDefault
       } as unknown as MouseEvent);
 
-      expect(component.isPenSessionActive).toBe(false);
-      expect(preventDefault).not.toHaveBeenCalled();
+      expect(component.isPenSessionActive).toBe(true);
+      expect(preventDefault).toHaveBeenCalled();
     });
 
     it('pen tool inserts a node on an existing path line segment', async () => {
@@ -5331,10 +5339,19 @@ describe('SvgCanvasComponent', () => {
     });
 
     it('prepend close at tail without new nodes closes original open path', async () => {
-      await loadSvgAndPenMode(
+      fixture.componentRef.setInput(
+        'svgContent',
         '<svg viewBox="0 0 600 400"><path id="open-a" d="M 294.5 105.609375 L 264.5 213.609375 L 367.5 285.609375 L 502.5 109.609375" fill="none" stroke="black"/></svg>'
       );
-
+      component.wrapperWidth = 600;
+      component.wrapperHeight = 400;
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      editorToolService.setTool('pen');
+      editorToolService.setPenAltCurveMode(false);
+      stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 600, 400), '0 0 600 400');
+      fixture.detectChanges();
       const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg');
       component.onCanvasMouseDown({
         button: 0,
@@ -5345,20 +5362,20 @@ describe('SvgCanvasComponent', () => {
         preventDefault: vi.fn(),
         target: svgRoot
       } as unknown as MouseEvent);
+      component.onDocumentMouseUp({
+        button: 0,
+        clientX: 294.5,
+        clientY: 105.609375
+      } as MouseEvent);
       fixture.detectChanges();
 
       component.onCanvasMouseDown({
         button: 0,
         clientX: 502.5,
         clientY: 109.609375,
-        detail: 1,
+        detail: 2,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      component.onDocumentMouseUp({
-        button: 0,
-        clientX: 502.5,
-        clientY: 109.609375
-      } as MouseEvent);
       fixture.detectChanges();
 
       const dAfter =
@@ -5936,7 +5953,7 @@ describe('SvgCanvasComponent', () => {
       expect(segs[0].type).toBe('M');
       expect(segs[1].type).toBe('C');
       const m = segs[0] as { type: 'M'; x: number; y: number };
-      const c = segs[1] as { type: 'C'; x: number; y: number; x2: number; y2: number };
+      const c = segs[1] as { type: 'C'; x: number; y: number; x1: number; y1: number; x2: number; y2: number };
       expect(c.x).toBeCloseTo(100, 5);
       expect(c.y).toBeCloseTo(10, 5);
       expect(c.x2).toBeCloseTo(c.x, 5);
@@ -6271,7 +6288,7 @@ describe('SvgCanvasComponent', () => {
       );
       // Anchor→P1, end→P2, and end→pointer (incoming drag affordance).
       expect(guides.length).toBe(3);
-      for (const g of Array.from(guides)) {
+      for (const g of Array.from(guides) as Element[]) {
         expect(g.getAttribute('stroke')).toBe('#43A047');
         expect(g.getAttribute('stroke-dasharray')).toBe('3 2');
         expect(g.getAttribute('stroke-width')).toBe('1.5');

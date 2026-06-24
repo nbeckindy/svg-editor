@@ -36,12 +36,9 @@ import {
   UngroupElementsCommand,
   AddShapeCommand,
   AddPathCommand,
-  EditPathNodesCommand,
-  SetPathNodeHandleLinkCommand,
   CompositeCommand,
   PasteCommand,
   DuplicateCommand,
-  TextContentCommand,
 } from '../../models/editor-commands';
 import {
   DragGesture,
@@ -57,33 +54,27 @@ import {
   type SvgCanvasPointerGestureHost
 } from './gestures';
 import { PenToolSession, type PenToolSessionPorts } from './pen-tool-session/pen-tool-session';
+import {
+  PathNodeEditSession,
+  type PathNodeDragSession,
+  type PathNodeEditSessionPorts
+} from './path-node-edit-session/path-node-edit-session';
+import {
+  collectPathControlHandles,
+  collectPathNodeAnchors,
+  PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ
+} from './path-node-edit-geometry';
+import { createCanvasAdapterContext } from '../../tools/create-canvas-adapter-context';
+import type { SelectorKeyboardActionsPort } from './selector-canvas-tool-keyboard';
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
 import type { CanvasToolHost } from '../../tools/canvas-tool-host.interface';
 import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createSvgCanvasPointerStack } from './svg-canvas-pointer-stack.factory';
-import { lastCommittedVertex, penSvgDistanceSq } from '../../models/pen-path';
-import { parsePathD, parsePathDForNodeEditing, pathSegmentsToD, type PathSegment } from '../../models/path-d';
+import { penSvgDistanceSq } from '../../models/pen-path';
+import { parsePathDForNodeEditing } from '../../models/path-d';
 import { buildPathSelectionOutlineOverlayD } from '../../models/path-selection-outline';
-import {
-  convertPathAnchorAtMoveSegmentIndexToCorner,
-  convertPathAnchorAtMoveSegmentIndexToIndependentHandles,
-  convertPathAnchorAtMoveSegmentIndexToMirrorCubic,
-  getIndependentHandlesJointUiState,
-  isIndependentHandlesJointActionable,
-  getMirrorCubicJointUiState,
-  isPathNodeCornerAnchorAlreadyApplied,
-  PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK,
-  resolvePathNodeConversionLegs
-} from '../../models/path-node-anchor-convert';
-import { applySymmetricCubicControlDragInPlace } from '../../models/path-node-cubic-handle-mirror';
-import {
-  parsePathNodeHandleLinkMap,
-  remapPathNodeHandleLinkMapByStableAnchors,
-  serializePathNodeHandleLinkMap,
-  type PathNodeHandleLinkMap
-} from '../../models/path-node-handle-link';
 import { findPenPathInsertHit } from '../../models/path-pen-insert';
 import { ClipboardService } from '../../services/clipboard.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
@@ -100,16 +91,18 @@ import { EditorPointerIntentDebugService } from '../../services/editor-pointer-i
 import { buildPointerIntentSnapshot } from './gestures/pointer-intent-debug';
 import { sampleSolidComputedPaint } from '../../utils/svg-computed-color-sample';
 import {
-  inlineTextEditorFontShorthand,
-  resolveInlineTextEditorTypography
-} from '../../utils/svg-inline-text-typography';
+  InlineTextEditSession,
+  type InlineTextEditSessionPorts
+} from './inline-text-edit-session/inline-text-edit-session';
 import { SelectionOverlayComponent } from './overlays/selection-overlay.component';
+import { InlineTextEditorOverlayComponent } from './overlays/inline-text-editor-overlay.component';
 import { PathNodeOverlayComponent } from './overlays/path-node-overlay.component';
 import { RulerOverlayComponent } from './overlays/ruler-overlay.component';
 import { GridOverlayComponent } from './overlays/grid-overlay.component';
 import { SmartGuideOverlayComponent } from './overlays/smart-guide-overlay.component';
-import type { GridLineOverlay, SmartGuideLineOverlay } from './overlays/canvas-guide-overlay.model';
 import { SnapCandidateShape } from '../../services/snap.service';
+import { CanvasViewportChromePresenter, type CanvasViewportChromePresenterHost } from './canvas-viewport-chrome.presenter';
+import type { PenToolSessionSvgPort } from './pen-tool-session/pen-tool-session-svg.port';
 
 /**
  * **Canvas adapter** seams (Editor runtime): keyboard policy → `svg-canvas-keyboard.controller.ts`;
@@ -117,8 +110,8 @@ import { SnapCandidateShape } from '../../services/snap.service';
  * {@link SvgCanvasEditorChromeFacade}.
  */
 
-/** Target number of major ticks visible across the ruler at any zoom level. */
-const RULER_TICK_COUNT = 30;
+/** After loading SVG, fit the editor stage in the canvas with this much inset (margin). */
+const INITIAL_LOAD_VIEWPORT_FIT_FRACTION = 0.88;
 
 const CONTENT_SHAPE_TAGS = new Set([
   'circle',
@@ -134,10 +127,6 @@ const CONTENT_SHAPE_TAGS = new Set([
   'g'
 ]);
 
-/** After loading SVG, fit the editor stage in the canvas with this much inset (margin). */
-const INITIAL_LOAD_VIEWPORT_FIT_FRACTION = 0.88;
-/** When a drawable segment ends at the subpath start and is followed by `Z`, skip a duplicate node-edit anchor (squared distance in user space). */
-const PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ = 1e-6;
 const PATH_NODE_EDIT_FEEDBACK_DURATION_MS = 1400;
 const ALIGN_LEFT_SHORTCUT = 'ArrowLeft';
 const ALIGN_RIGHT_SHORTCUT = 'ArrowRight';
@@ -166,50 +155,6 @@ interface PathNodeControlHandle {
   vertexMoveSegmentIndex: number;
 }
 
-interface PathNodeEditPathState {
-  pathId: string;
-  anchors: PathNodePoint[];
-  controlHandles: PathNodeControlHandle[];
-}
-
-interface PathNodeSelectionState {
-  pathId: string;
-  moveSegmentIndex: number;
-}
-
-interface PathNodeEditState {
-  paths: PathNodeEditPathState[];
-  activePathId: string | null;
-}
-
-interface PathNodeEditStateBuildResult {
-  state: PathNodeEditPathState | null;
-  reason: string | null;
-}
-
-interface PathNodeDragSession {
-  pathId: string;
-  oldD: string;
-  segments: PathSegment[];
-  target:
-    | { kind: 'anchor'; index: number }
-    | { kind: 'control'; index: number };
-}
-
-interface InlineTextEditState {
-  textId: string;
-  originalText: string;
-}
-
-/** Round to nearest "nice" step (1, 2, 5 × 10^n) for readable labels. */
-function roundToNiceStep(value: number): number {
-  if (value <= 0 || !Number.isFinite(value)) return 1;
-  const exp = Math.floor(Math.log10(value));
-  const mag = Math.pow(10, exp);
-  const normalized = value / mag;
-  const nice = normalized <= 1.5 ? 1 : normalized <= 3.5 ? 2 : normalized <= 7.5 ? 5 : 10;
-  return mag * nice;
-}
 
 /** 10%–1000% zoom band for TUX-5 inverse-scale formulas; avoids div-by-zero and runaway values. */
 const SELECTION_CHROME_ZOOM_CLAMP_MIN = 0.1;
@@ -257,7 +202,8 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
     PathNodeOverlayComponent,
     RulerOverlayComponent,
     GridOverlayComponent,
-    SmartGuideOverlayComponent
+    SmartGuideOverlayComponent,
+    InlineTextEditorOverlayComponent
   ],
   templateUrl: './svg-canvas.component.html',
   styleUrl: './svg-canvas.component.css',
@@ -280,7 +226,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
   private readonly groupStructureChange = inject(GroupStructureChangeService);
   readonly rulerOverlay = viewChild(RulerOverlayComponent);
-  readonly inlineTextEditor = viewChild<ElementRef<HTMLTextAreaElement>>('inlineTextEditor');
+  readonly inlineTextEditorOverlay = viewChild(InlineTextEditorOverlayComponent);
   altKeyPressed = false;
   isPanning = false;
   overlayViewBox = '0 0 100 100';
@@ -289,77 +235,20 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   rulerOriginOffsetX = 0;
   rulerOriginOffsetY = 0;
 
+  private readonly viewportChrome: CanvasViewportChromePresenter;
+
   get overlayWidthPx(): number {
-    return this.wrapperWidth * this.canvasView.scale;
+    return this.viewportChrome.overlayWidthPx;
   }
   get overlayHeightPx(): number {
-    return this.wrapperHeight * this.canvasView.scale;
+    return this.viewportChrome.overlayHeightPx;
   }
   get zoomLevelPercent(): number {
-    return Math.round(this.canvasView.scale * 100);
-  }
-
-  get isInlineTextEditModeActive(): boolean {
-    return this.inlineTextEditState !== null;
-  }
-
-  get inlineTextEditValue(): string {
-    return this.inlineTextEditDraft;
-  }
-
-  get inlineTextEditOverlayRect(): { x: number; y: number; width: number; height: number } | null {
-    if (!this.inlineTextEditState) return null;
-    const bbox =
-      this.svgManipulation.getShapeBBox(this.inlineTextEditState.textId) ??
-      this.svgManipulation.getShapeBBox(this.inlineTextEditState.textId, { preferScreenBounds: false });
-    if (!bbox) return null;
-    return this.svgBboxToOverlayPixels(bbox);
-  }
-
-  inlineTextEditWidthPx(rect: { width: number }): number {
-    return Math.max(24, rect.width);
-  }
-
-  inlineTextEditHeightPx(rect: { height: number }): number {
-    return Math.max(18, rect.height);
-  }
-
-  /** Tooltip for the floating SVG text editor (a11y / TER polish). */
-  readonly inlineTextEditorHint =
-    'Edits canvas text. Press Escape or click outside the editor to apply changes.';
-
-  /**
-   * `font` shorthand for the inline HTML editor so it tracks the target `<text>` (see
-   * `resolveInlineTextEditorTypography` for SVG vs DOM font limitations).
-   */
-  inlineTextEditorTypographyStyle(): string {
-    if (!this.inlineTextEditState) {
-      return inlineTextEditorFontShorthand({
-        fontSizePx: 14,
-        fontFamily: 'sans-serif',
-        fontWeight: 'normal',
-        fontStyle: 'normal',
-        lineHeight: 1.2
-      });
-    }
-    const svg = this.svgManipulation.getSVGInstance();
-    const shape = svg?.findOne(`#${this.inlineTextEditState.textId}`) as SVGElement | undefined;
-    const node = shape?.node ?? null;
-    const props = shape ? this.svgManipulation.getShapeProperties(shape) : null;
-    const t = resolveInlineTextEditorTypography(node, props, (b) => this.svgBboxToOverlayPixels(b));
-    return inlineTextEditorFontShorthand(t);
+    return this.viewportChrome.zoomLevelPercent;
   }
 
   get horizontalRulerTicks(): { position: number; value: number; major: boolean }[] {
-    const originX = this.rulerOriginOffsetX + this.canvasView.panX;
-    return this.getRulerTicks(
-      (0 - originX) / this.canvasView.scale,
-      (this.wrapperWidth - originX) / this.canvasView.scale,
-      this.canvasView.scale,
-      (svgVal) => this.rulerOriginOffsetX + this.canvasView.panX + svgVal * this.canvasView.scale,
-      this.wrapperWidth,
-      RULER_TICK_COUNT
-    );
+    return this.viewportChrome.horizontalRulerTicks;
   }
 
   get showResizeHandles(): boolean {
@@ -402,173 +291,32 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   get verticalRulerTicks(): { position: number; value: number; major: boolean }[] {
-    const originY = this.rulerOriginOffsetY + this.canvasView.panY;
-    return this.getRulerTicks(
-      (0 - originY) / this.canvasView.scale,
-      (this.wrapperHeight - originY) / this.canvasView.scale,
-      this.canvasView.scale,
-      (svgVal) => this.rulerOriginOffsetY + this.canvasView.panY + svgVal * this.canvasView.scale,
-      this.wrapperHeight,
-      Math.max(1, Math.floor(RULER_TICK_COUNT / 2))
-    );
+    return this.viewportChrome.verticalRulerTicks;
   }
 
   get showGridOverlay(): boolean {
-    return (
-      this.editorTool.isGridSnapEnabled() &&
-      !!this.svgContent() &&
-      this.wrapperWidth > 0 &&
-      this.wrapperHeight > 0 &&
-      this.canvasView.scale > 0
-    );
+    return this.viewportChrome.showGridOverlay;
   }
 
+  get verticalGridLines() {
+    return this.viewportChrome.verticalGridLines;
+  }
+
+  get horizontalGridLines() {
+    return this.viewportChrome.horizontalGridLines;
+  }
+
+  /** Grid spacing in root SVG user units (coarsens when zoomed out). */
   get gridStepSvgUnits(): number {
-    const baseStep = 10;
-    const minScreenSpacingPx = 16;
-    const maxScreenSpacingPx = 48;
-    const scale = this.canvasView.scale;
-    if (scale <= 0 || !Number.isFinite(scale)) return baseStep;
-
-    let step = baseStep;
-    let screenSpacing = step * scale;
-    if (screenSpacing < minScreenSpacingPx) {
-      while (screenSpacing < minScreenSpacingPx) {
-        step *= 2;
-        screenSpacing *= 2;
-      }
-      return step;
-    }
-    while (screenSpacing > maxScreenSpacingPx && step > baseStep / 64) {
-      step /= 2;
-      screenSpacing /= 2;
-    }
-    return step;
+    return this.viewportChrome.gridStepSvgUnits;
   }
 
-  get verticalGridLines(): GridLineOverlay[] {
-    if (!this.showGridOverlay) return [];
-    const { minSvgX, maxSvgX, minSvgY, maxSvgY } = this.getVisibleSvgBoundsFromRulerFrame();
-    const step = this.gridStepSvgUnits;
-    const majorStep = step * 5;
-    const first = Math.floor(minSvgX / step) * step;
-    const out: GridLineOverlay[] = [];
-    for (let x = first; x <= maxSvgX + step * 0.5; x += step) {
-      const xOverlay = this.svgBboxToOverlayPixels({ x, y: minSvgY, width: 0, height: 0 }).x;
-      const top = this.svgBboxToOverlayPixels({ x, y: minSvgY, width: 0, height: 0 }).y;
-      const bottom = this.svgBboxToOverlayPixels({ x, y: maxSvgY, width: 0, height: 0 }).y;
-      const major = Math.abs((x / majorStep) - Math.round(x / majorStep)) < 1e-6;
-      out.push({
-        key: `vx-${x.toFixed(4)}`,
-        x1: xOverlay,
-        y1: Math.min(top, bottom),
-        x2: xOverlay,
-        y2: Math.max(top, bottom),
-        major
-      });
-    }
-    return out;
+  get verticalSmartGuideLines() {
+    return this.viewportChrome.verticalSmartGuideLines;
   }
 
-  get horizontalGridLines(): GridLineOverlay[] {
-    if (!this.showGridOverlay) return [];
-    const { minSvgX, maxSvgX, minSvgY, maxSvgY } = this.getVisibleSvgBoundsFromRulerFrame();
-    const step = this.gridStepSvgUnits;
-    const majorStep = step * 5;
-    const first = Math.floor(minSvgY / step) * step;
-    const out: GridLineOverlay[] = [];
-    for (let y = first; y <= maxSvgY + step * 0.5; y += step) {
-      const yOverlay = this.svgBboxToOverlayPixels({ x: minSvgX, y, width: 0, height: 0 }).y;
-      const left = this.svgBboxToOverlayPixels({ x: minSvgX, y, width: 0, height: 0 }).x;
-      const right = this.svgBboxToOverlayPixels({ x: maxSvgX, y, width: 0, height: 0 }).x;
-      const major = Math.abs((y / majorStep) - Math.round(y / majorStep)) < 1e-6;
-      out.push({
-        key: `hy-${y.toFixed(4)}`,
-        x1: Math.min(left, right),
-        y1: yOverlay,
-        x2: Math.max(left, right),
-        y2: yOverlay,
-        major
-      });
-    }
-    return out;
-  }
-
-  get verticalSmartGuideLines(): SmartGuideLineOverlay[] {
-    if (this.altKeyPressed) return [];
-    const guides = this.isDraggingShape
-      ? this.drag.activeGuides.vertical
-      : this.isResizingSelection
-        ? this.resize.activeGuides.vertical
-        : [];
-    if (guides.length === 0 || this.overlayHeightPx <= 0) return [];
-    return guides.map((x) => {
-      const mapped = this.svgBboxToOverlayPixels({ x, y: 0, width: 0, height: 0 });
-      return {
-        key: `smart-v-${x.toFixed(4)}`,
-        x1: mapped.x,
-        y1: 0,
-        x2: mapped.x,
-        y2: this.overlayHeightPx
-      };
-    });
-  }
-
-  get horizontalSmartGuideLines(): SmartGuideLineOverlay[] {
-    if (this.altKeyPressed) return [];
-    const guides = this.isDraggingShape
-      ? this.drag.activeGuides.horizontal
-      : this.isResizingSelection
-        ? this.resize.activeGuides.horizontal
-        : [];
-    if (guides.length === 0 || this.overlayWidthPx <= 0) return [];
-    return guides.map((y) => {
-      const mapped = this.svgBboxToOverlayPixels({ x: 0, y, width: 0, height: 0 });
-      return {
-        key: `smart-h-${y.toFixed(4)}`,
-        x1: 0,
-        y1: mapped.y,
-        x2: this.overlayWidthPx,
-        y2: mapped.y
-      };
-    });
-  }
-
-  private getVisibleSvgBoundsFromRulerFrame(): { minSvgX: number; maxSvgX: number; minSvgY: number; maxSvgY: number } {
-    const originX = this.rulerOriginOffsetX + this.canvasView.panX;
-    const originY = this.rulerOriginOffsetY + this.canvasView.panY;
-    const scale = this.canvasView.scale || 1;
-    return {
-      minSvgX: (0 - originX) / scale,
-      maxSvgX: (this.wrapperWidth - originX) / scale,
-      minSvgY: (0 - originY) / scale,
-      maxSvgY: (this.wrapperHeight - originY) / scale
-    };
-  }
-
-  private getRulerTicks(
-    minSvg: number,
-    maxSvg: number,
-    scale: number,
-    toPosition: (svgVal: number) => number,
-    sizePx: number,
-    tickCount: number
-  ): { position: number; value: number; major: boolean }[] {
-    if (sizePx <= 0 || scale <= 0 || tickCount <= 0) return [];
-    const visibleRangeSvg = sizePx / scale;
-    const rawStep = visibleRangeSvg / tickCount;
-    const step = roundToNiceStep(rawStep);
-    const minorStep = step / 2;
-    const first = Math.floor(minSvg / minorStep) * minorStep;
-    const out: { position: number; value: number; major: boolean }[] = [];
-    for (let v = first; v <= maxSvg + minorStep * 0.5; v += minorStep) {
-      const pos = toPosition(v);
-      if (pos >= -0.5 && pos <= sizePx + 0.5) {
-        const isMajor = Math.abs((v / step) - Math.round(v / step)) < 1e-6;
-        out.push({ position: pos, value: isMajor ? Math.round(v) : v, major: isMajor });
-      }
-    }
-    return out;
+  get horizontalSmartGuideLines() {
+    return this.viewportChrome.horizontalSmartGuideLines;
   }
 
   // --- Gesture handlers (assembled in {@link createSvgCanvasPointerStack}) ---
@@ -585,6 +333,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   private readonly pointerGestureRouter: PointerGestureRouter;
 
   readonly penTool: PenToolSession;
+  readonly pathNodeEditSession: PathNodeEditSession;
+  readonly inlineTextEditSession: InlineTextEditSession;
 
   /**
    * **Editor chrome** façade for the template — overlay/ruler/marquee bindings; logic remains on
@@ -594,8 +344,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   private readonly acceptedSvgContent = signal<string>('');
   private lastObservedTool: EditorTool = 'selector';
   private isRevertingToolChange = false;
-  pathNodeEditFeedbackMessage: string | null = null;
-  private pathNodeEditFeedbackTimer: ReturnType<typeof setTimeout> | null = null;
+  get pathNodeEditFeedbackMessage(): string | null {
+    return this.pathNodeEditSession.pathNodeEditFeedbackMessage;
+  }
 
   // Proxy getters for template bindings and inter-gesture guards
   get isDraggingShape(): boolean { return this.drag.isActive; }
@@ -637,49 +388,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     return this.penTool.penInsertOnPathPreviewPathD;
   }
 
-  /**
-   * While dragging to shape a pen insert on an existing path, draw node-edit–style handles and a
-   * planted anchor dot for the vertex being edited (same colors/sizes as path node overlays).
-   */
-  get penInsertOnPathNodeAffordanceOverlay(): {
-    lines: { x1: number; y1: number; x2: number; y2: number }[];
-    knobs: { cx: number; cy: number }[];
-    plantedAnchor: { cx: number; cy: number };
-  } | null {
-    if (!this.penTool.isPenInsertOnPathDragActive) return null;
-    const pathId = this.penTool.penInsertOnPathPathId;
-    const d = this.penInsertOnPathPreviewPathD;
-    const planted = this.penTool.penInsertOnPathPlantedAnchorSvg;
-    if (!pathId || !d || !planted) return null;
-    const plantedPt = this.pathNodeLocalPointToOverlay(pathId, planted.x, planted.y);
-    const plantedAnchor = { cx: plantedPt.x, cy: plantedPt.y };
-    const parsed = this.parsePathDataForNodeEditing(d);
-    if (!parsed) {
-      return { lines: [], knobs: [], plantedAnchor };
-    }
-    const handles = this.collectPathControlHandles(parsed);
-    const lines: { x1: number; y1: number; x2: number; y2: number }[] = [];
-    const knobs: { cx: number; cy: number }[] = [];
-    for (const h of handles) {
-      if (
-        penSvgDistanceSq({ x: h.anchorX, y: h.anchorY }, planted) > PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ
-      ) {
-        continue;
-      }
-      if (
-        penSvgDistanceSq(
-          { x: h.anchorX, y: h.anchorY },
-          { x: h.controlX, y: h.controlY }
-        ) < PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ
-      ) {
-        continue;
-      }
-      const a = this.pathNodeLocalPointToOverlay(pathId, h.anchorX, h.anchorY);
-      const c = this.pathNodeLocalPointToOverlay(pathId, h.controlX, h.controlY);
-      lines.push({ x1: a.x, y1: a.y, x2: c.x, y2: c.y });
-      knobs.push({ cx: c.x, cy: c.y });
-    }
-    return { lines, knobs, plantedAnchor };
+  get penInsertOnPathNodeAffordanceOverlay() {
+    return this.penTool.penInsertOnPathNodeAffordanceOverlay;
   }
 
   get penCurvePreviewPathD(): string | null {
@@ -732,42 +442,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
    * `d` (committed preview plus live curve preview when dragging). `null` when inactive or not parseable.
    * Visual only — template uses class `pen-session-path-node-affordance` so pointer hits pass through.
    */
-  get penSessionPathNodeOverlays(): {
-    anchors: { cx: number; cy: number }[];
-    handles: { x1: number; y1: number; x2: number; y2: number; cx: number; cy: number }[];
-  } | null {
-    if (!this.isPenToolWithActiveSession()) return null;
-    const d = this.penCurvePreviewPathD ?? this.penTool.penSessionPreviewPathD;
-    if (!d?.trim()) return null;
-    const parsed = this.parsePathDataForNodeEditing(d);
-    if (!parsed) return null;
-    const anchorsRaw = this.collectPathNodeAnchors(parsed);
-    if (anchorsRaw.length === 0) return null;
-    const anchors = anchorsRaw.map((a) => {
-      const o = this.penRootUserPointToOverlay(a.x, a.y);
-      return { cx: o.x, cy: o.y };
-    });
-    const handles = this.collectPathControlHandles(parsed)
-      .filter(
-        (h) =>
-          penSvgDistanceSq(
-            { x: h.anchorX, y: h.anchorY },
-            { x: h.controlX, y: h.controlY }
-          ) >= PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ
-      )
-      .map((h) => {
-        const anchor = this.penRootUserPointToOverlay(h.anchorX, h.anchorY);
-        const control = this.penRootUserPointToOverlay(h.controlX, h.controlY);
-        return {
-          x1: anchor.x,
-          y1: anchor.y,
-          x2: control.x,
-          y2: control.y,
-          cx: control.x,
-          cy: control.y
-        };
-      });
-    return { anchors, handles };
+  get penSessionPathNodeOverlays() {
+    return this.penTool.penSessionPathNodeOverlays;
   }
 
   private penRootUserPointToOverlay(rx: number, ry: number): { x: number; y: number } {
@@ -775,8 +451,28 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     return { x: o.x, y: o.y };
   }
 
+  private rootUserPathDToOutlineOverlayD(pathD: string): string | null {
+    const parsed = parsePathDForNodeEditing(pathD);
+    if (!parsed?.some((segment) => segment.type !== 'M')) return null;
+    const d = buildPathSelectionOutlineOverlayD('pen-session', parsed, (_id, rx, ry) =>
+      this.penRootUserPointToOverlay(rx, ry)
+    );
+    return d || null;
+  }
+
+  /** ~18px in screen space, expressed in root SVG user units, for pen path insert hit testing. */
+  private getPenPathInsertToleranceSvg(): number {
+    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
+    if (!mainSvg) return 14;
+    const vb = this.parseOverlayViewBox();
+    const r = mainSvg.getBoundingClientRect();
+    if (!vb || r.width <= 0 || r.height <= 0) return 14;
+    const svgPerPx = (vb.vbW / r.width + vb.vbH / r.height) / 2;
+    return 18 * svgPerPx;
+  }
+
   get isPathNodeEditModeActive(): boolean {
-    return this.pathNodeEditState !== null;
+    return this.pathNodeEditSession.isPathNodeEditModeActive;
   }
 
   /** Hide path node handles during selection transform gestures (stale overlay positions mid-gesture). */
@@ -796,28 +492,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
    * Uses current DOM `d` so it tracks live node drags and parent transforms.
    */
   get pathSelectionOutlineOverlays(): { pathId: string; d: string }[] {
-    if (!this.showPathNodeEditOverlays || !this.pathNodeEditState) return [];
-    const svg = this.svgManipulation.getSVGInstance();
-    if (!svg) return [];
-    const overlays: { pathId: string; d: string }[] = [];
-    for (const pathState of this.pathNodeEditState.paths) {
-      const pathEl = svg.findOne(`#${pathState.pathId}`)?.node as SVGPathElement | null;
-      if (!pathEl) continue;
-      const overlayD = this.pathLocalPathDToOutlineOverlayD(pathState.pathId, pathEl.getAttribute('d') ?? '');
-      if (overlayD) overlays.push({ pathId: pathState.pathId, d: overlayD });
-    }
-    return overlays;
+    if (!this.showPathNodeEditOverlays) return [];
+    return this.pathNodeEditSession.getPathSelectionOutlineOverlays();
   }
 
-  /**
-   * Thin blue outline for the in-progress pen preview (`penSessionPreviewPathD` / curve preview).
-   * Root SVG user space → overlay pixels; same stroke chrome as {@link pathSelectionOutlineOverlays}.
-   */
   get penSessionPathOutlineOverlayD(): string | null {
-    if (!this.isPenToolWithActiveSession()) return null;
-    const sourceD = this.penCurvePreviewPathD ?? this.penSessionPreviewPathD;
-    if (!sourceD?.trim()) return null;
-    return this.rootUserPathDToOutlineOverlayD(sourceD);
+    return this.penTool.penSessionPathOutlineOverlayD;
+  }
+
+  get penPostInsertAnchorOverlays(): { cx: number; cy: number }[] {
+    return this.penTool.penPostInsertAnchorOverlays;
   }
 
   /** Semi-transparent ghost for path boolean preview (root user `d` → overlay pixels). */
@@ -832,53 +516,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     return this.isPathNodeEditModeActive || this.editorTool.getCurrentTool() === 'pen';
   }
 
-  get pathNodeAnchorOverlays(): { cx: number; cy: number; selected: boolean; pathId: string; anchorIndex: number }[] {
-    if (!this.pathNodeEditState) return [];
-    return this.pathNodeEditState.paths.flatMap((pathState) =>
-      pathState.anchors.map((anchor, anchorIndex) => {
-        const overlay = this.pathNodeLocalPointToOverlay(pathState.pathId, anchor.x, anchor.y);
-        return {
-          cx: overlay.x,
-          cy: overlay.y,
-          selected:
-            this.selectedPathNode?.pathId === pathState.pathId &&
-            this.selectedPathNode.moveSegmentIndex === anchor.moveSegmentIndex,
-          pathId: pathState.pathId,
-          anchorIndex
-        };
-      })
-    );
+  get pathNodeAnchorOverlays() {
+    return this.pathNodeEditSession.getPathNodeAnchorOverlays();
   }
 
-  get pathNodeControlHandleOverlays(): {
-    x1: number; y1: number; x2: number; y2: number; cx: number; cy: number; pathId: string; handleIndex: number
-  }[] {
-    if (!this.pathNodeEditState) return [];
-    return this.pathNodeEditState.paths.flatMap((pathState) =>
-      pathState.controlHandles
-        .map((handle, handleIndex) => ({ handle, handleIndex }))
-        .filter(
-          ({ handle }) =>
-            penSvgDistanceSq(
-              { x: handle.anchorX, y: handle.anchorY },
-              { x: handle.controlX, y: handle.controlY }
-            ) >= PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ
-        )
-        .map(({ handle, handleIndex }) => {
-          const anchor = this.pathNodeLocalPointToOverlay(pathState.pathId, handle.anchorX, handle.anchorY);
-          const control = this.pathNodeLocalPointToOverlay(pathState.pathId, handle.controlX, handle.controlY);
-          return {
-            x1: anchor.x,
-            y1: anchor.y,
-            x2: control.x,
-            y2: control.y,
-            cx: control.x,
-            cy: control.y,
-            pathId: pathState.pathId,
-            handleIndex
-          };
-        })
-    );
+  get pathNodeControlHandleOverlays() {
+    return this.pathNodeEditSession.getPathNodeControlHandleOverlays();
   }
 
   // --- Shared selection/highlight state ---
@@ -1052,20 +695,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   drilledIntoGroupId: string | null = null;
-  private pathNodeEditState: PathNodeEditState | null = null;
-  private inlineTextEditState: InlineTextEditState | null = null;
-  private inlineTextEditDraft = '';
-  private selectedPathNode: PathNodeSelectionState | null = null;
-  private pathNodeDragSession: PathNodeDragSession | null = null;
-  private pathNodeDragJustEnded = false;
   private duplicateInvocationCount = 0;
   private duplicateSelectionKey = '';
 
-  /**
-   * Legacy fallback: pen insert on a path **without** shared `pathNodeEditState` drew anchors in-root via
-   * {@link syncPenPostInsertAnchorOverlayDom}. When overlays already cover the path, this stays null.
-   */
-  private penPostInsertAnchorPathId: string | null = null;
   private penInsertCursorRaf = 0;
   private pendingPenInsertHoverClient: { x: number; y: number } | null = null;
   /**
@@ -1078,9 +710,82 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   /** Last pointer position in root SVG user space while the text tool is active (placement preview). */
   private textToolPreviewLastPoint: { x: number; y: number } | null = null;
 
+
+  private createCanvasAdapterContextSlice() {
+    return createCanvasAdapterContext({
+      markForCheck: () => this.cdr.markForCheck(),
+      getCurrentTool: () => this.editorTool.getCurrentTool(),
+      setTool: (tool) => this.editorTool.setTool(tool),
+      clientToEditorSvgPoint: (clientX, clientY) => this.clientToEditorSvgPoint(clientX, clientY),
+      getMainSvgElement: () =>
+        this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null,
+      isEditorContentShapeTarget: (target) => !!(target && this.isEditorContentShapeTarget(target)),
+      isCanvasReady: () => !!(this.svgContent() && this.canvasView.isInitialized())
+    });
+  }
+
+  private createPathNodeEditSessionPorts(): PathNodeEditSessionPorts {
+    return {
+      ...this.createCanvasAdapterContextSlice(),
+      svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
+      svgManipulation: this.svgManipulation,
+      shapeSelection: this.shapeSelection,
+      editorHistory: this.editorHistory,
+      pathNodeEditBridge: this.pathNodeEditBridge,
+      getDrilledIntoGroupId: () => this.drilledIntoGroupId,
+      setDrilledIntoGroupId: (id) => { this.drilledIntoGroupId = id; },
+      setLastBbox: (bbox) => { this.lastBbox = bbox; },
+      clearHighlightRectCache: () => { this._highlightRectCacheKey = ''; }
+    };
+  }
+
+  private exitPathNodeEditMode(): boolean {
+    return this.pathNodeEditSession.exitPathNodeEditMode();
+  }
+
+  private enterPathNodeEditMode(pathIds: string[], preferredPathId?: string): void {
+    this.pathNodeEditSession.enterPathNodeEditMode(pathIds, preferredPathId);
+  }
+
+  private tryDeleteSelectedPathNode(): boolean {
+    return this.pathNodeEditSession.tryDeleteSelectedPathNode();
+  }
+
+  private isPathNodeEditTarget(target: Element): boolean {
+    return this.pathNodeEditSession.isPathNodeEditTarget(target);
+  }
+
+  tryStartPathNodeDrag(target: Element, event: MouseEvent): boolean {
+    return this.pathNodeEditSession.tryStartPathNodeDrag(target, event);
+  }
+
+  updatePathNodeDrag(clientX: number, clientY: number): void {
+    this.pathNodeEditSession.updatePathNodeDrag(clientX, clientY);
+  }
+
+  finishPathNodeDrag(): void {
+    this.pathNodeEditSession.finishPathNodeDrag();
+  }
+
+  private commitPenInsertOnExistingPath(pathId: string, oldD: string, newD: string, insertedMoveSegIndex?: number): void {
+    this.pathNodeEditSession.commitPenInsertOnExistingPath(pathId, oldD, newD, insertedMoveSegIndex);
+  }
+
+  clearPenPostInsertAnchorOverlay(): void {
+    this.pathNodeEditSession.clearPenPostInsertAnchorOverlay();
+  }
+
+  private pathNodeLocalPointToOverlay(pathId: string, lx: number, ly: number): { x: number; y: number } {
+    return this.pathNodeEditSession.pathNodeLocalPointToOverlay(pathId, lx, ly);
+  }
+
+  private pathLocalPathDToOutlineOverlayD(pathId: string, pathD: string): string | null {
+    return this.pathNodeEditSession.pathLocalPathDToOutlineOverlayD(pathId, pathD);
+  }
+
   // --- SvgCanvasPointerGestureHost (pointer router seam) ---
   getPathNodeDragSession(): PathNodeDragSession | null {
-    return this.pathNodeDragSession;
+    return this.pathNodeEditSession.getPathNodeDragSession();
   }
 
   isPenToolWithActiveSession(): boolean {
@@ -1143,11 +848,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   hasPathNodeEditState(): boolean {
-    return this.pathNodeEditState !== null;
-  }
-
-  clientToEditorSvgPointForDrag(clientX: number, clientY: number): { x: number; y: number } | null {
-    return this.clientToEditorSvgPoint(clientX, clientY);
+    return this.pathNodeEditSession.hasPathNodeEditState();
   }
 
   isShapeSelected(id: string): boolean {
@@ -1186,8 +887,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       toolRegistry: this.toolRegistry,
       getSvgContent: () => this.svgContent(),
       getCurrentTool: () => this.editorTool.getCurrentTool(),
-      isSelectorActive: () => this.editorTool.getCurrentTool() === 'selector',
-      commitInlineTextEditIfActive: () => this.commitInlineTextEditIfActive(),
+      commitInlineTextEditIfActive: () => this.inlineTextEditSession.commitIfActive(),
       shouldIgnoreKeyboardShortcuts: (e: KeyboardEvent) => this.shouldIgnoreKeyboardShortcuts(e),
       isDraggingShape: () => this.isDraggingShape,
       isResizingSelection: () => this.isResizingSelection,
@@ -1207,6 +907,28 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       },
       setTool: (tool: EditorTool) => this.editorTool.setTool(tool),
       markForCheck: () => this.cdr.markForCheck(),
+      getViewKeyboardActions: () => ({
+        zoomInAtViewportCenter: () => this.zoomInAtViewportCenter(),
+        zoomOutAtViewportCenter: () => this.zoomOutAtViewportCenter(),
+        resetZoomAndRefreshOverlay: () => {
+          this.canvasView.resetZoom();
+          this.updateViewBoxOverlayRect();
+          this.cdr.detectChanges();
+        },
+        fitArtboardToViewport: () => this.fitArtboardToViewport(),
+        fitContentToViewport: () => this.fitContentToViewport()
+      }),
+      getPathNodeEditState: () => this.pathNodeEditSession.getPathNodeEditState(),
+      tryDeleteSelectedPathNode: () => this.tryDeleteSelectedPathNode()
+    };
+  }
+
+  private getSelectorKeyboardActions(): SelectorKeyboardActionsPort {
+    return {
+      getSvgContent: () => this.svgContent(),
+      svgManipulation: this.svgManipulation,
+      shapeSelection: this.shapeSelection,
+      editorHistory: this.editorHistory,
       selectAllShapesFromDocument: () => this.selectAllShapesFromDocument(),
       copySelectionToClipboard: () => this.copySelectionToClipboard(),
       cutSelectionToClipboard: () => this.cutSelectionToClipboard(),
@@ -1214,18 +936,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       duplicateSelection: () => this.duplicateSelection(),
       groupSelectedShapes: () => this.groupSelectedShapes(),
       ungroupSelectedShape: () => this.ungroupSelectedShape(),
-      zoomInAtViewportCenter: () => this.zoomInAtViewportCenter(),
-      zoomOutAtViewportCenter: () => this.zoomOutAtViewportCenter(),
-      resetZoomAndRefreshOverlay: () => {
-        this.canvasView.resetZoom();
-        this.updateViewBoxOverlayRect();
-        this.cdr.detectChanges();
-      },
-      fitArtboardToViewport: () => this.fitArtboardToViewport(),
-      fitContentToViewport: () => this.fitContentToViewport(),
-      updateViewBoxOverlayRect: () => this.updateViewBoxOverlayRect(),
-      getPathNodeEditState: () => this.pathNodeEditState,
-      tryDeleteSelectedPathNode: () => this.tryDeleteSelectedPathNode(),
       handleAlignmentShortcut: (key: string) => this.handleAlignmentShortcut(key)
     };
   }
@@ -1650,6 +1360,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     private toolRegistry: ToolRegistryService,
     private canvasBoundToolRegistrar: CanvasBoundToolRegistrar
   ) {
+    this.pathNodeEditSession = new PathNodeEditSession(this.createPathNodeEditSessionPorts());
     const pointerStack = createSvgCanvasPointerStack({
       cdr: this.cdr,
       highlightOverlayContainer: this.highlightOverlayContainer,
@@ -1686,6 +1397,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       isSkewingSelection: () => this.isSkewingSelection,
       isRotatingSelection: () => this.isRotatingSelection,
       isDraggingShape: () => this.isDraggingShape,
+      getSelectorKeyboardActions: () => this.getSelectorKeyboardActions(),
       getZoomMarquee: () => this.zoomMarquee,
       isZoomMarquee: () => this.isZoomMarquee,
       commitZoomMarquee: () => this.commitZoomMarquee(),
@@ -1724,6 +1436,25 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.gestureRuntime = pointerStack.gestureRuntime;
     this.pointerGestureRouter = pointerStack.pointerGestureRouter;
     this.penTool = pointerStack.penTool;
+    this.inlineTextEditSession = new InlineTextEditSession(() => this.createInlineTextEditSessionPorts());
+    this.viewportChrome = new CanvasViewportChromePresenter({
+      getWrapperWidth: () => this.wrapperWidth,
+      getWrapperHeight: () => this.wrapperHeight,
+      getRulerOriginOffsetX: () => this.rulerOriginOffsetX,
+      getRulerOriginOffsetY: () => this.rulerOriginOffsetY,
+      getCanvasScale: () => this.canvasView.scale,
+      getCanvasPanX: () => this.canvasView.panX,
+      getCanvasPanY: () => this.canvasView.panY,
+      isGridSnapEnabled: () => this.snap.gridEnabled(),
+      hasSvgContent: () => !!this.svgContent(),
+      isAltKeyPressed: () => this.altKeyPressed,
+      isDraggingShape: () => this.isDraggingShape,
+      isResizingSelection: () => this.isResizingSelection,
+      getDragActiveGuides: () => this.drag.activeGuides,
+      getResizeActiveGuides: () => this.resize.activeGuides,
+      svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
+      getViewBoxOverlayRect: () => this._viewBoxOverlayRect
+    });
     this.editorChrome = new SvgCanvasEditorChromeFacade(this);
 
     effect(() => {
@@ -1774,8 +1505,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         this.penTool.clearDrawingState();
       }
       if (previousTool !== currentTool) {
-        this.toolRegistry.get(previousTool)?.onDeactivate();
-        this.toolRegistry.get(currentTool)?.onActivate(this.createCanvasToolHost());
+        this.toolRegistry.get(previousTool)?.onDeactivate?.();
+        this.toolRegistry.get(currentTool)?.onActivate?.(this.createCanvasToolHost());
       }
       if (!this.toolKeepsOrBuildsPathNodeTopology(currentTool)) {
         this.exitPathNodeEditMode();
@@ -1784,7 +1515,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     effect(() => {
       this.editorHistory.revision();
       this.drilledIntoGroupId = null;
-      if (this.pathNodeEditState) {
+      if (this.pathNodeEditSession.getPathNodeEditState()) {
         const selectedPathIds = this.shapeSelection
           .selectedShapes()
           .map((shape) => shape.id)
@@ -1792,7 +1523,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         if (selectedPathIds.length === 0) {
           this.exitPathNodeEditMode();
         } else {
-          this.enterPathNodeEditMode(selectedPathIds, this.pathNodeEditState.activePathId ?? selectedPathIds[0]);
+          this.enterPathNodeEditMode(
+            selectedPathIds,
+            this.pathNodeEditSession.getPathNodeEditState()?.activePathId ?? selectedPathIds[0]
+          );
         }
       }
       setTimeout(() => this.syncSelectionFromDom(), 0);
@@ -1809,8 +1543,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         this.duplicateInvocationCount = 0;
       }
       if (
-        this.pathNodeEditState &&
-        !shapes.some((shape) => this.pathNodeEditState?.paths.some((state) => state.pathId === shape.id))
+        this.pathNodeEditSession.getPathNodeEditState() &&
+        !shapes.some((shape) => this.pathNodeEditSession.getPathNodeEditState()?.paths.some((state) => state.pathId === shape.id))
       ) {
         this.exitPathNodeEditMode();
       }
@@ -1845,12 +1579,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       }
     });
     effect(() => {
-      void this.editorHistory.revision();
-      if (this.penPostInsertAnchorPathId) {
-        this.syncPenPostInsertAnchorOverlayDom();
-      }
-    });
-    effect(() => {
       const currentTool = this.editorTool.currentTool();
       const shapes = this.shapeSelection.selectedShapes();
       if (!this.isNodeEditSelectorTool(currentTool) && currentTool !== 'pen') return;
@@ -1861,11 +1589,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         this.exitPathNodeEditMode();
         return;
       }
-      const activePathId = this.pathNodeEditState?.activePathId;
+      const activePathId = this.pathNodeEditSession.getPathNodeEditState()?.activePathId;
       const shouldRefresh =
-        !this.pathNodeEditState ||
-        pathIds.length !== this.pathNodeEditState.paths.length ||
-        pathIds.some((id) => !this.pathNodeEditState?.paths.some((state) => state.pathId === id));
+        !this.pathNodeEditSession.getPathNodeEditState() ||
+        pathIds.length !== (this.pathNodeEditSession.getPathNodeEditState()?.paths.length ?? 0) ||
+        pathIds.some((id) => !this.pathNodeEditSession.getPathNodeEditState()?.paths.some((state) => state.pathId === id));
       if (shouldRefresh) {
         this.enterPathNodeEditMode(pathIds, activePathId ?? pathIds[0]);
       }
@@ -1878,17 +1606,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     });
     this.pathNodeEditBridge.register({
       convertSelectedAnchorToCorner: () =>
-        this.tryApplyPathNodeAnchorCornerFromBridge() ? { ok: true } : { ok: false },
+        this.pathNodeEditSession.tryApplyPathNodeAnchorCornerFromBridge() ? { ok: true } : { ok: false },
       convertSelectedAnchorToMirrorCubic: () =>
-        this.tryApplyPathNodeMirrorCubicFromBridge() ? { ok: true } : { ok: false },
+        this.pathNodeEditSession.tryApplyPathNodeMirrorCubicFromBridge() ? { ok: true } : { ok: false },
       convertSelectedAnchorToIndependentHandles: () =>
-        this.tryApplyPathNodeIndependentHandlesFromBridge() ? { ok: true } : { ok: false }
+        this.pathNodeEditSession.tryApplyPathNodeIndependentHandlesFromBridge() ? { ok: true } : { ok: false }
     });
     effect(() => {
       void this.editorTool.currentTool();
       void this.shapeSelection.selectedShapes();
       void this.editorHistory.revision();
-      this.syncPathNodeEditBridgeChrome();
+      this.pathNodeEditSession.syncPathNodeEditBridgeChrome();
     });
     effect(() => {
       this.groupStructureChange.changeRevision();
@@ -1909,7 +1637,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.clearPenInsertHostCursor();
     this.clearPenPostInsertAnchorOverlay();
     this.penTool.dispose();
-    this.clearPathNodeEditFeedback();
+    this.pathNodeEditSession.clearPathNodeEditFeedback();
     this.pathNodeEditBridge.register(null);
     const el = this.canvasViewport()?.nativeElement;
     if (el) {
@@ -1925,46 +1653,82 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   private createCanvasToolHost(): CanvasToolHost {
     return {
-      markForCheck: () => this.cdr.markForCheck(),
-      getCurrentTool: () => this.editorTool.getCurrentTool(),
-      setTool: (tool) => this.editorTool.setTool(tool),
-      clientToEditorSvgPoint: (clientX, clientY) => this.clientToEditorSvgPoint(clientX, clientY),
-      getMainSvgElement: () =>
-        this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null,
-      isEditorContentShapeTarget: (target) => !!(target && this.isEditorContentShapeTarget(target)),
+      ...this.createCanvasAdapterContextSlice(),
       svgManipulation: this.svgManipulation,
       shapeSelection: this.shapeSelection,
       editorHistory: this.editorHistory
     };
   }
 
-  private createPenToolSessionPorts(): PenToolSessionPorts {
+  private createInlineTextEditSessionPorts(): InlineTextEditSessionPorts {
     return {
       markForCheck: () => this.cdr.markForCheck(),
-      getCurrentTool: () => this.editorTool.getCurrentTool(),
+      svgManipulation: this.svgManipulation,
+      editorHistory: this.editorHistory,
+      shapeSelection: this.shapeSelection,
+      svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
+      focusInlineTextEditor: () => {
+        setTimeout(() => this.inlineTextEditorOverlay()?.focusEditor(), 0);
+      },
+      getInlineTextEditorElement: () => this.inlineTextEditorOverlay()?.textareaElement() ?? null
+    };
+  }
+
+  private createPenToolSessionSvgPort(): PenToolSessionSvgPort {
+    const svg = this.svgManipulation;
+    return {
+      getSVGInstance: () => svg.getSVGInstance(),
+      getShapeProperties: (el) => svg.getShapeProperties(el),
+      removeShape: (id) => svg.removeShape(id),
+      insertShapeMarkup: (markup, insertionIndex) => svg.insertShapeMarkup(markup, insertionIndex),
+      getLayerStackItems: () => svg.getLayerStackItems(),
+      getShapeBBox: (shapeId) => svg.getShapeBBox(shapeId),
+      insertPathIntoContentGroup: (d, attrs, options) => svg.insertPathIntoContentGroup(d, attrs, options),
+      setShapeVisibility: (shapeId, visible) => svg.setShapeVisibility(shapeId, visible),
+      updatePathData: (pathId, d) => svg.updatePathData(pathId, d)
+    };
+  }
+
+  private createPenToolSessionPorts(): PenToolSessionPorts {
+    return {
+      ...createCanvasAdapterContext({
+        markForCheck: () => this.cdr.markForCheck(),
+        getCurrentTool: () => this.editorTool.getCurrentTool(),
+        setTool: (tool) => this.editorTool.setTool(tool),
+        clientToEditorSvgPoint: (clientX, clientY) => this.clientToEditorSvgPoint(clientX, clientY),
+        getMainSvgElement: () =>
+          this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null,
+        isEditorContentShapeTarget: (target) => !!(target && this.isEditorContentShapeTarget(target)),
+        isCanvasReady: () => !!(this.svgContent() && this.canvasView.isInitialized())
+      }),
+      pathNodeOverlay: {
+        parsePathDataForNodeEditing: (pathData) => parsePathDForNodeEditing(pathData),
+        collectPathNodeAnchors: (segments) => collectPathNodeAnchors(segments),
+        collectPathControlHandles: (segments) => collectPathControlHandles(segments),
+        pathNodeLocalPointToOverlay: (pathId, lx, ly) => this.pathNodeLocalPointToOverlay(pathId, lx, ly),
+        penRootUserPointToOverlay: (rx, ry) => this.penRootUserPointToOverlay(rx, ry),
+        getPenPostInsertAnchorPathId: () => this.pathNodeEditSession.penPostInsertAnchorPathId,
+        isPathInNodeEditState: (pathId) =>
+          this.pathNodeEditSession.getPathNodeEditState()?.paths.some((state) => state.pathId === pathId) ?? false
+      },
       isPenAltCurveMode: () => this.editorTool.isPenAltCurveMode(),
       setPenAltCurveMode: (enabled) => this.editorTool.setPenAltCurveMode(enabled),
-      setTool: (tool) => this.editorTool.setTool(tool),
-      clientToEditorSvgPoint: (clientX, clientY) => this.clientToEditorSvgPoint(clientX, clientY),
       svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
       parseOverlayViewBox: () => this.parseOverlayViewBox(),
-      getMainSvgElement: () =>
-        this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null,
       confirmDiscardInProgressPath: (reason) =>
         typeof window === 'undefined' ||
         window.confirm(`Discard the current in-progress pen path before ${reason}?`),
-      svgManipulation: this.svgManipulation,
+      svgManipulation: this.createPenToolSessionSvgPort(),
       shapeSelection: this.shapeSelection,
       editorHistory: this.editorHistory,
       penBackspaceShortcutShouldDefer: () =>
-        !!(this.pathNodeEditState || this.inlineTextEditState),
+        !!(this.pathNodeEditSession.hasPathNodeEditState() || this.inlineTextEditSession.isActive),
       setLastBbox: (bbox) => {
         this.lastBbox = bbox;
       },
       clearHighlightRectCache: () => {
         this._highlightRectCacheKey = '';
       },
-      isEditorContentShapeTarget: (target) => !!(target && this.isEditorContentShapeTarget(target)),
       getPenPathInsertToleranceSvg: () => this.getPenPathInsertToleranceSvg(),
       getPathDForId: (pathId: string) => {
         const svg = this.svgManipulation.getSVGInstance();
@@ -1979,7 +1743,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         this.svgManipulation.clearHighlight();
         this.drilledIntoGroupId = null;
       },
-      isCanvasReadyForPenInput: () => !!(this.svgContent() && this.canvasView.isInitialized()),
       armPenClosePostNodeEditEmptyClickSelectionGuard: () =>
         this.armPenClosePostNodeEditEmptyClickSelectionGuard()
     };
@@ -2331,11 +2094,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   onCanvasClick(event: MouseEvent): void {
     const clickTarget = event.target as Element;
-    if (this.inlineTextEditState && !this.isInlineTextEditTarget(clickTarget)) {
-      this.commitInlineTextEditIfActive();
+    if (this.inlineTextEditSession.isActive && !this.inlineTextEditSession.isInlineTextEditTarget(clickTarget)) {
+      this.inlineTextEditSession.commitIfActive();
     }
-    if (this.pathNodeDragJustEnded) {
-      this.pathNodeDragJustEnded = false;
+    if (this.pathNodeEditSession.consumePathNodeDragJustEnded()) {
       return;
     }
     if (this.drag.consumeJustEnded()) return;
@@ -2347,7 +2109,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     const clickedContentShapeEl =
       clickTarget.id && (svgInstanceForClick?.findOne(`#${clickTarget.id}`) as SVGElement);
     const emptyHitNoResolvedShape = !clickedContentShapeEl;
-    if (this.pathNodeEditState && !this.isPathNodeEditTarget(clickTarget)) {
+    if (this.pathNodeEditSession.getPathNodeEditState() && !this.isPathNodeEditTarget(clickTarget)) {
       if (this.editorTool.getCurrentTool() !== 'pen') {
         const nowForPenCloseGuard =
           typeof performance !== 'undefined' && typeof performance.now === 'function'
@@ -2451,23 +2213,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       this._highlightRectCacheKey = '';
     }
     this.editorTool.setTool('selector');
-    this.openTextEditPrompt(newId);
+    this.inlineTextEditSession.tryEnterAfterTextCreate(newId);
     this.cdr.markForCheck();
-  }
-
-  /**
-   * Minimal edit path for newly created text until a dedicated inline editor lands.
-   */
-  private openTextEditPrompt(shapeId: string): void {
-    if (typeof window === 'undefined' || typeof window.prompt !== 'function') return;
-    const svgInstance = this.svgManipulation.getSVGInstance();
-    const shape = svgInstance?.findOne(`#${shapeId}`) as SVGElement | undefined;
-    const node = shape?.node as SVGTextElement | undefined;
-    if (!node || node.tagName.toLowerCase() !== 'text') return;
-    const currentText = node.textContent ?? 'Text';
-    const nextText = window.prompt('Edit text', currentText);
-    if (nextText === null || nextText === currentText) return;
-    this.svgManipulation.updateTextContent(shapeId, nextText);
   }
 
   onCanvasDoubleClick(event: MouseEvent): void {
@@ -2488,7 +2235,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
           ? selectedId
           : (selectedEl.closest('text') as Element | null)?.id ?? null;
       if (!resolvedTextId) return;
-      this.enterInlineTextEditMode(resolvedTextId);
+      this.inlineTextEditSession.enterInlineTextEditMode(resolvedTextId);
       return;
     }
     if (selectedTag !== 'g') return;
@@ -2505,48 +2252,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     }
   }
 
-  onInlineTextEditInput(event: Event): void {
-    const target = event.target as HTMLTextAreaElement | null;
-    this.inlineTextEditDraft = target?.value ?? '';
-  }
-
-  private enterInlineTextEditMode(textId: string): void {
-    const selected = this.shapeSelection.getSelectedShapes();
-    if (selected.length !== 1) return;
-    const text = this.svgManipulation.getTextContent(textId);
-    if (text === null) return;
-    this.inlineTextEditState = {
-      textId,
-      originalText: text
-    };
-    this.inlineTextEditDraft = text;
-    this.cdr.markForCheck();
-    setTimeout(() => {
-      const input = this.inlineTextEditor()?.nativeElement;
-      if (!input) return;
-      input.focus();
-      input.select();
-    }, 0);
-  }
-
-  private commitInlineTextEditIfActive(): boolean {
-    if (!this.inlineTextEditState) return false;
-    const { textId, originalText } = this.inlineTextEditState;
-    const nextText = this.inlineTextEditDraft;
-    if (nextText !== originalText) {
-      const cmd = new TextContentCommand(this.svgManipulation, textId, originalText, nextText);
-      this.editorHistory.pushAndExecute(cmd);
-    }
-    this.inlineTextEditState = null;
-    this.inlineTextEditDraft = '';
-    this.cdr.markForCheck();
-    return true;
-  }
-
-  private isInlineTextEditTarget(target: Element | null): boolean {
-    if (!target) return false;
-    const editor = this.inlineTextEditor()?.nativeElement;
-    return !!editor && (target === editor || editor.contains(target));
+  onInlineTextEditInput(value: string): void {
+    this.inlineTextEditSession.onInput(value);
   }
 
   private getSnappedPenPoint(
@@ -2570,972 +2277,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       x: gridSnapped.x + guideResult.delta.x,
       y: gridSnapped.y + guideResult.delta.y
     };
-  }
-
-  private showPathNodeEditFeedback(message: string): void {
-    this.pathNodeEditFeedbackMessage = message;
-    if (this.pathNodeEditFeedbackTimer) {
-      clearTimeout(this.pathNodeEditFeedbackTimer);
-    }
-    this.pathNodeEditFeedbackTimer = setTimeout(() => {
-      this.pathNodeEditFeedbackMessage = null;
-      this.pathNodeEditFeedbackTimer = null;
-      this.cdr.markForCheck();
-    }, PATH_NODE_EDIT_FEEDBACK_DURATION_MS);
-    this.cdr.markForCheck();
-  }
-
-  private clearPathNodeEditFeedback(): void {
-    if (this.pathNodeEditFeedbackTimer) {
-      clearTimeout(this.pathNodeEditFeedbackTimer);
-      this.pathNodeEditFeedbackTimer = null;
-    }
-    if (this.pathNodeEditFeedbackMessage === null) return;
-    this.pathNodeEditFeedbackMessage = null;
-    this.cdr.markForCheck();
-  }
-
-  private enterPathNodeEditMode(pathIds: string[], preferredPathId?: string): void {
-    const states: PathNodeEditPathState[] = [];
-    let lastReason: string | null = null;
-    for (const pathId of pathIds) {
-      const build = this.buildPathNodeEditState(pathId);
-      if (build.state) {
-        states.push(build.state);
-      } else if (build.reason) {
-        lastReason = build.reason;
-      }
-    }
-    if (states.length === 0) {
-      this.pathNodeEditState = null;
-      this.selectedPathNode = null;
-      this.pathNodeDragSession = null;
-      this.pathNodeDragJustEnded = false;
-      if (lastReason) {
-        this.showPathNodeEditFeedback(lastReason);
-      } else {
-        this.clearPathNodeEditFeedback();
-      }
-      this.syncPathNodeEditBridgeChrome();
-      this.cdr.markForCheck();
-      return;
-    }
-    const activePathId = states.some((state) => state.pathId === preferredPathId)
-      ? (preferredPathId as string)
-      : states[0].pathId;
-    this.pathNodeEditState = { paths: states, activePathId };
-    this.selectedPathNode = null;
-    this.drilledIntoGroupId = null;
-    this.clearPathNodeEditFeedback();
-    this.syncPenPostInsertAnchorOverlayDom();
-    this.syncPathNodeEditBridgeChrome();
-    this.cdr.markForCheck();
-  }
-
-  private exitPathNodeEditMode(): boolean {
-    if (!this.pathNodeEditState) return false;
-    this.pathNodeEditState = null;
-    this.selectedPathNode = null;
-    this.pathNodeDragSession = null;
-    this.pathNodeDragJustEnded = false;
-    this.clearPathNodeEditFeedback();
-    this.syncPenPostInsertAnchorOverlayDom();
-    this.syncPathNodeEditBridgeChrome();
-    this.cdr.markForCheck();
-    return true;
-  }
-
-  private isPathNodeEditTarget(target: Element): boolean {
-    if (!this.pathNodeEditState) return false;
-    const activePathIds = new Set(this.pathNodeEditState.paths.map((state) => state.pathId));
-    if (target.id && activePathIds.has(target.id)) return true;
-    if (typeof target.closest !== 'function') return false;
-    return !!target.closest('[data-path-node-edit-target]');
-  }
-
-  tryStartPathNodeDrag(target: Element, event: MouseEvent): boolean {
-    if (!this.pathNodeEditState) return false;
-    if (typeof target.closest !== 'function') return false;
-    const anchorEl = target.closest('[data-path-node-anchor-index]') as Element | null;
-    const handleEl = target.closest('[data-path-node-handle-index]') as Element | null;
-    if (!anchorEl && !handleEl) return false;
-    const rawPathId = (anchorEl ?? handleEl)?.getAttribute('data-path-node-path-id');
-    if (!rawPathId) return false;
-    const targetPathState = this.pathNodeEditState.paths.find((state) => state.pathId === rawPathId);
-    if (!targetPathState) return false;
-
-    const svg = this.svgManipulation.getSVGInstance();
-    if (!svg) return false;
-    const pathEl = svg.findOne(`#${targetPathState.pathId}`)?.node as SVGPathElement | null;
-    if (!pathEl) return false;
-
-    const oldD = pathEl.getAttribute('d') ?? '';
-    const parsed = this.parsePathDataForNodeEditing(oldD);
-    if (!parsed) return false;
-
-    if (anchorEl) {
-      const index = Number(anchorEl.getAttribute('data-path-node-anchor-index'));
-      if (!Number.isFinite(index) || index < 0 || index >= targetPathState.anchors.length) return false;
-      this.selectedPathNode = {
-        pathId: targetPathState.pathId,
-        moveSegmentIndex: targetPathState.anchors[index].moveSegmentIndex
-      };
-      this.pathNodeEditState.activePathId = targetPathState.pathId;
-      this.pathNodeDragSession = {
-        pathId: targetPathState.pathId,
-        oldD,
-        segments: parsed.map((segment) => ({ ...segment })),
-        target: { kind: 'anchor', index }
-      };
-      this.pathNodeDragJustEnded = false;
-      this.updatePathNodeDrag(event.clientX, event.clientY);
-      this.syncPathNodeEditBridgeChrome();
-      return true;
-    }
-
-    const index = Number(handleEl?.getAttribute('data-path-node-handle-index'));
-    if (!Number.isFinite(index) || index < 0 || index >= targetPathState.controlHandles.length) return false;
-    this.pathNodeEditState.activePathId = targetPathState.pathId;
-    this.pathNodeDragSession = {
-      pathId: targetPathState.pathId,
-      oldD,
-      segments: parsed.map((segment) => ({ ...segment })),
-      target: { kind: 'control', index }
-    };
-    this.pathNodeDragJustEnded = false;
-    this.updatePathNodeDrag(event.clientX, event.clientY);
-    this.syncPathNodeEditBridgeChrome();
-    return true;
-  }
-
-  private tryDeleteSelectedPathNode(): boolean {
-    if (!this.pathNodeEditState) return false;
-    if (this.selectedPathNode === null) {
-      this.showPathNodeEditFeedback('Select a node before deleting.');
-      return true;
-    }
-    const targetPathState = this.pathNodeEditState.paths.find(
-      (state) => state.pathId === this.selectedPathNode?.pathId
-    );
-    if (!targetPathState) return false;
-
-    const selectedAnchorIndex = targetPathState.anchors.findIndex(
-      (anchor) => anchor.moveSegmentIndex === this.selectedPathNode?.moveSegmentIndex
-    );
-    if (selectedAnchorIndex < 0) return false;
-
-    const uniqueMoveSegments = new Set(targetPathState.anchors.map((anchor) => anchor.moveSegmentIndex));
-    const svg = this.svgManipulation.getSVGInstance();
-    const pathEl = svg?.findOne(`#${targetPathState.pathId}`)?.node as SVGPathElement | null;
-    if (!pathEl) return false;
-    const oldD = pathEl.getAttribute('d') ?? '';
-    const parsed = this.parsePathDataForNodeEditing(oldD);
-    if (!parsed) return false;
-
-    const isClosedPath = parsed.some((segment) => segment.type === 'Z');
-    const minimumNodeCount = isClosedPath ? 3 : 2;
-    if (uniqueMoveSegments.size <= minimumNodeCount) {
-      this.showPathNodeEditFeedback(
-        isClosedPath ? 'Closed paths need at least 3 nodes.' : 'Paths need at least 2 nodes.'
-      );
-      return true;
-    }
-
-    const nextSegments = this.removePathAnchorByMoveSegmentIndex(
-      parsed,
-      this.selectedPathNode.moveSegmentIndex
-    );
-    if (!nextSegments) {
-      this.showPathNodeEditFeedback('Unable to delete that node.');
-      return true;
-    }
-
-    const newD = pathSegmentsToD(nextSegments);
-    if (newD === oldD) return true;
-
-    pathEl.setAttribute('d', newD);
-    const cmd = new EditPathNodesCommand(this.svgManipulation, targetPathState.pathId, oldD, newD, true);
-    this.editorHistory.pushAndExecute(cmd);
-
-    const remappedLinks = remapPathNodeHandleLinkMapByStableAnchors(
-      parsed,
-      nextSegments,
-      parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(targetPathState.pathId))
-    );
-    this.pushPathNodeHandleLinkMapIfChanged(targetPathState.pathId, remappedLinks);
-
-    const refreshed = this.buildPathNodeEditState(targetPathState.pathId);
-    if (!refreshed.state) {
-      this.exitPathNodeEditMode();
-      return true;
-    }
-    this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
-      state.pathId === targetPathState.pathId ? refreshed.state! : state
-    );
-    this.pathNodeEditState.activePathId = targetPathState.pathId;
-    const fallbackAnchor = refreshed.state.anchors[Math.max(0, selectedAnchorIndex - 1)];
-    this.selectedPathNode = fallbackAnchor
-      ? { pathId: targetPathState.pathId, moveSegmentIndex: fallbackAnchor.moveSegmentIndex }
-      : null;
-    this.clearPathNodeEditFeedback();
-    this.syncPathNodeEditBridgeChrome();
-    this.cdr.markForCheck();
-    return true;
-  }
-
-  private removePathAnchorByMoveSegmentIndex(
-    segments: readonly PathSegment[],
-    moveSegmentIndex: number
-  ): PathSegment[] | null {
-    const nextSegments = segments.map((segment) => ({ ...segment }));
-    if (moveSegmentIndex < 0 || moveSegmentIndex >= nextSegments.length) return null;
-    const target = nextSegments[moveSegmentIndex];
-    if (!target || target.type === 'Z') return null;
-
-    if (target.type === 'M') {
-      let replacementIndex = moveSegmentIndex + 1;
-      while (replacementIndex < nextSegments.length && nextSegments[replacementIndex].type === 'Z') {
-        replacementIndex++;
-      }
-      if (replacementIndex >= nextSegments.length) return null;
-      const replacement = nextSegments[replacementIndex];
-      if (replacement.type === 'Z') return null;
-      nextSegments[replacementIndex] = {
-        type: 'M',
-        x: replacement.x,
-        y: replacement.y
-      };
-      nextSegments.splice(moveSegmentIndex, 1);
-      return nextSegments;
-    }
-
-    nextSegments.splice(moveSegmentIndex, 1);
-    return nextSegments;
-  }
-
-  private syncPathNodeEditBridgeChrome(): void {
-    const toolIsNodeEdit = this.editorTool.getCurrentTool() === 'node-edit-selector';
-    if (!toolIsNodeEdit || !this.pathNodeEditState || !this.selectedPathNode) {
-      this.pathNodeEditBridge.setChrome({
-        toolIsNodeEdit,
-        hasSelectedPathNode: false,
-        pathLocked: false,
-        cornerEnabled: false,
-        mirrorCubicEnabled: false,
-        independentHandlesEnabled: false,
-        anchorMode: 'none'
-      });
-      return;
-    }
-    const pathId = this.selectedPathNode.pathId;
-    const locked = this.svgManipulation.isElementOrAncestorLocked(pathId);
-    const svg = this.svgManipulation.getSVGInstance();
-    const pathEl = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
-    const d = pathEl?.getAttribute('d') ?? '';
-    const parsed = parsePathDForNodeEditing(d);
-    if (!parsed) {
-      this.pathNodeEditBridge.setChrome({
-        toolIsNodeEdit: true,
-        hasSelectedPathNode: true,
-        pathLocked: locked,
-        cornerEnabled: false,
-        mirrorCubicEnabled: false,
-        independentHandlesEnabled: false,
-        anchorMode: 'none'
-      });
-      return;
-    }
-    const mi = this.selectedPathNode.moveSegmentIndex;
-    const legs = resolvePathNodeConversionLegs(parsed, mi);
-    let cornerEnabled =
-      !locked && !!legs && (legs.incoming !== null || legs.outgoing !== null);
-    if (cornerEnabled && legs) {
-      const idxs = [legs.incoming, legs.outgoing].filter((i): i is number => i !== null);
-      for (const i of idxs) {
-        const ty = parsed[i]?.type;
-        if (ty === 'Q' || ty === 'T' || ty === 'S') {
-          cornerEnabled = false;
-          break;
-        }
-      }
-    }
-    if (cornerEnabled && isPathNodeCornerAnchorAlreadyApplied(parsed, mi)) {
-      cornerEnabled = false;
-    }
-    const mirrorState = getMirrorCubicJointUiState(parsed, mi);
-    const independentState = getIndependentHandlesJointUiState(parsed, mi);
-    const linkMap = parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId));
-    const independentAtVertex = linkMap.get(mi) === 'independent';
-    const cornerAtVertex = isPathNodeCornerAnchorAlreadyApplied(parsed, mi);
-
-    let anchorMode: 'corner' | 'mirror' | 'independent' | 'none' = 'none';
-    if (cornerAtVertex) {
-      anchorMode = 'corner';
-    } else if (independentAtVertex) {
-      anchorMode = 'independent';
-    } else if (mirrorState.kind === 'already-cubic-noop') {
-      anchorMode = 'mirror';
-    }
-
-    const mirrorCubicEnabled =
-      !locked &&
-      (mirrorState.kind === 'applicable' ||
-        (independentAtVertex && isIndependentHandlesJointActionable(independentState)));
-    const independentHandlesEnabled =
-      !locked && isIndependentHandlesJointActionable(independentState) && !independentAtVertex;
-
-    this.pathNodeEditBridge.setChrome({
-      toolIsNodeEdit: true,
-      hasSelectedPathNode: true,
-      pathLocked: locked,
-      cornerEnabled: !!cornerEnabled,
-      mirrorCubicEnabled,
-      independentHandlesEnabled,
-      anchorMode
-    });
-  }
-
-  private pushPathNodeHandleLinkMapIfChanged(pathId: string, nextMap: PathNodeHandleLinkMap): void {
-    const oldRaw = this.svgManipulation.getPathNodeHandleLinkRaw(pathId);
-    const newSer = serializePathNodeHandleLinkMap(nextMap);
-    const normOld = oldRaw?.trim() || null;
-    const normNew = newSer?.trim() || null;
-    if (normOld === normNew) return;
-    this.svgManipulation.setPathNodeHandleLinkRaw(pathId, normNew);
-    this.editorHistory.pushAndExecute(
-      new SetPathNodeHandleLinkCommand(this.svgManipulation, pathId, normOld, normNew, true)
-    );
-  }
-
-  private clearIndependentHandleLinkForMove(pathId: string, moveSegmentIndex: number): void {
-    const map = parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId));
-    if (!map.delete(moveSegmentIndex)) return;
-    this.pushPathNodeHandleLinkMapIfChanged(pathId, map);
-  }
-
-  private tryApplyPathNodeIndependentHandlesFromBridge(): boolean {
-    if (!this.pathNodeEditState || !this.selectedPathNode) {
-      this.showPathNodeEditFeedback('Select a path node first.');
-      return false;
-    }
-    const pathId = this.selectedPathNode.pathId;
-    if (this.svgManipulation.isElementOrAncestorLocked(pathId)) {
-      this.showPathNodeEditFeedback('That path is locked.');
-      return false;
-    }
-    if (!this.pathNodeEditState.paths.some((s) => s.pathId === pathId)) return false;
-    const mi = this.selectedPathNode.moveSegmentIndex;
-    const svg = this.svgManipulation.getSVGInstance();
-    const pathEl = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
-    if (!pathEl) return false;
-    const oldD = pathEl.getAttribute('d') ?? '';
-    const parsed = this.parsePathDataForNodeEditing(oldD);
-    if (!parsed) {
-      this.showPathNodeEditFeedback('Unable to read that path.');
-      return false;
-    }
-    const linkMap = parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId));
-    if (linkMap.get(mi) === 'independent') {
-      this.clearPathNodeEditFeedback();
-      this.syncPathNodeEditBridgeChrome();
-      return true;
-    }
-    const state = getIndependentHandlesJointUiState(parsed, mi);
-    if (!isIndependentHandlesJointActionable(state)) {
-      const msg =
-        state.kind === 'rejects-quadratic'
-          ? PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK
-          : state.kind === 'needs-cubic-joint'
-            ? 'Independent handles need two segments meeting at this node.'
-            : 'Independent handles are not available at this node.';
-      this.showPathNodeEditFeedback(msg);
-      return false;
-    }
-
-    const outcome = convertPathAnchorAtMoveSegmentIndexToIndependentHandles(parsed, mi);
-    if (!outcome.ok) {
-      if (outcome.feedback) {
-        this.showPathNodeEditFeedback(outcome.feedback);
-      }
-      return false;
-    }
-
-    const newD = pathSegmentsToD(outcome.segments);
-    if (newD !== oldD && !this.isValidNodeEditSerializedPath(newD)) {
-      this.showPathNodeEditFeedback('Unable to apply independent handles for this path.');
-      return false;
-    }
-
-    const oldLinkRaw = this.svgManipulation.getPathNodeHandleLinkRaw(pathId);
-    const nextLinkMap = parsePathNodeHandleLinkMap(oldLinkRaw);
-    nextLinkMap.set(mi, 'independent');
-    const newLinkSer = serializePathNodeHandleLinkMap(nextLinkMap);
-    const normOldLink = oldLinkRaw?.trim() || null;
-    const normNewLink = newLinkSer?.trim() || null;
-
-    const historyCmds: EditorCommand[] = [];
-    if (newD !== oldD) {
-      pathEl.setAttribute('d', newD);
-      historyCmds.push(
-        new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true)
-      );
-    }
-    if (normOldLink !== normNewLink) {
-      this.svgManipulation.setPathNodeHandleLinkRaw(pathId, normNewLink);
-      historyCmds.push(
-        new SetPathNodeHandleLinkCommand(this.svgManipulation, pathId, normOldLink, normNewLink, true)
-      );
-    }
-
-    if (historyCmds.length === 1) {
-      this.editorHistory.pushAndExecute(historyCmds[0]);
-    } else if (historyCmds.length > 1) {
-      this.editorHistory.pushAndExecute(
-        new CompositeCommand(historyCmds, 'Independent handles')
-      );
-    }
-
-    const refreshed = this.buildPathNodeEditState(pathId);
-    if (!refreshed.state) {
-      this.exitPathNodeEditMode();
-      return true;
-    }
-    this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((s) =>
-      s.pathId === pathId ? refreshed.state! : s
-    );
-    this.pathNodeEditState.activePathId = pathId;
-    if (refreshed.state.anchors.some((a) => a.moveSegmentIndex === mi)) {
-      this.selectedPathNode = { pathId, moveSegmentIndex: mi };
-    } else {
-      this.selectedPathNode = null;
-    }
-    this.clearPathNodeEditFeedback();
-    this.syncPathNodeEditBridgeChrome();
-    this.cdr.markForCheck();
-    return true;
-  }
-
-  private tryApplyPathNodeAnchorCornerFromBridge(): boolean {
-    if (!this.pathNodeEditState || !this.selectedPathNode) {
-      this.showPathNodeEditFeedback('Select a path node first.');
-      return false;
-    }
-    const pathId = this.selectedPathNode.pathId;
-    if (this.svgManipulation.isElementOrAncestorLocked(pathId)) {
-      this.showPathNodeEditFeedback('That path is locked.');
-      return false;
-    }
-    if (!this.pathNodeEditState.paths.some((s) => s.pathId === pathId)) return false;
-    const svg = this.svgManipulation.getSVGInstance();
-    const pathEl = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
-    if (!pathEl) return false;
-    const oldD = pathEl.getAttribute('d') ?? '';
-    const parsed = this.parsePathDataForNodeEditing(oldD);
-    if (!parsed) {
-      this.showPathNodeEditFeedback('Unable to read that path.');
-      return false;
-    }
-
-    const moveIdx = this.selectedPathNode.moveSegmentIndex;
-    const outcome = convertPathAnchorAtMoveSegmentIndexToCorner(parsed, moveIdx);
-    if (!outcome.ok) {
-      if (outcome.feedback) {
-        this.showPathNodeEditFeedback(outcome.feedback);
-      }
-      return false;
-    }
-
-    this.clearIndependentHandleLinkForMove(pathId, moveIdx);
-
-    const newD = pathSegmentsToD(outcome.segments);
-    if (newD === oldD) {
-      this.clearPathNodeEditFeedback();
-      this.syncPathNodeEditBridgeChrome();
-      return true;
-    }
-    if (!this.isValidNodeEditSerializedPath(newD)) {
-      this.showPathNodeEditFeedback('Unable to apply corner anchor for this path.');
-      return false;
-    }
-
-    pathEl.setAttribute('d', newD);
-    const cmd = new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true);
-    this.editorHistory.pushAndExecute(cmd);
-
-    const refreshed = this.buildPathNodeEditState(pathId);
-    if (!refreshed.state) {
-      this.exitPathNodeEditMode();
-      return true;
-    }
-    this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
-      state.pathId === pathId ? refreshed.state! : state
-    );
-    this.pathNodeEditState.activePathId = pathId;
-    const preserve = moveIdx;
-    if (refreshed.state.anchors.some((a) => a.moveSegmentIndex === preserve)) {
-      this.selectedPathNode = { pathId, moveSegmentIndex: preserve };
-    } else {
-      this.selectedPathNode = null;
-    }
-    this.clearPathNodeEditFeedback();
-    this.syncPathNodeEditBridgeChrome();
-    this.cdr.markForCheck();
-    return true;
-  }
-
-  private tryApplyPathNodeMirrorCubicFromBridge(): boolean {
-    if (!this.pathNodeEditState || !this.selectedPathNode) {
-      this.showPathNodeEditFeedback('Select a path node first.');
-      return false;
-    }
-    const pathId = this.selectedPathNode.pathId;
-    if (this.svgManipulation.isElementOrAncestorLocked(pathId)) {
-      this.showPathNodeEditFeedback('That path is locked.');
-      return false;
-    }
-    if (!this.pathNodeEditState.paths.some((s) => s.pathId === pathId)) return false;
-    const svg = this.svgManipulation.getSVGInstance();
-    const pathEl = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
-    if (!pathEl) return false;
-    const oldD = pathEl.getAttribute('d') ?? '';
-    const parsed = this.parsePathDataForNodeEditing(oldD);
-    if (!parsed) {
-      this.showPathNodeEditFeedback('Unable to read that path.');
-      return false;
-    }
-
-    const moveIdx = this.selectedPathNode.moveSegmentIndex;
-    const linkMap = parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId));
-    const fromIndependent = linkMap.get(moveIdx) === 'independent';
-
-    const joint = getMirrorCubicJointUiState(parsed, moveIdx);
-    if (!fromIndependent && joint.kind === 'already-cubic-noop') {
-      this.clearPathNodeEditFeedback();
-      this.syncPathNodeEditBridgeChrome();
-      return true;
-    }
-    if (!fromIndependent && joint.kind !== 'applicable') {
-      const msg =
-        joint.kind === 'rejects-quadratic'
-          ? PATH_NODE_ANCHOR_UNSUPPORTED_JOINT_FEEDBACK
-          : joint.kind === 'needs-two-lines'
-            ? 'Mirror cubic needs two straight edges meeting at this node.'
-            : 'Unable to apply mirror cubic at this node.';
-      this.showPathNodeEditFeedback(msg);
-      return false;
-    }
-
-    const outcome = convertPathAnchorAtMoveSegmentIndexToMirrorCubic(parsed, moveIdx, {
-      fromIndependent
-    });
-    if (!outcome.ok) {
-      if (outcome.feedback) {
-        this.showPathNodeEditFeedback(outcome.feedback);
-      }
-      return false;
-    }
-
-    const newD = pathSegmentsToD(outcome.segments);
-    if (newD !== oldD && !this.isValidNodeEditSerializedPath(newD)) {
-      this.showPathNodeEditFeedback('Unable to apply mirror cubic for this path.');
-      return false;
-    }
-
-    const oldLinkRaw = this.svgManipulation.getPathNodeHandleLinkRaw(pathId);
-    const nextLinkMap = parsePathNodeHandleLinkMap(oldLinkRaw);
-    if (fromIndependent) {
-      nextLinkMap.delete(moveIdx);
-    }
-    const newLinkSer = serializePathNodeHandleLinkMap(nextLinkMap);
-    const normOldLink = oldLinkRaw?.trim() || null;
-    const normNewLink = newLinkSer?.trim() || null;
-
-    const historyCmds: EditorCommand[] = [];
-    if (newD !== oldD) {
-      pathEl.setAttribute('d', newD);
-      historyCmds.push(
-        new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true)
-      );
-    }
-    if (fromIndependent && normOldLink !== normNewLink) {
-      this.svgManipulation.setPathNodeHandleLinkRaw(pathId, normNewLink);
-      historyCmds.push(
-        new SetPathNodeHandleLinkCommand(this.svgManipulation, pathId, normOldLink, normNewLink, true)
-      );
-    }
-
-    if (historyCmds.length === 1) {
-      this.editorHistory.pushAndExecute(historyCmds[0]);
-    } else if (historyCmds.length > 1) {
-      this.editorHistory.pushAndExecute(new CompositeCommand(historyCmds, 'Mirror cubic'));
-    }
-
-    if (newD === oldD && !fromIndependent) {
-      this.clearPathNodeEditFeedback();
-      this.syncPathNodeEditBridgeChrome();
-      return true;
-    }
-
-    const refreshed = this.buildPathNodeEditState(pathId);
-    if (!refreshed.state) {
-      this.exitPathNodeEditMode();
-      return true;
-    }
-    this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
-      state.pathId === pathId ? refreshed.state! : state
-    );
-    this.pathNodeEditState.activePathId = pathId;
-    const preserve = moveIdx;
-    if (refreshed.state.anchors.some((a) => a.moveSegmentIndex === preserve)) {
-      this.selectedPathNode = { pathId, moveSegmentIndex: preserve };
-    } else {
-      this.selectedPathNode = null;
-    }
-    this.clearPathNodeEditFeedback();
-    this.syncPathNodeEditBridgeChrome();
-    this.cdr.markForCheck();
-    return true;
-  }
-
-  updatePathNodeDrag(clientX: number, clientY: number): void {
-    if (!this.pathNodeDragSession || !this.pathNodeEditState) return;
-    const rootPt = this.clientToEditorSvgPoint(clientX, clientY);
-    if (!rootPt) return;
-    const pathId = this.pathNodeDragSession.pathId;
-    const localPt = this.pathNodeRootUserPointToLocal(pathId, rootPt.x, rootPt.y);
-    const point = localPt ?? rootPt;
-
-    const nextSegments = this.pathNodeDragSession.segments.map((segment) => ({ ...segment }));
-    if (this.pathNodeDragSession.target.kind === 'anchor') {
-      this.applyAnchorDrag(nextSegments, this.pathNodeDragSession.target.index, point.x, point.y);
-    } else {
-      this.applyControlDrag(nextSegments, this.pathNodeDragSession.target.index, point.x, point.y);
-    }
-
-    const nextD = pathSegmentsToD(nextSegments);
-    if (!this.isValidNodeEditSerializedPath(nextD)) {
-      this.showPathNodeEditFeedback('Unable to apply node move for this path.');
-      return;
-    }
-    const svg = this.svgManipulation.getSVGInstance();
-    const pathEl = svg?.findOne(`#${this.pathNodeDragSession.pathId}`)?.node as SVGPathElement | null;
-    if (!pathEl) return;
-    pathEl.setAttribute('d', nextD);
-
-    this.pathNodeDragSession.segments = nextSegments;
-    this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
-      state.pathId === this.pathNodeDragSession?.pathId
-        ? {
-            pathId: state.pathId,
-            anchors: this.collectPathNodeAnchors(nextSegments),
-            controlHandles: this.collectPathControlHandles(nextSegments)
-          }
-        : state
-    );
-    this.pathNodeEditState.activePathId = this.pathNodeDragSession.pathId;
-    this.cdr.markForCheck();
-  }
-
-  finishPathNodeDrag(): void {
-    const drag = this.pathNodeDragSession;
-    this.pathNodeDragSession = null;
-    this.pathNodeDragJustEnded = true;
-    if (!drag) return;
-
-    const newD = pathSegmentsToD(drag.segments);
-    if (newD !== drag.oldD) {
-      const cmd = new EditPathNodesCommand(
-        this.svgManipulation,
-        drag.pathId,
-        drag.oldD,
-        newD,
-        true
-      );
-      this.editorHistory.pushAndExecute(cmd);
-    }
-    this.syncPathNodeEditBridgeChrome();
-    this.cdr.markForCheck();
-  }
-
-  private applyAnchorDrag(segments: PathSegment[], anchorIndex: number, x: number, y: number): void {
-    const pathId = this.pathNodeDragSession?.pathId;
-    const pathState = this.pathNodeEditState?.paths.find((state) => state.pathId === pathId);
-    const anchor = pathState?.anchors[anchorIndex];
-    if (!anchor) return;
-    const moveSegment = segments[anchor.moveSegmentIndex];
-    if (!moveSegment || moveSegment.type === 'Z') return;
-
-    const oldX = moveSegment.x;
-    const oldY = moveSegment.y;
-    const dx = x - oldX;
-    const dy = y - oldY;
-
-    moveSegment.x = x;
-    moveSegment.y = y;
-
-    // Move the incoming handle (P2) that lives inside the segment ending at this anchor.
-    if (moveSegment.type === 'C') {
-      moveSegment.x2 += dx;
-      moveSegment.y2 += dy;
-    }
-    if (moveSegment.type === 'Q') {
-      moveSegment.x1 += dx;
-      moveSegment.y1 += dy;
-    }
-
-    // Move the outgoing handle (P1) of the segment immediately following the moved anchor.
-    // (Done by direct index because moveSegment.x has already been updated, so the
-    // position-based loop below cannot match it.)
-    const nextSeg = segments[anchor.moveSegmentIndex + 1];
-    if (nextSeg?.type === 'C' || nextSeg?.type === 'Q') {
-      nextSeg.x1 += dx;
-      nextSeg.y1 += dy;
-    }
-
-    // For any other segment that happens to share the same old endpoint (rare; e.g. duplicate
-    // anchors in multi-subpath data), move its incoming handle and the outgoing handle of
-    // whatever follows it.
-    for (const segment of segments) {
-      if (segment.type === 'C' && segment.x === oldX && segment.y === oldY) {
-        segment.x2 += dx;
-        segment.y2 += dy;
-      }
-      if (segment.type === 'Q' && segment.x === oldX && segment.y === oldY) {
-        segment.x1 += dx;
-        segment.y1 += dy;
-      }
-    }
-
-    for (let i = 1; i < segments.length; i++) {
-      const previous = segments[i - 1];
-      const segment = segments[i];
-      if (previous.type === 'Z') continue;
-      if (previous.x !== oldX || previous.y !== oldY) continue;
-      if (segment.type === 'C') {
-        segment.x1 += dx;
-        segment.y1 += dy;
-      } else if (segment.type === 'Q') {
-        segment.x1 += dx;
-        segment.y1 += dy;
-      }
-    }
-
-    // Closed paths: dragging `M` only updated the moveto; the closing `C`/`L`/… endpoint can
-    // still equal the pre-drag point, so `collectPathNodeAnchors` sees a gap before `Z` and
-    // emits a duplicate start/end overlay until mouseup (svg-editor-19z).
-    for (const segment of segments) {
-      if (segment.type === 'Z' || segment.type === 'M') continue;
-      if (segment.x === oldX && segment.y === oldY) {
-        segment.x = x;
-        segment.y = y;
-      }
-    }
-  }
-
-  private applyControlDrag(segments: PathSegment[], handleIndex: number, x: number, y: number): void {
-    const pathId = this.pathNodeDragSession?.pathId;
-    const pathState = this.pathNodeEditState?.paths.find((state) => state.pathId === pathId);
-    const handle = pathState?.controlHandles[handleIndex];
-    if (!handle) return;
-    const segment = segments[handle.segmentIndex];
-    if (!segment) return;
-    if (segment.type === 'Q') {
-      if (handle.controlPoint === 'x1y1') {
-        segment.x1 = x;
-        segment.y1 = y;
-      }
-      return;
-    }
-    if (segment.type !== 'C') return;
-    const linkMap = parsePathNodeHandleLinkMap(
-      pathId ? this.svgManipulation.getPathNodeHandleLinkRaw(pathId) : null
-    );
-    if (linkMap.get(handle.vertexMoveSegmentIndex) === 'independent') {
-      if (handle.controlPoint === 'x1y1') {
-        segment.x1 = x;
-        segment.y1 = y;
-      } else {
-        segment.x2 = x;
-        segment.y2 = y;
-      }
-      return;
-    }
-    applySymmetricCubicControlDragInPlace(segments, handle.segmentIndex, handle.controlPoint, x, y);
-  }
-
-  /**
-   * Path `d` is stored in **element-local** space; overlay and pointer math use **root SVG user**
-   * space (same as selection bbox). Uses `getTransformToElement` so parent `<g>` transforms are
-   * included. Multi-select: each path id has its own mapping.
-   */
-  private pathNodeLocalPointToOverlay(pathId: string, lx: number, ly: number): { x: number; y: number } {
-    const mapped = this.svgManipulation.mapPathLocalToRootUser(pathId, lx, ly);
-    const o = this.svgBboxToOverlayPixels({ x: mapped.x, y: mapped.y, width: 0, height: 0 });
-    return { x: o.x, y: o.y };
-  }
-
-  private pathLocalPathDToOutlineOverlayD(pathId: string, pathD: string): string | null {
-    const parsed = this.parsePathDataForNodeEditing(pathD);
-    if (!parsed) return null;
-    const d = buildPathSelectionOutlineOverlayD(pathId, parsed, (id, lx, ly) =>
-      this.pathNodeLocalPointToOverlay(id, lx, ly)
-    );
-    return d || null;
-  }
-
-  private rootUserPathDToOutlineOverlayD(pathD: string): string | null {
-    const parsed = this.parsePathDataForNodeEditing(pathD);
-    if (!parsed?.some((segment) => segment.type !== 'M')) return null;
-    const d = buildPathSelectionOutlineOverlayD('pen-session', parsed, (_id, rx, ry) =>
-      this.penRootUserPointToOverlay(rx, ry)
-    );
-    return d || null;
-  }
-
-  private pathNodeRootUserPointToLocal(pathId: string, rx: number, ry: number): { x: number; y: number } | null {
-    return this.svgManipulation.mapRootUserToPathLocal(pathId, rx, ry);
-  }
-
-  private buildPathNodeEditState(pathId: string): PathNodeEditStateBuildResult {
-    const svg = this.svgManipulation.getSVGInstance();
-    if (!svg) return { state: null, reason: null };
-    const pathEl = svg.findOne(`#${pathId}`)?.node as SVGPathElement | null;
-    if (!pathEl) return { state: null, reason: null };
-    const pathData = pathEl.getAttribute('d') ?? '';
-    if (!pathData.trim()) return { state: null, reason: null };
-
-    const parsed = this.parsePathDataForNodeEditing(pathData);
-    if (!parsed) {
-      return {
-        state: null,
-        reason: 'Node editing supports only clean M/L/C/S/Q/T/Z path commands (smooth S/T are stored as C/Q).'
-      };
-    }
-    return {
-      state: {
-        pathId,
-        anchors: this.collectPathNodeAnchors(parsed),
-        controlHandles: this.collectPathControlHandles(parsed)
-      },
-      reason: null
-    };
-  }
-
-  private parsePathDataForNodeEditing(pathData: string): PathSegment[] | null {
-    return parsePathDForNodeEditing(pathData);
-  }
-
-  /** ~18px in screen space, expressed in root SVG user units, for pen path insert hit testing (cursor + click). */
-  private getPenPathInsertToleranceSvg(): number {
-    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
-    if (!mainSvg) return 14;
-    const vb = this.parseOverlayViewBox();
-    const r = mainSvg.getBoundingClientRect();
-    if (!vb || r.width <= 0 || r.height <= 0) return 14;
-    const svgPerPx = (vb.vbW / r.width + vb.vbH / r.height) / 2;
-    return 18 * svgPerPx;
-  }
-
-  /**
-   * Commit pen insert-on-path from {@link PenToolSession} (mousedown→mouseup / micro-drag).
-   * @param insertedMoveSegIndex move-segment index of the inserted vertex (for `selectedPathNode` parity with node-edit).
-   */
-  private commitPenInsertOnExistingPath(pathId: string, oldD: string, newD: string, insertedMoveSegIndex?: number): void {
-    if (newD === oldD || !this.isValidNodeEditSerializedPath(newD)) return;
-    const svg = this.svgManipulation.getSVGInstance();
-    const pathNode = svg?.findOne(`#${pathId}`)?.node as SVGPathElement | null;
-    if (!pathNode) return;
-
-    this.svgManipulation.updatePathData(pathId, newD);
-    const cmd = new EditPathNodesCommand(this.svgManipulation, pathId, oldD, newD, true);
-    this.editorHistory.pushAndExecute(cmd);
-
-    const oldParsed = this.parsePathDataForNodeEditing(oldD);
-    const newParsed = this.parsePathDataForNodeEditing(newD);
-    if (oldParsed && newParsed) {
-      const remappedLinks = remapPathNodeHandleLinkMapByStableAnchors(
-        oldParsed,
-        newParsed,
-        parsePathNodeHandleLinkMap(this.svgManipulation.getPathNodeHandleLinkRaw(pathId))
-      );
-      this.pushPathNodeHandleLinkMapIfChanged(pathId, remappedLinks);
-    }
-
-    const el = svg?.findOne(`#${pathId}`) as SVGElement | undefined;
-    if (el) {
-      this.shapeSelection.selectShape(this.svgManipulation.getShapeProperties(el));
-    }
-    const shapeBbox = this.svgManipulation.getShapeBBox(pathId);
-    if (shapeBbox) {
-      this.lastBbox = shapeBbox;
-      this._highlightRectCacheKey = '';
-    }
-
-    if (this.pathNodeEditState?.paths.some((state) => state.pathId === pathId)) {
-      const refreshed = this.buildPathNodeEditState(pathId);
-      if (refreshed.state) {
-        this.pathNodeEditState.paths = this.pathNodeEditState.paths.map((state) =>
-          state.pathId === pathId ? refreshed.state! : state
-        );
-        this.pathNodeEditState.activePathId = pathId;
-        if (
-          insertedMoveSegIndex !== undefined &&
-          refreshed.state.anchors.some((a) => a.moveSegmentIndex === insertedMoveSegIndex)
-        ) {
-          this.selectedPathNode = { pathId, moveSegmentIndex: insertedMoveSegIndex };
-        } else {
-          this.selectedPathNode = null;
-        }
-      } else {
-        this.exitPathNodeEditMode();
-      }
-    }
-
-    // Legacy single-path anchor ring: only when shared path-node overlays are not driving this path.
-    if (this.pathNodeEditState?.paths.some((state) => state.pathId === pathId)) {
-      this.penPostInsertAnchorPathId = null;
-    } else {
-      this.penPostInsertAnchorPathId = pathId;
-    }
-    this.syncPenPostInsertAnchorOverlayDom();
-    this.syncPathNodeEditBridgeChrome();
-    this.cdr.markForCheck();
-  }
-
-  clearPenPostInsertAnchorOverlay(): void {
-    this.penPostInsertAnchorPathId = null;
-    this.syncPenPostInsertAnchorOverlayDom();
-  }
-
-  private syncPenPostInsertAnchorOverlayDom(): void {
-    const svg = this.svgManipulation.getSVGInstance();
-    if (!svg) return;
-    svg.findOne('#pen-post-insert-anchor-overlay')?.remove();
-    if (!this.penPostInsertAnchorPathId) return;
-    if (this.pathNodeEditState?.paths.some((state) => state.pathId === this.penPostInsertAnchorPathId)) {
-      return;
-    }
-    const pathId = this.penPostInsertAnchorPathId;
-    const pathEl = svg.findOne(`#${pathId}`)?.node as SVGPathElement | null;
-    if (!pathEl) return;
-    const pathData = pathEl.getAttribute('d') ?? '';
-    const parsed = this.parsePathDataForNodeEditing(pathData);
-    if (!parsed) return;
-    const anchors = this.collectPathNodeAnchors(parsed);
-    const g = svg.group().id('pen-post-insert-anchor-overlay').attr('pointer-events', 'none');
-    for (const anchor of anchors) {
-      const m = this.svgManipulation.mapPathLocalToRootUser(pathId, anchor.x, anchor.y);
-      // Match `path-node-anchor` in the selection overlay (white fill, blue stroke).
-      g.circle(4)
-        .center(m.x, m.y)
-        .attr({
-          fill: '#ffffff',
-          stroke: '#1E88E5',
-          'stroke-width': 2,
-          'vector-effect': 'non-scaling-stroke'
-        });
-    }
-    svg.add(g);
   }
 
   schedulePenInsertHoverCursorHitTest(clientX: number, clientY: number): void {
@@ -3664,7 +2405,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     const vp = this.canvasViewport()?.nativeElement;
     const vpCur = vp?.style?.cursor?.trim();
 
-    if (this.pathNodeDragSession) {
+    if (this.pathNodeEditSession.getPathNodeDragSession()) {
       return 'Expected cursor: move (path node drag in progress)';
     }
     if (this.creation.isActive) {
@@ -3778,7 +2519,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         expectedCursorLine: this.computeExpectedCursorHint(clientX, clientY, hitTarget, overCanvas),
         sampledAtMs: typeof performance !== 'undefined' ? performance.now() : Date.now(),
         isCreationInProgress: this.creation.isActive,
-        pathNodeDragPathId: this.pathNodeDragSession?.pathId ?? null,
+        pathNodeDragPathId: this.pathNodeEditSession.getPathNodeDragSession()?.pathId ?? null,
         isPenInsertOnPathDragActive: this.isPenInsertOnPathDragActive(),
         isPenSessionActive: tool === 'pen' && this.isPenToolWithActiveSession(),
         isSelectionMarquee: this.isSelectionMarquee,
@@ -3793,194 +2534,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         hasRegisteredTool: (id) => this.toolRegistry.has(id)
       })
     );
-  }
-
-  private isValidNodeEditSerializedPath(pathData: string): boolean {
-    if (!pathData.trim()) return false;
-    const reparsed = parsePathD(pathData);
-    return reparsed.errors.length === 0 && reparsed.segments.length > 0 && reparsed.segments[0].type === 'M';
-  }
-
-  private collectPathNodeAnchors(segments: readonly PathSegment[]): PathNodePoint[] {
-    const anchors: PathNodePoint[] = [];
-    let current: PathNodePoint | null = null;
-    let subpathStart: PathNodePoint | null = null;
-
-    for (const [segmentIndex, segment] of segments.entries()) {
-      if (segment.type === 'M') {
-        const point = {
-          x: segment.x,
-          y: segment.y,
-          segmentIndex,
-          moveSegmentIndex: segmentIndex
-        };
-        anchors.push(point);
-        current = point;
-        subpathStart = point;
-        continue;
-      }
-      if (segment.type === 'L') {
-        const coincidentClose =
-          subpathStart !== null &&
-          segments[segmentIndex + 1]?.type === 'Z' &&
-          penSvgDistanceSq(
-            { x: segment.x, y: segment.y },
-            { x: subpathStart.x, y: subpathStart.y }
-          ) < PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ;
-        if (!coincidentClose) {
-          anchors.push({
-            x: segment.x,
-            y: segment.y,
-            segmentIndex,
-            moveSegmentIndex: segmentIndex
-          });
-        }
-        current = {
-          x: segment.x,
-          y: segment.y,
-          segmentIndex,
-          moveSegmentIndex: coincidentClose && subpathStart ? subpathStart.moveSegmentIndex : segmentIndex
-        };
-        continue;
-      }
-      if (segment.type === 'C') {
-        const coincidentClose =
-          subpathStart !== null &&
-          segments[segmentIndex + 1]?.type === 'Z' &&
-          penSvgDistanceSq(
-            { x: segment.x, y: segment.y },
-            { x: subpathStart.x, y: subpathStart.y }
-          ) < PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ;
-        if (!coincidentClose) {
-          anchors.push({
-            x: segment.x,
-            y: segment.y,
-            segmentIndex,
-            moveSegmentIndex: segmentIndex
-          });
-        }
-        current = {
-          x: segment.x,
-          y: segment.y,
-          segmentIndex,
-          moveSegmentIndex: coincidentClose && subpathStart ? subpathStart.moveSegmentIndex : segmentIndex
-        };
-        continue;
-      }
-      if (segment.type === 'Q') {
-        const coincidentClose =
-          subpathStart !== null &&
-          segments[segmentIndex + 1]?.type === 'Z' &&
-          penSvgDistanceSq(
-            { x: segment.x, y: segment.y },
-            { x: subpathStart.x, y: subpathStart.y }
-          ) < PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ;
-        if (!coincidentClose) {
-          anchors.push({
-            x: segment.x,
-            y: segment.y,
-            segmentIndex,
-            moveSegmentIndex: segmentIndex
-          });
-        }
-        current = {
-          x: segment.x,
-          y: segment.y,
-          segmentIndex,
-          moveSegmentIndex: coincidentClose && subpathStart ? subpathStart.moveSegmentIndex : segmentIndex
-        };
-        continue;
-      }
-      if (segment.type === 'Z' && subpathStart && current) {
-        const gapSq = penSvgDistanceSq(
-          { x: subpathStart.x, y: subpathStart.y },
-          { x: current.x, y: current.y }
-        );
-        if (gapSq >= PATH_SUBPATH_CLOSE_ANCHOR_COINCIDENT_EPS_SQ) {
-          anchors.push({
-            x: subpathStart.x,
-            y: subpathStart.y,
-            segmentIndex,
-            moveSegmentIndex: subpathStart.moveSegmentIndex
-          });
-        }
-        current = {
-          x: subpathStart.x,
-          y: subpathStart.y,
-          segmentIndex,
-          moveSegmentIndex: subpathStart.moveSegmentIndex
-        };
-      }
-    }
-
-    return anchors;
-  }
-
-  private collectPathControlHandles(segments: readonly PathSegment[]): PathNodeControlHandle[] {
-    const handles: PathNodeControlHandle[] = [];
-    let current: PathNodePoint | null = null;
-    let subpathStart: PathNodePoint | null = null;
-
-    for (const [segmentIndex, segment] of segments.entries()) {
-      if (segment.type === 'M') {
-        current = { x: segment.x, y: segment.y, segmentIndex, moveSegmentIndex: segmentIndex };
-        subpathStart = current;
-        continue;
-      }
-      if (segment.type === 'L') {
-        current = { x: segment.x, y: segment.y, segmentIndex, moveSegmentIndex: segmentIndex };
-        continue;
-      }
-      if (segment.type === 'C') {
-        if (current) {
-          handles.push({
-            anchorX: current.x,
-            anchorY: current.y,
-            controlX: segment.x1,
-            controlY: segment.y1,
-            segmentIndex,
-            controlPoint: 'x1y1',
-            vertexMoveSegmentIndex: current.moveSegmentIndex
-          });
-        }
-        handles.push({
-          anchorX: segment.x,
-          anchorY: segment.y,
-          controlX: segment.x2,
-          controlY: segment.y2,
-          segmentIndex,
-          controlPoint: 'x2y2',
-          vertexMoveSegmentIndex: segmentIndex
-        });
-        current = { x: segment.x, y: segment.y, segmentIndex, moveSegmentIndex: segmentIndex };
-        continue;
-      }
-      if (segment.type === 'Q') {
-        if (current) {
-          handles.push({
-            anchorX: current.x,
-            anchorY: current.y,
-            controlX: segment.x1,
-            controlY: segment.y1,
-            segmentIndex,
-            controlPoint: 'x1y1',
-            vertexMoveSegmentIndex: current.moveSegmentIndex
-          });
-        }
-        current = { x: segment.x, y: segment.y, segmentIndex, moveSegmentIndex: segmentIndex };
-        continue;
-      }
-      if (segment.type === 'Z' && subpathStart) {
-        current = {
-          x: subpathStart.x,
-          y: subpathStart.y,
-          segmentIndex,
-          moveSegmentIndex: subpathStart.moveSegmentIndex
-        };
-      }
-    }
-
-    return handles;
   }
 
   private isGroupAClipMaskCarrier(groupId: string): boolean {

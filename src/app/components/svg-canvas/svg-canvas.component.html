@@ -289,6 +289,7 @@
             [insertAffordance]="editorChrome.penInsertOnPathPreviewPathD ? editorChrome.penInsertOnPathNodeAffordanceOverlay : null"
             [penSessionNodes]="editorChrome.penSessionPathNodeOverlays"
             [penSessionPathOutlineD]="editorChrome.penSessionPathOutlineOverlayD"
+            [postInsertAnchors]="editorChrome.penPostInsertAnchorOverlays"
             [showPathNodeEditOverlays]="editorChrome.showPathNodeEditOverlays"
             [pathSelectionOutlines]="editorChrome.pathSelectionOutlineOverlays"
             [controlHandles]="editorChrome.pathNodeControlHandleOverlays"
@@ -298,20 +299,16 @@
         </svg>
       </div>
       @if (editorChrome.isInlineTextEditModeActive && editorChrome.inlineTextEditOverlayRect; as textRect) {
-        <textarea
-          #inlineTextEditor
-          class="inline-text-editor"
-          data-testid="canvas-inline-text-editor"
-          aria-label="Edit canvas text"
-          aria-multiline="true"
-          [attr.title]="editorChrome.inlineTextEditorHint"
+        <app-inline-text-editor-overlay
+          [panX]="canvasView.panX"
+          [panY]="canvasView.panY"
+          [overlayRect]="textRect"
           [value]="editorChrome.inlineTextEditValue"
-          [style.font]="editorChrome.inlineTextEditorTypographyStyle()"
-          [style.left.px]="canvasView.panX + textRect.x"
-          [style.top.px]="canvasView.panY + textRect.y"
-          [style.width.px]="editorChrome.inlineTextEditWidthPx(textRect)"
-          [style.height.px]="editorChrome.inlineTextEditHeightPx(textRect)"
-          (input)="onInlineTextEditInput($event)"></textarea>
+          [hint]="editorChrome.inlineTextEditorHint"
+          [typographyStyle]="editorChrome.inlineTextEditorTypographyStyle()"
+          [widthPx]="editorChrome.inlineTextEditWidthPx(textRect)"
+          [heightPx]="editorChrome.inlineTextEditHeightPx(textRect)"
+          (valueChange)="onInlineTextEditInput($event)" />
       }
     </div>
   </div>
