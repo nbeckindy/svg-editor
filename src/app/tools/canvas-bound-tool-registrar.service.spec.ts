@@ -9,6 +9,7 @@ import { SkewGesture } from '../components/svg-canvas/gestures/skew-gesture';
 import { ZoomMarqueeGesture } from '../components/svg-canvas/gestures/zoom-marquee-gesture';
 import { ToolRegistryService } from './tool-registry.service';
 import type { GestureRuntimeContext } from '../components/svg-canvas/gestures/gesture-context';
+import type { SelectorKeyboardActionsPort } from '../components/svg-canvas/selector-canvas-tool-keyboard';
 
 const emptyRt = {
   pointer: {} as GestureRuntimeContext['pointer'],
@@ -31,7 +32,7 @@ function makeSelectorDeps() {
     hasPathNodeEditState: () => false,
     tryStartPathNodeDrag: () => false,
     isEditorContentShapeTarget: () => false,
-    clientToEditorSvgPointForDrag: () => ({ x: 0, y: 0 }),
+    clientToEditorSvgPoint: () => ({ x: 0, y: 0 }),
     isShapeSelected: () => false,
     getNearestGroupAncestorId: () => null,
     getSelectedShapeIds: () => [],
@@ -39,7 +40,22 @@ function makeSelectorDeps() {
     isResizingSelection: () => false,
     isSkewingSelection: () => false,
     isRotatingSelection: () => false,
-    isDraggingShape: () => false
+    isDraggingShape: () => false,
+    getKeyboardActions: () =>
+      ({
+        getSvgContent: () => 'svg',
+        svgManipulation: {} as SelectorKeyboardActionsPort['svgManipulation'],
+        shapeSelection: {} as SelectorKeyboardActionsPort['shapeSelection'],
+        editorHistory: {} as SelectorKeyboardActionsPort['editorHistory'],
+        selectAllShapesFromDocument: vi.fn(),
+        copySelectionToClipboard: vi.fn(() => false),
+        cutSelectionToClipboard: vi.fn(() => false),
+        pasteFromClipboard: vi.fn(() => false),
+        duplicateSelection: vi.fn(() => false),
+        groupSelectedShapes: vi.fn(),
+        ungroupSelectedShape: vi.fn(),
+        handleAlignmentShortcut: vi.fn(() => false)
+      }) satisfies SelectorKeyboardActionsPort
   };
 }
 

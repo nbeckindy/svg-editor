@@ -223,7 +223,7 @@ export function toolIdsForCanvasRegistrationGroup<G extends CanvasToolRegistrati
 ): readonly BundleForGroup<G>['descriptor']['id'][] {
   return DEFAULT_TOOL_BUNDLES.filter((bundle) => bundle.canvasRegistrationGroup === group).map(
     (bundle) => bundle.descriptor.id
-  ) as readonly BundleForGroup<G>['descriptor']['id'][];
+  ) as unknown as readonly BundleForGroup<G>['descriptor']['id'][];
 }
 
 export const CREATION_TOOL_IDS = toolIdsForCanvasRegistrationGroup('creation');

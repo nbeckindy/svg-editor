@@ -9,6 +9,7 @@ import { SelectionMarqueeGesture } from '../components/svg-canvas/gestures/selec
 import { SkewGesture } from '../components/svg-canvas/gestures/skew-gesture';
 import { ZoomMarqueeGesture } from '../components/svg-canvas/gestures/zoom-marquee-gesture';
 import type { PenToolSession } from '../components/svg-canvas/pen-tool-session/pen-tool-session';
+import type { SelectorKeyboardActionsPort } from '../components/svg-canvas/selector-canvas-tool-keyboard';
 import type { EditorTool } from '../services/editor-tool.service';
 import { CanvasBoundToolRegistrar } from './canvas-bound-tool-registrar.service';
 import type { CanvasTool } from './canvas-tool.interface';
@@ -50,13 +51,14 @@ export interface CanvasToolsTestHostState {
   createTextAtPoint: (clientX: number, clientY: number) => void;
   destroyTextToolPreview: () => void;
   sampleEyedropperAt: (event: MouseEvent) => void;
-  clientToEditorSvgPointForDrag: (clientX: number, clientY: number) => { x: number; y: number } | null;
+  clientToEditorSvgPoint: (clientX: number, clientY: number) => { x: number; y: number } | null;
   screenToSvg: (clientX: number, clientY: number) => { x: number; y: number } | null;
   zoomInAt: (x: number, y: number) => void;
   zoomOutAt: (x: number, y: number) => void;
   refreshViewAfterZoomClick: () => void;
   detectChanges: () => void;
   scheduleInsertHoverCursorHitTest: (clientX: number, clientY: number) => void;
+  getSelectorKeyboardActions: () => SelectorKeyboardActionsPort;
 }
 
 export interface RegisterAllCanvasToolsForTestOptions {
@@ -109,13 +111,28 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     createTextAtPoint: vi.fn(),
     destroyTextToolPreview: vi.fn(),
     sampleEyedropperAt: vi.fn(),
-    clientToEditorSvgPointForDrag: () => ({ x: 0, y: 0 }),
+    clientToEditorSvgPoint: () => ({ x: 0, y: 0 }),
     screenToSvg: () => null,
     zoomInAt: vi.fn(),
     zoomOutAt: vi.fn(),
     refreshViewAfterZoomClick: vi.fn(),
     detectChanges: vi.fn(),
-    scheduleInsertHoverCursorHitTest: vi.fn()
+    scheduleInsertHoverCursorHitTest: vi.fn(),
+    getSelectorKeyboardActions: () =>
+      ({
+        getSvgContent: () => 'svg',
+        svgManipulation: {} as SelectorKeyboardActionsPort['svgManipulation'],
+        shapeSelection: {} as SelectorKeyboardActionsPort['shapeSelection'],
+        editorHistory: {} as SelectorKeyboardActionsPort['editorHistory'],
+        selectAllShapesFromDocument: vi.fn(),
+        copySelectionToClipboard: vi.fn(() => false),
+        cutSelectionToClipboard: vi.fn(() => false),
+        pasteFromClipboard: vi.fn(() => false),
+        duplicateSelection: vi.fn(() => false),
+        groupSelectedShapes: vi.fn(),
+        ungroupSelectedShape: vi.fn(),
+        handleAlignmentShortcut: vi.fn(() => false)
+      }) satisfies SelectorKeyboardActionsPort
   };
 }
 
@@ -200,7 +217,7 @@ export function registerAllCanvasToolsForTest(
     hasPathNodeEditState: () => hostState.hasPathNodeEditState,
     tryStartPathNodeDrag: hostState.tryStartPathNodeDrag,
     isEditorContentShapeTarget: hostState.isEditorContentShapeTarget,
-    clientToEditorSvgPointForDrag: hostState.clientToEditorSvgPointForDrag,
+    clientToEditorSvgPoint: hostState.clientToEditorSvgPoint,
     isShapeSelected: hostState.isShapeSelected,
     getNearestGroupAncestorId: hostState.getNearestGroupAncestorId,
     getSelectedShapeIds: hostState.getSelectedShapeIds,
@@ -208,7 +225,8 @@ export function registerAllCanvasToolsForTest(
     isResizingSelection: () => hostState.isResizingSelection,
     isSkewingSelection: () => hostState.isSkewingSelection,
     isRotatingSelection: () => hostState.isRotatingSelection,
-    isDraggingShape: () => hostState.isDraggingShape
+    isDraggingShape: () => hostState.isDraggingShape,
+    getKeyboardActions: hostState.getSelectorKeyboardActions
   }));
 
   registrar.registerViewUtilityTools({

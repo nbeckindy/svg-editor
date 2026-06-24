@@ -17,7 +17,6 @@ function makePenDeps(over: Partial<PenCanvasToolDeps> = {}): () => PenCanvasTool
   } as unknown as PenToolSession;
 
   return () => ({
-    getPenTool: () => penTool,
     getSnappedPenPoint: (clientX, clientY) => ({ x: clientX, y: clientY }),
     hasPathNodeEditState: () => false,
     tryStartPathNodeDrag: () => false,
@@ -71,7 +70,7 @@ describe('createPenCanvasTool', () => {
     const clearDrawingState = vi.fn();
     const penTool = { clearDrawingState } as unknown as PenToolSession;
     const tool = createPenCanvasTool(makePenDeps({ getPenTool: () => penTool }));
-    tool.onDeactivate();
+    tool.onDeactivate?.();
     expect(clearDrawingState).toHaveBeenCalled();
   });
 

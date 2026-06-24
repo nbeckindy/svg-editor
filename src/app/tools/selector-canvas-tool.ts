@@ -12,6 +12,10 @@ import {
   SELECTOR_INTERACTION_TOOL_IDS,
   type SelectorInteractionToolId
 } from './tool-bundles';
+import {
+  tryHandleSelectorKeyDown,
+  type SelectorKeyboardActionsPort
+} from '../components/svg-canvas/selector-canvas-tool-keyboard';
 
 export type { SelectorInteractionToolId };
 
@@ -30,7 +34,7 @@ export interface SelectorCanvasToolDeps {
   hasPathNodeEditState: () => boolean;
   tryStartPathNodeDrag: (target: Element, event: MouseEvent) => boolean;
   isEditorContentShapeTarget: (target: Element) => boolean;
-  clientToEditorSvgPointForDrag: (clientX: number, clientY: number) => { x: number; y: number } | null;
+  clientToEditorSvgPoint: (clientX: number, clientY: number) => { x: number; y: number } | null;
   isShapeSelected: (id: string) => boolean;
   getNearestGroupAncestorId: (id: string) => string | null;
   getSelectedShapeIds: () => string[];
@@ -39,6 +43,7 @@ export interface SelectorCanvasToolDeps {
   isSkewingSelection: () => boolean;
   isRotatingSelection: () => boolean;
   isDraggingShape: () => boolean;
+  getKeyboardActions: () => SelectorKeyboardActionsPort;
 }
 
 function isResizeHandle(value: string | null): value is ResizeHandle {
@@ -127,7 +132,7 @@ export function createSelectorCanvasTool(
         }
       }
       if (event.shiftKey || event.ctrlKey || event.metaKey) return false;
-      const point = deps.clientToEditorSvgPointForDrag(event.clientX, event.clientY);
+      const point = deps.clientToEditorSvgPoint(event.clientX, event.clientY);
       if (!point) return false;
       const selectedIds = deps.getSelectedShapeIds();
       return gestures.drag.start(runtime, selectedIds, effectiveDragId, point, event);
@@ -183,6 +188,9 @@ export function createSelectorCanvasTool(
         return true;
       }
       return false;
+    },
+    onKeyDown(event) {
+      return tryHandleSelectorKeyDown(getDeps().getKeyboardActions(), event);
     }
   };
 }

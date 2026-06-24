@@ -1,6 +1,6 @@
 import type { Type } from '@angular/core';
 import type { EditorTool } from '../services/editor-tool.service';
-import type { CanvasSvgPoint, CanvasToolHost } from './canvas-tool-host.interface';
+import type { CanvasAdapterContext, CanvasSvgPoint } from './canvas-adapter-context';
 
 /**
  * Contract for a canvas tool registered in the tool registry.
@@ -9,8 +9,8 @@ import type { CanvasSvgPoint, CanvasToolHost } from './canvas-tool-host.interfac
 export interface CanvasTool {
   readonly toolId: EditorTool;
 
-  onActivate(host: CanvasToolHost): void;
-  onDeactivate(): void;
+  onActivate?(ctx: CanvasAdapterContext): void;
+  onDeactivate?(): void;
 
   onPointerDown?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;
   /** Return `false` to allow router fall-through (e.g. idle pen hover cursor). */

@@ -10,7 +10,7 @@ function makeRuntime(): GestureRuntimeContext {
     pointer: {
       cdr: { detectChanges: vi.fn() } as unknown as ChangeDetectorRef,
       clientToEditorSvgPoint: () => ({ x: 10, y: 20 }),
-      svgBboxToOverlayPixels: (bbox) => bbox,
+      svgBboxToOverlayPixels: (bbox: { x: number; y: number; width: number; height: number }) => bbox,
       invalidateHighlightCache: vi.fn(),
       setLastBbox: vi.fn(),
       highlightOverlayContainer: vi.fn()
@@ -69,7 +69,7 @@ describe('createCreationCanvasTool', () => {
 
   it('aborts in-progress creation on deactivate', () => {
     const tool = createCreationCanvasTool('rect', creation, () => runtime, () => true);
-    tool.onDeactivate();
+    tool.onDeactivate?.();
     expect(creation.abort).toHaveBeenCalled();
   });
 });

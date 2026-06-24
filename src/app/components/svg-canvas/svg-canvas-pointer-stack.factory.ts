@@ -75,6 +75,7 @@ export interface CreateSvgCanvasPointerStackArgs {
   isSkewingSelection: SelectorCanvasToolDeps['isSkewingSelection'];
   isRotatingSelection: SelectorCanvasToolDeps['isRotatingSelection'];
   isDraggingShape: SelectorCanvasToolDeps['isDraggingShape'];
+  getSelectorKeyboardActions: SelectorCanvasToolDeps['getKeyboardActions'];
   getZoomMarquee: ZoomCanvasToolDeps['getZoomMarquee'];
   isZoomMarquee: ZoomCanvasToolDeps['isZoomMarquee'];
   commitZoomMarquee: ZoomCanvasToolDeps['commitZoomMarquee'];
@@ -158,7 +159,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     hasPathNodeEditState: args.hasPathNodeEditState,
     tryStartPathNodeDrag: args.tryStartPathNodeDrag,
     isEditorContentShapeTarget: args.isEditorContentShapeTarget,
-    clientToEditorSvgPointForDrag: args.clientToEditorSvgPoint,
+    clientToEditorSvgPoint: args.clientToEditorSvgPoint,
     isShapeSelected: args.isShapeSelected,
     getNearestGroupAncestorId: args.getNearestGroupAncestorId,
     getSelectedShapeIds: args.getSelectedShapeIds,
@@ -166,7 +167,8 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     isResizingSelection: args.isResizingSelection,
     isSkewingSelection: args.isSkewingSelection,
     isRotatingSelection: args.isRotatingSelection,
-    isDraggingShape: args.isDraggingShape
+    isDraggingShape: args.isDraggingShape,
+    getKeyboardActions: args.getSelectorKeyboardActions
   }));
 
   args.canvasBoundToolRegistrar.registerViewUtilityTools({

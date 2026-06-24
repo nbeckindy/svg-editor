@@ -133,7 +133,7 @@ describe('CreationGesture', () => {
     });
 
     it('applies smart-guide offset after grid snap when shape snap is enabled', () => {
-      (ctx.snap.snap.shapeEnabled as ReturnType<typeof vi.fn>).mockReturnValue(true);
+      (ctx.snap.snap.shapeEnabled as unknown as ReturnType<typeof vi.fn>).mockReturnValue(true);
       (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 37, y: 44 });
       (ctx.snap.snap.snapToGrid as ReturnType<typeof vi.fn>).mockReturnValue({ x: 40, y: 40 });
       (ctx.snap.snap.snapDeltaToSmartGuides as ReturnType<typeof vi.fn>).mockReturnValue({
@@ -196,7 +196,7 @@ describe('CreationGesture', () => {
       gesture = new CreationGesture();
       installSvgFindOneMock(ctx);
       gesture.start(ctx, 'ellipse', makeMouseEvent(100, 100));
-      (ctx.snap.snap.shapeEnabled as ReturnType<typeof vi.fn>).mockReturnValue(true);
+      (ctx.snap.snap.shapeEnabled as unknown as ReturnType<typeof vi.fn>).mockReturnValue(true);
       (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 37, y: 44 });
       (ctx.snap.snap.snapToGrid as ReturnType<typeof vi.fn>).mockReturnValue({ x: 40, y: 40 });
       (ctx.snap.snap.snapDeltaToSmartGuides as ReturnType<typeof vi.fn>).mockReturnValue({

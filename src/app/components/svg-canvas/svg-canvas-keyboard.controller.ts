@@ -20,7 +20,7 @@ import type { SelectionMarqueeGesture } from './gestures/selection-marquee-gestu
 import type { ZoomMarqueeGesture } from './gestures/zoom-marquee-gesture';
 import type { ToolRegistryService } from '../../tools/tool-registry.service';
 import { buildEditorToolShortcutMap } from '../../tools/tool-bundles';
-import { RemoveShapesCommand, buildReorderToExtremeCommand } from '../../models/editor-commands';
+import { tryHandleViewKeyDown, type ViewKeyboardActionsPort } from './view-canvas-tool-keyboard';
 
 export interface SvgCanvasKeyboardContext extends Pick<CanvasAdapterToolState, 'markForCheck' | 'getCurrentTool' | 'setTool'> {
   readonly gestureRuntime: GestureRuntimeContext;
@@ -40,8 +40,6 @@ export interface SvgCanvasKeyboardContext extends Pick<CanvasAdapterToolState, '
   /** Current `svgContent` input string (empty means many shortcuts no-op). */
   getSvgContent(): string | null | undefined;
 
-  isSelectorActive(): boolean;
-
   commitInlineTextEditIfActive(): boolean;
   shouldIgnoreKeyboardShortcuts(event: KeyboardEvent): boolean;
 
@@ -58,25 +56,10 @@ export interface SvgCanvasKeyboardContext extends Pick<CanvasAdapterToolState, '
   clearSelectionAndHighlight(): void;
   setDrilledIntoGroupId(id: string | null): void;
 
-  selectAllShapesFromDocument(): void;
-  copySelectionToClipboard(): boolean;
-  cutSelectionToClipboard(): boolean;
-  pasteFromClipboard(): boolean;
-  duplicateSelection(): boolean;
-  groupSelectedShapes(): void;
-  ungroupSelectedShape(): void;
-
-  zoomInAtViewportCenter(): void;
-  zoomOutAtViewportCenter(): void;
-  resetZoomAndRefreshOverlay(): void;
-  fitArtboardToViewport(): void;
-  fitContentToViewport(): void;
-  updateViewBoxOverlayRect(): void;
-
   getPathNodeEditState(): unknown;
   tryDeleteSelectedPathNode(): boolean;
 
-  handleAlignmentShortcut(key: string): boolean;
+  getViewKeyboardActions(): ViewKeyboardActionsPort;
 }
 
 function tryEditorToolShortcut(
@@ -117,12 +100,17 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
   }
   if (ctx.shouldIgnoreKeyboardShortcuts(event)) return;
 
+  if (ctx.getPathNodeEditState() && (event.key === 'Delete' || event.key === 'Backspace')) {
+    if (ctx.tryDeleteSelectedPathNode()) {
+      event.preventDefault();
+      return;
+    }
+  }
+
   if (dispatchRegisteredKeyDown(ctx, event)) {
     event.preventDefault();
     return;
   }
-
-  const selectorActive = ctx.isSelectorActive();
 
   if (event.key === 'Escape') {
     if (ctx.isDraggingShape()) {
@@ -198,116 +186,8 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
     return;
   }
 
-  if (selectorActive && mod && (event.key === 'a' || event.key === 'A')) {
-    ctx.selectAllShapesFromDocument();
+  if (tryHandleViewKeyDown(ctx.getViewKeyboardActions(), event)) {
     event.preventDefault();
     return;
-  }
-
-  if (selectorActive && mod && (event.key === 'c' || event.key === 'C')) {
-    ctx.copySelectionToClipboard();
-    event.preventDefault();
-    return;
-  }
-
-  if (selectorActive && mod && (event.key === 'x' || event.key === 'X')) {
-    if (ctx.cutSelectionToClipboard()) {
-      event.preventDefault();
-    }
-    return;
-  }
-
-  if (selectorActive && mod && (event.key === 'v' || event.key === 'V')) {
-    if (ctx.pasteFromClipboard()) {
-      event.preventDefault();
-    }
-    return;
-  }
-
-  if (selectorActive && mod && (event.key === 'd' || event.key === 'D')) {
-    if (ctx.duplicateSelection()) {
-      event.preventDefault();
-    }
-    return;
-  }
-
-  if (selectorActive && mod && event.shiftKey && ctx.handleAlignmentShortcut(event.key)) {
-    event.preventDefault();
-    return;
-  }
-
-  if (selectorActive && mod && (event.key === 'g' || event.key === 'G') && !event.shiftKey) {
-    ctx.groupSelectedShapes();
-    event.preventDefault();
-    return;
-  }
-
-  if (selectorActive && mod && (event.key === 'g' || event.key === 'G') && event.shiftKey) {
-    ctx.ungroupSelectedShape();
-    event.preventDefault();
-    return;
-  }
-
-  if (selectorActive && !mod && (event.key === ']' || event.key === '[')) {
-    const direction = event.key === ']' ? 'front' : 'back';
-    const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
-    const cmd = buildReorderToExtremeCommand(ctx.svgManipulation, ids, direction);
-    if (cmd) {
-      ctx.editorHistory.pushAndExecute(cmd);
-      event.preventDefault();
-    }
-    return;
-  }
-
-  if (mod && (event.key === '+' || event.key === '=' || event.code === 'NumpadAdd')) {
-    ctx.zoomInAtViewportCenter();
-    event.preventDefault();
-    return;
-  }
-
-  if (mod && (event.key === '-' || event.code === 'NumpadSubtract')) {
-    ctx.zoomOutAtViewportCenter();
-    event.preventDefault();
-    return;
-  }
-
-  if (mod && event.key === '0') {
-    ctx.resetZoomAndRefreshOverlay();
-    event.preventDefault();
-    return;
-  }
-
-  if (mod && event.key === '1') {
-    ctx.fitArtboardToViewport();
-    event.preventDefault();
-    return;
-  }
-
-  if (mod && event.key === '2') {
-    ctx.fitContentToViewport();
-    event.preventDefault();
-    return;
-  }
-
-  if (ctx.getPathNodeEditState() && (event.key === 'Delete' || event.key === 'Backspace')) {
-    if (ctx.tryDeleteSelectedPathNode()) {
-      event.preventDefault();
-    }
-    return;
-  }
-
-  if (
-    selectorActive &&
-    (event.key === 'Delete' || event.key === 'Backspace') &&
-    ctx.shapeSelection.getSelectedShapes().length > 0
-  ) {
-    const ids = ctx.shapeSelection.getSelectedShapes().map((s) => s.id);
-    if (ids.some((id) => ctx.svgManipulation.isElementOrAncestorLocked(id))) {
-      return;
-    }
-    const cmd = new RemoveShapesCommand(ctx.svgManipulation, ids, ctx.shapeSelection);
-    ctx.editorHistory.pushAndExecute(cmd);
-    ctx.svgManipulation.clearHighlight();
-    event.preventDefault();
   }
 }

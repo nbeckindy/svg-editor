@@ -24,6 +24,10 @@ export function createPenCanvasTool(getDeps: () => PenCanvasToolDeps): CanvasToo
     },
     onPointerDown(event) {
       const deps = getDeps();
+      if (event.button === 2) {
+        deps.getPenTool().onPenRightMouseDown();
+        return true;
+      }
       if (!deps.isCanvasReady()) return false;
       const penTool = deps.getPenTool();
       const target = event.target as Element;

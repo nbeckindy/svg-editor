@@ -3,6 +3,7 @@ import { ChangeDetectorRef, signal } from '@angular/core';
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
 import type { EditorTool } from '../../services/editor-tool.service';
 import type { PenToolSession } from './pen-tool-session/pen-tool-session';
+import type { SelectorKeyboardActionsPort } from './selector-canvas-tool-keyboard';
 import {
   patchRegisteredCanvasTool,
   registerAllCanvasToolsForTest,
@@ -36,7 +37,6 @@ function makeKeyboardContext(
     toolRegistry: boot.registry,
     getSvgContent: () => '<svg/>',
     getCurrentTool: () => currentTool(),
-    isSelectorActive: () => currentTool() === 'selector',
     commitInlineTextEditIfActive: () => false,
     shouldIgnoreKeyboardShortcuts: () => false,
     isDraggingShape: () => false,
@@ -52,22 +52,15 @@ function makeKeyboardContext(
     setDrilledIntoGroupId: vi.fn(),
     setTool: (tool: EditorTool) => currentTool.set(tool),
     markForCheck: vi.fn(),
-    selectAllShapesFromDocument: vi.fn(),
-    copySelectionToClipboard: () => false,
-    cutSelectionToClipboard: () => false,
-    pasteFromClipboard: () => false,
-    duplicateSelection: () => false,
-    groupSelectedShapes: vi.fn(),
-    ungroupSelectedShape: vi.fn(),
-    zoomInAtViewportCenter: vi.fn(),
-    zoomOutAtViewportCenter: vi.fn(),
-    resetZoomAndRefreshOverlay: vi.fn(),
-    fitArtboardToViewport: vi.fn(),
-    fitContentToViewport: vi.fn(),
-    updateViewBoxOverlayRect: vi.fn(),
+    getViewKeyboardActions: () => ({
+      zoomInAtViewportCenter: vi.fn(),
+      zoomOutAtViewportCenter: vi.fn(),
+      resetZoomAndRefreshOverlay: vi.fn(),
+      fitArtboardToViewport: vi.fn(),
+      fitContentToViewport: vi.fn()
+    }),
     getPathNodeEditState: () => null,
-    tryDeleteSelectedPathNode: () => false,
-    handleAlignmentShortcut: () => false
+    tryDeleteSelectedPathNode: () => false
   };
   return { ...base, ...over, getCurrentTool: over.getCurrentTool ?? base.getCurrentTool };
 }
