@@ -1,7 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { signal, WritableSignal } from '@angular/core';
-import { provideNoopAnimations } from '@angular/platform-browser/animations';
 import { vi } from 'vitest';
 import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
 import { LayersPanelComponent } from './layers-panel.component';
@@ -48,7 +47,6 @@ describe('LayersPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [LayersPanelComponent],
       providers: [
-        provideNoopAnimations(),
         ...mdiIconHttpTestProviders,
         {
           provide: SvgManipulationService,

@@ -1,6 +1,5 @@
 import { TestBed } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
-import { provideAnimationsAsync } from '@angular/platform-browser/animations/async';
 import { provideRouter } from '@angular/router';
 import { AppComponent } from './app';
 import { SvgManipulationService } from './services/svg-manipulation.service';
@@ -17,7 +16,7 @@ describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [provideAnimationsAsync(), provideRouter(routes), ...mdiIconHttpTestProviders]
+      providers: [provideRouter(routes), ...mdiIconHttpTestProviders]
     }).compileComponents();
 
     registerDefaultDockPanels(TestBed.inject(DockPanelRegistryService));
