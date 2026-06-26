@@ -87,6 +87,7 @@ import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.ser
 import { GroupStructureChangeService } from '../../services/chrome-apply/group-structure-change.service';
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
 import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-command-bridge.service';
+import { EditorDocumentBridgeService } from '../../services/editor-document-bridge.service';
 import { EditorPointerIntentDebugService } from '../../services/editor-pointer-intent-debug.service';
 import { buildPointerIntentSnapshot } from './gestures/pointer-intent-debug';
 import { sampleSolidComputedPaint } from '../../utils/svg-computed-color-sample';
@@ -342,6 +343,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
    */
   readonly editorChrome!: SvgCanvasEditorChromeFacade;
   private readonly acceptedSvgContent = signal<string>('');
+  /** True after {@link replaceDocument}; ignores stale `svgContent` input until parent syncs. */
+  private readonly documentReplaceForced = signal(false);
   private lastObservedTool: EditorTool = 'selector';
   private isRevertingToolChange = false;
   get pathNodeEditFeedbackMessage(): string | null {
@@ -1356,6 +1359,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     protected drawingDefaults: DrawingStyleDefaultsService,
     private chromeEditorApply: ChromeEditorApplyService,
     private pathNodeEditBridge: PathNodeEditCommandBridgeService,
+    private documentBridge: EditorDocumentBridgeService,
     private pathBooleanPreview: PathBooleanPreviewService,
     private toolRegistry: ToolRegistryService,
     private canvasBoundToolRegistrar: CanvasBoundToolRegistrar
@@ -1471,16 +1475,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     effect(() => {
       const incomingSvgContent = this.svgContent();
       const acceptedSvgContent = this.acceptedSvgContent();
-      if (incomingSvgContent === acceptedSvgContent) return;
-      if (
-        this.editorTool.getCurrentTool() === 'pen' &&
-        !this.penTool.confirmDiscardPenSessionIfNeeded('document replace/load')
-      ) {
+      if (this.documentReplaceForced()) {
+        if (incomingSvgContent === acceptedSvgContent) {
+          this.documentReplaceForced.set(false);
+        }
         return;
       }
-      this.acceptedSvgContent.set(incomingSvgContent);
-      this.rasterInsertAnchor.clear();
-      this.canvasView.resetZoom();
+      if (incomingSvgContent === acceptedSvgContent) return;
+      if (!this.tryConfirmDocumentReplace()) return;
+      this.applyDocumentReplace(incomingSvgContent);
     });
     effect(() => {
       const currentTool = this.editorTool.currentTool();
@@ -1604,6 +1607,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         setTimeout(() => this.initializeSVG(acceptedSvgContent), 0);
       }
     });
+    this.documentBridge.register({
+      replaceDocument: (svgContent) => this.replaceDocument(svgContent)
+    });
     this.pathNodeEditBridge.register({
       convertSelectedAnchorToCorner: () =>
         this.pathNodeEditSession.tryApplyPathNodeAnchorCornerFromBridge() ? { ok: true } : { ok: false },
@@ -1639,6 +1645,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.penTool.dispose();
     this.pathNodeEditSession.clearPathNodeEditFeedback();
     this.pathNodeEditBridge.register(null);
+    this.documentBridge.register(null);
     const el = this.canvasViewport()?.nativeElement;
     if (el) {
       el.removeEventListener('wheel', this.boundOnWheel);
@@ -1952,6 +1959,35 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       this._highlightRectCacheKey = '';
     }
     this.cdr.detectChanges();
+  }
+
+  private tryConfirmDocumentReplace(): boolean {
+    if (
+      this.editorTool.getCurrentTool() === 'pen' &&
+      !this.penTool.confirmDiscardPenSessionIfNeeded('document replace/load')
+    ) {
+      return false;
+    }
+    return true;
+  }
+
+  private applyDocumentReplace(svgContent: string): void {
+    this.acceptedSvgContent.set(svgContent);
+    this.rasterInsertAnchor.clear();
+    this.canvasView.resetZoom();
+    this.shapeSelection.clearSelection();
+    this.svgManipulation.clearHighlight();
+  }
+
+  replaceDocument(svgContent: string): boolean {
+    if (!this.tryConfirmDocumentReplace()) return false;
+    this.documentReplaceForced.set(true);
+    const sameAcceptedContent = svgContent === this.acceptedSvgContent();
+    this.applyDocumentReplace(svgContent);
+    if (sameAcceptedContent && svgContent && this.svgContainer()?.nativeElement) {
+      setTimeout(() => this.initializeSVG(svgContent), 0);
+    }
+    return true;
   }
 
   private initializeSVG(svgContent: string): void {
