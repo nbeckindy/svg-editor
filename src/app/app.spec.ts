@@ -279,20 +279,40 @@ describe('AppComponent', () => {
   });
 
   describe('onNewCanvas', () => {
-    it('should set svgContent to empty then to DEFAULT_SVG via microtask', async () => {
+    it('should set svgContent to DEFAULT_DOCUMENT_SVG synchronously after reset', () => {
       const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
       const app = fixture.componentInstance;
 
       app.svgContent = '<svg><circle cx="10" cy="10" r="5"/></svg>';
       app.onNewCanvas();
-      expect(app.svgContent).toBe('');
-
-      await new Promise<void>((r) => queueMicrotask(r));
       expect(app.svgContent).toContain('viewBox="0 0 800 600"');
     });
 
-    it('should clear selection and highlight', () => {
+    it('should clear live DOM when parent svgContent string is unchanged', async () => {
       const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      const svg = TestBed.inject(SvgManipulationService);
+      svg.insertShapeMarkup('<rect id="stale-rect" x="1" y="2" width="10" height="10"/>');
+      expect(svg.getSVGInstance()?.findOne('#stale-rect')).toBeTruthy();
+
+      fixture.componentInstance.onNewCanvas();
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      expect(svg.getSVGInstance()?.findOne('#stale-rect')).toBeFalsy();
+    });
+
+    it('should clear selection and highlight', async () => {
+      const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
       const app = fixture.componentInstance;
       const shapeSelection = TestBed.inject(ShapeSelectionService);
       const svgManipulation = TestBed.inject(SvgManipulationService);
@@ -308,6 +328,7 @@ describe('AppComponent', () => {
 
     it('should clear uploadedFileName', () => {
       const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
       const app = fixture.componentInstance;
 
       app.uploadedFileName = 'test.svg';
@@ -315,18 +336,30 @@ describe('AppComponent', () => {
       expect(app.uploadedFileName).toBe('');
     });
 
-    it('should clear editor history', () => {
+    it('should clear editor history', async () => {
       const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
       const app = fixture.componentInstance;
       const editorHistory = TestBed.inject(EditorHistoryService);
 
+      const dummyCmd = { description: 'Dummy command', execute: vi.fn(), undo: vi.fn() };
+      editorHistory.pushAndExecute(dummyCmd);
       const clearSpy = vi.spyOn(editorHistory, 'clear');
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+
       app.onNewCanvas();
+      await new Promise((r) => setTimeout(r, 50));
       expect(clearSpy).toHaveBeenCalled();
+
+      confirmSpy.mockRestore();
     });
 
     it('should show confirm dialog when canUndo is true and abort if user cancels', () => {
       const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
       const app = fixture.componentInstance;
       const editorHistory = TestBed.inject(EditorHistoryService);
 
@@ -347,6 +380,7 @@ describe('AppComponent', () => {
 
     it('should not show confirm dialog when canUndo is false', () => {
       const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
       const app = fixture.componentInstance;
 
       const confirmSpy = vi.spyOn(window, 'confirm');
@@ -358,8 +392,9 @@ describe('AppComponent', () => {
       confirmSpy.mockRestore();
     });
 
-    it('should proceed with new canvas when user confirms', async () => {
+    it('should proceed with new canvas when user confirms', () => {
       const fixture = TestBed.createComponent(AppComponent);
+      fixture.detectChanges();
       const app = fixture.componentInstance;
       const editorHistory = TestBed.inject(EditorHistoryService);
 
@@ -372,9 +407,6 @@ describe('AppComponent', () => {
       app.onNewCanvas();
 
       expect(confirmSpy).toHaveBeenCalled();
-      expect(app.svgContent).toBe('');
-
-      await new Promise<void>((r) => queueMicrotask(r));
       expect(app.svgContent).toContain('viewBox="0 0 800 600"');
 
       confirmSpy.mockRestore();

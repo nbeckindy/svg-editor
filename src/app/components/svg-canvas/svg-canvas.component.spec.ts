@@ -112,6 +112,95 @@ describe('SvgCanvasComponent', () => {
     expect(component).toBeTruthy();
   });
 
+  describe('replaceDocument', () => {
+    const blankDoc = '<svg viewBox="0 0 100 100"></svg>';
+
+    async function loadBlankDoc(): Promise<void> {
+      fixture.componentRef.setInput('svgContent', blankDoc);
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+    }
+
+    it('re-inits when content string equals current accepted content', async () => {
+      await loadBlankDoc();
+      svgManipulationService.insertShapeMarkup('<rect id="same-str-reset" x="1" y="2" width="10" height="10"/>');
+      expect(svgManipulationService.getSVGInstance()?.findOne('#same-str-reset')).toBeTruthy();
+
+      expect(component.replaceDocument(blankDoc)).toBe(true);
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      expect(svgManipulationService.getSVGInstance()?.findOne('#same-str-reset')).toBeFalsy();
+    });
+
+    it('canceling pen discard blocks replaceDocument and preserves document', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="doc-pen-old" x="1" y="1" width="5" height="5"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      editorToolService.setTool('pen');
+      stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const replaceSvg = '<svg viewBox="0 0 100 100"><circle id="doc-pen-new" cx="20" cy="20" r="5"/></svg>';
+      expect(component.replaceDocument(replaceSvg)).toBe(false);
+
+      const host = component.svgContainer()?.nativeElement;
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(component.isPenSessionActive).toBe(true);
+      expect(host?.querySelector('#doc-pen-old')).toBeTruthy();
+      expect(host?.querySelector('#doc-pen-new')).toBeFalsy();
+      confirmSpy.mockRestore();
+    });
+
+    it('accepting pen discard replaces document via replaceDocument', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="doc-pen-old2" x="1" y="1" width="5" height="5"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      editorToolService.setTool('pen');
+      stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const replaceSvg = '<svg viewBox="0 0 100 100"><circle id="doc-pen-new2" cx="20" cy="20" r="5"/></svg>';
+      expect(component.replaceDocument(replaceSvg)).toBe(true);
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      const host = component.svgContainer()?.nativeElement;
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(component.isPenSessionActive).toBe(false);
+      expect(host?.querySelector('#doc-pen-old2')).toBeFalsy();
+      expect(host?.querySelector('#doc-pen-new2')).toBeTruthy();
+      confirmSpy.mockRestore();
+    });
+  });
+
   it('raster drop on canvas calls RasterImageInsertService with mapped anchor and silent MIME skips', async () => {
     const rasterInsert = TestBed.inject(RasterImageInsertService);
     const insertSpy = vi.spyOn(rasterInsert, 'insertRasterFileAtAnchor').mockResolvedValue({ kind: 'inserted' });
@@ -574,12 +663,12 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should not clear selection when zoom tool is active and user clicks canvas', () => {
-    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
-    const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
-
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('zoom');
+
+    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+    const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
 
     const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
@@ -1032,13 +1121,13 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should not clear selection or select shape when pan tool is active and user clicks canvas', () => {
-    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
-    const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
-    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
-
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="c1" cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('pan');
+
+    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+    const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
+    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
 
     const mockEvent = {
       target: { tagName: 'svg' },
