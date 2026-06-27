@@ -24,7 +24,6 @@ import {
   rotateGhostWorldToUnionMatrix
 } from '../../utils/selection-rotate';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
-import { rootSvgUserPointToScreenPoint, screenPointToRootSvgUserPoint } from '../../utils/svg-screen-user';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   EditorCommand,
@@ -100,6 +99,7 @@ import { GroupStructureChangeService } from '../../services/chrome-apply/group-s
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
 import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-command-bridge.service';
 import { EditorDocumentBridgeService } from '../../services/editor-document-bridge.service';
+import { CanvasCoordinateMappingService } from '../../services/canvas-coordinate-mapping.service';
 import { EditorPointerIntentDebugService } from '../../services/editor-pointer-intent-debug.service';
 import { buildPointerIntentSnapshot } from './gestures/pointer-intent-debug';
 import { sampleSolidComputedPaint } from '../../utils/svg-computed-color-sample';
@@ -256,6 +256,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     canRotate: false
   });
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
+  private readonly coordinateMapping = inject(CanvasCoordinateMappingService);
   private readonly groupStructureChange = inject(GroupStructureChangeService);
   readonly rulerOverlay = viewChild(RulerOverlayComponent);
   readonly inlineTextEditorOverlay = viewChild(InlineTextEditorOverlayComponent);
@@ -498,7 +499,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   private getPenPathInsertToleranceSvg(): number {
     const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
     if (!mainSvg) return 14;
-    const vb = this.parseOverlayViewBox();
+    const vb = this.coordinateMapping.parseOverlayViewBox();
     const r = mainSvg.getBoundingClientRect();
     if (!vb || r.width <= 0 || r.height <= 0) return 14;
     const svgPerPx = (vb.vbW / r.width + vb.vbH / r.height) / 2;
@@ -750,7 +751,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       markForCheck: () => this.cdr.markForCheck(),
       getCurrentTool: () => this.editorTool.getCurrentTool(),
       setTool: (tool) => this.editorTool.setTool(tool),
-      clientToEditorSvgPoint: (clientX, clientY) => this.clientToEditorSvgPoint(clientX, clientY),
+      clientToEditorSvgPoint: (clientX, clientY) =>
+        this.coordinateMapping.clientToEditorSvgPoint(clientX, clientY),
       getMainSvgElement: () =>
         this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null,
       isEditorContentShapeTarget: (target) => !!(target && this.isEditorContentShapeTarget(target)),
@@ -761,7 +763,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   private createPathNodeEditSessionPorts(): PathNodeEditSessionPorts {
     return {
       ...this.createCanvasAdapterContextSlice(),
-      svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
+      svgBboxToOverlayPixels: (bbox) => this.coordinateMapping.svgBboxToOverlayPixels(bbox),
       svgManipulation: this.svgManipulation,
       shapeSelection: this.shapeSelection,
       editorHistory: this.editorHistory,
@@ -1517,8 +1519,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       shapeSelection: this.shapeSelection,
       editorHistory: this.editorHistory,
       snap: this.snap,
-      clientToEditorSvgPoint: (cx: number, cy: number) => this.clientToEditorSvgPoint(cx, cy),
-      svgBboxToOverlayPixels: (bbox: Rect) => this.svgBboxToOverlayPixels(bbox),
+      coordinateMapping: this.coordinateMapping,
       invalidateHighlightCache: () => {
         this._highlightRectCacheKey = '';
       },
@@ -1608,24 +1609,26 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.pointerGestureRouter = pointerStack.pointerGestureRouter;
     this.penTool = pointerStack.penTool;
     this.inlineTextEditSession = new InlineTextEditSession(() => this.createInlineTextEditSessionPorts());
-    this.viewportChrome = new CanvasViewportChromePresenter({
-      getWrapperWidth: () => this.wrapperWidth,
-      getWrapperHeight: () => this.wrapperHeight,
-      getRulerOriginOffsetX: () => this.rulerOriginOffsetX,
-      getRulerOriginOffsetY: () => this.rulerOriginOffsetY,
-      getCanvasScale: () => this.canvasView.scale,
-      getCanvasPanX: () => this.canvasView.panX,
-      getCanvasPanY: () => this.canvasView.panY,
-      isGridSnapEnabled: () => this.snap.gridEnabled(),
-      hasSvgContent: () => !!this.svgContent(),
-      isAltKeyPressed: () => this.altKeyPressed,
-      isDraggingShape: () => this.isDraggingShape,
-      isResizingSelection: () => this.isResizingSelection,
-      getDragActiveGuides: () => this.drag.activeGuides,
-      getResizeActiveGuides: () => this.resize.activeGuides,
-      svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
-      getViewBoxOverlayRect: () => this._viewBoxOverlayRect
-    });
+    this.viewportChrome = new CanvasViewportChromePresenter(
+      {
+        getWrapperWidth: () => this.wrapperWidth,
+        getWrapperHeight: () => this.wrapperHeight,
+        getRulerOriginOffsetX: () => this.rulerOriginOffsetX,
+        getRulerOriginOffsetY: () => this.rulerOriginOffsetY,
+        getCanvasScale: () => this.canvasView.scale,
+        getCanvasPanX: () => this.canvasView.panX,
+        getCanvasPanY: () => this.canvasView.panY,
+        isGridSnapEnabled: () => this.snap.gridEnabled(),
+        hasSvgContent: () => !!this.svgContent(),
+        isAltKeyPressed: () => this.altKeyPressed,
+        isDraggingShape: () => this.isDraggingShape,
+        isResizingSelection: () => this.isResizingSelection,
+        getDragActiveGuides: () => this.drag.activeGuides,
+        getResizeActiveGuides: () => this.resize.activeGuides,
+        getViewBoxOverlayRect: () => this._viewBoxOverlayRect
+      },
+      this.coordinateMapping
+    );
     this.editorChrome = new SvgCanvasEditorChromeFacade(this);
 
     effect(() => {
@@ -1813,6 +1816,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.pathNodeEditSession.clearPathNodeEditFeedback();
     this.pathNodeEditBridge.register(null);
     this.documentBridge.register(null);
+    this.coordinateMapping.unbind();
     const el = this.canvasViewport()?.nativeElement;
     if (el) {
       el.removeEventListener('wheel', this.boundOnWheel);
@@ -1840,7 +1844,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       svgManipulation: this.svgManipulation,
       editorHistory: this.editorHistory,
       shapeSelection: this.shapeSelection,
-      svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
+      svgBboxToOverlayPixels: (bbox) => this.coordinateMapping.svgBboxToOverlayPixels(bbox),
       focusInlineTextEditor: () => {
         setTimeout(() => this.inlineTextEditorOverlay()?.focusEditor(), 0);
       },
@@ -1869,7 +1873,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         markForCheck: () => this.cdr.markForCheck(),
         getCurrentTool: () => this.editorTool.getCurrentTool(),
         setTool: (tool) => this.editorTool.setTool(tool),
-        clientToEditorSvgPoint: (clientX, clientY) => this.clientToEditorSvgPoint(clientX, clientY),
+        clientToEditorSvgPoint: (clientX, clientY) =>
+        this.coordinateMapping.clientToEditorSvgPoint(clientX, clientY),
         getMainSvgElement: () =>
           this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null,
         isEditorContentShapeTarget: (target) => !!(target && this.isEditorContentShapeTarget(target)),
@@ -1887,8 +1892,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       },
       isPenAltCurveMode: () => this.editorTool.isPenAltCurveMode(),
       setPenAltCurveMode: (enabled) => this.editorTool.setPenAltCurveMode(enabled),
-      svgBboxToOverlayPixels: (bbox) => this.svgBboxToOverlayPixels(bbox),
-      parseOverlayViewBox: () => this.parseOverlayViewBox(),
+      svgBboxToOverlayPixels: (bbox) => this.coordinateMapping.svgBboxToOverlayPixels(bbox),
+      parseOverlayViewBox: () => this.coordinateMapping.parseOverlayViewBox(),
       confirmDiscardInProgressPath: (reason) =>
         typeof window === 'undefined' ||
         window.confirm(`Discard the current in-progress pen path before ${reason}?`),
@@ -1959,6 +1964,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
     if (!mainSvg) {
       this._viewBoxOverlayRect = null;
+      this.bindCoordinateMapping();
       return;
     }
     const vb = mainSvg.getAttribute('viewBox');
@@ -2012,101 +2018,41 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
           this._viewBoxOverlayRect = this.svgBboxToOverlayPixels(bbox);
           this.cdr.markForCheck();
         }, 0);
+        this.bindCoordinateMapping();
         return;
       }
     }
     this._viewBoxOverlayRect = null;
+    this.bindCoordinateMapping();
+  }
+
+  private bindCoordinateMapping(): void {
+    this.coordinateMapping.bind({
+      getMainSvgElement: () =>
+        this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null,
+      getOverlayViewBoxString: () => this.overlayViewBox,
+      getZoomWrapperElement: () => this.zoomWrapper()?.nativeElement ?? null,
+      getCanvasScale: () => this.canvasView.scale,
+      getWrapperWidth: () => this.wrapperWidth,
+      getWrapperHeight: () => this.wrapperHeight
+    });
   }
 
   private updateViewBoxOverlayRect(): void {
     this.syncOverlayViewBox();
   }
 
-  svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): { x: number; y: number; width: number; height: number } {
-    const parts = this.overlayViewBox.split(/\s+/);
-    const vbMinX = parts.length >= 4 ? Number(parts[0]) || 0 : 0;
-    const vbMinY = parts.length >= 4 ? Number(parts[1]) || 0 : 0;
-    const vbW = parts.length >= 4 ? Number(parts[2]) || 100 : 100;
-    const vbH = parts.length >= 4 ? Number(parts[3]) || 100 : 100;
-    const canvasScale = this.canvasView.scale;
-    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
-    if (!mainSvg) {
-      const sx = (this.wrapperWidth * canvasScale) / vbW;
-      const sy = (this.wrapperHeight * canvasScale) / vbH;
-      return { x: (bbox.x - vbMinX) * sx, y: (bbox.y - vbMinY) * sy, width: bbox.width * sx, height: bbox.height * sy };
-    }
-    const wrapperRect = this.zoomWrapper()?.nativeElement?.getBoundingClientRect();
-    const svgRect = mainSvg.getBoundingClientRect();
-    let viewportW = svgRect.width;
-    let viewportH = svgRect.height;
-    let svgLeftInWrapper = 0;
-    let svgTopInWrapper = 0;
-    const usingVisualRects = Boolean(wrapperRect && viewportW > 0 && viewportH > 0);
-    if (!usingVisualRects) {
-      viewportW = this.wrapperWidth;
-      viewportH = this.wrapperHeight;
-    } else {
-      svgLeftInWrapper = svgRect.left - wrapperRect!.left;
-      svgTopInWrapper = svgRect.top - wrapperRect!.top;
-    }
-    const par = mainSvg.getAttribute('preserveAspectRatio') ?? 'xMidYMid meet';
-    const isNone = par.split(/\s+/)[0] === 'none';
-    let scaleFit: number;
-    let offsetX: number;
-    let offsetY: number;
-    if (isNone) {
-      const sx = (viewportW * (usingVisualRects ? 1 : canvasScale)) / vbW;
-      const sy = (viewportH * (usingVisualRects ? 1 : canvasScale)) / vbH;
-      const px = svgLeftInWrapper + (bbox.x - vbMinX) * (viewportW / vbW);
-      const py = svgTopInWrapper + (bbox.y - vbMinY) * (viewportH / vbH);
-      return { x: usingVisualRects ? px : px * canvasScale, y: usingVisualRects ? py : py * canvasScale, width: bbox.width * sx, height: bbox.height * sy };
-    }
-    scaleFit = Math.min(viewportW / vbW, viewportH / vbH);
-    const align = par.split(/\s+/)[0].toLowerCase();
-    const contentW = scaleFit * vbW;
-    const contentH = scaleFit * vbH;
-    if (align.includes('xmin')) offsetX = 0;
-    else if (align.includes('xmid')) offsetX = (viewportW - contentW) / 2;
-    else offsetX = viewportW - contentW;
-    if (align.includes('ymin')) offsetY = 0;
-    else if (align.includes('ymid')) offsetY = (viewportH - contentH) / 2;
-    else offsetY = viewportH - contentH;
-    const viewportX = offsetX + (bbox.x - vbMinX) * scaleFit;
-    const viewportY = offsetY + (bbox.y - vbMinY) * scaleFit;
-    if (usingVisualRects) {
-      return { x: svgLeftInWrapper + viewportX, y: svgTopInWrapper + viewportY, width: bbox.width * scaleFit, height: bbox.height * scaleFit };
-    }
-    const x = (svgLeftInWrapper + viewportX) * canvasScale;
-    const y = (svgTopInWrapper + viewportY) * canvasScale;
-    const w = bbox.width * scaleFit * canvasScale;
-    const h = bbox.height * scaleFit * canvasScale;
-    return { x, y, width: w, height: h };
-  }
-
-  private parseOverlayViewBox(): { vbMinX: number; vbMinY: number; vbW: number; vbH: number } | null {
-    const parts = this.overlayViewBox.split(/\s+/);
-    if (parts.length < 4) return null;
-    return {
-      vbMinX: Number(parts[0]) || 0,
-      vbMinY: Number(parts[1]) || 0,
-      vbW: Number(parts[2]) || 100,
-      vbH: Number(parts[3]) || 100
-    };
+  svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): {
+    x: number;
+    y: number;
+    width: number;
+    height: number;
+  } {
+    return this.coordinateMapping.svgBboxToOverlayPixels(bbox);
   }
 
   clientToEditorSvgPoint(clientX: number, clientY: number): { x: number; y: number } | null {
-    const mainSvg = this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null;
-    if (!mainSvg) return null;
-    const fromCtm = screenPointToRootSvgUserPoint(mainSvg, clientX, clientY);
-    if (fromCtm) return fromCtm;
-    const vb = this.parseOverlayViewBox();
-    const r = mainSvg.getBoundingClientRect();
-    if (!vb || r.width <= 0 || r.height <= 0) return null;
-    const { vbMinX, vbMinY, vbW, vbH } = vb;
-    return {
-      x: vbMinX + ((clientX - r.left) / r.width) * vbW,
-      y: vbMinY + ((clientY - r.top) / r.height) * vbH
-    };
+    return this.coordinateMapping.clientToEditorSvgPoint(clientX, clientY);
   }
 
   private syncSelectionFromDom(): void {

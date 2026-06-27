@@ -9,6 +9,7 @@ import type { SvgManipulationService } from '../../services/svg-manipulation.ser
 import type { ShapeSelectionService } from '../../services/shape-selection.service';
 import type { EditorHistoryService } from '../../services/editor-history.service';
 import type { SnapCandidateShape, SnapService } from '../../services/snap.service';
+import type { CanvasCoordinateMappingService } from '../../services/canvas-coordinate-mapping.service';
 import type { ToolRegistryService } from '../../tools/tool-registry.service';
 import type { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
 import type { PenCanvasToolDeps } from '../../tools/pen-canvas-tool';
@@ -52,8 +53,7 @@ export interface CreateSvgCanvasPointerStackArgs {
   shapeSelection: ShapeSelectionService;
   editorHistory: EditorHistoryService;
   snap: SnapService;
-  clientToEditorSvgPoint: (clientX: number, clientY: number) => { x: number; y: number } | null;
-  svgBboxToOverlayPixels: (bbox: Rect) => Rect;
+  coordinateMapping: CanvasCoordinateMappingService;
   invalidateHighlightCache: () => void;
   setLastBbox: (bbox: Rect | null) => void;
   getSmartGuideCandidates: () => SnapCandidateShape[];
@@ -131,8 +131,8 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     pointer: {
       cdr: args.cdr,
       highlightOverlayContainer: args.highlightOverlayContainer,
-      clientToEditorSvgPoint: (cx, cy) => args.clientToEditorSvgPoint(cx, cy),
-      svgBboxToOverlayPixels: (bbox) => args.svgBboxToOverlayPixels(bbox),
+      clientToEditorSvgPoint: (cx, cy) => args.coordinateMapping.clientToEditorSvgPoint(cx, cy),
+      svgBboxToOverlayPixels: (bbox) => args.coordinateMapping.svgBboxToOverlayPixels(bbox),
       invalidateHighlightCache: () => args.invalidateHighlightCache(),
       setLastBbox: (bbox) => args.setLastBbox(bbox)
     },
@@ -171,7 +171,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     hasPathNodeEditState: args.hasPathNodeEditState,
     tryStartPathNodeDrag: args.tryStartPathNodeDrag,
     isEditorContentShapeTarget: args.isEditorContentShapeTarget,
-    clientToEditorSvgPoint: args.clientToEditorSvgPoint,
+    clientToEditorSvgPoint: (cx, cy) => args.coordinateMapping.clientToEditorSvgPoint(cx, cy),
     isShapeSelected: args.isShapeSelected,
     getNearestGroupAncestorId: args.getNearestGroupAncestorId,
     getSelectedShapeIds: args.getSelectedShapeIds,
