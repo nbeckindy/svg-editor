@@ -1,5 +1,4 @@
 import { TestBed } from '@angular/core/testing';
-import { HttpTestingController } from '@angular/common/http/testing';
 import { provideRouter } from '@angular/router';
 import { AppComponent } from './app';
 import { SvgManipulationService } from './services/svg-manipulation.service';
@@ -10,22 +9,15 @@ import { EditorLayoutService } from './services/editor-layout.service';
 import { DockPanelRegistryService } from './panels/dock-panel-registry.service';
 import { registerDefaultDockPanels } from './panels/register-default-dock-panels';
 import { routes } from './app.routes';
-import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from './testing/mdi-icon-testing';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [provideRouter(routes), ...mdiIconHttpTestProviders]
+      providers: [provideRouter(routes)]
     }).compileComponents();
 
     registerDefaultDockPanels(TestBed.inject(DockPanelRegistryService));
-    registerMdiSvgIconSetForTests();
-  });
-
-  afterEach(() => {
-    flushMdiSvgIfPending();
-    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
   });
 
   it('should create the app', () => {

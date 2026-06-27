@@ -76,6 +76,18 @@ export interface CreateSvgCanvasPointerStackArgs {
   isRotatingSelection: SelectorCanvasToolDeps['isRotatingSelection'];
   isDraggingShape: SelectorCanvasToolDeps['isDraggingShape'];
   getSelectorKeyboardActions: SelectorCanvasToolDeps['getKeyboardActions'];
+  getDrilledIntoGroupId: SelectorCanvasToolDeps['getDrilledIntoGroupId'];
+  setDrilledIntoGroupId: SelectorCanvasToolDeps['setDrilledIntoGroupId'];
+  isGroupAClipMaskCarrier: SelectorCanvasToolDeps['isGroupAClipMaskCarrier'];
+  consumeSelectionMarqueeJustEnded: SelectorCanvasToolDeps['consumeSelectionMarqueeJustEnded'];
+  shouldSkipEmptyHitSelectionClear: SelectorCanvasToolDeps['shouldSkipEmptyHitSelectionClear'];
+  clearHighlight: SelectorCanvasToolDeps['clearHighlight'];
+  getSvgInstanceForClick: SelectorCanvasToolDeps['getSvgInstance'];
+  getShapePropertiesForClick: SelectorCanvasToolDeps['getShapeProperties'];
+  getShapePropertiesInSameClipGroupForClick: SelectorCanvasToolDeps['getShapePropertiesInSameClipGroup'];
+  selectShapesForClick: SelectorCanvasToolDeps['selectShapes'];
+  toggleShapeGroupInSelectionForClick: SelectorCanvasToolDeps['toggleShapeGroupInSelection'];
+  clearSelectionForClick: SelectorCanvasToolDeps['clearSelection'];
   getZoomMarquee: ZoomCanvasToolDeps['getZoomMarquee'];
   isZoomMarquee: ZoomCanvasToolDeps['isZoomMarquee'];
   commitZoomMarquee: ZoomCanvasToolDeps['commitZoomMarquee'];
@@ -168,7 +180,19 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     isSkewingSelection: args.isSkewingSelection,
     isRotatingSelection: args.isRotatingSelection,
     isDraggingShape: args.isDraggingShape,
-    getKeyboardActions: args.getSelectorKeyboardActions
+    getKeyboardActions: args.getSelectorKeyboardActions,
+    getSvgInstance: args.getSvgInstanceForClick,
+    getShapeProperties: args.getShapePropertiesForClick,
+    getShapePropertiesInSameClipGroup: args.getShapePropertiesInSameClipGroupForClick,
+    selectShapes: args.selectShapesForClick,
+    toggleShapeGroupInSelection: args.toggleShapeGroupInSelectionForClick,
+    clearSelection: args.clearSelectionForClick,
+    clearHighlight: args.clearHighlight,
+    getDrilledIntoGroupId: args.getDrilledIntoGroupId,
+    setDrilledIntoGroupId: args.setDrilledIntoGroupId,
+    isGroupAClipMaskCarrier: args.isGroupAClipMaskCarrier,
+    consumeSelectionMarqueeJustEnded: args.consumeSelectionMarqueeJustEnded,
+    shouldSkipEmptyHitSelectionClear: args.shouldSkipEmptyHitSelectionClear
   }));
 
   args.canvasBoundToolRegistrar.registerViewUtilityTools({

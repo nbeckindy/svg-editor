@@ -1,8 +1,7 @@
 import { ApplicationConfig, inject, provideAppInitializer, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
-import { MatIconRegistry } from '@angular/material/icon';
-import { DomSanitizer } from '@angular/platform-browser';
+import { MAT_ICON_DEFAULT_OPTIONS } from '@angular/material/icon';
 import { routes } from './app.routes';
 import { DockPanelRegistryService } from './panels/dock-panel-registry.service';
 import { registerDefaultDockPanels } from './panels/register-default-dock-panels';
@@ -15,13 +14,7 @@ export const appConfig: ApplicationConfig = {
     provideBrowserGlobalErrorListeners(),
     provideHttpClient(),
     provideRouter(routes),
-    provideAppInitializer(() => {
-      const matIconRegistry = inject(MatIconRegistry);
-      const domSanitizer = inject(DomSanitizer);
-      matIconRegistry.addSvgIconSet(
-        domSanitizer.bypassSecurityTrustResourceUrl('assets/mdi.svg')
-      );
-    }),
+    { provide: MAT_ICON_DEFAULT_OPTIONS, useValue: { fontSet: 'material-symbols-outlined' } },
     provideAppInitializer(() => {
       registerDefaultDockPanels(inject(DockPanelRegistryService));
     }),

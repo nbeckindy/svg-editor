@@ -43,6 +43,18 @@ function makeSelectorDeps(over: Partial<SelectorCanvasToolDeps> = {}): () => Sel
     isSkewingSelection: () => false,
     isRotatingSelection: () => false,
     isDraggingShape: () => false,
+    getSvgInstance: () => null,
+    getShapeProperties: () => ({ id: 'a', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }),
+    getShapePropertiesInSameClipGroup: () => [],
+    selectShapes: vi.fn(),
+    toggleShapeGroupInSelection: vi.fn(),
+    clearSelection: vi.fn(),
+    clearHighlight: vi.fn(),
+    getDrilledIntoGroupId: () => null,
+    setDrilledIntoGroupId: vi.fn(),
+    isGroupAClipMaskCarrier: () => false,
+    consumeSelectionMarqueeJustEnded: () => false,
+    shouldSkipEmptyHitSelectionClear: () => false,
     getKeyboardActions: () =>
       ({
         getSvgContent: () => 'svg',
@@ -97,5 +109,19 @@ describe('createSelectorCanvasTool', () => {
     registerSelectorCanvasTools(registry, makeSelectorDeps());
     expect(registry.has('selector')).toBe(true);
     expect(registry.has('node-edit-selector')).toBe(true);
+  });
+
+  it('clears selection on empty hit via onClick', () => {
+    const clearSelection = vi.fn();
+    const deps = makeSelectorDeps({ clearSelection });
+    const tool = createSelectorCanvasTool('selector', deps);
+
+    const consumed = tool.onClick?.(
+      { target: document.createElement('svg') } as unknown as MouseEvent,
+      { x: 0, y: 0 }
+    );
+
+    expect(consumed).toBe(true);
+    expect(clearSelection).toHaveBeenCalled();
   });
 });

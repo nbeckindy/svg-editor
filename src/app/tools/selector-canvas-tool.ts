@@ -13,6 +13,10 @@ import {
   type SelectorInteractionToolId
 } from './tool-bundles';
 import {
+  handleSelectorCanvasClick,
+  type SelectorCanvasClickDeps
+} from '../components/svg-canvas/selector-canvas-click';
+import {
   tryHandleSelectorKeyDown,
   type SelectorKeyboardActionsPort
 } from '../components/svg-canvas/selector-canvas-tool-keyboard';
@@ -27,7 +31,7 @@ export interface SelectorCanvasToolGestures {
   drag: DragGesture;
 }
 
-export interface SelectorCanvasToolDeps {
+export interface SelectorCanvasToolDeps extends SelectorCanvasClickDeps {
   getGestures: () => SelectorCanvasToolGestures;
   getRuntime: () => GestureRuntimeContext;
   isCanvasReady: () => boolean;
@@ -36,7 +40,6 @@ export interface SelectorCanvasToolDeps {
   isEditorContentShapeTarget: (target: Element) => boolean;
   clientToEditorSvgPoint: (clientX: number, clientY: number) => { x: number; y: number } | null;
   isShapeSelected: (id: string) => boolean;
-  getNearestGroupAncestorId: (id: string) => string | null;
   getSelectedShapeIds: () => string[];
   isSelectionMarquee: () => boolean;
   isResizingSelection: () => boolean;
@@ -188,6 +191,11 @@ export function createSelectorCanvasTool(
         return true;
       }
       return false;
+    },
+    onClick(event) {
+      const deps = getDeps();
+      if (!deps.isCanvasReady()) return false;
+      return handleSelectorCanvasClick(event, deps);
     },
     onKeyDown(event) {
       return tryHandleSelectorKeyDown(getDeps().getKeyboardActions(), event);

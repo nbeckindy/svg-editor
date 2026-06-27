@@ -12,7 +12,7 @@
           [attr.aria-label]="tool.ariaLabel"
           [attr.aria-pressed]="editorTool.currentTool() === tool.id">
           <span class="tool-icon" aria-hidden="true">
-            <mat-icon class="tool-mdi" [svgIcon]="tool.icon"></mat-icon>
+            <mat-icon class="tool-mat-icon">{{ tool.icon }}</mat-icon>
           </span>
         </button>
       }
@@ -36,7 +36,7 @@
           title="Insert image"
           aria-label="Insert image">
           <span class="tool-icon" aria-hidden="true">
-            <mat-icon class="tool-mdi" svgIcon="image-outline"></mat-icon>
+            <mat-icon class="tool-mat-icon">image</mat-icon>
           </span>
         </button>
       }

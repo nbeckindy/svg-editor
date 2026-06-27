@@ -258,8 +258,8 @@
   background: rgba(0, 0, 0, 0.08);
 }
 
-.visibility-toggle .layer-row-mdi,
-.lock-toggle .layer-row-mdi {
+.visibility-toggle .layer-row-mat-icon,
+.lock-toggle .layer-row-mat-icon {
   width: 16px;
   height: 16px;
   font-size: 16px;

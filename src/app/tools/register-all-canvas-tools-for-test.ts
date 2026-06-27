@@ -10,6 +10,8 @@ import { SkewGesture } from '../components/svg-canvas/gestures/skew-gesture';
 import { ZoomMarqueeGesture } from '../components/svg-canvas/gestures/zoom-marquee-gesture';
 import type { PenToolSession } from '../components/svg-canvas/pen-tool-session/pen-tool-session';
 import type { SelectorKeyboardActionsPort } from '../components/svg-canvas/selector-canvas-tool-keyboard';
+import type { ShapeProperties } from '../models/shape-properties.interface';
+import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { EditorTool } from '../services/editor-tool.service';
 import { CanvasBoundToolRegistrar } from './canvas-bound-tool-registrar.service';
 import type { CanvasTool } from './canvas-tool.interface';
@@ -59,6 +61,18 @@ export interface CanvasToolsTestHostState {
   detectChanges: () => void;
   scheduleInsertHoverCursorHitTest: (clientX: number, clientY: number) => void;
   getSelectorKeyboardActions: () => SelectorKeyboardActionsPort;
+  getDrilledIntoGroupId: () => string | null;
+  setDrilledIntoGroupId: (id: string | null) => void;
+  isGroupAClipMaskCarrier: (groupId: string) => boolean;
+  consumeSelectionMarqueeJustEnded: () => boolean;
+  shouldSkipEmptyHitSelectionClear: () => boolean;
+  clearHighlight: () => void;
+  getSvgInstance: () => null;
+  getShapeProperties: (el: SvgJsElement) => ShapeProperties;
+  getShapePropertiesInSameClipGroup: (el: SvgJsElement) => ShapeProperties[];
+  selectShapes: (shapes: ShapeProperties[]) => void;
+  toggleShapeGroupInSelection: (shapes: ShapeProperties[]) => void;
+  clearSelection: () => void;
 }
 
 export interface RegisterAllCanvasToolsForTestOptions {
@@ -118,6 +132,27 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     refreshViewAfterZoomClick: vi.fn(),
     detectChanges: vi.fn(),
     scheduleInsertHoverCursorHitTest: vi.fn(),
+    getDrilledIntoGroupId: () => null,
+    setDrilledIntoGroupId: vi.fn(),
+    isGroupAClipMaskCarrier: () => false,
+    consumeSelectionMarqueeJustEnded: () => false,
+    shouldSkipEmptyHitSelectionClear: () => false,
+    clearHighlight: vi.fn(),
+    getSvgInstance: () => null,
+    getShapeProperties: (el) => ({
+      id: el.id(),
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    }),
+    getShapePropertiesInSameClipGroup: (el) => [
+      { id: el.id(), type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
+    ],
+    selectShapes: vi.fn(),
+    toggleShapeGroupInSelection: vi.fn(),
+    clearSelection: vi.fn(),
     getSelectorKeyboardActions: () =>
       ({
         getSvgContent: () => 'svg',
@@ -226,7 +261,19 @@ export function registerAllCanvasToolsForTest(
     isSkewingSelection: () => hostState.isSkewingSelection,
     isRotatingSelection: () => hostState.isRotatingSelection,
     isDraggingShape: () => hostState.isDraggingShape,
-    getKeyboardActions: hostState.getSelectorKeyboardActions
+    getKeyboardActions: hostState.getSelectorKeyboardActions,
+    getSvgInstance: hostState.getSvgInstance,
+    getShapeProperties: hostState.getShapeProperties,
+    getShapePropertiesInSameClipGroup: hostState.getShapePropertiesInSameClipGroup,
+    selectShapes: hostState.selectShapes,
+    toggleShapeGroupInSelection: hostState.toggleShapeGroupInSelection,
+    clearSelection: hostState.clearSelection,
+    clearHighlight: hostState.clearHighlight,
+    getDrilledIntoGroupId: hostState.getDrilledIntoGroupId,
+    setDrilledIntoGroupId: hostState.setDrilledIntoGroupId,
+    isGroupAClipMaskCarrier: hostState.isGroupAClipMaskCarrier,
+    consumeSelectionMarqueeJustEnded: hostState.consumeSelectionMarqueeJustEnded,
+    shouldSkipEmptyHitSelectionClear: hostState.shouldSkipEmptyHitSelectionClear
   }));
 
   registrar.registerViewUtilityTools({

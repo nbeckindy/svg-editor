@@ -19,7 +19,7 @@ function makeDescriptor(id: ToolDescriptor['id'], over: Partial<ToolDescriptor> 
     id,
     label: id,
     title: id,
-    icon: 'cursor-default-outline',
+    icon: 'near_me',
     stripTestId: `tool-${id}`,
     ariaLabel: id,
     stripGroup: 'selection-view',

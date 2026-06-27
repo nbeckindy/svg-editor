@@ -1,4 +1,6 @@
-import { Component, input, viewChild, AfterViewInit, ElementRef, OnDestroy, ChangeDetectorRef, effect, signal, inject } from '@angular/core';
+import { Component, input, viewChild, AfterViewInit, ElementRef, OnDestroy, ChangeDetectorRef, effect, signal, inject, Injector } from '@angular/core';
+import { MatDividerModule } from '@angular/material/divider';
+import { MatMenu, MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -77,6 +79,16 @@ import { parsePathDForNodeEditing } from '../../models/path-d';
 import { buildPathSelectionOutlineOverlayD } from '../../models/path-selection-outline';
 import { findPenPathInsertHit } from '../../models/path-pen-insert';
 import { ClipboardService } from '../../services/clipboard.service';
+import { openEditorContextMenuAtPointer } from '../editor-context-menu/open-editor-context-menu';
+import {
+  prepareCanvasContextMenuSelection,
+  type CanvasContextMenuSelectionDeps
+} from './canvas-context-menu-selection';
+import {
+  computeCanvasContextMenuState,
+  shouldSuppressCanvasContextMenu,
+  type CanvasContextMenuState
+} from './canvas-context-menu-state';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import {
   applyTextTypographyFromDrawingDefaults,
@@ -204,7 +216,9 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
     RulerOverlayComponent,
     GridOverlayComponent,
     SmartGuideOverlayComponent,
-    InlineTextEditorOverlayComponent
+    InlineTextEditorOverlayComponent,
+    MatMenuModule,
+    MatDividerModule
   ],
   templateUrl: './svg-canvas.component.html',
   styleUrl: './svg-canvas.component.css',
@@ -218,12 +232,29 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
 export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPointerGestureHost {
   private readonly rasterInsertAnchor = inject(RasterInsertAnchorStore);
   private readonly rasterImageInsert = inject(RasterImageInsertService);
+  private readonly injector = inject(Injector);
   readonly RULER_SIZE = 24;
   readonly svgContent = input<string>('');
   readonly svgContainer = viewChild<ElementRef<HTMLElement>>('svgContainer');
   readonly zoomWrapper = viewChild<ElementRef<HTMLElement>>('zoomWrapper');
   readonly highlightOverlayContainer = viewChild<ElementRef<HTMLElement>>('highlightOverlayContainer');
   readonly canvasViewport = viewChild<ElementRef<HTMLElement>>('canvasViewport');
+  readonly canvasContextMenuTrigger = viewChild.required('canvasContextMenuTrigger', {
+    read: MatMenuTrigger
+  });
+  readonly canvasContextMenuTriggerEl = viewChild.required('canvasContextMenuTrigger', {
+    read: ElementRef<HTMLElement>
+  });
+  readonly canvasContextMenu = viewChild.required('canvasContextMenu', { read: MatMenu });
+  readonly contextMenuState = signal<CanvasContextMenuState>({
+    canCut: false,
+    canCopy: false,
+    canPaste: false,
+    canDelete: false,
+    canGroup: false,
+    canUngroup: false,
+    canRotate: false
+  });
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
   private readonly groupStructureChange = inject(GroupStructureChangeService);
   readonly rulerOverlay = viewChild(RulerOverlayComponent);
@@ -1305,6 +1336,120 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.drilledIntoGroupId = null;
   }
 
+  private deleteSelectedShapes(): void {
+    const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
+    if (ids.length === 0) return;
+    if (ids.some((id) => this.svgManipulation.isElementOrAncestorLocked(id))) return;
+    const cmd = new RemoveShapesCommand(this.svgManipulation, ids, this.shapeSelection);
+    this.editorHistory.pushAndExecute(cmd);
+    this.svgManipulation.clearHighlight();
+  }
+
+  private rotateSelectionByDegrees(deltaDeg: number): void {
+    const ids = this.getExpandedSelectedShapeIds();
+    if (ids.length === 0 || this.selectionTouchesLocked(ids)) return;
+    const union = this.svgManipulation.getUnionBBox(ids);
+    if (!union) return;
+    const pivot =
+      this.svgManipulation.getSelectionRotationPivot(ids) ?? unionRotationPivot(union);
+    const snap = this.svgManipulation.snapshotSelectionTransforms(ids);
+    this.editorHistory.pushAndExecute(
+      new UnionRotateCommand(this.svgManipulation, ids, pivot, deltaDeg, snap)
+    );
+    this.svgManipulation.clearHighlight();
+  }
+
+  private getCanvasContextMenuSelectionDeps(): CanvasContextMenuSelectionDeps {
+    return {
+      getSvgInstance: () => this.svgManipulation.getSVGInstance(),
+      getNearestGroupAncestorId: (id) => this.getNearestGroupAncestorId(id),
+      isGroupAClipMaskCarrier: (groupId) => this.isGroupAClipMaskCarrier(groupId),
+      getShapeProperties: (el) => this.svgManipulation.getShapeProperties(el),
+      getShapePropertiesInSameClipGroup: (el) =>
+        this.svgManipulation.getShapePropertiesInSameClipGroup(el),
+      selectShapes: (shapes) => this.shapeSelection.selectShapes(shapes),
+      getDrilledIntoGroupId: () => this.drilledIntoGroupId,
+      setDrilledIntoGroupId: (id) => {
+        this.drilledIntoGroupId = id;
+      },
+      getSelectedShapeIds: () => this.shapeSelection.getSelectedShapes().map((s) => s.id)
+    };
+  }
+
+  private shouldSuppressCanvasContextMenu(): boolean {
+    return shouldSuppressCanvasContextMenu({
+      hasSvgContent: !!this.svgContent(),
+      penSessionActive: this.isPenToolWithActiveSession(),
+      penInsertDragActive: this.isPenInsertOnPathDragActive(),
+      gestureActive:
+        this.isDraggingShape ||
+        this.isResizingSelection ||
+        this.isRotatingSelection ||
+        this.isSkewingSelection ||
+        this.isSelectionMarquee ||
+        this.isZoomMarquee
+    });
+  }
+
+  onCanvasContextMenu(event: MouseEvent): void {
+    if (this.shouldSuppressCanvasContextMenu()) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const selectionResult = prepareCanvasContextMenuSelection(
+      event,
+      this.getCanvasContextMenuSelectionDeps()
+    );
+    this.contextMenuState.set(
+      computeCanvasContextMenuState({
+        hitShape: selectionResult.hitShape,
+        selectedShapes: this.shapeSelection.getSelectedShapes(),
+        hasClipboardContent: this.clipboard.hasContent(),
+        isElementOrAncestorLocked: (id) => this.svgManipulation.isElementOrAncestorLocked(id)
+      })
+    );
+
+    openEditorContextMenuAtPointer({
+      trigger: this.canvasContextMenuTrigger(),
+      triggerEl: this.canvasContextMenuTriggerEl().nativeElement,
+      menu: this.canvasContextMenu(),
+      event,
+      injector: this.injector
+    });
+  }
+
+  onContextMenuCut(): void {
+    this.cutSelectionToClipboard();
+  }
+
+  onContextMenuCopy(): void {
+    this.copySelectionToClipboard();
+  }
+
+  onContextMenuPaste(): void {
+    this.pasteFromClipboard();
+  }
+
+  onContextMenuDelete(): void {
+    this.deleteSelectedShapes();
+  }
+
+  onContextMenuGroup(): void {
+    this.groupSelectedShapes();
+  }
+
+  onContextMenuUngroup(): void {
+    this.ungroupSelectedShape();
+  }
+
+  onContextMenuRotateCw(): void {
+    this.rotateSelectionByDegrees(90);
+  }
+
+  onContextMenuRotateCcw(): void {
+    this.rotateSelectionByDegrees(-90);
+  }
+
   // --- Mouse event orchestration ---
   onDocumentMouseMove(event: MouseEvent): void {
     this.pointerGestureRouter.onDocumentMouseMove(this, event);
@@ -1428,7 +1573,29 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         this.updateTextToolPreviewFromClient(clientX, clientY),
       createTextAtPoint: (clientX, clientY) => this.createTextAtPoint(clientX, clientY),
       destroyTextToolPreview: () => this.destroyTextToolPreview(),
-      sampleEyedropperAt: (event) => this.tryEyedropperSample(event)
+      sampleEyedropperAt: (event) => this.tryEyedropperSample(event),
+      getDrilledIntoGroupId: () => this.drilledIntoGroupId,
+      setDrilledIntoGroupId: (id) => {
+        this.drilledIntoGroupId = id;
+      },
+      isGroupAClipMaskCarrier: (groupId) => this.isGroupAClipMaskCarrier(groupId),
+      consumeSelectionMarqueeJustEnded: () => this.selectionMarquee.consumeJustEnded(),
+      shouldSkipEmptyHitSelectionClear: () => {
+        const now =
+          typeof performance !== 'undefined' && typeof performance.now === 'function'
+            ? performance.now()
+            : Date.now();
+        return now < this.penClosePostNodeEditEmptyClickClearUntilMs;
+      },
+      clearHighlight: () => this.svgManipulation.clearHighlight(),
+      getSvgInstanceForClick: () => this.svgManipulation.getSVGInstance(),
+      getShapePropertiesForClick: (el) => this.svgManipulation.getShapeProperties(el),
+      getShapePropertiesInSameClipGroupForClick: (el) =>
+        this.svgManipulation.getShapePropertiesInSameClipGroup(el),
+      selectShapesForClick: (shapes) => this.shapeSelection.selectShapes(shapes),
+      toggleShapeGroupInSelectionForClick: (shapes) =>
+        this.shapeSelection.toggleShapeGroupInSelection(shapes),
+      clearSelectionForClick: () => this.shapeSelection.clearSelection()
     });
     this.drag = pointerStack.drag;
     this.resize = pointerStack.resize;
@@ -2167,61 +2334,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     }
     if (this.editorTool.isCreationTool()) {
       return;
-    }
-
-    if (this.selectionMarquee.consumeJustEnded()) {
-      return;
-    }
-
-    const svgInstance = svgInstanceForClick;
-    const svgElement = clickedContentShapeEl;
-    if (svgElement) {
-      const additive = event.shiftKey || event.ctrlKey || event.metaKey;
-      const nearestGroupId = this.svgManipulation.getNearestGroupAncestorId(clickTarget.id);
-      const groupIsClipCarrier = nearestGroupId ? this.isGroupAClipMaskCarrier(nearestGroupId) : false;
-
-      if (nearestGroupId && !groupIsClipCarrier) {
-        if (this.drilledIntoGroupId === nearestGroupId) {
-          const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(svgElement);
-          if (additive) {
-            this.shapeSelection.toggleShapeGroupInSelection(expanded);
-          } else {
-            this.shapeSelection.selectShapes(expanded);
-          }
-        } else {
-          const groupEl = svgInstance?.findOne(`#${nearestGroupId}`) as SVGElement | undefined;
-          if (groupEl) {
-            const groupProps = this.svgManipulation.getShapeProperties(groupEl);
-            if (additive) {
-              this.shapeSelection.toggleShapeGroupInSelection([groupProps]);
-            } else {
-              this.shapeSelection.selectShapes([groupProps]);
-            }
-            this.drilledIntoGroupId = null;
-          }
-        }
-      } else {
-        const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(svgElement);
-        if (additive) {
-          this.shapeSelection.toggleShapeGroupInSelection(expanded);
-        } else {
-          this.shapeSelection.selectShapes(expanded);
-        }
-      }
-    } else {
-      // Pen may finish on mousedown/mouseup; the following primary `click` can target the root SVG
-      // (no `id`) and would clear selection — see `pen-tool-session-finish.ts` + guard below.
-      const now =
-        typeof performance !== 'undefined' && typeof performance.now === 'function'
-          ? performance.now()
-          : Date.now();
-      if (now < this.penClosePostNodeEditEmptyClickClearUntilMs) {
-        // Skip clearSelection only; still drop drill/highlight parity with empty hit.
-      } else {
-        this.shapeSelection.clearSelection();
-      }
-      this.svgManipulation.clearHighlight();
-      this.drilledIntoGroupId = null;
     }
   }
 
