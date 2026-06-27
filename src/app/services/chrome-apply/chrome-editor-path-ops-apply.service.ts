@@ -6,16 +6,15 @@ import { EditorToolService } from '../editor-tool.service';
 import { PathBooleanGeometryService } from '../path-boolean-geometry.service';
 import { ShapeSelectionService } from '../shape-selection.service';
 import {
-  sortPathIdsByDocumentOrder,
   sortCompoundOperandIdsByDocumentOrder,
   type BooleanOp
 } from '../../models/path-boolean';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
 
 const PATH_BOOLEAN_LABELS: Record<BooleanOp, string> = {
-  union: 'Union paths',
-  subtract: 'Subtract paths',
-  intersect: 'Intersect paths'
+  union: 'Union shapes',
+  subtract: 'Subtract shapes',
+  intersect: 'Intersect shapes'
 };
 
 @Injectable({ providedIn: 'root' })
@@ -85,14 +84,10 @@ export class ChromeEditorPathOpsApplyService {
     const port = this.pathBooleanGeometry.createGeometryPort();
     if (!port) return;
 
-    const sorted =
-      mode === 'compound'
-        ? sortCompoundOperandIdsByDocumentOrder(pathIds, port)
-        : sortPathIdsByDocumentOrder(pathIds, port);
+    const sorted = sortCompoundOperandIdsByDocumentOrder(pathIds, port);
     const topmostId = sorted[sorted.length - 1];
     if (!topmostId) return;
-    const topmostNode =
-      mode === 'compound' ? port.getCompoundOperandElement(topmostId) : port.getPathElement(topmostId);
+    const topmostNode = port.getCompoundOperandElement(topmostId);
     if (!topmostNode) return;
 
     const children = Array.from((contentGroup.node as Element).children);

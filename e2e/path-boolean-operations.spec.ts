@@ -166,4 +166,85 @@ test.describe('Path boolean operations', () => {
     await page.getByTestId('path-ops-cancel').click();
     await expect(page.getByTestId('canvas-path-boolean-preview')).toHaveCount(0);
   });
+
+  test('union boolean with rect and path operands', async ({ page }) => {
+    const MIXED_RECT_PATH_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+<rect id="bool-rect-a" x="100" y="100" width="80" height="60" fill="#000"/>
+<path id="bool-path-b" d="M 150 100 L 230 100 L 230 160 L 150 160 Z" fill="#333"/>
+</svg>`;
+
+    await page.goto('/');
+    await expect(page.getByTestId('canvas-viewport')).toBeVisible();
+    const debugPanel = page.getByTestId('editor-svg-debug-panel');
+    await debugPanel.getByRole('button', { name: 'Expand' }).click();
+    await page.getByTestId('svg-debug-editor').fill(MIXED_RECT_PATH_SVG);
+    await page.getByTestId('svg-debug-apply').click();
+    await expect(page.locator('[data-editor-content-group] rect')).toHaveCount(1);
+    await expect(page.locator('[data-editor-content-group] path')).toHaveCount(1);
+    await debugPanel.getByRole('button', { name: 'Collapse' }).click();
+
+    const getMixedOperandIds = () =>
+      page.evaluate(() =>
+        Array.from(
+          document.querySelectorAll(
+            '[data-editor-content-group] rect, [data-editor-content-group] path'
+          )
+        )
+          .map((el) => el.id)
+          .filter((id) => id.length > 0)
+      );
+
+    await selectTwoOperandsViaLayers(page, getMixedOperandIds);
+    await expect(page.getByTestId('path-ops-union')).toBeEnabled();
+
+    await page.getByTestId('path-ops-union').click();
+    await expect(page.getByTestId('canvas-path-boolean-preview')).toBeVisible();
+    await page.getByTestId('path-ops-apply').click();
+
+    await expect(page.locator('[data-editor-content-group] path')).toHaveCount(1);
+    await expect(page.locator('[data-editor-content-group] rect')).toHaveCount(0);
+
+    await page.keyboard.press('ControlOrMeta+z');
+    await expect(page.locator('[data-editor-content-group] rect')).toHaveCount(1);
+    await expect(page.locator('[data-editor-content-group] path')).toHaveCount(1);
+  });
+
+  test('subtract boolean with circle and ellipse operands', async ({ page }) => {
+    const CIRCLE_ELLIPSE_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
+<circle id="bool-circle-a" cx="200" cy="150" r="50" fill="#000"/>
+<ellipse id="bool-ellipse-b" cx="240" cy="150" rx="50" ry="40" fill="#333"/>
+</svg>`;
+
+    await page.goto('/');
+    await expect(page.getByTestId('canvas-viewport')).toBeVisible();
+    const debugPanel = page.getByTestId('editor-svg-debug-panel');
+    await debugPanel.getByRole('button', { name: 'Expand' }).click();
+    await page.getByTestId('svg-debug-editor').fill(CIRCLE_ELLIPSE_SVG);
+    await page.getByTestId('svg-debug-apply').click();
+    await expect(page.locator('[data-editor-content-group] circle')).toHaveCount(1);
+    await expect(page.locator('[data-editor-content-group] ellipse')).toHaveCount(1);
+    await debugPanel.getByRole('button', { name: 'Collapse' }).click();
+
+    const getCurvedOperandIds = () =>
+      page.evaluate(() =>
+        Array.from(
+          document.querySelectorAll(
+            '[data-editor-content-group] circle, [data-editor-content-group] ellipse'
+          )
+        )
+          .map((el) => el.id)
+          .filter((id) => id.length > 0)
+      );
+
+    await selectTwoOperandsViaLayers(page, getCurvedOperandIds);
+    await expect(page.getByTestId('path-ops-subtract')).toBeEnabled();
+
+    await page.getByTestId('path-ops-subtract').click();
+    await expect(page.getByTestId('canvas-path-boolean-preview')).toBeVisible();
+    await page.getByTestId('path-ops-apply').click();
+
+    await expect(page.locator('[data-editor-content-group] path')).toHaveCount(1);
+    await expect(page.locator('[data-editor-content-group] circle')).toHaveCount(0);
+    await expect(page.locator('[data-editor-content-group] ellipse')).toHaveCount(0);
+  });
 });

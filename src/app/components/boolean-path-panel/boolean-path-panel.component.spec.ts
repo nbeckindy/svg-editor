@@ -149,4 +149,18 @@ describe('BooleanPathPanelComponent', () => {
     compoundBtn.click();
     expect(applyPathCompound).toHaveBeenCalledWith(['rect-a', 'rect-b']);
   });
+
+  it('boolean union enables for rect and path selection', () => {
+    selectedShapes.set([
+      { id: 'rect-a', type: 'rect' } as ShapeProperties,
+      { id: 'path-b', type: 'path' } as ShapeProperties
+    ]);
+    fixture.detectChanges();
+
+    const unionBtn = fixture.nativeElement.querySelector('[data-testid="path-ops-union"]') as HTMLButtonElement;
+    expect(unionBtn.disabled).toBe(false);
+    unionBtn.click();
+    expect(applyPathBoolean).not.toHaveBeenCalled();
+    expect(previewService.previewOp()).toBe('union');
+  });
 });

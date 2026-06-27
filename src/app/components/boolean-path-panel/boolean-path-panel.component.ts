@@ -27,7 +27,7 @@ export class BooleanPathPanelComponent {
       this.editorTool.currentTool() === 'selector',
       shapes,
       (id) => this.pathSelectionRead.isElementOrAncestorLocked(id),
-      (id) => this.pathSelectionRead.getPathD(id)
+      (id) => this.pathSelectionRead.getCompoundOperandElement(id)
     );
   });
 
@@ -59,13 +59,13 @@ export class BooleanPathPanelComponent {
 
   readonly subtractTitle = computed(() =>
     this.selectionState().eligible
-      ? 'Subtract shapes behind the frontmost path from the frontmost path'
+      ? 'Subtract shapes behind the frontmost operand from the frontmost operand'
       : this.selectionState().reason
   );
 
   readonly intersectTitle = computed(() =>
     this.selectionState().eligible
-      ? 'Keep the overlapping region of all selected paths'
+      ? 'Keep the overlapping region of all selected paths and shapes'
       : this.selectionState().reason
   );
 

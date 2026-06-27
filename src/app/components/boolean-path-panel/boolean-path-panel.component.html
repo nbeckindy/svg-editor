@@ -6,7 +6,7 @@
   <div class="panel-body">
     @if (operandCount() >= 2) {
       <p class="operand-summary" data-testid="path-ops-operand-summary">
-        <span class="operand-count">{{ operandCount() }} paths selected</span>
+        <span class="operand-count">{{ operandCount() }} shapes selected</span>
       </p>
       <ul class="operand-list" data-testid="path-ops-operand-list" aria-label="Selected path operands">
         @for (id of operandIdsForList(); track id) {
@@ -32,7 +32,7 @@
         [class.active]="previewOp() === 'union'"
         data-testid="path-ops-union"
         [disabled]="!selectionState().eligible"
-        [attr.title]="selectionState().eligible ? 'Preview union of selected paths' : selectionState().reason"
+        [attr.title]="selectionState().eligible ? 'Preview union of selected paths and shapes' : selectionState().reason"
         (click)="onSelectOp('union')">
         Union
       </button>

@@ -199,31 +199,37 @@ export function evaluatePathBooleanSelection(
   isSelectorMode: boolean,
   shapes: readonly PathBooleanSelectionShape[],
   isLocked: (shapeId: string) => boolean,
-  getPathD: (shapeId: string) => string | null
+  getOperandElement: (shapeId: string) => Element | null
 ): PathBooleanSelectionState {
   if (!isSelectorMode) {
     return { eligible: false, reason: 'Switch to the selector tool.', operandIds: [] };
   }
   if (shapes.length < 2) {
-    return { eligible: false, reason: 'Select two or more paths.', operandIds: [] };
+    return { eligible: false, reason: 'Select two or more paths or shapes.', operandIds: [] };
   }
   if (shapes.some((s) => isLocked(s.id))) {
     return { eligible: false, reason: 'Selection includes a locked layer.', operandIds: [] };
   }
-  if (!shapes.every((s) => s.type === 'path')) {
-    return { eligible: false, reason: 'Only <path> elements can be combined.', operandIds: [] };
-  }
-  const operandIds = shapes.map((s) => s.id);
-  const allClosed = operandIds.every((id) => {
-    const d = getPathD(id);
-    return d != null && pathHasClosedSubpaths(d);
-  });
-  if (!allClosed) {
+  if (!shapes.every((s) => isCompoundOperandType(s.type))) {
     return {
       eligible: false,
-      reason: 'Each path must be closed (ends with Z on every subpath).',
-      operandIds
+      reason: 'Only paths, rectangles, circles, and ellipses can be combined.',
+      operandIds: []
     };
+  }
+  const operandIds = shapes.map((s) => s.id);
+  for (const id of operandIds) {
+    const el = getOperandElement(id);
+    if (!el || shapeLocalClosedSubpaths(el) == null) {
+      return {
+        eligible: false,
+        reason:
+          el?.tagName.toLowerCase() === 'path'
+            ? 'Each path must be closed (ends with Z on every subpath).'
+            : 'Selected shape has invalid geometry for boolean operation.',
+        operandIds
+      };
+    }
   }
   return { eligible: true, reason: '', operandIds };
 }
@@ -458,7 +464,7 @@ export function computeBooleanGeometry(
   port: PathBooleanGeometryPort
 ): Geometry | null {
   const geometries = sortedPathIds
-    .map((id) => operandPathToGeometry(id, port))
+    .map((id) => operandToGeometry(id, port))
     .filter((g): g is Geometry => g !== null);
   if (geometries.length !== sortedPathIds.length) return null;
 
@@ -469,7 +475,7 @@ export function computeBooleanGeometry(
 }
 
 export function sortPathIdsByDocumentOrder(pathIds: string[], port: PathBooleanGeometryPort): string[] {
-  return sortShapeIdsByDocumentOrder(pathIds, (id) => port.getPathElement(id));
+  return sortCompoundOperandIdsByDocumentOrder(pathIds, port);
 }
 
 export function sortCompoundOperandIdsByDocumentOrder(
@@ -497,20 +503,23 @@ function sortShapeIdsByDocumentOrder(
   return nodes.map((n) => n.id);
 }
 
-export function operandPathToGeometry(
-  pathId: string,
-  port: PathBooleanGeometryPort
-): Geometry | null {
-  const d = port.getPathD(pathId);
-  if (!d || !pathHasClosedSubpaths(d)) return null;
-  const segments = parsePathDForNodeEditing(d);
-  if (!segments) return null;
+/** Closed operand geometry in root user space for martinez clipping (paths and primitives). */
+export function operandToGeometry(shapeId: string, port: PathBooleanGeometryPort): Geometry | null {
+  const el = port.getCompoundOperandElement(shapeId);
+  if (!el) return null;
+  const subpaths = shapeLocalClosedSubpaths(el);
+  if (!subpaths) return null;
   const rings: FlattenedRing[] = [];
-  for (const subpath of splitPathIntoSubpaths(segments)) {
-    const ring = flattenSubpathToRing(subpath, pathId, port);
+  for (const subpath of subpaths) {
+    const ring = flattenSubpathToRing(subpath, shapeId, port);
     if (ring) rings.push(ring);
   }
   return flattenedRingsToGeometry(rings);
+}
+
+/** @deprecated Use {@link operandToGeometry}. */
+export function operandPathToGeometry(pathId: string, port: PathBooleanGeometryPort): Geometry | null {
+  return operandToGeometry(pathId, port);
 }
 
 export function unionPathGeometries(pathIds: string[], port: PathBooleanGeometryPort): FlattenedRing[] | null {
