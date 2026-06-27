@@ -1,9 +1,9 @@
 import { CdkDragDrop, CdkDragMove, DragDropModule } from '@angular/cdk/drag-drop';
 import { CommonModule } from '@angular/common';
-import { Component, computed, ElementRef, inject, Injector, signal, viewChild, afterNextRender } from '@angular/core';
-import { take } from 'rxjs';
+import { Component, computed, ElementRef, inject, Injector, signal, viewChild } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenu, MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
+import { openEditorContextMenuAtPointer } from '../editor-context-menu/open-editor-context-menu';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { LayerTreeNode } from '../../services/svg-layer-structure.port';
@@ -191,28 +191,13 @@ export class LayersPanelComponent {
     event.preventDefault();
     event.stopPropagation();
     this.contextMenuLayerId.set(layerId);
-    const trigger = this.contextMenuTrigger();
-    const btn = this.contextMenuTriggerEl().nativeElement;
-    btn.style.position = 'fixed';
-    btn.style.left = `${event.clientX}px`;
-    btn.style.top = `${event.clientY}px`;
-    trigger.openMenu();
-    trigger.menuOpened.pipe(take(1)).subscribe(() => {
-      // MatMenu.focusFirstItem runs in afterNextRender; reset after it so nothing stays highlighted.
-      afterNextRender(
-        () => {
-          this.layerContextMenu().resetActiveItem();
-          const panel = document.querySelector(
-            '.layer-context-menu-panel.mat-mdc-menu-panel'
-          ) as HTMLElement | null;
-          const active = document.activeElement;
-          if (active instanceof HTMLElement && active.classList.contains('mat-mdc-menu-item')) {
-            active.blur();
-          }
-          panel?.focus({ preventScroll: true });
-        },
-        { injector: this.injector }
-      );
+    openEditorContextMenuAtPointer({
+      trigger: this.contextMenuTrigger(),
+      triggerEl: this.contextMenuTriggerEl().nativeElement,
+      menu: this.layerContextMenu(),
+      event,
+      injector: this.injector,
+      panelClass: 'layer-context-menu-panel'
     });
   }
 
