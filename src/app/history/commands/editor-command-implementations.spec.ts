@@ -29,6 +29,7 @@ import {
   RemoveShapesCommand,
   AddShapeCommand,
   AddPathCommand,
+  OutlineToPathCommand,
   AddImageCommand,
   EditPathNodesCommand,
   TextContentCommand,
@@ -1510,6 +1511,72 @@ describe('AddPathCommand', () => {
     cmd.execute();
     cmd.execute();
     expect(svc.insertShapeMarkup).toHaveBeenCalledTimes(1);
+    expect(selectionSvc.selectShapes).toHaveBeenCalled();
+  });
+});
+
+describe('OutlineToPathCommand', () => {
+  function buildMockSvcsForOutline(shapeId: string) {
+    const contentGroup = document.createElement('div');
+    contentGroup.setAttribute('data-editor-content-group', '');
+    const rectNode = document.createElement('div');
+    rectNode.id = shapeId;
+    rectNode.setAttribute('data-kind', 'rect');
+    contentGroup.appendChild(rectNode);
+
+    const findOne = vi.fn((sel: string) => {
+      if (sel === `#${shapeId}`) return { node: rectNode };
+      if (sel === '[data-editor-content-group]') return { node: contentGroup };
+      return undefined;
+    });
+
+    const svc = {
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+      removeShape: vi.fn(),
+      insertShapeMarkup: vi.fn(),
+      getShapeProperties: vi.fn().mockReturnValue({ id: shapeId, type: 'path' }),
+    } as unknown as SvgManipulationService;
+
+    const selectionSvc = {
+      selectShapes: vi.fn(),
+      clearSelection: vi.fn(),
+    } as unknown as ShapeSelectionService;
+
+    return { svc, selectionSvc, rectNode };
+  }
+
+  it('execute replaces primitive with path and reselects', () => {
+    const { svc, selectionSvc } = buildMockSvcsForOutline('rect-a');
+    const cmd = new OutlineToPathCommand(
+      svc,
+      'rect-a',
+      '<path id="rect-a" d="M 0 0 L 10 0 L 10 10 Z"/>',
+      0,
+      selectionSvc
+    );
+    cmd.execute();
+    expect(svc.removeShape).toHaveBeenCalledWith('rect-a');
+    expect(svc.insertShapeMarkup).toHaveBeenCalledWith(
+      '<path id="rect-a" d="M 0 0 L 10 0 L 10 10 Z"/>',
+      0
+    );
+    expect(selectionSvc.selectShapes).toHaveBeenCalled();
+  });
+
+  it('undo restores original primitive markup', () => {
+    const { svc, selectionSvc, rectNode } = buildMockSvcsForOutline('rect-a');
+    const cmd = new OutlineToPathCommand(
+      svc,
+      'rect-a',
+      '<path id="rect-a" d="M 0 0 L 10 0 L 10 10 Z"/>',
+      0,
+      selectionSvc
+    );
+    const original = rectNode.outerHTML;
+    cmd.execute();
+    cmd.undo();
+    expect(svc.removeShape).toHaveBeenCalledWith('rect-a');
+    expect(svc.insertShapeMarkup).toHaveBeenLastCalledWith(original, 0);
     expect(selectionSvc.selectShapes).toHaveBeenCalled();
   });
 });

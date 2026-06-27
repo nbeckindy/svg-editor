@@ -39,6 +39,7 @@ describe('prepareCanvasContextMenuSelection', () => {
     );
 
     expect(result.hitShape).toBe(false);
+    expect(result.hitOutlineToPathPrimitive).toBe(false);
     expect(selectShapes).not.toHaveBeenCalled();
   });
 
@@ -60,6 +61,7 @@ describe('prepareCanvasContextMenuSelection', () => {
     );
 
     expect(result.hitShape).toBe(true);
+    expect(result.hitOutlineToPathPrimitive).toBe(true);
     expect(selectShapes).toHaveBeenCalledWith([rectProps('child')]);
   });
 

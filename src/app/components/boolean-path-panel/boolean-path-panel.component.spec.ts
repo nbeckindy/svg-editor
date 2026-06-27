@@ -15,6 +15,7 @@ describe('BooleanPathPanelComponent', () => {
   let currentTool: WritableSignal<string>;
   let applyPathBoolean: ReturnType<typeof vi.fn>;
   let applyPathCompound: ReturnType<typeof vi.fn>;
+  let applyOutlineToPath: ReturnType<typeof vi.fn>;
   let previewService: PathBooleanPreviewService;
 
   beforeEach(async () => {
@@ -22,6 +23,7 @@ describe('BooleanPathPanelComponent', () => {
     currentTool = signal('selector');
     applyPathBoolean = vi.fn();
     applyPathCompound = vi.fn();
+    applyOutlineToPath = vi.fn();
 
     await TestBed.configureTestingModule({
       imports: [BooleanPathPanelComponent],
@@ -69,12 +71,30 @@ describe('BooleanPathPanelComponent', () => {
                 getAttribute: (attr: string) =>
                   attr === 'd' ? 'M 0 0 L 10 0 L 10 10 L 0 10 Z' : null
               } as Element;
+            }),
+            getOutlineToPathElement: vi.fn((id: string) => {
+              const shape = selectedShapes().find((s) => s.id === id);
+              if (!shape || shape.type !== 'rect') return null;
+              return {
+                tagName: 'rect',
+                getAttribute: (attr: string) => {
+                  const attrs: Record<string, string> = {
+                    id,
+                    x: '0',
+                    y: '0',
+                    width: '10',
+                    height: '10'
+                  };
+                  return attrs[attr] ?? null;
+                },
+                hasAttribute: (attr: string) => attr in { id: true, x: true, y: true, width: true, height: true }
+              } as Element;
             })
           }
         },
         {
           provide: ChromeEditorApplyService,
-          useValue: { applyPathBoolean, applyPathCompound }
+          useValue: { applyPathBoolean, applyPathCompound, applyOutlineToPath }
         }
       ]
     }).compileComponents();
@@ -162,5 +182,16 @@ describe('BooleanPathPanelComponent', () => {
     unionBtn.click();
     expect(applyPathBoolean).not.toHaveBeenCalled();
     expect(previewService.previewOp()).toBe('union');
+  });
+
+  it('outline to path applies for a single rectangle', () => {
+    selectedShapes.set([{ id: 'rect-a', type: 'rect' } as ShapeProperties]);
+    fixture.detectChanges();
+
+    const outlineBtn = fixture.nativeElement.querySelector('[data-testid="path-ops-outline"]') as HTMLButtonElement;
+    expect(outlineBtn.disabled).toBe(false);
+    outlineBtn.click();
+
+    expect(applyOutlineToPath).toHaveBeenCalledWith('rect-a');
   });
 });

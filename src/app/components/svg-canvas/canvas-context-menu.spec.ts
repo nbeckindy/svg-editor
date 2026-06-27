@@ -32,9 +32,12 @@ describe('canvas context menu integration helpers', () => {
       );
       const state = computeCanvasContextMenuState({
         hitShape: selection.hitShape,
+        hitOutlineToPathPrimitive: selection.hitOutlineToPathPrimitive,
         selectedShapes: [rectProps('kept')],
         hasClipboardContent: true,
-        isElementOrAncestorLocked: () => false
+        isSelectorMode: true,
+        isElementOrAncestorLocked: () => false,
+        getOutlineToPathElement: () => null
       });
 
       expect(selection.hitShape).toBe(false);

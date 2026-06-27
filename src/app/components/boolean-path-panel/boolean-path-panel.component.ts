@@ -1,5 +1,6 @@
 import { Component, computed, effect, inject } from '@angular/core';
 import { evaluatePathBooleanSelection, evaluatePathCompoundSelection, type BooleanOp } from '../../models/path-boolean';
+import { evaluateOutlineToPathSelection } from '../../models/outline-to-path';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
@@ -39,6 +40,24 @@ export class BooleanPathPanelComponent {
       (id) => this.pathSelectionRead.isElementOrAncestorLocked(id),
       (id) => this.pathSelectionRead.getCompoundOperandElement(id)
     );
+  });
+
+  readonly outlineToPathState = computed(() => {
+    const shapes = this.shapeSelection.getSelectedShapes();
+    return evaluateOutlineToPathSelection(
+      this.editorTool.currentTool() === 'selector',
+      shapes,
+      (id) => this.pathSelectionRead.isElementOrAncestorLocked(id),
+      (id) => this.pathSelectionRead.getOutlineToPathElement(id)
+    );
+  });
+
+  readonly outlineToPathTitle = computed(() => {
+    const state = this.outlineToPathState();
+    if (state.eligible) {
+      return 'Replace the selected shape with an editable path (one-way conversion)';
+    }
+    return state.reason;
   });
 
   readonly operandCount = computed(() => {
@@ -111,5 +130,12 @@ export class BooleanPathPanelComponent {
     if (!eligible) return;
     this.preview.clearPreview();
     this.chromeApply.applyPathCompound(operandIds);
+  }
+
+  onOutlineToPath(): void {
+    const state = this.outlineToPathState();
+    if (!state.eligible || !state.shapeId) return;
+    this.preview.clearPreview();
+    this.chromeApply.applyOutlineToPath(state.shapeId);
   }
 }

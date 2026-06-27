@@ -160,6 +160,59 @@ export class PenSegmentReplaceCommand implements EditorCommand {
  * Atomic boolean path operation: removes operand paths and inserts one result path.
  * Captures operand markup + indices and result markup in the constructor for undo/redo.
  */
+/**
+ * Replaces a single primitive shape with an equivalent `<path>` at the same DOM index and id.
+ * Captures original markup in the constructor for undo.
+ */
+export class OutlineToPathCommand implements EditorCommand {
+  readonly description = 'Outline to path';
+
+  private readonly originalMarkup: string;
+  private readonly insertionIndex: number;
+
+  constructor(
+    private readonly svc: EditorShapeLifecycleSvgPort,
+    private readonly shapeId: string,
+    private readonly pathMarkup: string,
+    insertionIndex: number,
+    private readonly selectionSync?: SelectionSyncPort
+  ) {
+    const svgInstance = this.svc.getSVGInstance();
+    const shape = svgInstance?.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
+    if (!shape?.node) {
+      this.originalMarkup = '';
+      this.insertionIndex = insertionIndex;
+      return;
+    }
+    this.originalMarkup = (shape.node as Element).outerHTML;
+    this.insertionIndex = insertionIndex;
+  }
+
+  execute(): void {
+    if (!this.originalMarkup) return;
+    this.svc.removeShape(this.shapeId);
+    this.svc.insertShapeMarkup(this.pathMarkup, this.insertionIndex);
+    if (!this.selectionSync) return;
+    const svgInstance = this.svc.getSVGInstance();
+    const el = svgInstance?.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
+    if (el) {
+      this.selectionSync.selectShapes([this.svc.getShapeProperties(el)]);
+    }
+  }
+
+  undo(): void {
+    if (!this.originalMarkup) return;
+    this.svc.removeShape(this.shapeId);
+    this.svc.insertShapeMarkup(this.originalMarkup, this.insertionIndex);
+    if (!this.selectionSync) return;
+    const svgInstance = this.svc.getSVGInstance();
+    const el = svgInstance?.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
+    if (el) {
+      this.selectionSync.selectShapes([this.svc.getShapeProperties(el)]);
+    }
+  }
+}
+
 export class BooleanPathCommand implements EditorCommand {
   readonly description: string;
 

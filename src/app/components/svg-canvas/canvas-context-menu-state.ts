@@ -1,3 +1,4 @@
+import { evaluateOutlineToPathSelection } from '../../models/outline-to-path';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 
 export interface CanvasContextMenuSuppressInput {
@@ -16,9 +17,12 @@ export function shouldSuppressCanvasContextMenu(input: CanvasContextMenuSuppress
 
 export interface CanvasContextMenuStateInput {
   hitShape: boolean;
+  hitOutlineToPathPrimitive: boolean;
   selectedShapes: ShapeProperties[];
   hasClipboardContent: boolean;
+  isSelectorMode: boolean;
   isElementOrAncestorLocked(id: string): boolean;
+  getOutlineToPathElement(id: string): Element | null;
 }
 
 export interface CanvasContextMenuState {
@@ -28,11 +32,20 @@ export interface CanvasContextMenuState {
   canDelete: boolean;
   canGroup: boolean;
   canUngroup: boolean;
+  canOutlineToPath: boolean;
   canRotate: boolean;
 }
 
 export function computeCanvasContextMenuState(input: CanvasContextMenuStateInput): CanvasContextMenuState {
-  const { hitShape, selectedShapes, hasClipboardContent, isElementOrAncestorLocked } = input;
+  const {
+    hitShape,
+    hitOutlineToPathPrimitive,
+    selectedShapes,
+    hasClipboardContent,
+    isSelectorMode,
+    isElementOrAncestorLocked,
+    getOutlineToPathElement
+  } = input;
   const count = selectedShapes.length;
   const anyLocked = selectedShapes.some((s) => isElementOrAncestorLocked(s.id));
   const hasSelection = count > 0;
@@ -44,6 +57,13 @@ export function computeCanvasContextMenuState(input: CanvasContextMenuStateInput
     selectedShapes.length > 0 &&
     selectedShapes.every((s) => s.type === 'g');
 
+  const outlineToPathState = evaluateOutlineToPathSelection(
+    isSelectorMode,
+    selectedShapes,
+    isElementOrAncestorLocked,
+    getOutlineToPathElement
+  );
+
   return {
     canCut: shapeActionsAllowed && !anyLocked,
     canCopy: shapeActionsAllowed,
@@ -51,6 +71,7 @@ export function computeCanvasContextMenuState(input: CanvasContextMenuStateInput
     canDelete: shapeActionsAllowed && !anyLocked,
     canGroup: shapeActionsAllowed && count >= 2 && !anyLocked,
     canUngroup,
+    canOutlineToPath: hitOutlineToPathPrimitive && outlineToPathState.eligible,
     canRotate: shapeActionsAllowed && !anyLocked
   };
 }

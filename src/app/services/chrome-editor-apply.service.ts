@@ -76,6 +76,7 @@ export class ChromeEditorApplyService {
     return this.pathOps.applyPathBoolean(op, pathIds);
   }
   applyPathCompound(pathIds: string[]) { return this.pathOps.applyPathCompound(pathIds); }
+  applyOutlineToPath(shapeId: string) { return this.pathOps.applyOutlineToPath(shapeId); }
 
   toggleLayerVisibility(layerId: string) { return this.layers.toggleLayerVisibility(layerId); }
   toggleLayerLock(layerId: string) { return this.layers.toggleLayerLock(layerId); }

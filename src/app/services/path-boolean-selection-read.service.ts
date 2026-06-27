@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import type { PathBooleanSelectionReadPort } from '../history/path-boolean-selection-read.port';
 import type { LayerLockReadPort } from '../history/layer-lock-read.port';
+import { isOutlineToPathPrimitiveType } from '../models/primitive-to-path';
 import { SvgManipulationService } from './svg-manipulation.service';
 
 const COMPOUND_OPERAND_TAGS = new Set(['path', 'rect', 'circle', 'ellipse']);
@@ -28,6 +29,15 @@ export class PathBooleanSelectionReadService implements PathBooleanSelectionRead
     const el = this.findElement(shapeId);
     const tag = el?.tagName.toLowerCase();
     if (tag && COMPOUND_OPERAND_TAGS.has(tag)) {
+      return el ?? null;
+    }
+    return null;
+  }
+
+  getOutlineToPathElement(shapeId: string): Element | null {
+    const el = this.findElement(shapeId);
+    const tag = el?.tagName.toLowerCase();
+    if (tag && isOutlineToPathPrimitiveType(tag)) {
       return el ?? null;
     }
     return null;

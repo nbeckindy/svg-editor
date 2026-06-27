@@ -5,8 +5,21 @@ const BEZIER_KAPPA = 0.5522847498;
 
 export const COMPOUND_OPERAND_TYPES = new Set(['path', 'rect', 'circle', 'ellipse']);
 
+export const OUTLINE_TO_PATH_PRIMITIVE_TYPES = new Set([
+  'rect',
+  'circle',
+  'ellipse',
+  'line',
+  'polyline',
+  'polygon'
+]);
+
 export function isCompoundOperandType(type: string): boolean {
   return COMPOUND_OPERAND_TYPES.has(type);
+}
+
+export function isOutlineToPathPrimitiveType(type: string): boolean {
+  return OUTLINE_TO_PATH_PRIMITIVE_TYPES.has(type);
 }
 
 function parseLengthAttr(el: Element, name: string, fallback = 0): number {
@@ -63,6 +76,69 @@ export function ellipseToClosedSubpath(cx: number, cy: number, rx: number, ry: n
     { type: 'C', x1: cx - rx, y1: cy - ky, x2: cx - kx, y2: cy - ry, x: cx, y: cy - ry },
     { type: 'Z' }
   ];
+}
+
+function parsePointsAttr(raw: string | null): { x: number; y: number }[] {
+  if (!raw?.trim()) return [];
+  const nums = raw
+    .trim()
+    .split(/[\s,]+/)
+    .map((part) => Number.parseFloat(part))
+    .filter((n) => Number.isFinite(n));
+  const points: { x: number; y: number }[] = [];
+  for (let i = 0; i + 1 < nums.length; i += 2) {
+    points.push({ x: nums[i]!, y: nums[i + 1]! });
+  }
+  return points;
+}
+
+/** Open subpath for `<line>` in element-local space. */
+export function lineToSubpath(x1: number, y1: number, x2: number, y2: number): PathSegment[] {
+  return [
+    { type: 'M', x: x1, y: y1 },
+    { type: 'L', x: x2, y: y2 }
+  ];
+}
+
+/** Open subpath for `<polyline>` points in element-local space. */
+export function polylineToSubpath(points: readonly { x: number; y: number }[]): PathSegment[] {
+  if (points.length < 2) return [];
+  const segments: PathSegment[] = [{ type: 'M', x: points[0]!.x, y: points[0]!.y }];
+  for (let i = 1; i < points.length; i++) {
+    segments.push({ type: 'L', x: points[i]!.x, y: points[i]!.y });
+  }
+  return segments;
+}
+
+/** Closed subpath for `<polygon>` points in element-local space. */
+export function polygonToSubpath(points: readonly { x: number; y: number }[]): PathSegment[] {
+  if (points.length < 3) return [];
+  const segments = polylineToSubpath(points);
+  if (segments.length === 0) return [];
+  segments.push({ type: 'Z' });
+  return segments;
+}
+
+/** Path segments for outline-to-path on supported primitive tags (open or closed). */
+export function primitiveElementToPathSegments(element: Element): PathSegment[] | null {
+  const tag = element.tagName.toLowerCase();
+  if (tag === 'line') {
+    return lineToSubpath(
+      parseLengthAttr(element, 'x1'),
+      parseLengthAttr(element, 'y1'),
+      parseLengthAttr(element, 'x2'),
+      parseLengthAttr(element, 'y2')
+    );
+  }
+  if (tag === 'polyline') {
+    const segments = polylineToSubpath(parsePointsAttr(element.getAttribute('points')));
+    return segments.length > 0 ? segments : null;
+  }
+  if (tag === 'polygon') {
+    const segments = polygonToSubpath(parsePointsAttr(element.getAttribute('points')));
+    return segments.length > 0 ? segments : null;
+  }
+  return primitiveElementToClosedSubpath(element);
 }
 
 export function primitiveElementToClosedSubpath(element: Element): PathSegment[] | null {

@@ -13,10 +13,21 @@
           <li class="operand-item" [attr.data-testid]="'path-ops-operand-' + id">{{ id }}</li>
         }
       </ul>
+    } @else if (outlineToPathState().eligible) {
+      <p class="operand-summary" data-testid="path-ops-outline-summary">
+        <span class="operand-count">1 shape selected</span>
+      </p>
+      <p class="empty-hint" data-testid="path-ops-outline-hint">
+        Convert a rectangle, circle, ellipse, line, polyline, or polygon into an editable path.
+      </p>
     } @else {
       <p class="empty-hint" data-testid="path-ops-empty-hint">
-        Select two or more closed paths or shapes (rect, circle, ellipse) to combine them.
+        Select two or more closed paths or shapes (rect, circle, ellipse) to combine them, or select one primitive to outline to path.
       </p>
+    }
+
+    @if (outlineToPathState().reason && !outlineToPathState().eligible && operandCount() < 2) {
+      <p class="status-hint" data-testid="path-ops-outline-status-hint" role="status">{{ outlineToPathState().reason }}</p>
     }
 
     @if (selectionState().reason && !compoundSelectionState().eligible) {
@@ -67,6 +78,18 @@
         [attr.title]="compoundTitle()"
         (click)="onMakeCompound()">
         Compound
+      </button>
+    </div>
+
+    <div class="outline-toolbar" role="group" aria-label="Outline to path">
+      <button
+        type="button"
+        class="op-btn"
+        data-testid="path-ops-outline"
+        [disabled]="!outlineToPathState().eligible"
+        [attr.title]="outlineToPathTitle()"
+        (click)="onOutlineToPath()">
+        Outline to path
       </button>
     </div>
 

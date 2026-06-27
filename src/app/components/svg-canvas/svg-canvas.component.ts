@@ -95,6 +95,7 @@ import {
   TEXT_TOOL_PREVIEW_DATA_ATTR
 } from '../../utils/text-typography-from-defaults';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
+import { PathBooleanSelectionReadService } from '../../services/path-boolean-selection-read.service';
 import { GroupStructureChangeService } from '../../services/chrome-apply/group-structure-change.service';
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
 import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-command-bridge.service';
@@ -253,6 +254,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     canDelete: false,
     canGroup: false,
     canUngroup: false,
+    canOutlineToPath: false,
     canRotate: false
   });
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
@@ -1405,9 +1407,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.contextMenuState.set(
       computeCanvasContextMenuState({
         hitShape: selectionResult.hitShape,
+        hitOutlineToPathPrimitive: selectionResult.hitOutlineToPathPrimitive,
         selectedShapes: this.shapeSelection.getSelectedShapes(),
         hasClipboardContent: this.clipboard.hasContent(),
-        isElementOrAncestorLocked: (id) => this.svgManipulation.isElementOrAncestorLocked(id)
+        isSelectorMode: this.editorTool.currentTool() === 'selector',
+        isElementOrAncestorLocked: (id) => this.svgManipulation.isElementOrAncestorLocked(id),
+        getOutlineToPathElement: (id) => this.pathBooleanSelectionRead.getOutlineToPathElement(id)
       })
     );
 
@@ -1442,6 +1447,12 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   onContextMenuUngroup(): void {
     this.ungroupSelectedShape();
+  }
+
+  onContextMenuOutlineToPath(): void {
+    const shapeId = this.shapeSelection.getSelectedShapes()[0]?.id;
+    if (!shapeId || !this.contextMenuState().canOutlineToPath) return;
+    this.chromeEditorApply.applyOutlineToPath(shapeId);
   }
 
   onContextMenuRotateCw(): void {
@@ -1505,6 +1516,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     private clipboard: ClipboardService,
     protected drawingDefaults: DrawingStyleDefaultsService,
     private chromeEditorApply: ChromeEditorApplyService,
+    private pathBooleanSelectionRead: PathBooleanSelectionReadService,
     private pathNodeEditBridge: PathNodeEditCommandBridgeService,
     private documentBridge: EditorDocumentBridgeService,
     private pathBooleanPreview: PathBooleanPreviewService,

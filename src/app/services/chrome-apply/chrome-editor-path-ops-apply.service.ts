@@ -1,5 +1,5 @@
 import { Injectable, inject } from '@angular/core';
-import { BooleanPathCommand } from '../../models/editor-commands';
+import { BooleanPathCommand, OutlineToPathCommand } from '../../models/editor-commands';
 import type { EditorShapeLifecycleSvgPort } from '../../history/editor-shape-lifecycle-svg.port';
 import { SvgManipulationService } from '../svg-manipulation.service';
 import { EditorToolService } from '../editor-tool.service';
@@ -9,6 +9,7 @@ import {
   sortCompoundOperandIdsByDocumentOrder,
   type BooleanOp
 } from '../../models/path-boolean';
+import { buildOutlineToPathMarkup } from '../../models/outline-to-path';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
 
 const PATH_BOOLEAN_LABELS: Record<BooleanOp, string> = {
@@ -59,6 +60,39 @@ export class ChromeEditorPathOpsApplyService {
         this.pathBooleanGeometry.buildCompoundPathResult(pathIds, port, usedIds, topmostInsertionIndex),
       'Make compound path',
       'compound'
+    );
+  }
+
+  applyOutlineToPath(shapeId: string): void {
+    if (this.shapeIdsTouchLocked([shapeId])) return;
+    if (this.editorTool.currentTool() !== 'selector') return;
+
+    const svg = this.shapeLifecycleSvg.getSVGInstance();
+    if (!svg) return;
+    const contentGroup = svg.findOne('[data-editor-content-group]');
+    if (!contentGroup?.node) return;
+
+    const element = svg.findOne(`#${shapeId}`)?.node as Element | null;
+    if (!element) return;
+
+    const pathMarkup = buildOutlineToPathMarkup(element);
+    if (!pathMarkup) return;
+
+    const children = Array.from((contentGroup.node as Element).children);
+    const insertionIndex = children.indexOf(element);
+    if (insertionIndex < 0) return;
+
+    this.pushCommandsAndSyncSelection(
+      [
+        new OutlineToPathCommand(
+          this.shapeLifecycleSvg,
+          shapeId,
+          pathMarkup,
+          insertionIndex,
+          this.shapeSelection
+        )
+      ],
+      'Outline to path'
     );
   }
 

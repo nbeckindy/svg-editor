@@ -402,6 +402,15 @@
     <button
       mat-menu-item
       type="button"
+      data-testid="canvas-context-menu-outline-to-path"
+      [disabled]="!contextMenuState().canOutlineToPath"
+      (click)="onContextMenuOutlineToPath()">
+      Outline to path
+    </button>
+    <mat-divider />
+    <button
+      mat-menu-item
+      type="button"
       data-testid="canvas-context-menu-rotate-cw"
       [disabled]="!contextMenuState().canRotate"
       (click)="onContextMenuRotateCw()">

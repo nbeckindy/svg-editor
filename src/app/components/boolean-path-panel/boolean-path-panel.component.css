@@ -91,6 +91,15 @@
   border-top: 1px solid var(--editor-border);
 }
 
+.outline-toolbar {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--editor-spacing-md);
+  margin-top: var(--editor-spacing-md);
+  padding-top: var(--editor-spacing-lg);
+  border-top: 1px solid var(--editor-border);
+}
+
 .op-btn {
   border: 1px solid var(--editor-border-control);
   background: var(--editor-surface-subtle);

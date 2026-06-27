@@ -1,4 +1,5 @@
 import type { Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
+import { isOutlineToPathPrimitiveType } from '../../models/primitive-to-path';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 
 export interface CanvasContextMenuSelectionDeps {
@@ -16,6 +17,8 @@ export interface CanvasContextMenuSelectionDeps {
 export interface CanvasContextMenuSelectionResult {
   /** True when the pointer hit a content shape (not empty canvas). */
   hitShape: boolean;
+  /** True when the pointer target is a rect, circle, ellipse, line, polyline, or polygon. */
+  hitOutlineToPathPrimitive: boolean;
 }
 
 /**
@@ -35,8 +38,12 @@ export function prepareCanvasContextMenuSelection(
     : undefined;
 
   if (!clickedContentShapeEl) {
-    return { hitShape: false };
+    return { hitShape: false, hitOutlineToPathPrimitive: false };
   }
+
+  const hitOutlineToPathPrimitive = isOutlineToPathPrimitiveType(
+    deps.getShapeProperties(clickedContentShapeEl).type
+  );
 
   const selectedIds = new Set(deps.getSelectedShapeIds());
   const resolvedIds = resolveContextMenuTargetIds(clickTarget.id, clickedContentShapeEl, deps);
@@ -46,7 +53,7 @@ export function prepareCanvasContextMenuSelection(
     applyContextMenuSelection(clickTarget.id, clickedContentShapeEl, deps);
   }
 
-  return { hitShape: true };
+  return { hitShape: true, hitOutlineToPathPrimitive };
 }
 
 function resolveContextMenuTargetIds(

@@ -10,51 +10,83 @@ function group(id: string): ShapeProperties {
   return { id, type: 'g', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 };
 }
 
-describe('computeCanvasContextMenuState', () => {
-  const neverLocked = () => false;
-  const alwaysLocked = (id: string) => id === 'locked';
+function path(id: string): ShapeProperties {
+  return { id, type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 };
+}
 
+const neverLocked = () => false;
+const alwaysLocked = (id: string) => id === 'locked';
+
+function mockRectElement(): Element {
+  return {
+    tagName: 'rect',
+    getAttribute: (name: string) => {
+      const attrs: Record<string, string> = {
+        id: 'rect-a',
+        x: '0',
+        y: '0',
+        width: '10',
+        height: '10'
+      };
+      return attrs[name] ?? null;
+    },
+    hasAttribute: (name: string) => name in { id: true, x: true, y: true, width: true, height: true }
+  } as Element;
+}
+
+function baseInput(over: Partial<Parameters<typeof computeCanvasContextMenuState>[0]> = {}) {
+  return {
+    hitShape: true,
+    hitOutlineToPathPrimitive: false,
+    selectedShapes: [rect('a'), rect('b')],
+    hasClipboardContent: false,
+    isSelectorMode: true,
+    isElementOrAncestorLocked: neverLocked,
+    getOutlineToPathElement: (id: string) => (id === 'rect-a' ? mockRectElement() : null),
+    ...over
+  };
+}
+
+describe('computeCanvasContextMenuState', () => {
   it('enables shape actions on shape hit with selection', () => {
-    const state = computeCanvasContextMenuState({
-      hitShape: true,
-      selectedShapes: [rect('a'), rect('b')],
-      hasClipboardContent: false,
-      isElementOrAncestorLocked: neverLocked
-    });
+    const state = computeCanvasContextMenuState(baseInput());
 
     expect(state.canCut).toBe(true);
     expect(state.canCopy).toBe(true);
     expect(state.canDelete).toBe(true);
     expect(state.canGroup).toBe(true);
     expect(state.canUngroup).toBe(false);
+    expect(state.canOutlineToPath).toBe(false);
     expect(state.canRotate).toBe(true);
     expect(state.canPaste).toBe(false);
   });
 
   it('disables shape actions on empty hit but allows paste when clipboard has content', () => {
-    const state = computeCanvasContextMenuState({
-      hitShape: false,
-      selectedShapes: [rect('a')],
-      hasClipboardContent: true,
-      isElementOrAncestorLocked: neverLocked
-    });
+    const state = computeCanvasContextMenuState(
+      baseInput({
+        hitShape: false,
+        selectedShapes: [rect('a')],
+        hasClipboardContent: true
+      })
+    );
 
     expect(state.canCut).toBe(false);
     expect(state.canCopy).toBe(false);
     expect(state.canDelete).toBe(false);
     expect(state.canGroup).toBe(false);
     expect(state.canUngroup).toBe(false);
+    expect(state.canOutlineToPath).toBe(false);
     expect(state.canRotate).toBe(false);
     expect(state.canPaste).toBe(true);
   });
 
   it('disables cut/delete/group/rotate when selection touches locked elements', () => {
-    const state = computeCanvasContextMenuState({
-      hitShape: true,
-      selectedShapes: [rect('locked'), rect('b')],
-      hasClipboardContent: false,
-      isElementOrAncestorLocked: alwaysLocked
-    });
+    const state = computeCanvasContextMenuState(
+      baseInput({
+        selectedShapes: [rect('locked'), rect('b')],
+        isElementOrAncestorLocked: alwaysLocked
+      })
+    );
 
     expect(state.canCut).toBe(false);
     expect(state.canCopy).toBe(true);
@@ -64,15 +96,50 @@ describe('computeCanvasContextMenuState', () => {
   });
 
   it('enables ungroup when all selected shapes are groups', () => {
-    const state = computeCanvasContextMenuState({
-      hitShape: true,
-      selectedShapes: [group('g1')],
-      hasClipboardContent: false,
-      isElementOrAncestorLocked: neverLocked
-    });
+    const state = computeCanvasContextMenuState(
+      baseInput({
+        selectedShapes: [group('g1')]
+      })
+    );
 
     expect(state.canUngroup).toBe(true);
     expect(state.canGroup).toBe(false);
+  });
+
+  it('enables outline to path when clicking a primitive with single eligible selection', () => {
+    const state = computeCanvasContextMenuState(
+      baseInput({
+        hitOutlineToPathPrimitive: true,
+        selectedShapes: [rect('rect-a')],
+        getOutlineToPathElement: () => mockRectElement()
+      })
+    );
+
+    expect(state.canOutlineToPath).toBe(true);
+  });
+
+  it('disables outline to path when not clicking a primitive', () => {
+    const state = computeCanvasContextMenuState(
+      baseInput({
+        hitOutlineToPathPrimitive: false,
+        selectedShapes: [rect('rect-a')],
+        getOutlineToPathElement: () => mockRectElement()
+      })
+    );
+
+    expect(state.canOutlineToPath).toBe(false);
+  });
+
+  it('disables outline to path when clicking a path', () => {
+    const state = computeCanvasContextMenuState(
+      baseInput({
+        hitOutlineToPathPrimitive: false,
+        selectedShapes: [path('path-a')],
+        getOutlineToPathElement: () => null
+      })
+    );
+
+    expect(state.canOutlineToPath).toBe(false);
   });
 });
 
