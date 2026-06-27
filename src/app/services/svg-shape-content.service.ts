@@ -15,6 +15,7 @@ import { CONTENT_SHAPE_SELECTOR, EDITOR_CONTENT_GROUP_ID, SVG_NS } from './svg-e
 import { SvgShapePaintService } from './shape-content/svg-shape-paint.service';
 import { SvgShapePathDataService } from './shape-content/svg-shape-path-data.service';
 import { SvgShapeTextService } from './shape-content/svg-shape-text.service';
+import { SvgShapeRectService } from './shape-content/svg-shape-rect.service';
 import { SvgSelectionHitTestService } from './shape-content/svg-selection-hit-test.service';
 import { SvgClipboardService } from './shape-content/svg-clipboard.service';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
@@ -27,6 +28,7 @@ export class SvgShapeContentService implements SvgShapeContentPort {
   private readonly paint = inject(SvgShapePaintService);
   private readonly pathData = inject(SvgShapePathDataService);
   private readonly text = inject(SvgShapeTextService);
+  private readonly rect = inject(SvgShapeRectService);
   private readonly hitTest = inject(SvgSelectionHitTestService);
   private readonly clipboard = inject(SvgClipboardService);
 
@@ -65,6 +67,8 @@ export class SvgShapeContentService implements SvgShapeContentPort {
   updateTextAnchor(textId: string, textAnchor: 'start' | 'middle' | 'end') { this.text.updateTextAnchor(textId, textAnchor); }
   updateTextPaintOrder(textId: string, paintOrder: string | undefined) { this.text.updateTextPaintOrder(textId, paintOrder); }
   updateTextVectorEffect(textId: string, effect: string | undefined) { this.text.updateTextVectorEffect(textId, effect); }
+  updateRectCornerRadius(shapeId: string, radius: number) { this.rect.updateRectCornerRadius(shapeId, radius); }
+  restoreRectCornerRadii(shapeId: string, rx: number, ry: number) { this.rect.restoreRectCornerRadii(shapeId, rx, ry); }
 
   /**
    * Same as {@link getShapePropertiesInSameClipGroup} but uses `readProps` so a façade can supply

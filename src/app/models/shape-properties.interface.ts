@@ -58,4 +58,10 @@ export interface ShapeProperties {
   fillSource?: PaintSourceInfo;
   /** How the visible stroke color was resolved. */
   strokeSource?: PaintSourceInfo;
+  /** SVG rect corner radius (effective horizontal). Omitted when square. */
+  rx?: number;
+  /** SVG rect corner radius (effective vertical). Mirrors rx when ry attr absent. */
+  ry?: number;
+  /** Max corner radius for `<rect>` (min(width/2, height/2)). Omitted for non-rects. */
+  rectMaxCornerRadius?: number;
 }

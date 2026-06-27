@@ -1,3 +1,4 @@
+export * from './geometry/rect-corner-radius-command';
 export * from './paint/paint-commands';
 export * from './paint/bake-commands';
 export * from './paint/text-commands';

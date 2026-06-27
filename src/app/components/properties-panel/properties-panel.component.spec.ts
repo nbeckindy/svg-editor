@@ -93,6 +93,8 @@ describe('PropertiesPanelComponent', () => {
       updateTextAnchor: vi.fn(),
       updateTextPaintOrder: vi.fn(),
       updateTextVectorEffect: vi.fn(),
+      updateRectCornerRadius: vi.fn(),
+      restoreRectCornerRadii: vi.fn(),
       getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 50 }),
       snapshotSelectionTransforms: vi.fn(() => new Map<string, Matrix>()),
       snapshotVectorEffectsForShapes: vi.fn(() => new Map<string, (string | null)[]>()),
@@ -1002,6 +1004,58 @@ describe('PropertiesPanelComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('#font-family')).toBeNull();
     expect(el.textContent).not.toContain('Text Align');
+  });
+
+  it('shows corner radius control when a rect is selected', () => {
+    selectedShapesSignal.set([
+      { id: 'rect-1', type: 'rect', rx: 4, ry: 4, rectMaxCornerRadius: 15 }
+    ]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const slider = el.querySelector('#properties-rect-corner-radius') as HTMLInputElement;
+    expect(slider).toBeTruthy();
+    expect(slider.max).toBe('15');
+    const numberInput = el.querySelector(
+      '[data-testid="properties-rect-corner-radius"]'
+    ) as HTMLInputElement;
+    expect(numberInput.value).toBe('4');
+    expect(numberInput.max).toBe('15');
+  });
+
+  it('hides corner radius control when selection is not a rect', () => {
+    selectedShapesSignal.set([{ id: 'ellipse-1', type: 'ellipse', rx: 10, ry: 5 }]);
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="properties-rect-corner-radius"]')
+    ).toBeNull();
+  });
+
+  it('shows mixed corner radius when rects disagree', () => {
+    selectedShapesSignal.set([
+      { id: 'rect-1', type: 'rect', rx: 4, ry: 4, rectMaxCornerRadius: 15 },
+      { id: 'rect-2', type: 'rect', rx: 8, ry: 8, rectMaxCornerRadius: 20 }
+    ]);
+    fixture.detectChanges();
+    expect(component.rectCornerRadiiMixed()).toBe(true);
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="properties-rect-corner-radius"]'
+    ) as HTMLInputElement;
+    expect(input.placeholder).toBe('—');
+  });
+
+  it('uses the smallest rect clamp limit as the corner radius slider max', () => {
+    selectedShapesSignal.set([
+      { id: 'rect-1', type: 'rect', rectMaxCornerRadius: 15 },
+      { id: 'rect-2', type: 'rect', rectMaxCornerRadius: 40 }
+    ]);
+    expect(component.rectCornerRadiusSliderMax()).toBe(15);
+  });
+
+  it('updates rect corner radius through command path', () => {
+    selectedShapesSignal.set([{ id: 'rect-1', type: 'rect' }]);
+    fixture.detectChanges();
+    component.onRectCornerRadiusChange({ target: { value: '6' } } as unknown as Event);
+    expect(svgManipulationService.updateRectCornerRadius).toHaveBeenCalledWith('rect-1', 6);
   });
 
   it('updates text font family through command path', () => {

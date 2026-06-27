@@ -68,6 +68,9 @@ export class ChromeEditorApplyService {
   onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event) {
     return this.transform.onSelectionBBoxFieldCommit(field, event);
   }
+  applyRectCornerRadiusFromChrome(radius: number) {
+    return this.transform.applyRectCornerRadiusFromChrome(radius);
+  }
 
   applyPathBooleanUnion(pathIds: string[]) { return this.pathOps.applyPathBooleanUnion(pathIds); }
   applyPathBooleanSubtract(pathIds: string[]) { return this.pathOps.applyPathBooleanSubtract(pathIds); }

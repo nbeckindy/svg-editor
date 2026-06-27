@@ -201,6 +201,14 @@ export class SvgManipulationService
     this.shapes.updateTextVectorEffect(textId, effect);
   }
 
+  updateRectCornerRadius(shapeId: string, radius: number): void {
+    this.shapes.updateRectCornerRadius(shapeId, radius);
+  }
+
+  restoreRectCornerRadii(shapeId: string, rx: number, ry: number): void {
+    this.shapes.restoreRectCornerRadii(shapeId, rx, ry);
+  }
+
   getNearestGroupAncestorId(shapeId: string): string | null {
     return this.shapes.getNearestGroupAncestorId(shapeId);
   }

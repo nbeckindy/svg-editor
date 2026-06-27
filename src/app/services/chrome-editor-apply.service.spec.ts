@@ -54,6 +54,8 @@ describe('ChromeEditorApplyService', () => {
       updateTextAnchor: vi.fn(),
       updateTextPaintOrder: vi.fn(),
       updateTextVectorEffect: vi.fn(),
+      updateRectCornerRadius: vi.fn(),
+      restoreRectCornerRadii: vi.fn(),
       bakeEffectiveFillToLocal: vi.fn(),
       restoreBakedFillPresentation: vi.fn(),
       bakeEffectiveStrokeToLocal: vi.fn(),
@@ -166,6 +168,49 @@ describe('ChromeEditorApplyService', () => {
       pushAndExecute: ReturnType<typeof vi.fn>;
     };
     service.applyStrokeDashoffset(Number.POSITIVE_INFINITY);
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('applyRectCornerRadiusFromChrome pushes history for selected rects only', () => {
+    selectedShapesSignal.set([
+      { id: 'r1', type: 'rect', rx: 2, ry: 2 },
+      { id: 'e1', type: 'ellipse' }
+    ]);
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      updateRectCornerRadius: ReturnType<typeof vi.fn>;
+      getSVGInstance: ReturnType<typeof vi.fn>;
+      getShapeProperties: ReturnType<typeof vi.fn>;
+    };
+    manip.getSVGInstance.mockReturnValue({
+      findOne: vi.fn(() => ({ node: {} }))
+    });
+    manip.getShapeProperties.mockReturnValue({ id: 'r1', type: 'rect', rx: 8, ry: 8 });
+
+    service.applyRectCornerRadiusFromChrome(8);
+
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    expect(history.pushAndExecute).toHaveBeenCalled();
+    expect(manip.updateRectCornerRadius).toHaveBeenCalledWith('r1', 8);
+    expect(manip.updateRectCornerRadius).toHaveBeenCalledTimes(1);
+  });
+
+  it('applyRectCornerRadiusFromChrome does nothing when radius is not finite', () => {
+    selectedShapesSignal.set([{ id: 'r1', type: 'rect' }]);
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    service.applyRectCornerRadiusFromChrome(Number.NaN);
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('applyRectCornerRadiusFromChrome does nothing when no rects are selected', () => {
+    selectedShapesSignal.set([{ id: 'e1', type: 'ellipse' }]);
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    service.applyRectCornerRadiusFromChrome(5);
     expect(history.pushAndExecute).not.toHaveBeenCalled();
   });
 

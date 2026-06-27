@@ -1664,6 +1664,40 @@ describe('SvgManipulationService', () => {
       service.updateStrokeDasharray('r1', '5,3');
       expect(service.documentRevision()).toBeGreaterThan(before);
     });
+
+    it('getShapeProperties reads rect corner radius', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="30" rx="8"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const el = service.getSVGInstance()!.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.rx).toBe(8);
+      expect(props.ry).toBe(8);
+      expect(props.rectMaxCornerRadius).toBe(15);
+    });
+
+    it('updateRectCornerRadius sets rx and ry attributes', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="30"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.updateRectCornerRadius('r1', 6);
+      const node = container.querySelector('#r1');
+      expect(node?.getAttribute('rx')).toBe('6');
+      expect(node?.getAttribute('ry')).toBe('6');
+    });
+
+    it('restoreRectCornerRadii restores asymmetric radii', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="30" rx="8" ry="8"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.restoreRectCornerRadii('r1', 8, 4);
+      const node = container.querySelector('#r1');
+      expect(node?.getAttribute('rx')).toBe('8');
+      expect(node?.getAttribute('ry')).toBe('4');
+    });
   });
 
   describe('paint type classification (gradient/pattern/solid)', () => {

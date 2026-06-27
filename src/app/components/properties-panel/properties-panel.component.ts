@@ -258,6 +258,57 @@ export class PropertiesPanelComponent {
     return value === 'middle' || value === 'end' ? value : 'start';
   }
 
+  private rectSelection(): ShapeProperties[] {
+    return this.selectedShapesList().filter((s) => s.type === 'rect');
+  }
+
+  hasRectSelection(): boolean {
+    return this.rectSelection().length > 0;
+  }
+
+  /** Linked corner radius when rx and ry match; null when asymmetric. */
+  private effectiveCornerRadius(shape: ShapeProperties): number | null {
+    const rx = shape.rx ?? 0;
+    const ry = shape.ry ?? shape.rx ?? 0;
+    if (rx !== ry) return null;
+    return rx;
+  }
+
+  rectCornerRadiiMixed(): boolean {
+    const rects = this.rectSelection();
+    if (rects.length === 0) return false;
+    if (rects.some((s) => this.effectiveCornerRadius(s) === null)) return true;
+    if (rects.length <= 1) return false;
+    const keys = new Set(rects.map((s) => String(this.effectiveCornerRadius(s))));
+    return keys.size > 1;
+  }
+
+  /** Slider max = smallest per-rect clamp limit so full travel reaches max on every selected rect. */
+  rectCornerRadiusSliderMax(): number {
+    const rects = this.rectSelection();
+    if (rects.length === 0) return 0;
+    const limits = rects
+      .map((s) => s.rectMaxCornerRadius)
+      .filter((m): m is number => m != null && Number.isFinite(m) && m > 0);
+    if (limits.length === 0) return 0;
+    return Math.min(...limits);
+  }
+
+  rectCornerRadiusValue(): number {
+    const rects = this.rectSelection();
+    if (rects.length === 0 || this.rectCornerRadiiMixed()) return 0;
+    return this.effectiveCornerRadius(rects[0]!) ?? 0;
+  }
+
+  onRectCornerRadiusChange(event: Event): void {
+    if (this.rectCornerRadiiMixed()) return;
+    const raw = (event.target as HTMLInputElement).value.trim();
+    if (raw === '') return;
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    this.chromeApply.applyRectCornerRadiusFromChrome(parsed);
+  }
+
   onFontFamilyChange(event: Event): void {
     const fontFamily = (event.target as HTMLSelectElement).value;
     this.chromeApply.applyTextFontFamilyFromChrome(
