@@ -16,7 +16,7 @@ The editor is a **partially hexagonal** Angular app: narrow **ports**, **command
 | **Adapters** | `SvgManipulationService` (façade), `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` |
 | **Registries** | `ToolRegistryService` + `registerDefaultTools()`, `DockPanelRegistryService` + `registerDefaultDockPanels()` |
 
-Large **integration surfaces** remain: `SvgCanvasComponent` (~4.3k lines) orchestrates tools, keyboard, pen session, and inline text.
+Large **integration surfaces** remain: `SvgCanvasComponent` (~2.6k lines) orchestrates tools, keyboard, pen session, and inline text.
 
 ### Tool plugin seam
 
@@ -30,6 +30,7 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~4.3k lines) orches
 | Adapters | `*-canvas-tool.ts` factories (creation, selector, pen, zoom, pan, text, eyedropper, …) |
 | Orchestrator ports | e.g. `PenToolSessionPorts` + `PenToolSessionSvgPort` (narrow slices of the canvas adapter) |
 | Adapter context slices | `canvas-adapter-context.ts` — shared coordinate, tool-state, document-surface, and readiness types consumed by `CanvasToolHost`, pen ports, and pointer/keyboard seams |
+| Coordinate mapping | `canvas-coordinate-mapping.service.ts` — client ↔ SVG user ↔ overlay pixel transforms; bound from `SvgCanvasComponent.syncOverlayViewBox` |
 
 `CanvasAdapterContext` composes the coordinate, tool-state, and document-surface slices reused across host interfaces; extend it (or individual slices) rather than re-declaring `clientToEditorSvgPoint` / `getCurrentTool` on each seam.
 
