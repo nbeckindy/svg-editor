@@ -14,7 +14,8 @@ body {
   color: var(--editor-text);
 }
 
-/* Layers panel context menu — rendered in CDK overlay outside component host */
+/* Editor context menus — rendered in CDK overlay outside component host */
+.editor-context-menu-panel.mat-mdc-menu-panel,
 .layer-context-menu-panel.mat-mdc-menu-panel {
   --mat-menu-container-color: var(--editor-surface);
   --mat-sys-surface-container: var(--editor-surface);
@@ -26,14 +27,17 @@ body {
   box-shadow: var(--editor-shadow-menu);
 }
 
+.editor-context-menu-panel .mat-mdc-menu-content,
 .layer-context-menu-panel .mat-mdc-menu-content {
   background-color: var(--editor-surface);
 }
 
+.editor-context-menu-panel .mat-mdc-menu-item:not([disabled]):hover,
 .layer-context-menu-panel .mat-mdc-menu-item:not([disabled]):hover {
   background-color: var(--editor-accent-surface-hover);
 }
 
+.editor-context-menu-panel .mat-mdc-menu-item:not([disabled]).cdk-keyboard-focused,
 .layer-context-menu-panel .mat-mdc-menu-item:not([disabled]).cdk-keyboard-focused {
   background-color: var(--editor-accent-surface-focus);
 }

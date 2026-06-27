@@ -39,6 +39,7 @@
       aria-label="SVG drawing canvas"
       (click)="onCanvasClick($event)"
       (dblclick)="onCanvasDoubleClick($event)"
+      (contextmenu)="onCanvasContextMenu($event)"
       (mousedown)="onCanvasMouseDown($event)"
       (dragover)="onCanvasRasterDragOver($event)"
       (drop)="onCanvasRasterDrop($event)">
@@ -338,4 +339,81 @@
       <p>Load an SVG file to begin editing</p>
     </div>
   }
+
+  <button
+    type="button"
+    class="canvas-context-menu-trigger"
+    aria-hidden="true"
+    tabindex="-1"
+    [matMenuTriggerFor]="canvasContextMenu"
+    #canvasContextMenuTrigger="matMenuTrigger"></button>
+
+  <mat-menu #canvasContextMenu="matMenu" class="editor-context-menu-panel">
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-cut"
+      [disabled]="!contextMenuState().canCut"
+      (click)="onContextMenuCut()">
+      Cut
+    </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-copy"
+      [disabled]="!contextMenuState().canCopy"
+      (click)="onContextMenuCopy()">
+      Copy
+    </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-paste"
+      [disabled]="!contextMenuState().canPaste"
+      (click)="onContextMenuPaste()">
+      Paste
+    </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-delete"
+      [disabled]="!contextMenuState().canDelete"
+      (click)="onContextMenuDelete()">
+      Delete
+    </button>
+    <mat-divider />
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-group"
+      [disabled]="!contextMenuState().canGroup"
+      (click)="onContextMenuGroup()">
+      Group
+    </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-ungroup"
+      [disabled]="!contextMenuState().canUngroup"
+      (click)="onContextMenuUngroup()">
+      Ungroup
+    </button>
+    <mat-divider />
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-rotate-cw"
+      [disabled]="!contextMenuState().canRotate"
+      (click)="onContextMenuRotateCw()">
+      Rotate 90° CW
+    </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-rotate-ccw"
+      [disabled]="!contextMenuState().canRotate"
+      (click)="onContextMenuRotateCcw()">
+      Rotate 90° CCW
+    </button>
+  </mat-menu>
 </div>
