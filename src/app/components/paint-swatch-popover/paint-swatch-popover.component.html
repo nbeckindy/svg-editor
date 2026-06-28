@@ -1,0 +1,115 @@
+@if (disabled()) {
+  <div
+    class="paint-swatch-popover paint-swatch-popover--disabled"
+    data-testid="paint-swatch-popover"
+    [attr.aria-disabled]="true"
+    [attr.aria-label]="indeterminate() ? 'Paint (mixed selection)' : empty() ? noPaintLabel() : 'Paint (locked layer)'">
+    <div class="psp-summary psp-summary-disabled" data-testid="paint-swatch-popover-swatch">
+      @if (indeterminate()) {
+        <span class="psp-swatch psp-swatch-mixed" aria-hidden="true"></span>
+      } @else if (empty() || mode() === 'none') {
+        <span class="psp-swatch psp-swatch-empty" aria-hidden="true">
+          <mat-icon class="psp-empty-mat-icon" data-testid="paint-swatch-popover-empty-icon" aria-hidden="true"
+            >format_color_reset</mat-icon
+          >
+        </span>
+      } @else if (mode() === 'linear' || mode() === 'radial') {
+        <span
+          class="psp-swatch psp-swatch-gradient"
+          [style.background-image]="swatchBackground() ?? ''"
+          aria-hidden="true"></span>
+      } @else {
+        <span class="psp-swatch psp-swatch-solid" [style.background-color]="color()" aria-hidden="true"></span>
+      }
+    </div>
+  </div>
+} @else {
+  <details
+    class="paint-swatch-popover"
+    [class.indeterminate]="indeterminate()"
+    data-testid="paint-swatch-popover"
+    (toggle)="$event.stopPropagation()">
+    <summary
+      class="psp-summary"
+      data-testid="paint-swatch-popover-swatch"
+      [attr.aria-label]="
+        indeterminate() ? 'Paint — mixed selection' : empty() || mode() === 'none' ? noPaintLabel() + ' — open to edit' : 'Paint — open to edit'
+      ">
+      @if (indeterminate()) {
+        <span class="psp-swatch psp-swatch-mixed" aria-hidden="true"></span>
+      } @else if (empty() || mode() === 'none') {
+        <span class="psp-swatch psp-swatch-empty" aria-hidden="true">
+          <mat-icon class="psp-empty-mat-icon" data-testid="paint-swatch-popover-empty-icon" aria-hidden="true"
+            >format_color_reset</mat-icon
+          >
+        </span>
+      } @else if (mode() === 'linear' || mode() === 'radial') {
+        <span
+          class="psp-swatch psp-swatch-gradient"
+          [style.background-image]="swatchBackground() ?? ''"
+          aria-hidden="true"></span>
+      } @else {
+        <span class="psp-swatch psp-swatch-solid" [style.background-color]="color()" aria-hidden="true"></span>
+      }
+    </summary>
+    <div class="psp-panel" (click)="$event.stopPropagation()">
+      <div class="psp-mode-tabs" role="tablist" [attr.aria-label]="target() === 'fill' ? 'Fill paint mode' : 'Stroke paint mode'">
+        <button
+          type="button"
+          class="psp-mode-tab"
+          role="tab"
+          data-testid="paint-swatch-mode-solid"
+          [class.active]="activeModeTab() === 'solid'"
+          [attr.aria-selected]="activeModeTab() === 'solid'"
+          (click)="onModeTabClick('solid', $event)">
+          Solid
+        </button>
+        <button
+          type="button"
+          class="psp-mode-tab"
+          role="tab"
+          data-testid="paint-swatch-mode-linear"
+          [class.active]="activeModeTab() === 'linear'"
+          [attr.aria-selected]="activeModeTab() === 'linear'"
+          [disabled]="gradientModesDisabled()"
+          (click)="onModeTabClick('linear', $event)">
+          Linear
+        </button>
+        <button
+          type="button"
+          class="psp-mode-tab"
+          role="tab"
+          data-testid="paint-swatch-mode-radial"
+          [class.active]="activeModeTab() === 'radial'"
+          [attr.aria-selected]="activeModeTab() === 'radial'"
+          [disabled]="gradientModesDisabled()"
+          (click)="onModeTabClick('radial', $event)">
+          Radial
+        </button>
+        <button
+          type="button"
+          class="psp-mode-tab"
+          role="tab"
+          data-testid="paint-swatch-mode-none"
+          [class.active]="activeModeTab() === 'none'"
+          [attr.aria-selected]="activeModeTab() === 'none'"
+          (click)="onModeTabClick('none', $event)">
+          {{ noPaintLabel() }}
+        </button>
+      </div>
+
+      @if (activeModeTab() === 'solid') {
+        <div class="psp-solid-controls" data-testid="paint-swatch-solid-controls">
+          <app-color-picker
+            data-testid="paint-swatch-color-picker"
+            [color]="color()"
+            [empty]="empty()"
+            [indeterminate]="indeterminate()"
+            [clearable]="false"
+            [disabled]="disabled()"
+            (colorChange)="onSolidColorChange($event)" />
+        </div>
+      }
+    </div>
+  </details>
+}

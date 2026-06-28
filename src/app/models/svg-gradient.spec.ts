@@ -1,7 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   applyEditableGradientModelToElement,
+  cssGradientPreviewFromModel,
   defaultLinearGradientModel,
+  defaultRadialGradientModel,
+  firstStopColor,
   parsePaintReferenceId,
   readEditableGradientModel,
   serializeGradientElementToOuterHtml
@@ -37,5 +40,22 @@ describe('svg-gradient', () => {
     m.stops.push({ offset: '50%', color: '#333333' });
     applyEditableGradientModelToElement(lg, m);
     expect(lg.querySelectorAll('stop').length).toBe(3);
+  });
+
+  it('firstStopColor returns lowest-offset stop color', () => {
+    const m = defaultLinearGradientModel('g', '#ff0000', '#0000ff');
+    m.stops = [
+      { offset: '100%', color: '#0000ff' },
+      { offset: '0%', color: '#ff0000' }
+    ];
+    expect(firstStopColor(m)).toBe('#ff0000');
+  });
+
+  it('cssGradientPreviewFromModel builds linear and radial CSS', () => {
+    const linear = defaultLinearGradientModel('g', '#ff0000', '#0000ff');
+    expect(cssGradientPreviewFromModel(linear)).toMatch(/^linear-gradient\(/);
+
+    const radial = defaultRadialGradientModel('g', '#ffffff', '#000000');
+    expect(cssGradientPreviewFromModel(radial)).toMatch(/^radial-gradient\(/);
   });
 });

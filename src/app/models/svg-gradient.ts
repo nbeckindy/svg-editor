@@ -203,6 +203,53 @@ function escAttr(v: string): string {
   return v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }
 
+function parseOffsetPercent(offset: string): number {
+  const t = offset.trim();
+  if (t.endsWith('%')) {
+    const n = Number.parseFloat(t.slice(0, -1));
+    return Number.isFinite(n) ? n : 0;
+  }
+  const n = Number.parseFloat(t);
+  if (!Number.isFinite(n)) return 0;
+  return n <= 1 ? n * 100 : n;
+}
+
+/** First stop color by ascending offset (used when reverting gradient → solid). */
+export function firstStopColor(model: EditableGradientModel): string {
+  if (model.stops.length === 0) return '#000000';
+  const sorted = [...model.stops].sort(
+    (a, b) => parseOffsetPercent(a.offset) - parseOffsetPercent(b.offset)
+  );
+  return sorted[0].color.trim() || '#000000';
+}
+
+function cssStopColor(stop: GradientStopModel): string {
+  const alpha = stop.opacity != null && Number.isFinite(stop.opacity) ? stop.opacity : 1;
+  if (alpha >= 1) return stop.color;
+  return `color-mix(in srgb, ${stop.color} ${Math.round(alpha * 100)}%, transparent)`;
+}
+
+/** CSS `background-image` value approximating an SVG gradient for swatch previews. */
+export function cssGradientPreviewFromModel(model: EditableGradientModel): string {
+  const stops = [...model.stops]
+    .sort((a, b) => parseOffsetPercent(a.offset) - parseOffsetPercent(b.offset))
+    .map((s) => `${cssStopColor(s)} ${parseOffsetPercent(s.offset)}%`)
+    .join(', ');
+
+  if (model.kind === 'radial') {
+    const cx = model.cx ?? '50%';
+    const cy = model.cy ?? '50%';
+    return `radial-gradient(circle at ${cx} ${cy}, ${stops})`;
+  }
+
+  const x1 = parseOffsetPercent(model.x1 ?? '0%');
+  const y1 = parseOffsetPercent(model.y1 ?? '0%');
+  const x2 = parseOffsetPercent(model.x2 ?? '100%');
+  const y2 = parseOffsetPercent(model.y2 ?? '0%');
+  const angleDeg = 90 - (Math.atan2(y2 - y1, x2 - x1) * 180) / Math.PI;
+  return `linear-gradient(${angleDeg}deg, ${stops})`;
+}
+
 /** Build a defs-safe `<linearGradient>` / `<radialGradient>` outerHTML string from a model. */
 export function serializeGradientElementToOuterHtml(model: EditableGradientModel): string {
   const stopsXml = model.stops

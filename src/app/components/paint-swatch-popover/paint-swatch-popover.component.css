@@ -1,0 +1,129 @@
+.paint-swatch-popover {
+  position: relative;
+  display: inline-block;
+}
+
+.paint-swatch-popover.indeterminate {
+  opacity: 0.95;
+}
+
+.paint-swatch-popover--disabled {
+  opacity: 0.72;
+}
+
+.psp-summary-disabled {
+  list-style: none;
+  cursor: not-allowed;
+  padding: 0;
+  margin: 0;
+  user-select: none;
+}
+
+.psp-summary {
+  list-style: none;
+  cursor: pointer;
+  padding: 0;
+  margin: 0;
+}
+
+.psp-summary::-webkit-details-marker {
+  display: none;
+}
+
+.psp-swatch {
+  display: block;
+  width: 50px;
+  height: 40px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box;
+}
+
+.psp-swatch-solid {
+  background-color: #000;
+}
+
+.psp-swatch-gradient {
+  background-color: #fafafa;
+}
+
+.psp-swatch-mixed {
+  background: repeating-linear-gradient(
+    45deg,
+    #e8e8e8,
+    #e8e8e8 4px,
+    #f4f4f4 4px,
+    #f4f4f4 8px
+  );
+}
+
+.psp-swatch-empty {
+  position: relative;
+  background: #fafafa;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.psp-empty-mat-icon {
+  width: 100%;
+  height: 100%;
+  font-size: 28px;
+  color: #c62828;
+}
+
+.psp-panel {
+  position: absolute;
+  left: 0;
+  top: calc(100% + 6px);
+  z-index: 20;
+  min-width: 240px;
+  padding: 12px;
+  background: #fff;
+  border: 1px solid #ccc;
+  border-radius: 6px;
+  box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
+}
+
+.psp-mode-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 4px;
+  margin-bottom: 12px;
+}
+
+.psp-mode-tab {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: 6px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  background: #f8f8f8;
+  color: #333;
+  cursor: pointer;
+}
+
+.psp-mode-tab.active {
+  border-color: #1976d2;
+  background: #e3f2fd;
+  color: #0d47a1;
+}
+
+.psp-mode-tab:disabled {
+  opacity: 0.45;
+  cursor: not-allowed;
+}
+
+.psp-mode-tab:not(:disabled):hover {
+  background: #eee;
+}
+
+.psp-mode-tab.active:not(:disabled):hover {
+  background: #e3f2fd;
+}
+
+.psp-solid-controls {
+  margin-top: 4px;
+}
