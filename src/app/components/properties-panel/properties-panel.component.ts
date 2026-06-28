@@ -536,6 +536,16 @@ export class PropertiesPanelComponent {
     this.chromeApply.selectParentGroupForSingleSelection();
   }
 
+  gradientEditorSummaryLabel(paintProperty: 'fill' | 'stroke'): string {
+    return paintProperty === 'fill' ? 'Edit gradient fill' : 'Edit gradient stroke';
+  }
+
+  canShowGradientEditor(shape: ShapeProperties, paintProperty: 'fill' | 'stroke'): boolean {
+    if (this.selectionCount() !== 1) return false;
+    const paintType = paintProperty === 'fill' ? shape.fillPaintType : shape.strokePaintType;
+    return paintType === 'gradient';
+  }
+
   /** True when the fill is a url(#...) reference (gradient or pattern) that the hex picker can't edit. */
   isGradientOrPatternFill(shape: ShapeProperties): boolean {
     return shape.fillPaintType === 'gradient' || shape.fillPaintType === 'pattern';

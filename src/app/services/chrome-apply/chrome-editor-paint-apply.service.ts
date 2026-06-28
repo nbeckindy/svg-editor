@@ -19,7 +19,17 @@ import {
   BakeFillCommand,
   BakeStrokeCommand
 } from '../../models/editor-commands';
-import { defaultLinearGradientModel, serializeGradientElementToOuterHtml } from '../../models/svg-gradient';
+import {
+  defaultLinearGradientModel,
+  defaultRadialGradientModel,
+  firstStopColor,
+  parsePaintReferenceId,
+  serializeGradientElementToOuterHtml,
+  switchGradientKindModel,
+  type EditableGradientModel,
+  type PaintGradientSnapshot
+} from '../../models/svg-gradient';
+import type { PaintSwatchMode, PaintSwatchTarget } from '../../components/paint-swatch-popover/paint-swatch-popover.component';
 import type { PropertiesPanelSvgPort } from '../../history/properties-panel-svg.port';
 import type { LayerReorderGroupSvgPort } from '../../history/layers-panel-svg.port';
 import { SvgManipulationService } from '../svg-manipulation.service';
@@ -455,18 +465,140 @@ export class ChromeEditorPaintApplyService {
   }
 
   applyAddLinearGradientFillFromChrome(shape: ShapeProperties, solidFrom: string): void {
+    this.applyAddGradientPaintFromChrome(shape, 'fill', 'linear', solidFrom);
+  }
+
+  applyAddGradientPaintFromChrome(
+    shape: ShapeProperties,
+    paintProperty: 'fill' | 'stroke',
+    kind: 'linear' | 'radial',
+    seedFrom?: string
+  ): void {
     if (this.layerSvg.isElementOrAncestorLocked(shape.id)) return;
+    const fromColor = seedFrom ?? this.seedSolidColorForGradient(shape, paintProperty);
     const id = this.propertiesSvg.allocateUniqueDefId('grad');
-    const model = defaultLinearGradientModel(id, solidFrom, '#ffffff');
-    const before = this.propertiesSvg.capturePaintGradientSnapshot(shape.id, 'fill');
-    const after = {
-      gradientId: id,
-      shapePaintAttr: `url(#${id})`,
-      gradientOuterHtml: serializeGradientElementToOuterHtml(model)
+    const model =
+      kind === 'linear'
+        ? defaultLinearGradientModel(id, fromColor, '#ffffff')
+        : defaultRadialGradientModel(id, fromColor, '#ffffff');
+    const before = this.propertiesSvg.capturePaintGradientSnapshot(shape.id, paintProperty);
+    const after = this.buildGradientSnapshot(model);
+    const cmds: EditorCommand[] = [
+      new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, paintProperty, before, after)
+    ];
+    if (paintProperty === 'stroke') {
+      cmds.unshift(...this.strokeBootstrapCommands(shape));
+    }
+    this.pushCommandsAndSyncSelection(
+      cmds,
+      kind === 'linear' ? `Add linear gradient ${paintProperty}` : `Add radial gradient ${paintProperty}`
+    );
+  }
+
+  applyRevertGradientToSolidFromChrome(
+    shape: ShapeProperties,
+    paintProperty: 'fill' | 'stroke'
+  ): void {
+    if (this.layerSvg.isElementOrAncestorLocked(shape.id)) return;
+    const before = this.propertiesSvg.capturePaintGradientSnapshot(shape.id, paintProperty);
+    if (!before.gradientId) return;
+    const model = this.propertiesSvg.readEditableGradientModelById(before.gradientId);
+    const solid = model ? firstStopColor(model) : '#000000';
+    const after: PaintGradientSnapshot = {
+      gradientId: null,
+      shapePaintAttr: solid,
+      gradientOuterHtml: null
     };
     this.pushCommandsAndSyncSelection(
-      [new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, 'fill', before, after)],
-      'Add gradient fill'
+      [new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, paintProperty, before, after)],
+      paintProperty === 'fill' ? 'Revert fill to solid' : 'Revert stroke to solid'
     );
+  }
+
+  applySwitchGradientKindFromChrome(
+    shape: ShapeProperties,
+    paintProperty: 'fill' | 'stroke',
+    kind: 'linear' | 'radial'
+  ): void {
+    if (this.layerSvg.isElementOrAncestorLocked(shape.id)) return;
+    const before = this.propertiesSvg.capturePaintGradientSnapshot(shape.id, paintProperty);
+    if (!before.gradientId) return;
+    const current = this.propertiesSvg.readEditableGradientModelById(before.gradientId);
+    if (!current || current.kind === kind) return;
+    const switched = switchGradientKindModel(current, kind);
+    const after = this.buildGradientSnapshot(switched);
+    const cmds: EditorCommand[] = [
+      new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, paintProperty, before, after)
+    ];
+    if (paintProperty === 'stroke') {
+      cmds.unshift(...this.strokeBootstrapCommands(shape));
+    }
+    this.pushCommandsAndSyncSelection(cmds, `Switch ${paintProperty} gradient to ${kind}`);
+  }
+
+  applyPaintModeFromChrome(
+    shape: ShapeProperties,
+    target: PaintSwatchTarget,
+    mode: PaintSwatchMode
+  ): void {
+    if (this.layerSvg.isElementOrAncestorLocked(shape.id)) return;
+
+    const paintType = target === 'fill' ? shape.fillPaintType : shape.strokePaintType;
+    const paintUrl = target === 'fill' ? shape.fillUrl : shape.strokeUrl;
+
+    switch (mode) {
+      case 'none':
+        if (target === 'fill') {
+          this.applyFillColor('none');
+        } else {
+          this.applyStrokeColor('none');
+        }
+        return;
+      case 'solid':
+        if (paintType === 'gradient') {
+          this.applyRevertGradientToSolidFromChrome(shape, target);
+        }
+        return;
+      case 'linear':
+      case 'radial': {
+        if (paintType === 'gradient') {
+          const gradId = parsePaintReferenceId(paintUrl ?? undefined);
+          const model = gradId ? this.propertiesSvg.readEditableGradientModelById(gradId) : null;
+          if (model?.kind === mode) return;
+          if (model) {
+            this.applySwitchGradientKindFromChrome(shape, target, mode);
+            return;
+          }
+        }
+        if (paintType !== 'gradient' && paintType !== 'pattern') {
+          this.applyAddGradientPaintFromChrome(shape, target, mode);
+        }
+        return;
+      }
+    }
+  }
+
+  private buildGradientSnapshot(model: EditableGradientModel): PaintGradientSnapshot {
+    return {
+      gradientId: model.id,
+      shapePaintAttr: `url(#${model.id})`,
+      gradientOuterHtml: serializeGradientElementToOuterHtml(model)
+    };
+  }
+
+  private seedSolidColorForGradient(shape: ShapeProperties, paintProperty: 'fill' | 'stroke'): string {
+    const raw = paintProperty === 'fill' ? shape.fill : shape.stroke;
+    if (raw && raw.trim() !== '' && raw.toLowerCase() !== 'none' && !raw.includes('url(')) {
+      return raw;
+    }
+    return paintProperty === 'fill' ? '#000000' : '#000000';
+  }
+
+  private strokeBootstrapCommands(shape: ShapeProperties): EditorCommand[] {
+    if (this.hasStrokeColor(shape) && (shape.strokeWidth ?? 0) > 0) {
+      return [];
+    }
+    const w = Math.max(1, this.defaultStrokeWidthValue() > 0 ? this.defaultStrokeWidthValue() : 1);
+    return [new AddStrokeCommand(this.paintSvg, shape.id, '#000000', w)];
   }
 }

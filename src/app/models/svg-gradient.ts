@@ -199,6 +199,42 @@ export function defaultRadialGradientModel(id: string, innerColor: string, outer
   };
 }
 
+/** Switch linear ↔ radial while preserving stops and gradient id. */
+export function switchGradientKindModel(
+  preserveStopsFrom: EditableGradientModel,
+  kind: 'linear' | 'radial'
+): EditableGradientModel {
+  if (preserveStopsFrom.kind === kind) {
+    return preserveStopsFrom;
+  }
+  const id = preserveStopsFrom.id;
+  const stops =
+    preserveStopsFrom.stops.length >= 2
+      ? preserveStopsFrom.stops
+      : defaultLinearGradientModel(id, '#000000', '#ffffff').stops;
+  const units = preserveStopsFrom.gradientUnits;
+  if (kind === 'linear') {
+    return {
+      ...defaultLinearGradientModel(
+        id,
+        stops[0]?.color ?? '#000000',
+        stops[stops.length - 1]?.color ?? '#ffffff'
+      ),
+      stops,
+      gradientUnits: units
+    };
+  }
+  return {
+    ...defaultRadialGradientModel(
+      id,
+      stops[0]?.color ?? '#000000',
+      stops[stops.length - 1]?.color ?? '#ffffff'
+    ),
+    stops,
+    gradientUnits: units
+  };
+}
+
 function escAttr(v: string): string {
   return v.replace(/&/g, '&amp;').replace(/"/g, '&quot;').replace(/</g, '&lt;');
 }

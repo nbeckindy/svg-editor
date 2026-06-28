@@ -899,7 +899,41 @@ describe('PropertiesPanelComponent', () => {
 
       expect(fixture.nativeElement.querySelector('[data-testid="properties-gradient-fill-details"]')).toBeTruthy();
       expect(fixture.nativeElement.querySelector('[data-testid="gradient-fill-editor-root"]')).toBeTruthy();
-      expect(svgManipulationService.ensureDedicatedPaintGradient).toHaveBeenCalled();
+      expect(svgManipulationService.ensureDedicatedPaintGradient).toHaveBeenCalledWith('shape-1', 'fill');
+    });
+
+    it('renders gradient stroke editor when single selection has gradient stroke', () => {
+      const model = {
+        id: 'sg1',
+        kind: 'linear' as const,
+        gradientUnits: 'objectBoundingBox' as const,
+        stops: [
+          { offset: '0%', color: '#000000' },
+          { offset: '100%', color: '#ffffff' }
+        ]
+      };
+      const shapeStub = { attr: vi.fn((name: string) => (name === 'stroke' ? 'url(#sg1)' : null)) };
+      (svgManipulationService.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({
+        findOne: vi.fn(() => shapeStub)
+      });
+      (svgManipulationService.readEditableGradientModelById as ReturnType<typeof vi.fn>).mockReturnValue(model);
+
+      selectedShapesSignal.set([
+        {
+          id: 'shape-1',
+          type: 'rect',
+          strokePaintType: 'gradient',
+          strokeUrl: 'url(#sg1)',
+          strokeWidth: 2
+        } as ShapeProperties
+      ]);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-gradient-stroke-details"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-gradient-stroke-summary"]')?.textContent).toContain(
+        'Edit gradient stroke'
+      );
+      expect(svgManipulationService.ensureDedicatedPaintGradient).toHaveBeenCalledWith('shape-1', 'stroke');
     });
 
     it('does not render gradient fill editor when multiple shapes are selected', () => {

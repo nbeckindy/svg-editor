@@ -7,6 +7,7 @@ import { ChromeEditorPaintApplyService } from './chrome-apply/chrome-editor-pain
 import { ChromeEditorTransformApplyService } from './chrome-apply/chrome-editor-transform-apply.service';
 import { ChromeEditorLayersApplyService } from './chrome-apply/chrome-editor-layers-apply.service';
 import { ChromeEditorPathOpsApplyService } from './chrome-apply/chrome-editor-path-ops-apply.service';
+import type { PaintSwatchMode, PaintSwatchTarget } from '../components/paint-swatch-popover/paint-swatch-popover.component';
 
 /**
  * **Chrome** write path for the **Editor runtime**: **History** (`pushAndExecute`), **Live tree**
@@ -54,6 +55,27 @@ export class ChromeEditorApplyService {
   applyBakeStrokeFromChrome(shapes: ShapeProperties[]) { return this.paint.applyBakeStrokeFromChrome(shapes); }
   applyAddLinearGradientFillFromChrome(shape: ShapeProperties, solidFrom: string) {
     return this.paint.applyAddLinearGradientFillFromChrome(shape, solidFrom);
+  }
+  applyAddGradientPaintFromChrome(
+    shape: ShapeProperties,
+    paintProperty: 'fill' | 'stroke',
+    kind: 'linear' | 'radial',
+    seedFrom?: string
+  ) {
+    return this.paint.applyAddGradientPaintFromChrome(shape, paintProperty, kind, seedFrom);
+  }
+  applyRevertGradientToSolidFromChrome(shape: ShapeProperties, paintProperty: 'fill' | 'stroke') {
+    return this.paint.applyRevertGradientToSolidFromChrome(shape, paintProperty);
+  }
+  applySwitchGradientKindFromChrome(
+    shape: ShapeProperties,
+    paintProperty: 'fill' | 'stroke',
+    kind: 'linear' | 'radial'
+  ) {
+    return this.paint.applySwitchGradientKindFromChrome(shape, paintProperty, kind);
+  }
+  applyPaintModeFromChrome(shape: ShapeProperties, target: PaintSwatchTarget, mode: PaintSwatchMode) {
+    return this.paint.applyPaintModeFromChrome(shape, target, mode);
   }
 
   applyAlignFromChrome(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom', shapeIds: string[]) {

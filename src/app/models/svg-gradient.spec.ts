@@ -7,7 +7,8 @@ import {
   firstStopColor,
   parsePaintReferenceId,
   readEditableGradientModel,
-  serializeGradientElementToOuterHtml
+  serializeGradientElementToOuterHtml,
+  switchGradientKindModel
 } from './svg-gradient';
 
 describe('svg-gradient', () => {
@@ -57,5 +58,14 @@ describe('svg-gradient', () => {
 
     const radial = defaultRadialGradientModel('g', '#ffffff', '#000000');
     expect(cssGradientPreviewFromModel(radial)).toMatch(/^radial-gradient\(/);
+  });
+
+  it('switchGradientKindModel preserves id and stops', () => {
+    const linear = defaultLinearGradientModel('g1', '#111111', '#222222');
+    const radial = switchGradientKindModel(linear, 'radial');
+    expect(radial.id).toBe('g1');
+    expect(radial.kind).toBe('radial');
+    expect(radial.stops).toEqual(linear.stops);
+    expect(switchGradientKindModel(radial, 'linear').kind).toBe('linear');
   });
 });

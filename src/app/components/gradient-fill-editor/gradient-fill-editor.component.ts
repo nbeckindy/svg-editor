@@ -21,6 +21,7 @@ import { ColorPickerComponent } from '../color-picker/color-picker.component';
 })
 export class GradientFillEditorComponent {
   readonly shapeId = input.required<string>();
+  readonly paintProperty = input<'fill' | 'stroke'>('fill');
   /** When true, gradient edits cannot be committed (e.g. shape is on a locked layer). */
   readonly disabled = input(false);
 
@@ -30,11 +31,12 @@ export class GradientFillEditorComponent {
 
   draftModel: EditableGradientModel | null = null;
   private undoBaseline: PaintGradientSnapshot | null = null;
-  private lastLoadedShapeId = '';
+  private lastLoadedKey = '';
 
   constructor() {
     effect(() => {
       const id = this.shapeId();
+      const paintProperty = this.paintProperty();
       this.history.revision();
       this.svc.documentRevision();
       const svg = this.svc.getSVGInstance();
@@ -43,10 +45,10 @@ export class GradientFillEditorComponent {
         this.cdr.markForCheck();
         return;
       }
-      this.svc.ensureDedicatedPaintGradient(id, 'fill');
+      this.svc.ensureDedicatedPaintGradient(id, paintProperty);
       const shape = svg.findOne(`#${id}`);
-      const rawFill = (shape?.attr('fill') as string | null) ?? null;
-      const m = /url\(\s*#([^)'"\s]+)\s*\)/i.exec(rawFill?.trim() ?? '');
+      const rawPaint = (shape?.attr(paintProperty) as string | null) ?? null;
+      const m = /url\(\s*#([^)'"\s]+)\s*\)/i.exec(rawPaint?.trim() ?? '');
       const gid = m?.[1];
       if (!gid) {
         this.draftModel = null;
@@ -60,9 +62,10 @@ export class GradientFillEditorComponent {
         return;
       }
       this.draftModel = JSON.parse(JSON.stringify(model)) as EditableGradientModel;
-      if (id !== this.lastLoadedShapeId) {
-        this.undoBaseline = this.svc.capturePaintGradientSnapshot(id, 'fill');
-        this.lastLoadedShapeId = id;
+      const loadKey = `${id}:${paintProperty}`;
+      if (loadKey !== this.lastLoadedKey) {
+        this.undoBaseline = this.svc.capturePaintGradientSnapshot(id, paintProperty);
+        this.lastLoadedKey = loadKey;
       }
       this.cdr.markForCheck();
     });
@@ -72,9 +75,10 @@ export class GradientFillEditorComponent {
     if (this.disabled()) return;
     const d = this.draftModel;
     const id = this.shapeId();
+    const paintProperty = this.paintProperty();
     if (!d) return;
     if (d.kind === kind) return;
-    this.draftModel = this.svc.setGradientKindForShape(id, 'fill', kind, d);
+    this.draftModel = this.svc.setGradientKindForShape(id, paintProperty, kind, d);
     this.cdr.markForCheck();
   }
 
@@ -117,6 +121,7 @@ export class GradientFillEditorComponent {
     if (this.disabled()) return;
     const d = this.draftModel;
     const sid = this.shapeId();
+    const paintProperty = this.paintProperty();
     if (!d || !this.undoBaseline) return;
     const after: PaintGradientSnapshot = {
       gradientId: d.id,
@@ -124,9 +129,9 @@ export class GradientFillEditorComponent {
       gradientOuterHtml: serializeGradientElementToOuterHtml(d)
     };
     this.history.pushAndExecute(
-      new GradientFillSnapshotCommand(this.svc, sid, 'fill', this.undoBaseline, after)
+      new GradientFillSnapshotCommand(this.svc, sid, paintProperty, this.undoBaseline, after)
     );
-    this.undoBaseline = this.svc.capturePaintGradientSnapshot(sid, 'fill');
+    this.undoBaseline = this.svc.capturePaintGradientSnapshot(sid, paintProperty);
     this.cdr.markForCheck();
   }
 }

@@ -141,15 +141,28 @@
             Add gradient fill
           </button>
         }
-        @if (selectionCount() === 1 && supportsFill(ps) && ps.fillPaintType === 'gradient') {
+        @if (selectionCount() === 1 && supportsFill(ps) && canShowGradientEditor(ps, 'fill')) {
           <details class="gradient-fill-details" open data-testid="properties-gradient-fill-details">
             <summary class="gradient-fill-summary" data-testid="properties-gradient-fill-summary">
-              Edit gradient fill
+              {{ gradientEditorSummaryLabel('fill') }}
             </summary>
             <app-gradient-fill-editor
               [shapeId]="ps.id"
+              paintProperty="fill"
               [disabled]="anySelectedShapeLocked()"
               data-testid="properties-gradient-fill-editor" />
+          </details>
+        }
+        @if (selectionCount() === 1 && canShowGradientEditor(ps, 'stroke')) {
+          <details class="gradient-fill-details" open data-testid="properties-gradient-stroke-details">
+            <summary class="gradient-fill-summary" data-testid="properties-gradient-stroke-summary">
+              {{ gradientEditorSummaryLabel('stroke') }}
+            </summary>
+            <app-gradient-fill-editor
+              [shapeId]="ps.id"
+              paintProperty="stroke"
+              [disabled]="anySelectedShapeLocked()"
+              data-testid="properties-gradient-stroke-editor" />
           </details>
         }
       </div>
