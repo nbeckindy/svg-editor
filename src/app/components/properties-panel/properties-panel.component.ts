@@ -3,11 +3,11 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
-import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-properties.interface';
-import { ColorPickerComponent } from '../color-picker/color-picker.component';
+import { PaintSourceInfo, ShapeProperties } from '../../models/shape-properties.interface';
+import { PaintSwatchPopoverComponent, PaintSwatchMode } from '../paint-swatch-popover/paint-swatch-popover.component';
 import { DocumentSettingsComponent } from '../document-settings/document-settings.component';
 import { GradientFillEditorComponent } from '../gradient-fill-editor/gradient-fill-editor.component';
-import { parsePaintReferenceId } from '../../models/svg-gradient';
+import { EditableGradientModel, parsePaintReferenceId } from '../../models/svg-gradient';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
@@ -20,7 +20,7 @@ import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-nod
   imports: [
     CommonModule,
     FormsModule,
-    ColorPickerComponent,
+    PaintSwatchPopoverComponent,
     DocumentSettingsComponent,
     GradientFillEditorComponent,
     PathNodeAnchorToolsComponent
@@ -44,6 +44,7 @@ export class PropertiesPanelComponent {
   private drawingDefaults = inject(DrawingStyleDefaultsService);
   private editorTool = inject(EditorToolService);
   private chromeApply = inject(ChromeEditorApplyService);
+  private readonly svg = inject(SvgManipulationService);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
   private readonly layerLock = inject(SvgManipulationService) as LayerLockReadPort;
   readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
@@ -546,54 +547,9 @@ export class PropertiesPanelComponent {
     return paintType === 'gradient';
   }
 
-  /** True when the fill is a url(#...) reference (gradient or pattern) that the hex picker can't edit. */
-  isGradientOrPatternFill(shape: ShapeProperties): boolean {
-    return shape.fillPaintType === 'gradient' || shape.fillPaintType === 'pattern';
-  }
-
-  /** Single solid (or none) fill selection — offer creating a new gradient fill. */
-  canCreateGradientFill(shape: ShapeProperties): boolean {
-    if (this.selectionCount() !== 1 || !this.supportsFill(shape)) return false;
-    if (shape.fillPaintType === 'gradient' || shape.fillPaintType === 'pattern') return false;
-    return true;
-  }
-
-  onCreateGradientFill(shape: ShapeProperties): void {
-    if (this.selectionCount() !== 1) return;
-    const from =
-      shape.fill && shape.fill.trim() !== '' && shape.fill.toLowerCase() !== 'none'
-        ? shape.fill
-        : '#000000';
-    this.chromeApply.applyAddLinearGradientFillFromChrome(shape, from);
-  }
-
-  isGradientOrPatternStroke(shape: ShapeProperties): boolean {
-    return shape.strokePaintType === 'gradient' || shape.strokePaintType === 'pattern';
-  }
-
-  paintTypeLabel(paintType: PaintType | undefined): string {
-    switch (paintType) {
-      case 'gradient': return 'Gradient';
-      case 'pattern': return 'Pattern';
-      default: return 'Reference';
-    }
-  }
-
   /** Def id extracted from a raw `url(#id)` paint reference (for inspector labels). */
   paintDefIdFromUrl(url: string | undefined | null): string | null {
     return parsePaintReferenceId(url?.trim() ?? null);
-  }
-
-  fillPaintRefAriaLabel(shape: ShapeProperties): string {
-    const id = this.paintDefIdFromUrl(shape.fillUrl);
-    const kind = shape.fillPaintType === 'pattern' ? 'Pattern' : 'Gradient';
-    return id ? `${kind} fill, definition id ${id}` : `${kind} fill`;
-  }
-
-  strokePaintRefAriaLabel(shape: ShapeProperties): string {
-    const id = this.paintDefIdFromUrl(shape.strokeUrl);
-    const kind = shape.strokePaintType === 'pattern' ? 'Pattern' : 'Gradient';
-    return id ? `${kind} stroke, definition id ${id}` : `${kind} stroke`;
   }
 
   private static readonly NO_FILL_TYPES = new Set(['line', 'polyline']);
@@ -618,6 +574,118 @@ export class PropertiesPanelComponent {
   hasStrokeColor(shape: ShapeProperties): boolean {
     const s = shape.stroke;
     return s != null && s.trim() !== '' && s.toLowerCase() !== 'none';
+  }
+
+  /** Mixed fill paint across selection (solid hex, paint type, or gradient def). */
+  fillPaintMixed(): boolean {
+    if (this.fillMixed()) return true;
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const types = new Set(
+      shapes.map((s) => s.fillPaintType ?? (this.hasFillColor(s) ? 'solid' : 'none'))
+    );
+    if (types.size > 1) return true;
+    if (types.has('gradient') || types.has('pattern')) {
+      return new Set(shapes.map((s) => s.fillUrl ?? '')).size > 1;
+    }
+    return false;
+  }
+
+  /** Mixed stroke paint across selection. */
+  strokePaintMixed(): boolean {
+    if (this.strokeMixed()) return true;
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const types = new Set(
+      shapes.map((s) => s.strokePaintType ?? (this.hasStrokeColor(s) ? 'solid' : 'none'))
+    );
+    if (types.size > 1) return true;
+    if (types.has('gradient') || types.has('pattern')) {
+      return new Set(shapes.map((s) => s.strokeUrl ?? '')).size > 1;
+    }
+    return false;
+  }
+
+  fillGradientModesDisabled(): boolean {
+    return this.selectionCount() > 1 && this.fillPaintMixed();
+  }
+
+  strokeGradientModesDisabled(): boolean {
+    return this.selectionCount() > 1 && this.strokePaintMixed();
+  }
+
+  gradientModelForShape(
+    shape: ShapeProperties,
+    paintProperty: 'fill' | 'stroke'
+  ): EditableGradientModel | null {
+    const url = paintProperty === 'fill' ? shape.fillUrl : shape.strokeUrl;
+    const id = parsePaintReferenceId(url ?? undefined);
+    if (!id) return null;
+    return this.svg.readEditableGradientModelById(id);
+  }
+
+  fillSwatchMode(shape: ShapeProperties): PaintSwatchMode {
+    if (shape.fillPaintType === 'none' || (!this.hasFillColor(shape) && shape.fillPaintType !== 'gradient')) {
+      return 'none';
+    }
+    if (shape.fillPaintType === 'gradient') {
+      const model = this.gradientModelForShape(shape, 'fill');
+      return model?.kind === 'radial' ? 'radial' : 'linear';
+    }
+    return 'solid';
+  }
+
+  strokeSwatchMode(shape: ShapeProperties): PaintSwatchMode {
+    const hasStroke =
+      this.hasStrokeColor(shape) ||
+      shape.strokePaintType === 'gradient' ||
+      (shape.strokeWidth ?? 0) > 0;
+    if (!hasStroke && shape.strokePaintType !== 'gradient') {
+      return 'none';
+    }
+    if (shape.strokePaintType === 'gradient') {
+      const model = this.gradientModelForShape(shape, 'stroke');
+      return model?.kind === 'radial' ? 'radial' : 'linear';
+    }
+    return 'solid';
+  }
+
+  defaultFillSwatchMode(): PaintSwatchMode {
+    return this.hasDefaultSolidFill() ? 'solid' : 'none';
+  }
+
+  defaultStrokeSwatchMode(): PaintSwatchMode {
+    return this.hasDefaultSolidStroke() ? 'solid' : 'none';
+  }
+
+  isPatternFill(shape: ShapeProperties): boolean {
+    return shape.fillPaintType === 'pattern';
+  }
+
+  isPatternStroke(shape: ShapeProperties): boolean {
+    return shape.strokePaintType === 'pattern';
+  }
+
+  onFillPaintModeChange(mode: PaintSwatchMode): void {
+    const shape = this.selectedShape();
+    if (shape && this.selectionCount() === 1 && this.supportsFill(shape)) {
+      this.chromeApply.applyPaintModeFromChrome(shape, 'fill', mode);
+      return;
+    }
+    if (mode === 'none') {
+      this.chromeApply.applyFillColor('none');
+    }
+  }
+
+  onStrokePaintModeChange(mode: PaintSwatchMode): void {
+    const shape = this.selectedShape();
+    if (shape && this.selectionCount() === 1) {
+      this.chromeApply.applyPaintModeFromChrome(shape, 'stroke', mode);
+      return;
+    }
+    if (mode === 'none') {
+      this.chromeApply.applyStrokeColor('none');
+    }
   }
 
   onFillColorChange(color: string): void {

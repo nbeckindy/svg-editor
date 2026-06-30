@@ -368,6 +368,79 @@ describe('ChromeEditorApplyService', () => {
     );
   });
 
+  it('applyRevertGradientToSolidFromChrome reverts stroke gradient to first stop', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      strokePaintType: 'gradient',
+      strokeUrl: 'url(#sg1)',
+      strokeWidth: 2
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      readEditableGradientModelById: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+    };
+    manip.capturePaintGradientSnapshot.mockReturnValue({
+      gradientId: 'sg1',
+      shapePaintAttr: 'url(#sg1)',
+      gradientOuterHtml: '<linearGradient id="sg1"></linearGradient>'
+    });
+    manip.readEditableGradientModelById.mockReturnValue({
+      id: 'sg1',
+      kind: 'linear',
+      gradientUnits: 'objectBoundingBox',
+      stops: [
+        { offset: '0%', color: '#445566' },
+        { offset: '100%', color: '#ffffff' }
+      ]
+    });
+
+    service.applyRevertGradientToSolidFromChrome(shape, 'stroke');
+
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'stroke',
+      expect.objectContaining({
+        gradientId: null,
+        shapePaintAttr: '#445566',
+        gradientOuterHtml: null
+      })
+    );
+  });
+
+  it('applyPaintModeFromChrome creates stroke linear gradient from solid stroke', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      stroke: '#ff0000',
+      strokePaintType: 'solid',
+      strokeWidth: 2
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      allocateUniqueDefId: ReturnType<typeof vi.fn>;
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+    };
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+
+    service.applyPaintModeFromChrome(shape, 'stroke', 'linear');
+
+    expect(manip.allocateUniqueDefId).toHaveBeenCalledWith('grad');
+    expect(manip.capturePaintGradientSnapshot).toHaveBeenCalledWith('s1', 'stroke');
+    expect(history.pushAndExecute).toHaveBeenCalled();
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'stroke',
+      expect.objectContaining({
+        shapePaintAttr: expect.stringMatching(/^url\(#grad-/),
+        gradientOuterHtml: expect.stringContaining('linearGradient')
+      })
+    );
+  });
+
   it('applySwitchGradientKindFromChrome preserves gradient id with new kind', () => {
     const shape: ShapeProperties = {
       id: 's1',

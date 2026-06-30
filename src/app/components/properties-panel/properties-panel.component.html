@@ -14,43 +14,30 @@
         @if (selectedShape(); as shape) {
           @if (supportsFill(shape)) {
             <div class="color-input-group">
-              @if (isGradientOrPatternFill(shape)) {
-                <div
-                  class="no-paint-value paint-reference-block"
-                  role="group"
-                  [attr.aria-label]="fillPaintRefAriaLabel(shape)">
-                  <div class="paint-ref-row">
-                    <span class="paint-ref-label">{{ paintTypeLabel(shape.fillPaintType) }} fill</span>
-                    @if (paintDefIdFromUrl(shape.fillUrl); as fillDefId) {
-                      <code
-                        class="paint-def-id"
-                        data-testid="properties-fill-paint-def-id"
-                        [attr.title]="shape.fillUrl ?? ''"
-                        >#{{ fillDefId }}</code
-                      >
-                    }
-                  </div>
-                  @if (shape.fillPaintType === 'gradient') {
-                    <p class="paint-ref-hint" id="properties-fill-gradient-hint">
-                      Solid color picker does not apply. Expand the section below to edit stops and
-                      geometry.
-                    </p>
-                  } @else if (shape.fillPaintType === 'pattern') {
-                    <p class="paint-ref-hint" id="properties-fill-pattern-hint">
-                      Pattern fill; the editor does not edit patterns here yet.
-                    </p>
-                  }
-                </div>
-              } @else {
-                <app-color-picker
-                  data-testid="properties-fill-color-picker"
+              @if (isPatternFill(shape)) {
+                <app-paint-swatch-popover
+                  target="fill"
+                  mode="solid"
                   [color]="fillPickerColor(shape)"
+                  [disabled]="true"
+                  [gradientModesDisabled]="true"
+                  data-testid="properties-fill-paint-swatch" />
+                <p class="paint-ref-hint" id="properties-fill-pattern-hint">
+                  Pattern fill; the editor does not edit patterns here yet.
+                </p>
+              } @else {
+                <app-paint-swatch-popover
+                  target="fill"
+                  [mode]="fillSwatchMode(shape)"
+                  [color]="fillPickerColor(shape)"
+                  [gradientModel]="gradientModelForShape(shape, 'fill')"
                   [empty]="allSelectedLackFill(shape)"
-                  [indeterminate]="fillMixed()"
-                  [clearable]="true"
+                  [indeterminate]="fillPaintMixed()"
+                  [gradientModesDisabled]="fillGradientModesDisabled()"
                   [disabled]="anySelectedShapeLocked()"
-                  (colorChange)="onFillColorChange($event)">
-                </app-color-picker>
+                  (paintModeChange)="onFillPaintModeChange($event)"
+                  (colorChange)="onFillColorChange($event)"
+                  data-testid="properties-fill-paint-swatch" />
               }
             </div>
           } @else {
@@ -60,14 +47,16 @@
           }
         } @else {
           <div class="color-input-group">
-            <app-color-picker
-              data-testid="properties-fill-color-picker"
+            <app-paint-swatch-popover
+              target="fill"
+              [mode]="defaultFillSwatchMode()"
               [color]="defaultFillPickerColor()"
               [empty]="!hasDefaultSolidFill()"
               [indeterminate]="false"
-              [clearable]="true"
-              (colorChange)="onFillColorChange($event)">
-            </app-color-picker>
+              [gradientModesDisabled]="true"
+              (paintModeChange)="onFillPaintModeChange($event)"
+              (colorChange)="onFillColorChange($event)"
+              data-testid="properties-fill-paint-swatch" />
           </div>
         }
       </div>
@@ -76,54 +65,44 @@
         <label class="property-label" for="stroke-color">{{ textOutlineLabels() ? 'Outline color' : 'Stroke Color' }}</label>
         @if (selectedShape(); as shape) {
           <div class="color-input-group">
-            @if (isGradientOrPatternStroke(shape)) {
-              <div
-                class="no-paint-value paint-reference-block"
-                role="group"
-                [attr.aria-label]="strokePaintRefAriaLabel(shape)">
-                <div class="paint-ref-row">
-                  <span class="paint-ref-label">{{ paintTypeLabel(shape.strokePaintType) }} stroke</span>
-                  @if (paintDefIdFromUrl(shape.strokeUrl); as strokeDefId) {
-                    <code
-                      class="paint-def-id"
-                      data-testid="properties-stroke-paint-def-id"
-                      [attr.title]="shape.strokeUrl ?? ''"
-                      >#{{ strokeDefId }}</code
-                    >
-                  }
-                </div>
-                @if (shape.strokePaintType === 'gradient') {
-                  <p class="paint-ref-hint" id="properties-stroke-gradient-hint">
-                    Gradient stroke is shown as a reference only; edit stroke gradient in a follow-up.
-                  </p>
-                } @else if (shape.strokePaintType === 'pattern') {
-                  <p class="paint-ref-hint" id="properties-stroke-pattern-hint">
-                    Pattern stroke; the editor does not edit patterns here yet.
-                  </p>
-                }
-              </div>
-            } @else {
-              <app-color-picker
-                data-testid="properties-stroke-color-picker"
+            @if (isPatternStroke(shape)) {
+              <app-paint-swatch-popover
+                target="stroke"
+                mode="solid"
                 [color]="strokePickerColor(shape)"
+                [disabled]="true"
+                [gradientModesDisabled]="true"
+                data-testid="properties-stroke-paint-swatch" />
+              <p class="paint-ref-hint" id="properties-stroke-pattern-hint">
+                Pattern stroke; the editor does not edit patterns here yet.
+              </p>
+            } @else {
+              <app-paint-swatch-popover
+                target="stroke"
+                [mode]="strokeSwatchMode(shape)"
+                [color]="strokePickerColor(shape)"
+                [gradientModel]="gradientModelForShape(shape, 'stroke')"
                 [empty]="allSelectedLackStroke(shape)"
-                [indeterminate]="strokeMixed()"
-                [clearable]="true"
+                [indeterminate]="strokePaintMixed()"
+                [gradientModesDisabled]="strokeGradientModesDisabled()"
                 [disabled]="anySelectedShapeLocked()"
-                (colorChange)="onStrokeColorChange($event)">
-              </app-color-picker>
+                (paintModeChange)="onStrokePaintModeChange($event)"
+                (colorChange)="onStrokeColorChange($event)"
+                data-testid="properties-stroke-paint-swatch" />
             }
           </div>
         } @else {
           <div class="color-input-group">
-            <app-color-picker
-              data-testid="properties-stroke-color-picker"
+            <app-paint-swatch-popover
+              target="stroke"
+              [mode]="defaultStrokeSwatchMode()"
               [color]="defaultStrokePickerColor()"
               [empty]="!hasDefaultSolidStroke()"
               [indeterminate]="false"
-              [clearable]="true"
-              (colorChange)="onStrokeColorChange($event)">
-            </app-color-picker>
+              [gradientModesDisabled]="true"
+              (paintModeChange)="onStrokePaintModeChange($event)"
+              (colorChange)="onStrokeColorChange($event)"
+              data-testid="properties-stroke-paint-swatch" />
           </div>
         }
       </div>
@@ -131,16 +110,6 @@
 
     @if (selectedShape(); as ps) {
       <div class="paint-segment-extras">
-        @if (supportsFill(ps) && canCreateGradientFill(ps)) {
-          <button
-            type="button"
-            class="btn-paint-action secondary"
-            data-testid="properties-add-gradient-fill"
-            [disabled]="anySelectedShapeLocked()"
-            (click)="onCreateGradientFill(ps)">
-            Add gradient fill
-          </button>
-        }
         @if (selectionCount() === 1 && supportsFill(ps) && canShowGradientEditor(ps, 'fill')) {
           <details class="gradient-fill-details" open data-testid="properties-gradient-fill-details">
             <summary class="gradient-fill-summary" data-testid="properties-gradient-fill-summary">

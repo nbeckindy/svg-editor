@@ -121,6 +121,42 @@ describe('PaintSwatchPopoverComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="paint-swatch-mode-none"]')).toBeTruthy();
   });
 
+  it('emits paintModeChange for radial and none tabs', () => {
+    const emitted: PaintSwatchMode[] = [];
+    component.paintModeChange.subscribe((m) => emitted.push(m));
+
+    const radialTab = fixture.nativeElement.querySelector(
+      '[data-testid="paint-swatch-mode-radial"]'
+    ) as HTMLButtonElement;
+    radialTab.click();
+    expect(emitted).toEqual(['radial']);
+
+    const noneTab = fixture.nativeElement.querySelector(
+      '[data-testid="paint-swatch-mode-none"]'
+    ) as HTMLButtonElement;
+    noneTab.click();
+    expect(emitted).toEqual(['radial', 'none']);
+  });
+
+  it('marks the active mode tab', () => {
+    fixture.componentRef.setInput('mode', 'linear');
+    fixture.detectChanges();
+    const linearTab = fixture.nativeElement.querySelector(
+      '[data-testid="paint-swatch-mode-linear"]'
+    ) as HTMLButtonElement;
+    expect(linearTab.classList.contains('active')).toBe(true);
+    expect(linearTab.getAttribute('aria-selected')).toBe('true');
+  });
+
+  it('uses fill-specific no-paint label', () => {
+    fixture.componentRef.setInput('target', 'fill');
+    fixture.detectChanges();
+    const noneTab = fixture.nativeElement.querySelector(
+      '[data-testid="paint-swatch-mode-none"]'
+    ) as HTMLButtonElement;
+    expect(noneTab.textContent?.trim()).toBe('No fill');
+  });
+
   it('shows radial gradient preview for radial mode', () => {
     const model = defaultRadialGradientModel('g2', '#ffffff', '#000000');
     fixture.componentRef.setInput('mode', 'radial');
