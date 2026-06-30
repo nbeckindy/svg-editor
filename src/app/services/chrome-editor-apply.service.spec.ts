@@ -368,6 +368,51 @@ describe('ChromeEditorApplyService', () => {
     );
   });
 
+  it('applyPaintModeFromChrome clears gradient fill to none with snapshot', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      fillPaintType: 'gradient',
+      fillUrl: 'url(#g1)'
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+    };
+    manip.capturePaintGradientSnapshot.mockReturnValue({
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    });
+
+    service.applyPaintModeFromChrome(shape, 'fill', 'none');
+
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'fill',
+      expect.objectContaining({
+        gradientId: null,
+        shapePaintAttr: 'none',
+        gradientOuterHtml: null
+      })
+    );
+  });
+
+  it('applyPaintModeFromChrome applies solid fill when paint is none', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      fillPaintType: 'none'
+    };
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+
+    service.applyPaintModeFromChrome(shape, 'fill', 'solid');
+
+    expect(history.pushAndExecute).toHaveBeenCalled();
+  });
+
   it('applyRevertGradientToSolidFromChrome reverts stroke gradient to first stop', () => {
     const shape: ShapeProperties = {
       id: 's1',

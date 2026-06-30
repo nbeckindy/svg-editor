@@ -86,6 +86,7 @@
                 [indeterminate]="strokePaintMixed()"
                 [gradientModesDisabled]="strokeGradientModesDisabled()"
                 [disabled]="anySelectedShapeLocked()"
+                panelAlign="end"
                 (paintModeChange)="onStrokePaintModeChange($event)"
                 (colorChange)="onStrokeColorChange($event)"
                 data-testid="properties-stroke-paint-swatch" />
@@ -100,6 +101,7 @@
               [empty]="!hasDefaultSolidStroke()"
               [indeterminate]="false"
               [gradientModesDisabled]="true"
+              panelAlign="end"
               (paintModeChange)="onStrokePaintModeChange($event)"
               (colorChange)="onStrokeColorChange($event)"
               data-testid="properties-stroke-paint-swatch" />

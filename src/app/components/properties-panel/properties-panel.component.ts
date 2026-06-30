@@ -607,11 +607,11 @@ export class PropertiesPanelComponent {
   }
 
   fillGradientModesDisabled(): boolean {
-    return this.selectionCount() > 1 && this.fillPaintMixed();
+    return this.selectionCount() > 1;
   }
 
   strokeGradientModesDisabled(): boolean {
-    return this.selectionCount() > 1 && this.strokePaintMixed();
+    return this.selectionCount() > 1;
   }
 
   gradientModelForShape(
@@ -674,6 +674,10 @@ export class PropertiesPanelComponent {
     }
     if (mode === 'none') {
       this.chromeApply.applyFillColor('none');
+      return;
+    }
+    if (mode === 'solid') {
+      this.chromeApply.applyFillColor(this.resolveSolidFillColorForApply(shape));
     }
   }
 
@@ -685,7 +689,29 @@ export class PropertiesPanelComponent {
     }
     if (mode === 'none') {
       this.chromeApply.applyStrokeColor('none');
+      return;
     }
+    if (mode === 'solid') {
+      this.chromeApply.applyStrokeColor(this.resolveSolidStrokeColorForApply(shape));
+    }
+  }
+
+  private resolveSolidFillColorForApply(shape: ShapeProperties | null): string {
+    if (!shape) {
+      const d = this.defaultFillPickerColor();
+      return d && d.toLowerCase() !== 'none' ? d : '#000000';
+    }
+    const c = this.fillPickerColor(shape);
+    return c && c.toLowerCase() !== 'none' ? c : '#000000';
+  }
+
+  private resolveSolidStrokeColorForApply(shape: ShapeProperties | null): string {
+    if (!shape) {
+      const d = this.defaultStrokePickerColor();
+      return d && d.toLowerCase() !== 'none' ? d : '#000000';
+    }
+    const c = this.strokePickerColor(shape);
+    return c && c.toLowerCase() !== 'none' ? c : '#000000';
   }
 
   onFillColorChange(color: string): void {

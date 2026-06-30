@@ -53,6 +53,11 @@ export class ChromeEditorPaintApplyService {
   private pushCommandsAndSyncSelection(cmds: EditorCommand[], desc?: string) { return this.support.pushCommandsAndSyncSelection(cmds, desc); }
   private syncSelectedShapesFromDom() { return this.support.syncSelectedShapesFromDom(); }
 
+  private hasFillColor(shape: ShapeProperties): boolean {
+    const f = shape.fill;
+    return f != null && f.trim() !== '' && f.toLowerCase() !== 'none';
+  }
+
   private hasStrokeColor(shape: ShapeProperties): boolean {
     const s = shape.stroke;
     return s != null && s.trim() !== '' && s.toLowerCase() !== 'none';
@@ -84,11 +89,15 @@ export class ChromeEditorPaintApplyService {
       if (cleared) {
         this.shapeSelection.patchAllSelected({
           fill: undefined,
+          fillPaintType: 'none',
+          fillUrl: undefined,
           fillSource: { kind: 'default' }
         });
       } else {
         this.shapeSelection.patchAllSelected({
           fill: color,
+          fillPaintType: 'solid',
+          fillUrl: undefined,
           fillSource: OVERRIDE_PAINT_SOURCE
         });
       }
@@ -116,6 +125,8 @@ export class ChromeEditorPaintApplyService {
         this.shapeSelection.patchAllSelected({
           stroke: undefined,
           strokeWidth: 0,
+          strokePaintType: 'none',
+          strokeUrl: undefined,
           strokeSource: { kind: 'default' }
         });
       }
@@ -156,11 +167,15 @@ export class ChromeEditorPaintApplyService {
       this.shapeSelection.patchAllSelected({
         stroke: color,
         strokeWidth: w,
+        strokePaintType: 'solid',
+        strokeUrl: undefined,
         strokeSource: OVERRIDE_PAINT_SOURCE
       });
     } else {
       this.shapeSelection.patchAllSelected({
         stroke: color,
+        strokePaintType: 'solid',
+        strokeUrl: undefined,
         strokeSource: OVERRIDE_PAINT_SOURCE
       });
     }
@@ -548,17 +563,52 @@ export class ChromeEditorPaintApplyService {
 
     switch (mode) {
       case 'none':
+        if (target === 'fill' && paintType === 'gradient') {
+          this.applyClearGradientFillToNoneFromChrome(shape);
+          return;
+        }
         if (target === 'fill') {
           this.applyFillColor('none');
         } else {
           this.applyStrokeColor('none');
         }
         return;
-      case 'solid':
+      case 'solid': {
         if (paintType === 'gradient') {
           this.applyRevertGradientToSolidFromChrome(shape, target);
+          return;
+        }
+        if (paintType === 'pattern') {
+          return;
+        }
+        const hasPaint =
+          target === 'fill'
+            ? this.hasFillColor(shape)
+            : this.hasStrokeColor(shape) || (shape.strokeWidth ?? 0) > 0;
+        if (!hasPaint) {
+          const color = this.seedSolidColorForGradient(shape, target);
+          if (target === 'fill') {
+            this.applyFillColor(color);
+          } else {
+            this.applyStrokeColor(color);
+          }
+        } else if (target === 'fill' && paintType === 'none' && this.hasFillColor(shape)) {
+          this.shapeSelection.patchAllSelected({
+            fillPaintType: 'solid',
+            fillUrl: undefined
+          });
+        } else if (
+          target === 'stroke' &&
+          paintType === 'none' &&
+          (this.hasStrokeColor(shape) || (shape.strokeWidth ?? 0) > 0)
+        ) {
+          this.shapeSelection.patchAllSelected({
+            strokePaintType: 'solid',
+            strokeUrl: undefined
+          });
         }
         return;
+      }
       case 'linear':
       case 'radial': {
         if (paintType === 'gradient') {
@@ -584,6 +634,26 @@ export class ChromeEditorPaintApplyService {
       shapePaintAttr: `url(#${model.id})`,
       gradientOuterHtml: serializeGradientElementToOuterHtml(model)
     };
+  }
+
+  private applyClearGradientFillToNoneFromChrome(shape: ShapeProperties): void {
+    const before = this.propertiesSvg.capturePaintGradientSnapshot(shape.id, 'fill');
+    const after: PaintGradientSnapshot = {
+      gradientId: null,
+      shapePaintAttr: 'none',
+      gradientOuterHtml: null
+    };
+    const defaultsBefore = this.drawingDefaults.defaults();
+    const cmds: EditorCommand[] = [
+      new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, 'fill', before, after),
+      new UpdateDrawingDefaultsCommand(
+        this.drawingDefaults,
+        defaultsBefore,
+        { ...defaultsBefore, fill: 'none' },
+        'fill'
+      )
+    ];
+    this.pushCommandsAndSyncSelection(cmds, 'Clear fill');
   }
 
   private seedSolidColorForGradient(shape: ShapeProperties, paintProperty: 'fill' | 'stroke'): string {

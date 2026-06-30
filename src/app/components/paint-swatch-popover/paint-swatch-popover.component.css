@@ -85,6 +85,11 @@
   box-shadow: 0 4px 14px rgba(0, 0, 0, 0.12);
 }
 
+.psp-panel--align-end {
+  left: auto;
+  right: 0;
+}
+
 .psp-mode-tabs {
   display: flex;
   flex-wrap: wrap;
@@ -125,5 +130,5 @@
 }
 
 .psp-solid-controls {
-  margin-top: 4px;
+  margin-top: 0;
 }

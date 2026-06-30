@@ -94,6 +94,19 @@ describe('PaintSwatchPopoverComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="paint-swatch-solid-controls"]')).toBeNull();
   });
 
+  it('uses inline color picker without nested popover swatch in solid mode', () => {
+    fixture.componentRef.setInput('mode', 'solid');
+    fixture.detectChanges();
+    const solidControls = fixture.nativeElement.querySelector(
+      '[data-testid="paint-swatch-solid-controls"]'
+    ) as HTMLElement;
+    expect(solidControls.querySelector('.cp-inline-row')).toBeTruthy();
+    expect(solidControls.querySelector('[data-testid="color-picker-native"]')).toBeTruthy();
+    expect(solidControls.querySelector('[data-testid="color-picker-hex"]')).toBeTruthy();
+    expect(solidControls.querySelector('[data-testid="color-picker-swatch"]')).toBeNull();
+    expect(solidControls.querySelector('.cp-panel')).toBeNull();
+  });
+
   it('emits colorChange from embedded color picker', () => {
     fixture.componentRef.setInput('mode', 'solid');
     fixture.detectChanges();
@@ -164,5 +177,38 @@ describe('PaintSwatchPopoverComponent', () => {
     fixture.detectChanges();
     const swatch = fixture.nativeElement.querySelector('.psp-swatch-gradient') as HTMLElement;
     expect(swatch.style.backgroundImage).toContain('radial-gradient');
+  });
+
+  it('closes popover on outside document click', () => {
+    const details = fixture.nativeElement.querySelector('details') as HTMLDetailsElement;
+    details.open = true;
+    fixture.detectChanges();
+    expect(details.open).toBe(true);
+
+    document.body.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(details.open).toBe(false);
+  });
+
+  it('keeps popover open when clicking inside the component', () => {
+    const details = fixture.nativeElement.querySelector('details') as HTMLDetailsElement;
+    details.open = true;
+    fixture.detectChanges();
+
+    const solidTab = fixture.nativeElement.querySelector(
+      '[data-testid="paint-swatch-mode-solid"]'
+    ) as HTMLButtonElement;
+    solidTab.dispatchEvent(new MouseEvent('click', { bubbles: true }));
+    fixture.detectChanges();
+
+    expect(details.open).toBe(true);
+  });
+
+  it('aligns panel to end edge when panelAlign is end', () => {
+    fixture.componentRef.setInput('panelAlign', 'end');
+    fixture.detectChanges();
+    const panel = fixture.nativeElement.querySelector('.psp-panel') as HTMLElement;
+    expect(panel.classList.contains('psp-panel--align-end')).toBe(true);
   });
 });

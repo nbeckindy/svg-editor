@@ -25,10 +25,11 @@
   </div>
 } @else {
   <details
+    #detailsPopover
     class="paint-swatch-popover"
     [class.indeterminate]="indeterminate()"
     data-testid="paint-swatch-popover"
-    (toggle)="$event.stopPropagation()">
+    (toggle)="onDetailsToggle($event)">
     <summary
       class="psp-summary"
       data-testid="paint-swatch-popover-swatch"
@@ -52,7 +53,10 @@
         <span class="psp-swatch psp-swatch-solid" [style.background-color]="color()" aria-hidden="true"></span>
       }
     </summary>
-    <div class="psp-panel" (click)="$event.stopPropagation()">
+    <div
+      class="psp-panel"
+      [class.psp-panel--align-end]="panelAlign() === 'end'"
+      (click)="$event.stopPropagation()">
       <div class="psp-mode-tabs" role="tablist" [attr.aria-label]="target() === 'fill' ? 'Fill paint mode' : 'Stroke paint mode'">
         <button
           type="button"
@@ -102,6 +106,7 @@
         <div class="psp-solid-controls" data-testid="paint-swatch-solid-controls">
           <app-color-picker
             data-testid="paint-swatch-color-picker"
+            [inline]="true"
             [color]="color()"
             [empty]="empty()"
             [indeterminate]="indeterminate()"

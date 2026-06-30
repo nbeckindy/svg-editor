@@ -68,6 +68,65 @@
   color: #c62828;
 }
 
+.color-picker--inline {
+  display: block;
+  width: 100%;
+}
+
+.cp-inline-row {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.cp-inline-swatch-label {
+  position: relative;
+  flex: 0 0 auto;
+  display: block;
+  margin: 0;
+  cursor: pointer;
+}
+
+.cp-inline-swatch-state {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  z-index: 0;
+}
+
+.cp-native--inline {
+  position: relative;
+  z-index: 1;
+  display: block;
+  width: 50px;
+  height: 40px;
+  padding: 0;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  box-sizing: border-box;
+}
+
+.cp-native--state-overlay {
+  opacity: 0;
+}
+
+.cp-hex--inline {
+  flex: 1 1 auto;
+  min-width: 0;
+  height: 40px;
+  box-sizing: border-box;
+  padding: 8px 10px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  font-family: ui-monospace, monospace;
+  font-size: 13px;
+}
+
+.cp-clear--inline {
+  margin-top: 8px;
+}
+
 .cp-panel {
   position: absolute;
   left: 0;

@@ -1,3 +1,39 @@
+<ng-template #pickerControls>
+  <div class="cp-panel-row">
+    <label class="cp-native-label">
+      <span class="cp-label-text">Preview</span>
+      <input
+        type="color"
+        class="cp-native"
+        data-testid="color-picker-native"
+        [value]="nativePickerValue()"
+        (input)="onNativeColorInput($event)" />
+    </label>
+    <label class="cp-hex-label">
+      <span class="cp-label-text">HEX</span>
+      <input
+        type="text"
+        class="cp-hex"
+        data-testid="color-picker-hex"
+        spellcheck="false"
+        autocomplete="off"
+        [ngModel]="hexDraft()"
+        (ngModelChange)="onHexModelChange($event)"
+        [attr.placeholder]="indeterminate() ? 'Mixed' : empty() ? '#000000' : ''" />
+    </label>
+  </div>
+  @if (clearable()) {
+    <button
+      type="button"
+      class="cp-clear"
+      data-testid="color-picker-clear"
+      [disabled]="indeterminate() || empty()"
+      (click)="onClear($event)">
+      Clear paint
+    </button>
+  }
+</ng-template>
+
 @if (disabled()) {
   <div
     class="color-picker color-picker--disabled"
@@ -23,6 +59,56 @@
           aria-hidden="true"></span>
       }
     </div>
+  </div>
+} @else if (inline()) {
+  <div
+    class="color-picker color-picker--inline"
+    data-testid="color-picker"
+    (click)="$event.stopPropagation()">
+    <div class="cp-inline-row">
+      <label
+        class="cp-inline-swatch-label"
+        [attr.aria-label]="
+          indeterminate() ? 'Choose color to apply to selection' : empty() ? 'Choose color' : 'Color preview'
+        ">
+        @if (indeterminate()) {
+          <span class="cp-swatch cp-swatch-mixed cp-inline-swatch-state" aria-hidden="true"></span>
+        } @else if (empty()) {
+          <span class="cp-swatch cp-swatch-empty cp-inline-swatch-state" aria-hidden="true">
+            <mat-icon class="cp-empty-mat-icon" data-testid="color-picker-empty-icon" aria-hidden="true"
+              >format_color_reset</mat-icon
+            >
+          </span>
+        }
+        <input
+          type="color"
+          class="cp-native cp-native--inline"
+          data-testid="color-picker-native"
+          [class.cp-native--state-overlay]="indeterminate() || empty()"
+          [value]="nativePickerValue()"
+          (input)="onNativeColorInput($event)" />
+      </label>
+      <input
+        type="text"
+        class="cp-hex cp-hex--inline"
+        data-testid="color-picker-hex"
+        spellcheck="false"
+        autocomplete="off"
+        aria-label="HEX color"
+        [ngModel]="hexDraft()"
+        (ngModelChange)="onHexModelChange($event)"
+        [attr.placeholder]="indeterminate() ? 'Mixed' : empty() ? '#000000' : ''" />
+    </div>
+    @if (clearable()) {
+      <button
+        type="button"
+        class="cp-clear cp-clear--inline"
+        data-testid="color-picker-clear"
+        [disabled]="indeterminate() || empty()"
+        (click)="onClear($event)">
+        Clear paint
+      </button>
+    }
   </div>
 } @else {
   <details
@@ -53,39 +139,7 @@
       }
     </summary>
     <div class="cp-panel" (click)="$event.stopPropagation()">
-      <div class="cp-panel-row">
-        <label class="cp-native-label">
-          <span class="cp-label-text">Preview</span>
-          <input
-            type="color"
-            class="cp-native"
-            data-testid="color-picker-native"
-            [value]="nativePickerValue()"
-            (input)="onNativeColorInput($event)" />
-        </label>
-        <label class="cp-hex-label">
-          <span class="cp-label-text">HEX</span>
-          <input
-            type="text"
-            class="cp-hex"
-            data-testid="color-picker-hex"
-            spellcheck="false"
-            autocomplete="off"
-            [ngModel]="hexDraft()"
-            (ngModelChange)="onHexModelChange($event)"
-            [attr.placeholder]="indeterminate() ? 'Mixed' : empty() ? '#000000' : ''" />
-        </label>
-      </div>
-      @if (clearable()) {
-        <button
-          type="button"
-          class="cp-clear"
-          data-testid="color-picker-clear"
-          [disabled]="indeterminate() || empty()"
-          (click)="onClear($event)">
-          Clear paint
-        </button>
-      }
+      <ng-container *ngTemplateOutlet="pickerControls" />
     </div>
   </details>
 }

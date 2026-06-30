@@ -103,4 +103,24 @@ describe('ColorPickerComponent', () => {
     expect(compiled.querySelector('.cp-swatch-empty')).toBeTruthy();
     expect(compiled.querySelector('[data-testid="color-picker-empty-icon"]')).toBeTruthy();
   });
+
+  it('inline mode renders swatch and hex in one row without a nested card', () => {
+    fixture.componentRef.setInput('inline', true);
+    fixture.componentRef.setInput('color', '#aabbcc');
+    fixture.detectChanges();
+    const root = fixture.nativeElement as HTMLElement;
+    expect(root.querySelector('details')).toBeNull();
+    expect(root.querySelector('.cp-panel')).toBeNull();
+    expect(root.querySelector('.cp-inline-row')).toBeTruthy();
+    expect(root.querySelector('[data-testid="color-picker-native"]')).toBeTruthy();
+    expect(root.querySelector('[data-testid="color-picker-hex"]')).toBeTruthy();
+    expect(root.querySelector('.cp-label-text')).toBeNull();
+  });
+
+  it('inline mode syncs hex draft from color input', () => {
+    fixture.componentRef.setInput('inline', true);
+    fixture.componentRef.setInput('color', '#aabbcc');
+    fixture.detectChanges();
+    expect(component.hexDraft()).toBe('#AABBCC');
+  });
 });

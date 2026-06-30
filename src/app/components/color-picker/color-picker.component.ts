@@ -1,4 +1,4 @@
-import { Component, input, output, signal } from '@angular/core';
+import { Component, effect, input, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { MatIconModule } from '@angular/material/icon';
@@ -34,12 +34,24 @@ export class ColorPickerComponent {
   readonly indeterminate = input(false);
   /** When true, popover shows a control to clear paint (`none`). */
   readonly clearable = input(false);
+  /** When true, renders preview + HEX inline (no nested popover swatch). */
+  readonly inline = input(false);
   /** When true, the picker is read-only (no popover / no color edits). */
   readonly disabled = input(false);
   readonly colorChange = output<string>();
 
   /** Draft HEX while the popover is open (no inline rail). */
   readonly hexDraft = signal('');
+
+  constructor() {
+    effect(() => {
+      if (!this.inline()) return;
+      this.color();
+      this.empty();
+      this.indeterminate();
+      this.syncHexDraftFromColor();
+    });
+  }
 
   nativePickerValue(): string {
     const parsed = parseHexColorInput(this.color());
@@ -50,6 +62,10 @@ export class ColorPickerComponent {
   onDetailsToggle(ev: Event): void {
     const el = ev.target as HTMLDetailsElement;
     if (!el.open) return;
+    this.syncHexDraftFromColor();
+  }
+
+  private syncHexDraftFromColor(): void {
     if (this.indeterminate() || this.empty()) {
       this.hexDraft.set('');
     } else {

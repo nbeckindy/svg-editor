@@ -463,6 +463,8 @@ describe('PropertiesPanelComponent', () => {
     expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('shape-1', newColor);
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       fill: newColor,
+      fillPaintType: 'solid',
+      fillUrl: undefined,
       fillSource: { kind: 'presentation-attr' }
     });
     expect(drawingDefaultsSignal().fill).toBe(newColor);
@@ -501,6 +503,8 @@ describe('PropertiesPanelComponent', () => {
     expect(svgManipulationService.updateStrokeColor).toHaveBeenCalledWith('shape-1', newColor);
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       stroke: newColor,
+      strokePaintType: 'solid',
+      strokeUrl: undefined,
       strokeSource: { kind: 'presentation-attr' }
     });
     expect(drawingDefaultsSignal().stroke).toBe(newColor);
@@ -522,6 +526,8 @@ describe('PropertiesPanelComponent', () => {
     expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('shape-1', 'none');
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       fill: undefined,
+      fillPaintType: 'none',
+      fillUrl: undefined,
       fillSource: { kind: 'default' }
     });
     expect(drawingDefaultsSignal().fill).toBe('none');
@@ -545,6 +551,8 @@ describe('PropertiesPanelComponent', () => {
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       stroke: undefined,
       strokeWidth: 0,
+      strokePaintType: 'none',
+      strokeUrl: undefined,
       strokeSource: { kind: 'default' }
     });
   });
@@ -831,6 +839,43 @@ describe('PropertiesPanelComponent', () => {
     );
   });
 
+  it('onFillPaintModeChange routes none from gradient fill through gradient snapshot', () => {
+    selectedShapesSignal.set([
+      {
+        id: 'shape-1',
+        type: 'rect',
+        fillPaintType: 'gradient',
+        fillUrl: 'url(#g1)'
+      } as ShapeProperties
+    ]);
+    (svgManipulationService.capturePaintGradientSnapshot as ReturnType<typeof vi.fn>).mockReturnValue({
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    });
+    fixture.detectChanges();
+    component.onFillPaintModeChange('none');
+    expect(svgManipulationService.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      'shape-1',
+      'fill',
+      expect.objectContaining({
+        gradientId: null,
+        shapePaintAttr: 'none',
+        gradientOuterHtml: null
+      })
+    );
+  });
+
+  it('fillSwatchMode returns none after gradient fill cleared in selection state', () => {
+    const shape = {
+      id: 'shape-1',
+      type: 'rect',
+      fillPaintType: 'none',
+      fillUrl: undefined
+    } as ShapeProperties;
+    expect(component.fillSwatchMode(shape)).toBe('none');
+  });
+
   it('fillGradientModesDisabled is true when multi-select paint types differ', () => {
     selectedShapesSignal.set([
       { id: 'a', type: 'rect', fillPaintType: 'solid', fill: '#000000' } as ShapeProperties,
@@ -838,6 +883,25 @@ describe('PropertiesPanelComponent', () => {
     ]);
     fixture.detectChanges();
     expect(component.fillGradientModesDisabled()).toBe(true);
+  });
+
+  it('fillGradientModesDisabled is true when multi-select paint types match', () => {
+    selectedShapesSignal.set([
+      { id: 'a', type: 'rect', fillPaintType: 'solid', fill: '#000000' } as ShapeProperties,
+      { id: 'b', type: 'rect', fillPaintType: 'solid', fill: '#000000' } as ShapeProperties
+    ]);
+    fixture.detectChanges();
+    expect(component.fillGradientModesDisabled()).toBe(true);
+  });
+
+  it('onFillPaintModeChange applies solid fill when selection has no fill', () => {
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+    selectedShapesSignal.set([
+      { id: 'shape-1', type: 'rect', fillPaintType: 'none' } as ShapeProperties
+    ]);
+    fixture.detectChanges();
+    component.onFillPaintModeChange('solid');
+    expect(history.pushAndExecute).toHaveBeenCalled();
   });
 
   describe('gradient / pattern paint UI (a19)', () => {
@@ -1027,6 +1091,8 @@ describe('PropertiesPanelComponent', () => {
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       stroke: '#112233',
       strokeWidth: 2,
+      strokePaintType: 'solid',
+      strokeUrl: undefined,
       strokeSource: { kind: 'presentation-attr' }
     });
   });
