@@ -525,28 +525,23 @@ function sortedStopsCss(stops: GradientStopModel[], mapOffset?: (offset: number)
     .join(', ');
 }
 
+/** Track preview is always horizontal left→right (0° track-aligned); shape preview uses real angle/geometry. */
+const SLIDER_TRACK_CSS_DEG = 90;
+
 /** CSS preview for the stop slider track; remaps stop offsets when linear span is shortened. */
 export function cssGradientPreviewForSlider(
   model: EditableGradientModel,
   endpointSpan?: GradientEndpointSpan
 ): string {
-  if (model.kind === 'radial') {
-    const cx = model.cx ?? '50%';
-    const cy = model.cy ?? '50%';
-    return `radial-gradient(circle at ${cx} ${cy}, ${sortedStopsCss(model.stops)})`;
-  }
-
-  const mathDeg = linearGradientAngleDegrees(model);
-  const cssDeg = mathAngleToCssDegrees(mathDeg);
   const mapOffset =
-    endpointSpan != null
+    model.kind === 'linear' && endpointSpan != null
       ? (offset: number) => {
           const start = Math.min(endpointSpan.start, endpointSpan.end);
           const end = Math.max(endpointSpan.start, endpointSpan.end);
           return start + (offset / 100) * (end - start);
         }
       : undefined;
-  return `linear-gradient(${cssDeg}deg, ${sortedStopsCss(model.stops, mapOffset)})`;
+  return `linear-gradient(${SLIDER_TRACK_CSS_DEG}deg, ${sortedStopsCss(model.stops, mapOffset)})`;
 }
 
 /** RGB interpolate between neighboring stops at `offsetPercent` (for click-to-add). */

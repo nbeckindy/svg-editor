@@ -119,10 +119,21 @@ describe('svg-gradient', () => {
       const m = defaultLinearGradientModel('g', '#ff0000', '#0000ff');
       const full = cssGradientPreviewForSlider(m);
       const shortened = cssGradientPreviewForSlider(m, { start: 20, end: 80 });
-      expect(full).toMatch(/^linear-gradient\(/);
+      expect(full).toMatch(/^linear-gradient\(90deg,/);
       expect(shortened).not.toBe(full);
       expect(shortened).toMatch(/20%/);
       expect(shortened).toMatch(/80%/);
+    });
+
+    it('keeps horizontal track preview when linear angle changes on the shape', () => {
+      const m = defaultLinearGradientModel('g', '#ff0000', '#0000ff');
+      const rotated = applyLinearGradientAngleDegrees(m, 90);
+      expect(cssGradientPreviewForSlider(rotated)).toMatch(/^linear-gradient\(90deg,/);
+    });
+
+    it('uses horizontal track preview for radial (center-to-edge along the bar)', () => {
+      const m = defaultRadialGradientModel('g', '#ff0000', '#0000ff');
+      expect(cssGradientPreviewForSlider(m)).toMatch(/^linear-gradient\(90deg, #ff0000 0%, #0000ff 100%\)/);
     });
   });
 
