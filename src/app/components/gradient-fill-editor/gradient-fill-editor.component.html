@@ -1,50 +1,161 @@
-@if (draftModel; as d) {
+@if (draftModel(); as d) {
   <fieldset class="gradient-editor" [disabled]="disabled()" data-testid="gradient-fill-editor-root">
     <div class="row">
-      <span class="label">Type</span>
-      <label><input type="radio" name="gk" [checked]="d.kind === 'linear'" (change)="onKindChange('linear')" /> Linear</label>
-      <label><input type="radio" name="gk" [checked]="d.kind === 'radial'" (change)="onKindChange('radial')" /> Radial</label>
+      <span class="property-label">Type</span>
+      <label>
+        <input
+          type="radio"
+          name="gk"
+          [checked]="d.kind === 'linear'"
+          (change)="onKindChange('linear')" />
+        Linear
+      </label>
+      <label>
+        <input
+          type="radio"
+          name="gk"
+          [checked]="d.kind === 'radial'"
+          (change)="onKindChange('radial')" />
+        Radial
+      </label>
     </div>
+
+    <app-gradient-stop-slider
+      [kind]="d.kind"
+      [stops]="d.stops"
+      [previewCss]="previewCss()"
+      [disabled]="disabled()"
+      [selectedIndex]="selectedStopIndex()"
+      [endpointSpan]="endpointSpan()"
+      (stopsChange)="onStopsChange($event)"
+      (selectedIndexChange)="onSelectedStopIndexChange($event)"
+      (addStopAt)="onAddStopAt($event)"
+      (removeStop)="onRemoveStop($event)"
+      (endpointSpanChange)="onEndpointSpanChange($event)"
+      (interactingChange)="onInteractingChange($event)"
+      data-testid="gradient-fill-editor-stop-slider" />
+
+    @if (d.stops[selectedStopIndex()]; as selectedStop) {
+      <div class="property-group">
+        <span class="property-label">Stop color</span>
+        <app-color-picker
+          [color]="selectedStop.color"
+          [disabled]="disabled()"
+          (colorChange)="onStopColor($event)" />
+      </div>
+    }
 
     @if (d.kind === 'linear') {
-      <div class="grid4">
-        <label>x1 <input type="text" [(ngModel)]="d.x1" name="x1" /></label>
-        <label>y1 <input type="text" [(ngModel)]="d.y1" name="y1" /></label>
-        <label>x2 <input type="text" [(ngModel)]="d.x2" name="x2" /></label>
-        <label>y2 <input type="text" [(ngModel)]="d.y2" name="y2" /></label>
+      <div class="property-group">
+        <label class="property-label" for="gradient-angle">Angle</label>
+        <div class="range-input-group">
+          <input
+            id="gradient-angle"
+            type="range"
+            class="range-slider"
+            min="0"
+            max="360"
+            step="1"
+            [value]="angleDegrees()"
+            [disabled]="disabled()"
+            data-testid="gradient-fill-editor-angle-range"
+            (input)="onAngleInput($event)"
+            (change)="onAngleChange()" />
+          <input
+            type="number"
+            class="range-number"
+            min="0"
+            max="360"
+            step="1"
+            [value]="angleDegrees()"
+            [disabled]="disabled()"
+            data-testid="gradient-fill-editor-angle-number"
+            (input)="onAngleInput($event)"
+            (change)="onAngleChange()" />
+        </div>
       </div>
     } @else {
-      <div class="grid4">
-        <label>cx <input type="text" [(ngModel)]="d.cx" name="cx" /></label>
-        <label>cy <input type="text" [(ngModel)]="d.cy" name="cy" /></label>
-        <label>r <input type="text" [(ngModel)]="d.r" name="r" /></label>
-        <label>fx <input type="text" [(ngModel)]="d.fx" name="fx" /></label>
-        <label>fy <input type="text" [(ngModel)]="d.fy" name="fy" /></label>
+      <div class="property-group">
+        <label class="property-label" for="gradient-radial-cx">Center X</label>
+        <div class="range-input-group">
+          <input
+            id="gradient-radial-cx"
+            type="range"
+            class="range-slider"
+            min="0"
+            max="100"
+            step="1"
+            [value]="radialCenterX()"
+            [disabled]="disabled()"
+            data-testid="gradient-fill-editor-radial-cx"
+            (input)="onRadialCenterInput('cx', $event)"
+            (change)="onRadialControlChange()" />
+          <input
+            type="number"
+            class="range-number"
+            min="0"
+            max="100"
+            step="1"
+            [value]="radialCenterX()"
+            [disabled]="disabled()"
+            (input)="onRadialCenterInput('cx', $event)"
+            (change)="onRadialControlChange()" />
+        </div>
+      </div>
+      <div class="property-group">
+        <label class="property-label" for="gradient-radial-cy">Center Y</label>
+        <div class="range-input-group">
+          <input
+            id="gradient-radial-cy"
+            type="range"
+            class="range-slider"
+            min="0"
+            max="100"
+            step="1"
+            [value]="radialCenterY()"
+            [disabled]="disabled()"
+            data-testid="gradient-fill-editor-radial-cy"
+            (input)="onRadialCenterInput('cy', $event)"
+            (change)="onRadialControlChange()" />
+          <input
+            type="number"
+            class="range-number"
+            min="0"
+            max="100"
+            step="1"
+            [value]="radialCenterY()"
+            [disabled]="disabled()"
+            (input)="onRadialCenterInput('cy', $event)"
+            (change)="onRadialControlChange()" />
+        </div>
+      </div>
+      <div class="property-group">
+        <label class="property-label" for="gradient-radial-r">Radius</label>
+        <div class="range-input-group">
+          <input
+            id="gradient-radial-r"
+            type="range"
+            class="range-slider"
+            min="0"
+            max="100"
+            step="1"
+            [value]="radialRadius()"
+            [disabled]="disabled()"
+            data-testid="gradient-fill-editor-radial-r"
+            (input)="onRadialRadiusInput($event)"
+            (change)="onRadialControlChange()" />
+          <input
+            type="number"
+            class="range-number"
+            min="0"
+            max="100"
+            step="1"
+            [value]="radialRadius()"
+            [disabled]="disabled()"
+            (input)="onRadialRadiusInput($event)"
+            (change)="onRadialControlChange()" />
+        </div>
       </div>
     }
-
-    <div class="row">
-      <span class="label">Units</span>
-      <select [(ngModel)]="d.gradientUnits" name="gu">
-        <option value="objectBoundingBox">objectBoundingBox</option>
-        <option value="userSpaceOnUse">userSpaceOnUse</option>
-      </select>
-    </div>
-
-    <div class="stops-head">
-      <span class="label">Stops</span>
-      <button type="button" class="btn-mini" (click)="addStop()">Add stop</button>
-    </div>
-    @for (s of d.stops; track $index) {
-      <div class="stop-row">
-        <input type="text" class="offset" [(ngModel)]="s.offset" [name]="'off' + $index" placeholder="0%" />
-        <app-color-picker [color]="s.color" [disabled]="disabled()" (colorChange)="onStopColor($index, $event)" />
-        @if (d.stops.length > 2) {
-          <button type="button" class="btn-mini" (click)="removeStop($index)">Remove</button>
-        }
-      </div>
-    }
-
-    <button type="button" class="btn-apply" (click)="commit()">Apply gradient</button>
   </fieldset>
 }

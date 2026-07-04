@@ -45,7 +45,8 @@ describe('GradientFillEditorComponent', () => {
     setGradientKindForShape: vi.fn(),
     applyPaintGradientSnapshot: vi.fn(),
     countPaintUrlReferencesToDefId: vi.fn().mockReturnValue(0),
-    removeGradientDefById: vi.fn()
+    removeGradientDefById: vi.fn(),
+    getShapeBBoxForGradient: vi.fn(() => ({ x: 0, y: 0, width: 100, height: 100 }))
   };
 
   const historyMock = {
@@ -75,13 +76,19 @@ describe('GradientFillEditorComponent', () => {
 
   it('loads stroke gradient draft and dedicates defs for stroke', () => {
     expect(svcMock.ensureDedicatedPaintGradient).toHaveBeenCalledWith('shape-1', 'stroke');
-    expect(component.draftModel?.id).toBe('sg1');
+    expect(component.draftModel()?.id).toBe('sg1');
     expect(fixture.nativeElement.querySelector('[data-testid="gradient-fill-editor-root"]')).toBeTruthy();
   });
 
-  it('commit pushes GradientFillSnapshotCommand for stroke paint', () => {
-    component.draftModel!.stops[0].color = '#abcdef';
-    component.commit();
+  it('renders visual stop slider without Apply button or units field', () => {
+    expect(fixture.nativeElement.querySelector('[data-testid="gradient-fill-editor-stop-slider"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('.btn-apply')).toBeNull();
+    expect(fixture.nativeElement.querySelector('select[name="gu"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="gradient-fill-editor-angle-range"]')).toBeTruthy();
+  });
+
+  it('commitLive pushes GradientFillSnapshotCommand when stop color changes', () => {
+    component.onStopColor('#abcdef');
 
     expect(historyMock.pushAndExecute).toHaveBeenCalled();
     const cmd = historyMock.pushAndExecute.mock.calls[0][0] as GradientFillSnapshotCommand;
@@ -100,7 +107,16 @@ describe('GradientFillEditorComponent', () => {
   it('does not commit when disabled', () => {
     fixture.componentRef.setInput('disabled', true);
     fixture.detectChanges();
-    component.commit();
+    component.onStopColor('#abcdef');
     expect(historyMock.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('kind change uses commitLive via history without silent setGradientKindForShape', () => {
+    historyMock.pushAndExecute.mockClear();
+    component.onKindChange('radial');
+    expect(svcMock.setGradientKindForShape).not.toHaveBeenCalled();
+    expect(historyMock.pushAndExecute).toHaveBeenCalled();
+    expect(component.draftModel()?.kind).toBe('radial');
+    expect(component.draftModel()?.gradientUnits).toBe('objectBoundingBox');
   });
 });

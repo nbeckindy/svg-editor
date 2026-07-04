@@ -22,12 +22,16 @@ Unify fill/stroke paint editing behind a single swatch popover with mode tabs (S
 | GP-3 | Stroke gradient editor (`paintProperty` on gradient editor) | `svg-editor-qpk.3` | feature | Generalize `GradientFillEditorComponent` for stroke |
 | GP-4 | Properties panel: wire paint swatch popover | `svg-editor-qpk.4` | feature | Replace color-picker/reference blocks; remove "Add gradient fill" button |
 | GP-5 | Regression tests for paint popover and stroke gradients | `svg-editor-qpk.5` | task | Popover, chrome apply, panel, stroke editor specs |
+| GP-6.1 | Gradient model helpers + bbox port | `svg-editor-qpk.7` | feature | Math angle, endpoint span, span-aware CSS preview, normalization |
+| GP-6.2 | GradientStopSliderComponent | `svg-editor-qpk.8` | feature | Visual stop slider with live track preview |
+| GP-6.3 | Linear visual gradient panel editor | `svg-editor-qpk.9` | feature | commitLive, angle control, no Apply/raw fields |
+| GP-6.4 | Radial controls + GP-6 docs polish | `svg-editor-qpk.10` | task | Center/radius sliders; kind switch via history |
 
 ## Future follow-up (separate bead)
 
 | Local ref | Title | bd id | Notes |
 |-----------|--------|-------|-------|
-| GP-F1 | Visual gradient editor on canvas | `svg-editor-qpk.6` | Draggable stops, angle/focal handles; hide raw x1/y1/gradientUnits fields |
+| GP-F1 | Visual gradient editor on canvas | `svg-editor-qpk.6` | Draggable stops, angle/focal handles on canvas; GP-6 panel defers focal editing to GP-F1 |
 
 Aligns with [svg-js-gradient-pattern-support spike](../spikes/svg-js-gradient-pattern-support.md) §4 phase 3.
 
@@ -71,7 +75,7 @@ Aligns with [svg-js-gradient-pattern-support spike](../spikes/svg-js-gradient-pa
 - Switching gradient → Solid reverts to first-stop color and removes unreferenced def.
 - Switching to No paint clears fill or removes stroke and purges def.
 - Undo/redo preserves `url(#id)` integrity (dedicated def on edit).
-- Technical gradient editor remains in panel for stops/geometry until visual editor ships.
+- Technical gradient editor in panel for stops/geometry until on-canvas editor ships (GP-6 panel editor shipped in `qpk.7`–`qpk.10`; GP-F1 remains on-canvas).
 
 ## Full plan
 

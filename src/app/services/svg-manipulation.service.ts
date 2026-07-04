@@ -589,4 +589,8 @@ export class SvgManipulationService
   ): EditableGradientModel {
     return this.gradients.setGradientKindForShape(shapeId, paintProperty, kind, preserveStopsFrom);
   }
+
+  getShapeBBoxForGradient(shapeId: string): { x: number; y: number; width: number; height: number } | null {
+    return this.getShapeBBox(shapeId, { preferScreenBounds: false });
+  }
 }
