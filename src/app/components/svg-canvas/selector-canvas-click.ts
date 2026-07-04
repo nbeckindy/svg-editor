@@ -10,7 +10,7 @@ export interface SelectorCanvasClickDeps {
   getNearestGroupAncestorId(id: string): string | null;
   isGroupAClipMaskCarrier(groupId: string): boolean;
   getShapeProperties(el: SvgJsElement): ShapeProperties;
-  getShapePropertiesInSameClipGroup(el: SvgJsElement): ShapeProperties[];
+  getSelectorSelectionForShape(el: SvgJsElement): ShapeProperties[];
   selectShapes(shapes: ShapeProperties[]): void;
   toggleShapeGroupInSelection(shapes: ShapeProperties[]): void;
   clearSelection(): void;
@@ -45,7 +45,7 @@ export function handleSelectorCanvasClick(
 
     if (nearestGroupId && !groupIsClipCarrier) {
       if (deps.getDrilledIntoGroupId() === nearestGroupId) {
-        const expanded = deps.getShapePropertiesInSameClipGroup(svgElement);
+        const expanded = deps.getSelectorSelectionForShape(svgElement);
         if (additive) {
           deps.toggleShapeGroupInSelection(expanded);
         } else {
@@ -64,7 +64,7 @@ export function handleSelectorCanvasClick(
         }
       }
     } else {
-      const expanded = deps.getShapePropertiesInSameClipGroup(svgElement);
+      const expanded = deps.getSelectorSelectionForShape(svgElement);
       if (additive) {
         deps.toggleShapeGroupInSelection(expanded);
       } else {

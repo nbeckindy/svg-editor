@@ -45,7 +45,7 @@ function makeSelectorDeps(over: Partial<SelectorCanvasToolDeps> = {}): () => Sel
     isDraggingShape: () => false,
     getSvgInstance: () => null,
     getShapeProperties: () => ({ id: 'a', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }),
-    getShapePropertiesInSameClipGroup: () => [],
+    getSelectorSelectionForShape: () => [],
     selectShapes: vi.fn(),
     toggleShapeGroupInSelection: vi.fn(),
     clearSelection: vi.fn(),

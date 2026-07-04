@@ -43,6 +43,8 @@ function baseInput(over: Partial<Parameters<typeof computeCanvasContextMenuState
     isSelectorMode: true,
     isElementOrAncestorLocked: neverLocked,
     getOutlineToPathElement: (id: string) => (id === 'rect-a' ? mockRectElement() : null),
+    canMakeClipPathForSelection: () => true,
+    canReleaseClipPathForSelection: () => false,
     ...over
   };
 }
@@ -59,6 +61,41 @@ describe('computeCanvasContextMenuState', () => {
     expect(state.canOutlineToPath).toBe(false);
     expect(state.canRotate).toBe(true);
     expect(state.canPaste).toBe(false);
+  });
+
+  it('enables make clipping mask when delegate allows and disables release', () => {
+    const state = computeCanvasContextMenuState(
+      baseInput({
+        canMakeClipPathForSelection: () => true,
+        canReleaseClipPathForSelection: () => false
+      })
+    );
+    expect(state.canMakeClipPath).toBe(true);
+    expect(state.canReleaseClipPath).toBe(false);
+  });
+
+  it('enables release clipping mask when delegate allows', () => {
+    const state = computeCanvasContextMenuState(
+      baseInput({
+        selectedShapes: [rect('a')],
+        canMakeClipPathForSelection: () => false,
+        canReleaseClipPathForSelection: () => true
+      })
+    );
+    expect(state.canMakeClipPath).toBe(false);
+    expect(state.canReleaseClipPath).toBe(true);
+  });
+
+  it('disables clip path actions when not in selector mode', () => {
+    const state = computeCanvasContextMenuState(
+      baseInput({
+        isSelectorMode: false,
+        canMakeClipPathForSelection: () => true,
+        canReleaseClipPathForSelection: () => true
+      })
+    );
+    expect(state.canMakeClipPath).toBe(false);
+    expect(state.canReleaseClipPath).toBe(false);
   });
 
   it('disables shape actions on empty hit but allows paste when clipboard has content', () => {

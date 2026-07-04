@@ -25,6 +25,8 @@ import {
   GroupCommand,
   UngroupCommand,
   UngroupElementsCommand,
+  MakeClipPathCommand,
+  ReleaseClipPathCommand,
   ReparentElementsCommand,
   RemoveShapesCommand,
   AddShapeCommand,
@@ -1149,6 +1151,85 @@ describe('UngroupCommand', () => {
 
   it('should have description "Ungroup elements"', () => {
     expect(new UngroupCommand(mockSvc(), 'g1').description).toBe('Ungroup elements');
+  });
+});
+
+describe('MakeClipPathCommand', () => {
+  function mockClipSvc(overrides: Record<string, unknown> = {}) {
+    return {
+      makeClipPathFromSelection: vi.fn().mockReturnValue({
+        carrierGroupId: 'clip-carrier-1',
+        clipPathDefId: 'clip-1',
+        clipGeometryId: 'clip-geom-1',
+        contentIds: ['back'],
+        undo: {
+          clipShapeMarkup: '<rect id="front"/>',
+          clipShapeParentId: null,
+          clipShapeFormerIndex: 1,
+          contentPlacement: [{ elementId: 'back', parentId: null, formerIndex: 0 }]
+        }
+      }),
+      undoMakeClipPath: vi.fn(),
+      ...overrides
+    };
+  }
+
+  it('calls makeClipPathFromSelection on execute', () => {
+    const svc = mockClipSvc();
+    const cmd = new MakeClipPathCommand(svc, ['back'], 'front');
+    cmd.execute();
+    expect(svc.makeClipPathFromSelection).toHaveBeenCalledWith(['back'], 'front');
+    expect(cmd.createdCarrierGroupId).toBe('clip-carrier-1');
+  });
+
+  it('calls undoMakeClipPath on undo', () => {
+    const svc = mockClipSvc();
+    const cmd = new MakeClipPathCommand(svc, ['back'], 'front');
+    cmd.execute();
+    cmd.undo();
+    expect(svc.undoMakeClipPath).toHaveBeenCalledWith(
+      expect.objectContaining({ clipShapeFormerIndex: 1 }),
+      'clip-carrier-1',
+      'clip-1'
+    );
+  });
+});
+
+describe('ReleaseClipPathCommand', () => {
+  function mockClipSvc(overrides: Record<string, unknown> = {}) {
+    return {
+      releaseClipPathForSelection: vi.fn().mockReturnValue({
+        freedChildIds: ['a', 'b'],
+        restoredClipShapeId: 'clip-shape',
+        undo: {
+          carrierGroupId: 'clip-carrier-1',
+          carrierParentId: null,
+          carrierFormerIndex: 0,
+          clipPathDefId: 'clip-1',
+          clipPathChildMarkup: '<rect width="10" height="10"/>',
+          childIds: ['a', 'b'],
+          restoredClipShapeId: 'clip-shape'
+        }
+      }),
+      undoReleaseClipPath: vi.fn().mockReturnValue('clip-carrier-1'),
+      ...overrides
+    };
+  }
+
+  it('calls releaseClipPathForSelection on execute', () => {
+    const svc = mockClipSvc();
+    const cmd = new ReleaseClipPathCommand(svc, ['a']);
+    cmd.execute();
+    expect(svc.releaseClipPathForSelection).toHaveBeenCalledWith(['a']);
+    expect(cmd.releasedChildIds).toEqual(['a', 'b']);
+  });
+
+  it('calls undoReleaseClipPath on undo', () => {
+    const svc = mockClipSvc();
+    const cmd = new ReleaseClipPathCommand(svc, ['a']);
+    cmd.execute();
+    cmd.undo();
+    expect(svc.undoReleaseClipPath).toHaveBeenCalled();
   });
 });
 

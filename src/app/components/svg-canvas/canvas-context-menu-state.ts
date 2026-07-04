@@ -23,6 +23,8 @@ export interface CanvasContextMenuStateInput {
   isSelectorMode: boolean;
   isElementOrAncestorLocked(id: string): boolean;
   getOutlineToPathElement(id: string): Element | null;
+  canMakeClipPathForSelection(ids: string[]): boolean;
+  canReleaseClipPathForSelection(ids: string[]): boolean;
 }
 
 export interface CanvasContextMenuState {
@@ -32,6 +34,8 @@ export interface CanvasContextMenuState {
   canDelete: boolean;
   canGroup: boolean;
   canUngroup: boolean;
+  canMakeClipPath: boolean;
+  canReleaseClipPath: boolean;
   canOutlineToPath: boolean;
   canRotate: boolean;
 }
@@ -44,12 +48,15 @@ export function computeCanvasContextMenuState(input: CanvasContextMenuStateInput
     hasClipboardContent,
     isSelectorMode,
     isElementOrAncestorLocked,
-    getOutlineToPathElement
+    getOutlineToPathElement,
+    canMakeClipPathForSelection,
+    canReleaseClipPathForSelection
   } = input;
   const count = selectedShapes.length;
   const anyLocked = selectedShapes.some((s) => isElementOrAncestorLocked(s.id));
   const hasSelection = count > 0;
   const shapeActionsAllowed = hitShape && hasSelection;
+  const selectedIds = selectedShapes.map((s) => s.id);
 
   const canUngroup =
     shapeActionsAllowed &&
@@ -71,6 +78,10 @@ export function computeCanvasContextMenuState(input: CanvasContextMenuStateInput
     canDelete: shapeActionsAllowed && !anyLocked,
     canGroup: shapeActionsAllowed && count >= 2 && !anyLocked,
     canUngroup,
+    canMakeClipPath:
+      shapeActionsAllowed && isSelectorMode && count >= 2 && !anyLocked && canMakeClipPathForSelection(selectedIds),
+    canReleaseClipPath:
+      shapeActionsAllowed && isSelectorMode && !anyLocked && canReleaseClipPathForSelection(selectedIds),
     canOutlineToPath: hitOutlineToPathPrimitive && outlineToPathState.eligible,
     canRotate: shapeActionsAllowed && !anyLocked
   };

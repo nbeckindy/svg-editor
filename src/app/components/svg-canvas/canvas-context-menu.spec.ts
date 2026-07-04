@@ -19,7 +19,7 @@ describe('canvas context menu integration helpers', () => {
         getNearestGroupAncestorId: () => null,
         isGroupAClipMaskCarrier: () => false,
         getShapeProperties: (el) => rectProps(el.id),
-        getShapePropertiesInSameClipGroup: (el) => [rectProps(el.id)],
+        getSelectorSelectionForShape: (el) => [rectProps(el.id)],
         selectShapes: vi.fn(),
         getDrilledIntoGroupId: () => null,
         setDrilledIntoGroupId: vi.fn(),
@@ -37,7 +37,9 @@ describe('canvas context menu integration helpers', () => {
         hasClipboardContent: true,
         isSelectorMode: true,
         isElementOrAncestorLocked: () => false,
-        getOutlineToPathElement: () => null
+        getOutlineToPathElement: () => null,
+        canMakeClipPathForSelection: () => false,
+        canReleaseClipPathForSelection: () => false
       });
 
       expect(selection.hitShape).toBe(false);

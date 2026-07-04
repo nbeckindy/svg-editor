@@ -11,6 +11,14 @@ import { SvgLayerStructureService } from './svg-layer-structure.service';
 import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
 import type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
 import { SvgShapeContentService } from './svg-shape-content.service';
+import { SvgClipPathService } from './svg-clip-path.service';
+import type { ClipPathSvgPort } from '../history/clip-path-svg.port';
+import type {
+  MakeClipPathResult,
+  MakeClipPathUndoSnapshot,
+  ReleaseClipPathResult,
+  ReleaseClipPathUndoSnapshot
+} from './svg-clip-path.port';
 import type {
   TransformGestureDocSvgPort,
   SelectionTransformApplySvgPort
@@ -49,13 +57,15 @@ export class SvgManipulationService
     PropertiesPanelSvgPort,
     EditorShapeLifecycleSvgPort,
     PathDataEditorSvgPort,
-    PathNodeHandleLinkSvgPort
+    PathNodeHandleLinkSvgPort,
+    ClipPathSvgPort
 {
   private readonly doc = inject(SvgEditorDocumentService);
   private readonly gradients = inject(SvgGradientDefsService);
   private readonly layers = inject(SvgLayerStructureService);
   private readonly geometry = inject(SvgSelectionGeometryService);
   private readonly shapes = inject(SvgShapeContentService);
+  private readonly clipPaths = inject(SvgClipPathService);
 
   readonly documentRevision = this.doc.documentRevision;
   readonly artboard = this.doc.artboard;
@@ -109,6 +119,35 @@ export class SvgManipulationService
     return this.shapes.getShapePropertiesInSameClipGroupReadingWith(shape, (el) =>
       this.getShapeProperties(el)
     );
+  }
+
+  /**
+   * Selector-tool selection: when the hit is clipped content, select the clip-path geometry in defs.
+   */
+  getSelectorSelectionForShape(shape: SvgJsElement): ShapeProperties[] {
+    const clipGeomId = this.clipPaths.resolveClipGeometryIdForContentShape(shape);
+    if (clipGeomId) {
+      const geom = this.doc.getSVGInstance()?.findOne(`#${clipGeomId}`) as SvgJsElement | undefined;
+      if (geom) return [this.getShapeProperties(geom)];
+    }
+    return [this.getShapeProperties(shape)];
+  }
+
+  resolveSelectorMarqueeSelection(hits: ShapeProperties[]): ShapeProperties[] {
+    if (hits.length === 0) return [];
+    const seen = new Set<string>();
+    const result: ShapeProperties[] = [];
+    for (const hit of hits) {
+      const shape = this.doc.getSVGInstance()?.findOne(`#${hit.id}`) as SvgJsElement | undefined;
+      if (!shape) continue;
+      for (const props of this.getSelectorSelectionForShape(shape)) {
+        if (!seen.has(props.id)) {
+          seen.add(props.id);
+          result.push(props);
+        }
+      }
+    }
+    return result;
   }
 
   expandSelectionByClipGroups(shapes: ShapeProperties[]): ShapeProperties[] {
@@ -592,5 +631,45 @@ export class SvgManipulationService
 
   getShapeBBoxForGradient(shapeId: string): { x: number; y: number; width: number; height: number } | null {
     return this.getShapeBBox(shapeId, { preferScreenBounds: false });
+  }
+
+  makeClipPathFromSelection(contentIds: string[], clipShapeId: string): MakeClipPathResult | null {
+    return this.clipPaths.makeClipPathFromSelection(contentIds, clipShapeId);
+  }
+
+  undoMakeClipPath(
+    snapshot: MakeClipPathUndoSnapshot,
+    carrierGroupId: string,
+    clipPathDefId: string
+  ): void {
+    this.clipPaths.undoMakeClipPath(snapshot, carrierGroupId, clipPathDefId);
+  }
+
+  releaseClipPathForSelection(shapeIds: string[]): ReleaseClipPathResult | null {
+    return this.clipPaths.releaseClipPathForSelection(shapeIds);
+  }
+
+  undoReleaseClipPath(snapshot: ReleaseClipPathUndoSnapshot): string | null {
+    return this.clipPaths.undoReleaseClipPath(snapshot);
+  }
+
+  findClipCarrierForShape(shapeId: string): string | null {
+    return this.clipPaths.findClipCarrierForShape(shapeId);
+  }
+
+  resolveClipGeometryIdForContentShape(shape: SvgJsElement): string | null {
+    return this.clipPaths.resolveClipGeometryIdForContentShape(shape);
+  }
+
+  resolveClipCarrierForShapeId(shapeId: string): Element | null {
+    return this.clipPaths.resolveClipCarrierForShapeId(shapeId);
+  }
+
+  canMakeClipPath(shapeIds: string[]): boolean {
+    return this.clipPaths.canMakeClipPath(shapeIds);
+  }
+
+  canReleaseClipPath(shapeIds: string[]): boolean {
+    return this.clipPaths.canReleaseClipPath(shapeIds);
   }
 }

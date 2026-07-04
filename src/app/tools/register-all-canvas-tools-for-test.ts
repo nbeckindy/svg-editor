@@ -69,7 +69,7 @@ export interface CanvasToolsTestHostState {
   clearHighlight: () => void;
   getSvgInstance: () => null;
   getShapeProperties: (el: SvgJsElement) => ShapeProperties;
-  getShapePropertiesInSameClipGroup: (el: SvgJsElement) => ShapeProperties[];
+  getSelectorSelectionForShape: (el: SvgJsElement) => ShapeProperties[];
   selectShapes: (shapes: ShapeProperties[]) => void;
   toggleShapeGroupInSelection: (shapes: ShapeProperties[]) => void;
   clearSelection: () => void;
@@ -147,7 +147,7 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
       strokeWidth: 0,
       opacity: 1
     }),
-    getShapePropertiesInSameClipGroup: (el) => [
+    getSelectorSelectionForShape: (el) => [
       { id: el.id(), type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
     ],
     selectShapes: vi.fn(),
@@ -264,7 +264,7 @@ export function registerAllCanvasToolsForTest(
     getKeyboardActions: hostState.getSelectorKeyboardActions,
     getSvgInstance: hostState.getSvgInstance,
     getShapeProperties: hostState.getShapeProperties,
-    getShapePropertiesInSameClipGroup: hostState.getShapePropertiesInSameClipGroup,
+    getSelectorSelectionForShape: hostState.getSelectorSelectionForShape,
     selectShapes: hostState.selectShapes,
     toggleShapeGroupInSelection: hostState.toggleShapeGroupInSelection,
     clearSelection: hostState.clearSelection,

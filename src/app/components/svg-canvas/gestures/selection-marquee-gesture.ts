@@ -53,7 +53,7 @@ export class SelectionMarqueeGesture {
         const w = Math.max(0, Math.abs(endSvg.x - startSvg.x));
         const h = Math.max(0, Math.abs(endSvg.y - startSvg.y));
         const hits = ctx.doc.svgManipulation.getShapePropertiesIntersectingRect({ x, y, width: w, height: h });
-        const expanded = ctx.doc.svgManipulation.expandSelectionByClipGroups(hits);
+        const expanded = ctx.doc.svgManipulation.resolveSelectorMarqueeSelection(hits);
         if (shiftKey) {
           if (expanded.length > 0) {
             ctx.doc.shapeSelection.mergeShapesIntoSelection(expanded);

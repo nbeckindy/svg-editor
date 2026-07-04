@@ -200,6 +200,18 @@ describe('SvgManipulationService', () => {
     expect(properties.fill).toBe('#0000FF');
   });
 
+  it('getSelectorSelectionForShape returns clip geometry for clipped content', () => {
+    const svgContent = `<svg viewBox="0 0 100 100">
+      <defs><clipPath id="cp"><rect id="cp-geom" x="0" y="0" width="50" height="50"/></clipPath></defs>
+      <g clip-path="url(#cp)"><rect id="inner" x="5" y="5" width="10" height="10"/></g>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    const inner = service.getSVGInstance()?.findOne('#inner') as any;
+    const selection = service.getSelectorSelectionForShape(inner);
+    expect(selection).toHaveLength(1);
+    expect(selection[0].id).toMatch(/^clip-geom-/);
+  });
+
   it('getShapePropertiesInSameClipGroup returns all shapes under the clip-path ancestor', () => {
     const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
       <defs><clipPath id="cp"><rect x="0" y="0" width="50" height="100"/></clipPath></defs>

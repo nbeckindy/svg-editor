@@ -398,6 +398,22 @@
       (click)="onContextMenuUngroup()">
       Ungroup
     </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-make-clip-path"
+      [disabled]="!contextMenuState().canMakeClipPath"
+      (click)="onContextMenuMakeClipPath()">
+      Make clipping mask
+    </button>
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="canvas-context-menu-release-clip-path"
+      [disabled]="!contextMenuState().canReleaseClipPath"
+      (click)="onContextMenuReleaseClipPath()">
+      Release clipping mask
+    </button>
     <mat-divider />
     <button
       mat-menu-item

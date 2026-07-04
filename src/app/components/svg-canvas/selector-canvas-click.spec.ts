@@ -19,7 +19,7 @@ function makeClickDeps(over: Partial<SelectorCanvasClickDeps> = {}): SelectorCan
     getNearestGroupAncestorId: () => null,
     isGroupAClipMaskCarrier: () => false,
     getShapeProperties: (el) => rectProps(el.id),
-    getShapePropertiesInSameClipGroup: (el) => [rectProps(el.id)],
+    getSelectorSelectionForShape: (el) => [rectProps(el.id)],
     selectShapes: vi.fn(),
     toggleShapeGroupInSelection: vi.fn(),
     clearSelection: vi.fn(),
@@ -77,7 +77,7 @@ describe('handleSelectorCanvasClick', () => {
         findOne: (sel) => (sel === '#leaf' ? (child as unknown as SVGElement) : undefined)
       }),
       getNearestGroupAncestorId: () => null,
-      getShapePropertiesInSameClipGroup: () => [rectProps('leaf')],
+      getSelectorSelectionForShape: () => [rectProps('leaf')],
       selectShapes
     });
 
@@ -123,7 +123,7 @@ describe('handleSelectorCanvasClick', () => {
       }),
       getNearestGroupAncestorId: () => 'grp',
       getDrilledIntoGroupId: () => 'grp',
-      getShapePropertiesInSameClipGroup: () => [rectProps('child')],
+      getSelectorSelectionForShape: () => [rectProps('child')],
       selectShapes
     });
 
@@ -132,7 +132,7 @@ describe('handleSelectorCanvasClick', () => {
     expect(selectShapes).toHaveBeenCalledWith([rectProps('child')]);
   });
 
-  it('bypasses clip-carrier group and selects leaf', () => {
+  it('bypasses clip-carrier group and selects clip mask geometry', () => {
     const child = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     child.id = 'child';
     const selectShapes = vi.fn();
@@ -142,13 +142,13 @@ describe('handleSelectorCanvasClick', () => {
       }),
       getNearestGroupAncestorId: () => 'clip-g',
       isGroupAClipMaskCarrier: (id) => id === 'clip-g',
-      getShapePropertiesInSameClipGroup: () => [rectProps('child')],
+      getSelectorSelectionForShape: () => [rectProps('clip-geom')],
       selectShapes
     });
 
     handleSelectorCanvasClick({ target: child } as unknown as MouseEvent, deps);
 
-    expect(selectShapes).toHaveBeenCalledWith([rectProps('child')]);
+    expect(selectShapes).toHaveBeenCalledWith([rectProps('clip-geom')]);
   });
 
   it('toggles selection with shift modifier', () => {
@@ -159,7 +159,7 @@ describe('handleSelectorCanvasClick', () => {
       getSvgInstance: () => ({
         findOne: (sel) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
       }),
-      getShapePropertiesInSameClipGroup: () => [rectProps('child')],
+      getSelectorSelectionForShape: () => [rectProps('child')],
       toggleShapeGroupInSelection: toggle
     });
 

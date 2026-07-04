@@ -6,6 +6,7 @@ export * from './transform/translate-command';
 export * from './transform/align-distribute-commands';
 export * from './transform/union-transform-commands';
 export * from './layers/layer-commands';
+export * from './layers/clip-path-commands';
 export * from './document/document-lifecycle-commands';
 export * from './document/document-artboard-commands';
 export * from './document/document-shape-commands';

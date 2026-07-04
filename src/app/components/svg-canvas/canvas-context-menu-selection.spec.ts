@@ -19,7 +19,7 @@ function makeDeps(over: Partial<CanvasContextMenuSelectionDeps> = {}): CanvasCon
     getNearestGroupAncestorId: () => null,
     isGroupAClipMaskCarrier: () => false,
     getShapeProperties: (el) => rectProps(el.id),
-    getShapePropertiesInSameClipGroup: (el) => [rectProps(el.id)],
+    getSelectorSelectionForShape: (el) => [rectProps(el.id)],
     selectShapes: vi.fn(),
     getDrilledIntoGroupId: () => null,
     setDrilledIntoGroupId: vi.fn(),
@@ -51,7 +51,7 @@ describe('prepareCanvasContextMenuSelection', () => {
       getSvgInstance: () => ({
         findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
       }),
-      getShapePropertiesInSameClipGroup: () => [rectProps('child')],
+      getSelectorSelectionForShape: () => [rectProps('child')],
       selectShapes
     });
 
@@ -73,7 +73,7 @@ describe('prepareCanvasContextMenuSelection', () => {
       getSvgInstance: () => ({
         findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
       }),
-      getShapePropertiesInSameClipGroup: () => [rectProps('child')],
+      getSelectorSelectionForShape: () => [rectProps('child')],
       getSelectedShapeIds: () => ['child', 'other'],
       selectShapes
     });

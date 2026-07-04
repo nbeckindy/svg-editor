@@ -7,7 +7,7 @@ export interface CanvasContextMenuSelectionDeps {
   getNearestGroupAncestorId(id: string): string | null;
   isGroupAClipMaskCarrier(groupId: string): boolean;
   getShapeProperties(el: SvgJsElement): ShapeProperties;
-  getShapePropertiesInSameClipGroup(el: SvgJsElement): ShapeProperties[];
+  getSelectorSelectionForShape(el: SvgJsElement): ShapeProperties[];
   selectShapes(shapes: ShapeProperties[]): void;
   getDrilledIntoGroupId(): string | null;
   setDrilledIntoGroupId(id: string | null): void;
@@ -67,12 +67,12 @@ function resolveContextMenuTargetIds(
 
   if (nearestGroupId && !groupIsClipCarrier) {
     if (deps.getDrilledIntoGroupId() === nearestGroupId) {
-      return deps.getShapePropertiesInSameClipGroup(svgElement).map((s) => s.id);
+      return deps.getSelectorSelectionForShape(svgElement).map((s) => s.id);
     }
     return [nearestGroupId];
   }
 
-  return deps.getShapePropertiesInSameClipGroup(svgElement).map((s) => s.id);
+  return deps.getSelectorSelectionForShape(svgElement).map((s) => s.id);
 }
 
 function applyContextMenuSelection(
@@ -86,7 +86,7 @@ function applyContextMenuSelection(
 
   if (nearestGroupId && !groupIsClipCarrier) {
     if (deps.getDrilledIntoGroupId() === nearestGroupId) {
-      deps.selectShapes(deps.getShapePropertiesInSameClipGroup(svgElement));
+      deps.selectShapes(deps.getSelectorSelectionForShape(svgElement));
     } else {
       const groupEl = (svgInstance?.findOne(`#${nearestGroupId}`) as SvgJsElement | null) ?? undefined;
       if (groupEl) {
@@ -95,6 +95,6 @@ function applyContextMenuSelection(
       }
     }
   } else {
-    deps.selectShapes(deps.getShapePropertiesInSameClipGroup(svgElement));
+    deps.selectShapes(deps.getSelectorSelectionForShape(svgElement));
   }
 }

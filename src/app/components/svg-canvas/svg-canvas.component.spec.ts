@@ -14,7 +14,7 @@ import { ClipboardService } from '../../services/clipboard.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { SnapService } from '../../services/snap.service';
 import { RasterImageInsertService } from '../../services/raster-image-insert.service';
-import { CompositeCommand, TranslateCommand } from '../../models/editor-commands';
+import { CompositeCommand, TranslateCommand, MakeClipPathCommand, ReleaseClipPathCommand } from '../../models/editor-commands';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
 import { parsePathDForNodeEditing } from '../../models/path-d';
 
@@ -910,7 +910,7 @@ describe('SvgCanvasComponent', () => {
     expect(selectShapesSpy).toHaveBeenCalledWith([expect.objectContaining({ id: 'a' })]);
   });
 
-  it('should pass marquee hits through expandSelectionByClipGroups before selectShapes', () => {
+  it('should pass marquee hits through resolveSelectorMarqueeSelection before selectShapes', () => {
     const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
     const hitA = {
       id: 'a',
@@ -929,7 +929,9 @@ describe('SvgCanvasComponent', () => {
       opacity: 1
     };
     vi.spyOn(svgManipulationService, 'getShapePropertiesIntersectingRect').mockReturnValue([hitA]);
-    const expandSpy = vi.spyOn(svgManipulationService, 'expandSelectionByClipGroups').mockReturnValue([hitA, hitB]);
+    const resolveSpy = vi
+      .spyOn(svgManipulationService, 'resolveSelectorMarqueeSelection')
+      .mockReturnValue([hitA, hitB]);
 
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/></svg>');
     fixture.detectChanges();
@@ -946,11 +948,11 @@ describe('SvgCanvasComponent', () => {
     component.onDocumentMouseMove({ clientX: 50, clientY: 50 } as MouseEvent);
     component.onDocumentMouseUp({ button: 0, shiftKey: false } as MouseEvent);
 
-    expect(expandSpy).toHaveBeenCalledWith([hitA]);
+    expect(resolveSpy).toHaveBeenCalledWith([hitA]);
     expect(selectShapesSpy).toHaveBeenCalledWith([hitA, hitB]);
   });
 
-  it('should expand a single marquee hit to all shapes in the same clip group (real manipulation)', () => {
+  it('should resolve marquee hits in the same clip group to clip-path geometry', () => {
     const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
     const soloHit = {
       id: 'mq-x1',
@@ -965,7 +967,7 @@ describe('SvgCanvasComponent', () => {
     fixture.componentRef.setInput(
       'svgContent',
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-        <defs><clipPath id="cp-mq"><rect x="0" y="0" width="100" height="100"/></clipPath></defs>
+        <defs><clipPath id="cp-mq"><rect id="cp-mq-geom" x="0" y="0" width="100" height="100"/></clipPath></defs>
         <g clip-path="url(#cp-mq)">
           <rect id="mq-x1" x="0" y="0" width="5" height="5"/>
           <rect id="mq-x2" x="10" y="0" width="5" height="5"/>
@@ -987,7 +989,8 @@ describe('SvgCanvasComponent', () => {
     component.onDocumentMouseUp({ button: 0, shiftKey: false } as MouseEvent);
 
     const arg = selectShapesSpy.mock.calls[0]?.[0];
-    expect(arg?.map((s) => s.id).sort()).toEqual(['mq-x1', 'mq-x2'].sort());
+    expect(arg).toHaveLength(1);
+    expect(arg?.[0]?.id).toMatch(/^clip-geom-/);
   });
 
   it('should not call selectShapes on mouseup after tiny selection marquee', () => {
@@ -1693,12 +1696,12 @@ describe('SvgCanvasComponent', () => {
     expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['b']);
   });
 
-  it('should select every shape under the same clip-path ancestor on click', () => {
+  it('should select clip-path geometry when clicking clipped content', () => {
     fixture.componentRef.setInput(
       'svgContent',
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-        <defs><clipPath id="cp"><rect x="0" y="0" width="50" height="100"/></clipPath></defs>
-        <g clip-path="url(#cp)">
+        <defs><clipPath id="cp"><rect id="cp-geom" x="0" y="0" width="50" height="100"/></clipPath></defs>
+        <g id="clip-carrier" clip-path="url(#cp)">
           <rect id="r-in-1" x="5" y="5" width="10" height="10"/>
           <rect id="r-in-2" x="25" y="25" width="10" height="10"/>
         </g>
@@ -1716,8 +1719,9 @@ describe('SvgCanvasComponent', () => {
       shiftKey: false
     } as unknown as MouseEvent);
 
-    const ids = shapeSelectionService.getSelectedShapes().map((s) => s.id).sort();
-    expect(ids).toEqual(['r-in-1', 'r-in-2'].sort());
+    const ids = shapeSelectionService.getSelectedShapes().map((s) => s.id);
+    expect(ids).toHaveLength(1);
+    expect(ids[0]).toMatch(/^clip-geom-/);
   });
 
   it('should remove from selection on shift-click on already selected shape', () => {
@@ -7148,6 +7152,46 @@ describe('SvgCanvasComponent', () => {
       }
 
       expect(translateSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('clipping mask context menu', () => {
+    it('make then release round-trip via context menu handlers', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="back" x="0" y="0" width="40" height="40"/><rect id="front" x="10" y="10" width="30" height="30"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      shapeSelectionService.selectShapes([
+        { id: 'back', type: 'rect', fill: '#f00', strokeWidth: 0, opacity: 1 },
+        { id: 'front', type: 'rect', fill: '#00f', strokeWidth: 0, opacity: 1 }
+      ]);
+
+      const makeSpy = vi.spyOn(editorHistoryService, 'pushAndExecute');
+      component.onContextMenuMakeClipPath();
+      expect(makeSpy).toHaveBeenCalled();
+      expect(makeSpy.mock.calls[0][0]).toBeInstanceOf(MakeClipPathCommand);
+
+      const svg = svgManipulationService.getSVGInstance()!;
+      expect(svg.findOne('#front')).toBeFalsy();
+      const carrier = svg.find('[clip-path]')[0] as { node: Element } | undefined;
+      expect(carrier?.node.getAttribute('clip-path')).toMatch(/url\(#clip-/);
+
+      const makeCmd = makeSpy.mock.calls[0][0] as MakeClipPathCommand;
+      expect(makeCmd.createdClipGeometryId).toBeTruthy();
+      expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual([
+        makeCmd.createdClipGeometryId!
+      ]);
+
+      component.onContextMenuReleaseClipPath();
+      expect(makeSpy.mock.calls[1][0]).toBeInstanceOf(ReleaseClipPathCommand);
+      expect(svg.find('[clip-path]').length).toBe(0);
+      expect(svg.findOne('#back')).toBeDefined();
+      expect(svg.findOne('#front')).toBeDefined();
     });
   });
 });
