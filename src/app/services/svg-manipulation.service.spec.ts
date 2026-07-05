@@ -252,6 +252,19 @@ describe('SvgManipulationService', () => {
     expect(expanded.map((p) => p.id).sort()).toEqual(['x1', 'x2'].sort());
   });
 
+  it('expandSelectionForClipPathTransform includes clip geometry with clipped content', () => {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect id="back" x="0" y="0" width="40" height="40" fill="red"/>
+      <rect id="front" x="10" y="10" width="30" height="30" fill="blue"/>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    const made = service.makeClipPathFromSelection(['back'], 'front');
+    expect(made).not.toBeNull();
+
+    const expanded = service.expandSelectionForClipPathTransform([made!.clipGeometryId]);
+    expect(expanded.sort()).toEqual([made!.clipGeometryId, 'back'].sort());
+  });
+
   it('should update fill color', () => {
     const svgContent = '<svg><circle id="color-test" cx="50" cy="50" r="40" fill="#FF0000"/></svg>';
     
@@ -971,6 +984,7 @@ describe('SvgManipulationService', () => {
       const tree = service.getLayerTree();
       expect(tree.length).toBe(1);
       expect(tree[0].type).toBe('g');
+      expect(tree[0].kind).toBe('group');
       expect(tree[0].id).toBe('layer1');
       expect(tree[0].children).toBeDefined();
       expect(tree[0].children!.length).toBe(2);
@@ -1028,6 +1042,46 @@ describe('SvgManipulationService', () => {
       const tree = service.getLayerTree();
       expect(tree.find((n) => n.id === 'free')?.locked).toBe(false);
       expect(tree.find((n) => n.id === 'lck')?.locked).toBe(true);
+    });
+
+    it('represents clip-path carriers as clip branches with clipped preview markup', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <clipPath id="cp">
+            <rect id="clip-geom" data-editor-clip-source-id="mask-rect" x="0" y="0" width="40" height="40"/>
+          </clipPath>
+        </defs>
+        <g id="clip-carrier" clip-path="url(#cp)">
+          <rect id="inner" x="10" y="10" width="80" height="80" fill="red"/>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree.length).toBe(1);
+      expect(tree[0].type).toBe('clip');
+      expect(tree[0].kind).toBe('clipMask');
+      expect(tree[0].name).toBe('mask-rect');
+      expect(tree[0].children?.length).toBe(1);
+      expect(tree[0].children![0].type).toBe('rect');
+      expect(tree[0].previewMarkup).toContain('<clipPath id="cp">');
+      expect(tree[0].previewMarkup).toContain('clip-path="url(#cp)"');
+      expect(tree[0].previewMarkup).toContain('id="inner"');
+    });
+
+    it('uses carrier data-name for clip-path carrier when set', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <clipPath id="cp">
+            <rect id="clip-geom" data-editor-clip-source-id="mask-rect" x="0" y="0" width="40" height="40"/>
+          </clipPath>
+        </defs>
+        <g id="clip-carrier" clip-path="url(#cp)" data-name="Custom mask label">
+          <rect id="inner" x="10" y="10" width="80" height="80" fill="red"/>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree[0].name).toBe('Custom mask label');
     });
   });
 

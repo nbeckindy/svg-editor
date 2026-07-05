@@ -1,5 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
+import type { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   ReorderCommand,
   buildReorderToExtremeCommand,
@@ -10,9 +11,11 @@ import {
   UngroupCommand,
   UngroupElementsCommand,
   ReparentElementsCommand,
+  ReleaseClipPathCommand,
   type ReparentElementsMode
 } from '../../models/editor-commands';
 import type { LayerReorderGroupSvgPort } from '../../history/layers-panel-svg.port';
+import type { ClipPathSvgPort } from '../../history/clip-path-svg.port';
 import type { PropertiesPanelSvgPort } from '../../history/properties-panel-svg.port';
 import type { ChromeEditorApplySvgPort } from '../../history/chrome-editor-apply-svg.port';
 import { SvgManipulationService } from '../svg-manipulation.service';
@@ -23,6 +26,7 @@ import { GroupStructureChangeService } from './group-structure-change.service';
 export class ChromeEditorLayersApplyService {
   private readonly support = inject(ChromeEditorApplySupport);
   private readonly layerSvg: LayerReorderGroupSvgPort = inject(SvgManipulationService);
+  private readonly clipPathSvg: ClipPathSvgPort = inject(SvgManipulationService);
   private readonly paintSvg: ChromeEditorApplySvgPort = inject(SvgManipulationService);
   private readonly propertiesSvg: PropertiesPanelSvgPort = inject(SvgManipulationService);
   private readonly groupStructureChange = inject(GroupStructureChangeService);
@@ -190,6 +194,30 @@ export class ChromeEditorLayersApplyService {
     mode: ReparentElementsMode
   ): void {
     this.reparentLayersFromPanel(elementIds, mode);
+  }
+
+  releaseClipPathFromLayersPanel(carrierGroupId: string): void {
+    if (this.shapeIdsTouchLocked([carrierGroupId])) return;
+    if (!this.clipPathSvg.canReleaseClipPath([carrierGroupId])) return;
+
+    const cmd = new ReleaseClipPathCommand(this.clipPathSvg, [carrierGroupId]);
+    this.editorHistory.pushAndExecute(cmd);
+
+    const svg = this.paintSvg.getSVGInstance();
+    const releasedShapes: ShapeProperties[] = [];
+    for (const id of cmd.releasedChildIds) {
+      const el = svg?.findOne(`#${id}`) as SvgJsElement | null;
+      if (el) releasedShapes.push(this.propertiesSvg.getShapeProperties(el));
+    }
+    if (cmd.restoredClipShapeId) {
+      const clipEl = svg?.findOne(`#${cmd.restoredClipShapeId}`) as SvgJsElement | null;
+      if (clipEl) releasedShapes.push(this.propertiesSvg.getShapeProperties(clipEl));
+    }
+    if (releasedShapes.length > 0) {
+      this.shapeSelection.selectShapes(releasedShapes);
+    } else {
+      this.shapeSelection.clearSelection();
+    }
   }
 
   private selectReparentedElements(elementIds: string[]): void {

@@ -36,6 +36,7 @@ function makeSelectorDeps() {
     isShapeSelected: () => false,
     getNearestGroupAncestorId: () => null,
     getSelectedShapeIds: () => [],
+    getExpandedDragShapeIds: () => [],
     isSelectionMarquee: () => false,
     isResizingSelection: () => false,
     isSkewingSelection: () => false,

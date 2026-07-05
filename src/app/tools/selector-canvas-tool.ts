@@ -41,6 +41,7 @@ export interface SelectorCanvasToolDeps extends SelectorCanvasClickDeps {
   clientToEditorSvgPoint: (clientX: number, clientY: number) => { x: number; y: number } | null;
   isShapeSelected: (id: string) => boolean;
   getSelectedShapeIds: () => string[];
+  getExpandedDragShapeIds: () => string[];
   isSelectionMarquee: () => boolean;
   isResizingSelection: () => boolean;
   isSkewingSelection: () => boolean;
@@ -125,8 +126,9 @@ export function createSelectorCanvasTool(
       }
 
       if (target.tagName === 'svg' || !target.id) return false;
+      const dragIds = deps.getExpandedDragShapeIds();
       let effectiveDragId = target.id;
-      if (!deps.isShapeSelected(target.id)) {
+      if (!dragIds.includes(target.id)) {
         const nearestGroupId = deps.getNearestGroupAncestorId(target.id);
         if (nearestGroupId && deps.isShapeSelected(nearestGroupId)) {
           effectiveDragId = nearestGroupId;
@@ -137,8 +139,7 @@ export function createSelectorCanvasTool(
       if (event.shiftKey || event.ctrlKey || event.metaKey) return false;
       const point = deps.clientToEditorSvgPoint(event.clientX, event.clientY);
       if (!point) return false;
-      const selectedIds = deps.getSelectedShapeIds();
-      return gestures.drag.start(runtime, selectedIds, effectiveDragId, point, event);
+      return gestures.drag.start(runtime, dragIds, effectiveDragId, point, event);
     },
     onPointerMove(event) {
       const deps = getDeps();

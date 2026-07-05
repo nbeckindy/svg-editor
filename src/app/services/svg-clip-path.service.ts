@@ -73,6 +73,8 @@ export class SvgClipPathService implements SvgClipPathPort {
     const carrierEl = document.createElementNS(SVG_NS, 'g');
     carrierEl.setAttribute('id', carrierGroupId);
     carrierEl.setAttribute('clip-path', `url(#${clipPathDefId})`);
+    const clipShapeDisplayName = clipNode.getAttribute('data-name') || clipShapeId;
+    carrierEl.setAttribute('data-name', clipShapeDisplayName);
     clipParent.insertBefore(carrierEl, clipNode);
     clipParent.removeChild(clipNode);
 
@@ -293,6 +295,25 @@ export class SvgClipPathService implements SvgClipPathPort {
       }
     }
     return carrier != null && !!carrier.id;
+  }
+
+  getClipPathTransformMemberIds(seedShapeId: string): string[] | null {
+    const carrier = this.resolveClipCarrierForShapeId(seedShapeId);
+    if (!carrier) return null;
+
+    const clipPathValue = carrier.getAttribute('clip-path');
+    const clipPathDefId = clipPathValue ? this.parseUrlDefId(clipPathValue) : null;
+    const ids: string[] = [];
+    if (clipPathDefId) {
+      const geom = this.findClipPathGeometryElement(clipPathDefId);
+      if (geom?.id) {
+        ids.push(geom.id);
+      }
+    }
+    for (const child of Array.from(carrier.children)) {
+      if (child.id) ids.push(child.id);
+    }
+    return ids.length > 0 ? ids : null;
   }
 
   private getContentRootElement(): Element | null {

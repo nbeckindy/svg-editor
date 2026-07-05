@@ -155,5 +155,14 @@
       (click)="onContextMenuMoveToBack()">
       Send to back
     </button>
+    @if (canReleaseClipPathFromContextMenu()) {
+      <button
+        mat-menu-item
+        type="button"
+        data-testid="layer-context-menu-release-clip"
+        (click)="onContextMenuReleaseClipPath()">
+        Release clipping mask
+      </button>
+    }
   </mat-menu>
 </div>

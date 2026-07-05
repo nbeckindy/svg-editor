@@ -126,6 +126,9 @@ export class ChromeEditorApplyService {
   reparentLayerDrag(elementIds: string[], mode: ReparentElementsMode) {
     return this.layers.reparentLayerDrag(elementIds, mode);
   }
+  releaseClipPathFromLayersPanel(carrierGroupId: string) {
+    return this.layers.releaseClipPathFromLayersPanel(carrierGroupId);
+  }
 
   syncSelectedShapesFromDom() { return this.support.syncSelectedShapesFromDom(); }
 }

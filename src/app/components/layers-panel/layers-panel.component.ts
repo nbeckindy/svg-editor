@@ -6,7 +6,7 @@ import { MatMenu, MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { openEditorContextMenuAtPointer } from '../editor-context-menu/open-editor-context-menu';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
-import { LayerTreeNode } from '../../services/svg-layer-structure.port';
+import { LayerTreeNode, isLayerBranchKind } from '../../services/svg-layer-structure.port';
 import type { LayersPanelSvgPort } from '../../history/layers-panel-svg.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
@@ -25,6 +25,7 @@ const LAYER_ROW_RASTER_PREVIEW_HREF =
 interface LayerTreeViewModel {
   id: string;
   type: string;
+  kind: LayerTreeNode['kind'];
   name: string;
   depth: number;
   isGroup: boolean;
@@ -37,6 +38,7 @@ interface LayerTreeViewModel {
 
 interface PreviewPaintData {
   elementMarkup: string;
+  previewMarkup?: string;
   fill?: string;
   stroke?: string;
   strokeWidth?: number;
@@ -107,6 +109,13 @@ export class LayersPanelComponent {
     if (shapes.length === 0) return false;
     if (shapes.some((s) => this.svg.isElementOrAncestorLocked(s.id))) return false;
     return shapes.some((s) => this.getUserGroupParentId(s.id) != null);
+  });
+
+  readonly canReleaseClipPathFromContextMenu = computed(() => {
+    const layerId = this.contextMenuLayerId();
+    if (!layerId) return false;
+    if (this.svg.isElementOrAncestorLocked(layerId)) return false;
+    return this.svg.canReleaseClipPath([layerId]);
   });
 
   readonly flattenedLayers = computed<LayerTreeViewModel[]>(() => {
@@ -221,6 +230,12 @@ export class LayersPanelComponent {
     if (id && !this.isLayerReorderDisabled(id)) this.onMoveToBack(id);
   }
 
+  onContextMenuReleaseClipPath(): void {
+    const id = this.contextMenuLayerId();
+    if (!id || !this.canReleaseClipPathFromContextMenu()) return;
+    this.chromeApply.releaseClipPathFromLayersPanel(id);
+  }
+
   onMoveForward(layerId: string): void {
     this.chromeApply.moveLayerForward(layerId);
   }
@@ -277,9 +292,11 @@ export class LayersPanelComponent {
     const additive = Boolean(event?.shiftKey || event?.ctrlKey || event?.metaKey);
     const tree = this.svg.getLayerTree();
     const node = this.findNodeInTree(tree, layerId);
-    const isGroup = node?.type === 'g' && Array.isArray(node.children);
+    const kind = node?.kind ?? (node ? this.inferLayerRowKind(node) : 'shape');
+    const isUserGroup = kind === 'group' && Array.isArray(node?.children);
+    const isClipMask = kind === 'clipMask' && Array.isArray(node?.children);
 
-    if (isGroup) {
+    if (isUserGroup) {
       const leafIds = this.collectLeafIds(node!.children!);
       const leafShapes = leafIds
         .map((id) => svgInstance.findOne(`#${id}`) as SvgJsElement | null)
@@ -290,6 +307,19 @@ export class LayersPanelComponent {
         this.shapeSelection.toggleShapeGroupInSelection(leafShapes);
       } else {
         this.shapeSelection.selectShapes(leafShapes);
+      }
+    } else if (isClipMask) {
+      const firstChildId = node!.children!.find((c) => c.kind === 'shape')?.id;
+      const firstChild = firstChildId
+        ? (svgInstance.findOne(`#${firstChildId}`) as SvgJsElement | null)
+        : null;
+      if (!firstChild) return;
+      const expanded = this.svg.getShapePropertiesInSameClipGroup(firstChild);
+      if (expanded.length === 0) return;
+      if (additive) {
+        this.shapeSelection.toggleShapeGroupInSelection(expanded);
+      } else {
+        this.shapeSelection.selectShapes(expanded);
       }
     } else {
       const expanded = this.svg.getShapePropertiesInSameClipGroup(shape);
@@ -328,7 +358,8 @@ export class LayersPanelComponent {
     const reversed = [...nodes].reverse();
 
     for (const node of reversed) {
-      const isGroup = node.type === 'g' && Array.isArray(node.children);
+      const kind = node.kind ?? this.inferLayerRowKind(node);
+      const isGroup = isLayerBranchKind(kind) && Array.isArray(node.children);
       const isExpanded = isGroup && !collapsed.has(node.id);
       const directlySelected = selectedIds.has(node.id);
       const selected = directlySelected || ancestorSelected;
@@ -336,6 +367,7 @@ export class LayersPanelComponent {
       result.push({
         id: node.id,
         type: node.type,
+        kind,
         name: node.name,
         depth,
         isGroup,
@@ -370,7 +402,8 @@ export class LayersPanelComponent {
   private collectLeafIds(nodes: LayerTreeNode[]): string[] {
     const ids: string[] = [];
     for (const node of nodes) {
-      if (node.type === 'g' && node.children) {
+      const kind = node.kind ?? this.inferLayerRowKind(node);
+      if (isLayerBranchKind(kind) && node.children) {
         ids.push(...this.collectLeafIds(node.children));
       } else {
         ids.push(node.id);
@@ -402,7 +435,10 @@ export class LayersPanelComponent {
   }
 
   private createPreviewDataUrl(layer: PreviewPaintData): string {
-    const normalizedMarkup = this.applyPreviewStyleOverrides(layer);
+    const sourceMarkup = layer.previewMarkup ?? layer.elementMarkup;
+    const normalizedMarkup = layer.previewMarkup
+      ? sourceMarkup
+      : this.applyPreviewStyleOverrides({ ...layer, elementMarkup: sourceMarkup });
     const viewBox = this.computePreviewViewBox(normalizedMarkup);
     const svg = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="${viewBox}" width="32" height="24" preserveAspectRatio="xMidYMid meet">${normalizedMarkup}</svg>`;
     return `data:image/svg+xml,${encodeURIComponent(svg)}`;
@@ -450,7 +486,7 @@ export class LayersPanelComponent {
         'image/svg+xml'
       );
       const svgEl = doc.querySelector('svg');
-      const shape = doc.querySelector('*:not(svg)');
+      const shape = this.findPreviewBBoxElement(doc);
       if (!svgEl || !shape) return defaultViewBox;
 
       host.appendChild(document.importNode(svgEl, true));
@@ -485,5 +521,21 @@ export class LayersPanelComponent {
     } finally {
       host.remove();
     }
+  }
+
+  private findPreviewBBoxElement(doc: Document): Element | null {
+    const skip = new Set(['svg', 'defs', 'clippath', 'mask', 'title', 'desc', 'metadata', 'style']);
+    const candidates = Array.from(doc.querySelectorAll('*')).filter((el) => {
+      const tag = el.tagName?.toLowerCase() ?? '';
+      return !skip.has(tag);
+    });
+    return candidates[0] ?? null;
+  }
+
+  private inferLayerRowKind(node: LayerTreeNode): LayerTreeNode['kind'] {
+    if (node.type === 'clip') return 'clipMask';
+    if (node.type === 'mask' && node.children) return 'mask';
+    if (node.type === 'g' && node.children) return 'group';
+    return 'shape';
   }
 }

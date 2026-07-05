@@ -50,4 +50,6 @@ export interface SvgClipPathPort {
   resolveClipCarrierForShapeId(shapeId: string): Element | null;
   canMakeClipPath(shapeIds: string[]): boolean;
   canReleaseClipPath(shapeIds: string[]): boolean;
+  /** All shape ids that must translate together for a clip-path group (content + clip geometry). */
+  getClipPathTransformMemberIds(seedShapeId: string): string[] | null;
 }

@@ -37,7 +37,8 @@ import type { ResizeHandle } from '../utils/selection-resize';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 
 export type { CreatableShapeType, InsertRasterImageAttrs, ShapeCreationAttrs } from './svg-shape-content.port';
-export type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
+export type { LayerStackItem, LayerTreeNode, LayerRowKind } from './svg-layer-structure.port';
+export { isLayerBranchKind } from './svg-layer-structure.port';
 
 @Injectable({
   providedIn: 'root'
@@ -671,5 +672,41 @@ export class SvgManipulationService
 
   canReleaseClipPath(shapeIds: string[]): boolean {
     return this.clipPaths.canReleaseClipPath(shapeIds);
+  }
+
+  getClipPathTransformMemberIds(seedShapeId: string): string[] | null {
+    return this.clipPaths.getClipPathTransformMemberIds(seedShapeId);
+  }
+
+  /**
+   * Expand selection for drag/transform so clip-path content and clip geometry move together.
+   */
+  expandSelectionForClipPathTransform(selectedIds: string[]): string[] {
+    if (selectedIds.length === 0) return [];
+    const expanded = new Set<string>();
+    for (const id of selectedIds) {
+      const members = this.clipPaths.getClipPathTransformMemberIds(id);
+      if (members) {
+        for (const memberId of members) expanded.add(memberId);
+      } else {
+        expanded.add(id);
+      }
+    }
+    const shapes = [...expanded]
+      .map((id) => this.doc.getSVGInstance()?.findOne(`#${id}`) as SvgJsElement | undefined)
+      .filter((el): el is SvgJsElement => el != null)
+      .map((el) => this.getShapeProperties(el));
+    for (const props of this.shapes.expandSelectionByClipGroups(shapes)) {
+      expanded.add(props.id);
+      const members = this.clipPaths.getClipPathTransformMemberIds(props.id);
+      if (members) {
+        for (const memberId of members) expanded.add(memberId);
+      }
+    }
+    const all = [...expanded];
+    const inContentOrder = this.getShapeIdsInDomOrder(all);
+    const contentSet = new Set(inContentOrder);
+    const defsMembers = all.filter((id) => !contentSet.has(id));
+    return [...inContentOrder, ...defsMembers];
   }
 }

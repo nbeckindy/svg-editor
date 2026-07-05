@@ -48,7 +48,22 @@ describe('SvgClipPathService', () => {
 
     const carrier = svg.findOne(`#${result!.carrierGroupId}`)!.node as Element;
     expect(carrier.getAttribute('clip-path')).toContain(`url(#${result!.clipPathDefId})`);
+    expect(carrier.getAttribute('data-name')).toBe('front');
     expect(carrier.querySelector('#back')).not.toBeNull();
+  });
+
+  it('sets carrier data-name from clip shape data-name when present', () => {
+    const svgContent = `<svg viewBox="0 0 100 100">
+      <rect id="back" x="0" y="0" width="40" height="40" fill="red"/>
+      <circle id="front" cx="20" cy="20" r="15" data-name="Star mask"/>
+    </svg>`;
+    doc.initializeSVG(container, svgContent);
+
+    const result = clipPaths.makeClipPathFromSelection(['back'], 'front');
+    expect(result).not.toBeNull();
+
+    const carrier = doc.getSVGInstance()!.findOne(`#${result!.carrierGroupId}`)!.node as Element;
+    expect(carrier.getAttribute('data-name')).toBe('Star mask');
   });
 
   it('undoMakeClipPath restores clip shape and content placement', () => {
@@ -150,5 +165,17 @@ describe('SvgClipPathService', () => {
     expect(made).not.toBeNull();
     expect(clipPaths.canReleaseClipPath(['back'])).toBe(true);
     expect(clipPaths.canReleaseClipPath([made!.clipGeometryId])).toBe(true);
+  });
+
+  it('getClipPathTransformMemberIds returns clip geometry and all carrier children', () => {
+    initTwoRects('back', 'front');
+    const made = clipPaths.makeClipPathFromSelection(['back'], 'front');
+    expect(made).not.toBeNull();
+
+    const fromContent = clipPaths.getClipPathTransformMemberIds('back');
+    expect(fromContent).toEqual([made!.clipGeometryId, 'back']);
+
+    const fromGeom = clipPaths.getClipPathTransformMemberIds(made!.clipGeometryId);
+    expect(fromGeom).toEqual([made!.clipGeometryId, 'back']);
   });
 });

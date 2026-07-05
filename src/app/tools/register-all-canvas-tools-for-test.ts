@@ -43,6 +43,7 @@ export interface CanvasToolsTestHostState {
   isShapeSelected: (id: string) => boolean;
   getNearestGroupAncestorId: (id: string) => string | null;
   getSelectedShapeIds: () => string[];
+  getExpandedDragShapeIds: () => string[];
   tryStartPathNodeDrag: (target: Element, event: MouseEvent) => boolean;
   beginPanSession: (event: MouseEvent) => void;
   applyPanDragFromEvent: (event: MouseEvent) => void;
@@ -115,6 +116,7 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     isShapeSelected: () => true,
     getNearestGroupAncestorId: () => null,
     getSelectedShapeIds: () => ['a'],
+    getExpandedDragShapeIds: () => ['a'],
     tryStartPathNodeDrag: () => false,
     beginPanSession: vi.fn(),
     applyPanDragFromEvent: vi.fn(),
@@ -256,6 +258,7 @@ export function registerAllCanvasToolsForTest(
     isShapeSelected: hostState.isShapeSelected,
     getNearestGroupAncestorId: hostState.getNearestGroupAncestorId,
     getSelectedShapeIds: hostState.getSelectedShapeIds,
+    getExpandedDragShapeIds: hostState.getExpandedDragShapeIds,
     isSelectionMarquee: () => hostState.isSelectionMarquee,
     isResizingSelection: () => hostState.isResizingSelection,
     isSkewingSelection: () => hostState.isSkewingSelection,

@@ -57,4 +57,5 @@ export interface LayersPanelSvgPort extends LayerReorderGroupSvgPort {
   getLayerTree(): LayerTreeNode[];
   getShapeProperties(element: SvgJsElement): ShapeProperties;
   getShapePropertiesInSameClipGroup(shape: SvgJsElement): ShapeProperties[];
+  canReleaseClipPath(shapeIds: string[]): boolean;
 }

@@ -38,6 +38,7 @@ function makeSelectorDeps(over: Partial<SelectorCanvasToolDeps> = {}): () => Sel
     isShapeSelected: () => true,
     getNearestGroupAncestorId: () => null,
     getSelectedShapeIds: () => ['a'],
+    getExpandedDragShapeIds: () => ['a'],
     isSelectionMarquee: () => false,
     isResizingSelection: () => false,
     isSkewingSelection: () => false,
