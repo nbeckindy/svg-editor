@@ -101,7 +101,23 @@
           <img class="layer-preview" [src]="layer.previewUrl" [alt]="layer.type + ' preview'" />
 
           <div class="layer-meta">
-            <div class="layer-name">{{ layer.name }}</div>
+            @if (editingLayerId() === layer.id) {
+              <input
+                #layerNameInput
+                class="layer-name-input"
+                type="text"
+                [value]="editingDraftName()"
+                [attr.aria-label]="'Rename layer, ' + layer.name"
+                [attr.data-testid]="'layer-name-input-' + layer.id"
+                (input)="onLayerNameInput($event)"
+                (keydown)="onLayerNameKeydown($event, layer)"
+                (blur)="commitLayerRename(layer)"
+                (click)="$event.stopPropagation()" />
+            } @else {
+              <div
+                class="layer-name"
+                (dblclick)="startLayerRename(layer, $event)">{{ layer.name }}</div>
+            }
             <div class="layer-type">{{ layer.type }}</div>
           </div>
         </div>
@@ -123,6 +139,13 @@
     #contextMenuTrigger="matMenuTrigger"></button>
 
   <mat-menu #layerContextMenu="matMenu" class="layer-context-menu-panel">
+    <button
+      mat-menu-item
+      type="button"
+      data-testid="layer-context-menu-rename"
+      (click)="onContextMenuRename()">
+      Rename
+    </button>
     <button
       mat-menu-item
       type="button"

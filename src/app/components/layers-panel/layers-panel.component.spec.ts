@@ -15,7 +15,8 @@ import {
   UngroupElementsCommand,
   ReparentElementsCommand,
   ReleaseClipPathCommand,
-  ReorderBeforeSiblingCommand
+  ReorderBeforeSiblingCommand,
+  RenameElementCommand
 } from '../../models/editor-commands';
 
 describe('LayersPanelComponent', () => {
@@ -30,6 +31,8 @@ describe('LayersPanelComponent', () => {
   let getShapeProperties: ReturnType<typeof vi.fn>;
   let getShapePropertiesInSameClipGroup: ReturnType<typeof vi.fn>;
   let canReleaseClipPath: ReturnType<typeof vi.fn>;
+  let getElementDataName: ReturnType<typeof vi.fn>;
+  let resolveLayerDisplayName: ReturnType<typeof vi.fn>;
   let pushAndExecute: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -42,6 +45,8 @@ describe('LayersPanelComponent', () => {
     getShapeProperties = vi.fn((el: any) => ({ id: el.id(), type: el.type }));
     getShapePropertiesInSameClipGroup = vi.fn(() => []);
     canReleaseClipPath = vi.fn().mockReturnValue(false);
+    getElementDataName = vi.fn().mockReturnValue(null);
+    resolveLayerDisplayName = vi.fn((_id: string) => 'rect-1');
     getSVGInstance = vi.fn(() => ({ findOne: vi.fn() }));
     pushAndExecute = vi.fn();
 
@@ -63,6 +68,8 @@ describe('LayersPanelComponent', () => {
               (id: string) => id.startsWith('g') || id.includes('group')
             ),
             isGroupClipMaskCarrier: vi.fn().mockReturnValue(false),
+            getElementDataName,
+            resolveLayerDisplayName,
             setLayerLocked: vi.fn(),
             moveElementBeforeNextSibling: vi.fn().mockReturnValue(true)
           }
@@ -1117,5 +1124,184 @@ describe('LayersPanelComponent', () => {
 
     expect(pushAndExecute).toHaveBeenCalledTimes(1);
     expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReleaseClipPathCommand);
+  });
+
+  describe('inline layer rename', () => {
+    const rectLayer = {
+      id: 'rect-1',
+      type: 'rect',
+      kind: 'shape' as const,
+      name: 'rect-1',
+      visible: true,
+      locked: false,
+      elementMarkup: '<rect id="rect-1" />'
+    };
+
+    it('double-click layer name shows inline input prefilled with display name', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      const nameEl = (fixture.nativeElement as HTMLElement).querySelector('.layer-name') as HTMLElement;
+      nameEl.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      expect(input).toBeTruthy();
+      expect(input.value).toBe('rect-1');
+    });
+
+    it('context menu rename opens inline input', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.contextMenuLayerId.set('rect-1');
+      fixture.componentInstance.onContextMenuRename();
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="layer-name-input-rect-1"]')
+      ).toBeTruthy();
+    });
+
+    it('blur with changed text dispatches RenameElementCommand', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      getElementDataName.mockReturnValue(null);
+      resolveLayerDisplayName.mockReturnValue('rect-1');
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.startLayerRename({
+        ...rectLayer,
+        depth: 0,
+        isGroup: false,
+        isExpanded: true,
+        selected: false,
+        previewUrl: ''
+      });
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      input.value = 'Renamed layer';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+      fixture.detectChanges();
+
+      expect(pushAndExecute).toHaveBeenCalledTimes(1);
+      expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(RenameElementCommand);
+    });
+
+    it('Escape hides input without dispatching a command', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.startLayerRename({
+        ...rectLayer,
+        depth: 0,
+        isGroup: false,
+        isExpanded: true,
+        selected: false,
+        previewUrl: ''
+      });
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="layer-name-input-rect-1"]')
+      ).toBeFalsy();
+      expect(pushAndExecute).not.toHaveBeenCalled();
+    });
+
+    it('commit with unchanged display fallback does not dispatch', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      getElementDataName.mockReturnValue(null);
+      resolveLayerDisplayName.mockReturnValue('rect-1');
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.startLayerRename({
+        ...rectLayer,
+        depth: 0,
+        isGroup: false,
+        isExpanded: true,
+        selected: false,
+        previewUrl: ''
+      });
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      expect(pushAndExecute).not.toHaveBeenCalled();
+    });
+
+    it('Enter commits once without blur double-dispatch', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      getElementDataName.mockReturnValue(null);
+      resolveLayerDisplayName.mockReturnValue('rect-1');
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.startLayerRename({
+        ...rectLayer,
+        depth: 0,
+        isGroup: false,
+        isExpanded: true,
+        selected: false,
+        previewUrl: ''
+      });
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      input.value = 'New label';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+      fixture.detectChanges();
+
+      expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    });
+
+    it('clip mask row prefills fallback source id label', () => {
+      getLayerTree.mockReturnValue([
+        {
+          id: 'clip-carrier',
+          type: 'clip',
+          kind: 'clipMask' as const,
+          name: 'mask-rect',
+          visible: true,
+          locked: false,
+          elementMarkup: '<g id="clip-carrier" clip-path="url(#cp)"/>',
+          children: []
+        }
+      ]);
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      const nameEl = (fixture.nativeElement as HTMLElement).querySelector('.layer-name') as HTMLElement;
+      nameEl.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-clip-carrier"]'
+      ) as HTMLInputElement;
+      expect(input.value).toBe('mask-rect');
+    });
   });
 });

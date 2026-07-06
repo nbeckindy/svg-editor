@@ -105,6 +105,25 @@ export function buildReorderToExtremeCommand(
   );
 }
 
+export class RenameElementCommand implements EditorCommand {
+  readonly description = 'Rename layer';
+
+  constructor(
+    private readonly svc: LayerReorderGroupSvgPort,
+    private readonly elementId: string,
+    private readonly oldDataName: string | null,
+    private readonly newDataName: string | null
+  ) {}
+
+  execute(): void {
+    this.svc.setElementDataName(this.elementId, this.newDataName);
+  }
+
+  undo(): void {
+    this.svc.setElementDataName(this.elementId, this.oldDataName);
+  }
+}
+
 export class ToggleVisibilityCommand implements EditorCommand {
   readonly description = 'Toggle visibility';
 

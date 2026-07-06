@@ -6,6 +6,7 @@ import {
   buildReorderToExtremeCommand,
   ToggleVisibilityCommand,
   ToggleLayerLockCommand,
+  RenameElementCommand,
   ReorderBeforeSiblingCommand,
   GroupCommand,
   UngroupCommand,
@@ -15,6 +16,7 @@ import {
   type ReparentElementsMode
 } from '../../models/editor-commands';
 import type { LayerReorderGroupSvgPort } from '../../history/layers-panel-svg.port';
+import type { LayerRowKind } from '../svg-layer-structure.port';
 import type { ClipPathSvgPort } from '../../history/clip-path-svg.port';
 import type { PropertiesPanelSvgPort } from '../../history/properties-panel-svg.port';
 import type { ChromeEditorApplySvgPort } from '../../history/chrome-editor-apply-svg.port';
@@ -41,6 +43,22 @@ export class ChromeEditorLayersApplyService {
 
   toggleLayerLock(layerId: string): void {
     this.editorHistory.pushAndExecute(new ToggleLayerLockCommand(this.layerSvg, layerId));
+  }
+
+  renameLayer(layerId: string, kind: LayerRowKind, newName: string): void {
+    const trimmed = newName.trim();
+    const newDataName = trimmed.length > 0 ? trimmed : null;
+    const oldDataName = this.layerSvg.getElementDataName(layerId);
+    if (newDataName === oldDataName) return;
+    if (
+      oldDataName === null &&
+      newDataName === this.layerSvg.resolveLayerDisplayName(layerId, kind)
+    ) {
+      return;
+    }
+    this.editorHistory.pushAndExecute(
+      new RenameElementCommand(this.layerSvg, layerId, oldDataName, newDataName)
+    );
   }
 
   moveLayerBeforeSibling(draggedLayerId: string, referenceNextSiblingId: string | null): void {

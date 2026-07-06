@@ -6,6 +6,7 @@ import { ChromeEditorApplySupport } from './chrome-apply/chrome-editor-apply-sup
 import { ChromeEditorPaintApplyService } from './chrome-apply/chrome-editor-paint-apply.service';
 import { ChromeEditorTransformApplyService } from './chrome-apply/chrome-editor-transform-apply.service';
 import { ChromeEditorLayersApplyService } from './chrome-apply/chrome-editor-layers-apply.service';
+import type { LayerRowKind } from './svg-layer-structure.port';
 import { ChromeEditorPathOpsApplyService } from './chrome-apply/chrome-editor-path-ops-apply.service';
 import type { PaintSwatchMode, PaintSwatchTarget } from '../components/paint-swatch-popover/paint-swatch-popover.component';
 
@@ -105,6 +106,9 @@ export class ChromeEditorApplyService {
 
   toggleLayerVisibility(layerId: string) { return this.layers.toggleLayerVisibility(layerId); }
   toggleLayerLock(layerId: string) { return this.layers.toggleLayerLock(layerId); }
+  renameLayer(layerId: string, kind: LayerRowKind, newName: string) {
+    return this.layers.renameLayer(layerId, kind, newName);
+  }
   moveLayerBeforeSibling(draggedLayerId: string, referenceNextSiblingId: string | null) {
     return this.layers.moveLayerBeforeSibling(draggedLayerId, referenceNextSiblingId);
   }

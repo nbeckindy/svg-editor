@@ -1624,6 +1624,45 @@ describe('SvgManipulationService', () => {
       service.initializeSVG(container, svgContent);
       expect(service.getElementName('r1')).toBe('r1');
     });
+
+    it('removes data-name when rename receives empty string', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10" data-name="Named"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.renameElement('r1', '   ');
+      expect(service.getElementDataName('r1')).toBeNull();
+      expect(service.getElementName('r1')).toBe('r1');
+    });
+  });
+
+  describe('layer display name port helpers', () => {
+    it('resolveLayerDisplayName matches clip carrier tree fallback', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <clipPath id="cp">
+            <rect id="clip-geom" data-editor-clip-source-id="mask-rect" x="0" y="0" width="40" height="40"/>
+          </clipPath>
+        </defs>
+        <g id="clip-carrier" clip-path="url(#cp)">
+          <rect id="inner" x="10" y="10" width="80" height="80" fill="red"/>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.resolveLayerDisplayName('clip-carrier', 'clipMask')).toBe('mask-rect');
+      expect(service.getElementDataName('clip-carrier')).toBeNull();
+    });
+
+    it('setElementDataName round-trips through getElementDataName', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.setElementDataName('r1', 'Custom');
+      expect(service.getElementDataName('r1')).toBe('Custom');
+      service.setElementDataName('r1', null);
+      expect(service.getElementDataName('r1')).toBeNull();
+    });
   });
 
   describe('stroke dash array', () => {

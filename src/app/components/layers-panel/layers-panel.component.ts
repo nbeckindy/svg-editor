@@ -1,6 +1,6 @@
 import { CdkDragDrop, CdkDragMove, DragDropModule } from '@angular/cdk/drag-drop';
 import { CommonModule } from '@angular/common';
-import { Component, computed, ElementRef, inject, Injector, signal, viewChild } from '@angular/core';
+import { Component, computed, ElementRef, inject, Injector, signal, viewChild, afterNextRender, effect } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenu, MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { openEditorContextMenuAtPointer } from '../editor-context-menu/open-editor-context-menu';
@@ -80,6 +80,11 @@ export class LayersPanelComponent {
   } | null>(null);
   readonly pendingDropIntent = signal<LayerDropIntent | null>(null);
 
+  readonly editingLayerId = signal<string | null>(null);
+  readonly editingDraftName = signal('');
+
+  readonly layerNameInput = viewChild<ElementRef<HTMLInputElement>>('layerNameInput');
+
   readonly selectionCount = computed(() => this.shapeSelection.selectedShapes().length);
 
   readonly canUngroup = computed(() => {
@@ -126,6 +131,17 @@ export class LayersPanelComponent {
     return this.flattenTree(tree, 0, collapsed, selectedIds, false);
   });
 
+  private readonly cancelRenameIfRowMissing = effect(() => {
+    this.svg.documentRevision();
+    const editingId = this.editingLayerId();
+    if (!editingId) return;
+    const exists = this.flattenedLayers().some((layer) => layer.id === editingId);
+    if (!exists) {
+      this.editingLayerId.set(null);
+      this.editingDraftName.set('');
+    }
+  });
+
   toggleGroupExpanded(groupId: string): void {
     this.collapsedGroups.update((prev) => {
       const next = new Set(prev);
@@ -144,6 +160,55 @@ export class LayersPanelComponent {
 
   onLockToggle(layerId: string): void {
     this.chromeApply.toggleLayerLock(layerId);
+  }
+
+  startLayerRename(layer: LayerTreeViewModel, event?: Event): void {
+    event?.stopPropagation();
+    this.editingLayerId.set(layer.id);
+    this.editingDraftName.set(layer.name);
+    afterNextRender(
+      () => {
+        const input = this.layerNameInput()?.nativeElement;
+        if (!input) return;
+        input.focus();
+        input.select();
+      },
+      { injector: this.injector }
+    );
+  }
+
+  commitLayerRename(layer: LayerTreeViewModel): void {
+    if (this.editingLayerId() !== layer.id) return;
+    this.chromeApply.renameLayer(layer.id, layer.kind, this.editingDraftName());
+    this.editingLayerId.set(null);
+    this.editingDraftName.set('');
+  }
+
+  cancelLayerRename(): void {
+    this.editingLayerId.set(null);
+    this.editingDraftName.set('');
+  }
+
+  onLayerNameInput(event: Event): void {
+    this.editingDraftName.set((event.target as HTMLInputElement).value);
+  }
+
+  onLayerNameKeydown(event: KeyboardEvent, layer: LayerTreeViewModel): void {
+    if (event.key === 'Enter') {
+      event.preventDefault();
+      this.commitLayerRename(layer);
+    } else if (event.key === 'Escape') {
+      event.preventDefault();
+      this.cancelLayerRename();
+    }
+  }
+
+  onContextMenuRename(): void {
+    const id = this.contextMenuLayerId();
+    if (!id) return;
+    const layer = this.flattenedLayers().find((row) => row.id === id);
+    if (!layer) return;
+    this.startLayerRename(layer);
   }
 
   isLayerDragDisabled(layer: LayerTreeViewModel): boolean {

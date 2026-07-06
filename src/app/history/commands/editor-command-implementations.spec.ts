@@ -21,6 +21,7 @@ import {
   buildReorderToExtremeCommand,
   ToggleVisibilityCommand,
   ToggleLayerLockCommand,
+  RenameElementCommand,
   ReorderBeforeSiblingCommand,
   GroupCommand,
   UngroupCommand,
@@ -68,6 +69,9 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     moveElementToBack: vi.fn(),
     restoreElementSiblingOrder: vi.fn(),
     toggleLayerVisibility: vi.fn(),
+    getElementDataName: vi.fn().mockReturnValue(null),
+    setElementDataName: vi.fn(),
+    resolveLayerDisplayName: vi.fn().mockReturnValue('layer'),
     moveElementBeforeNextSibling: vi.fn(),
     isElementDirectLocked: vi.fn().mockReturnValue(false),
     isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
@@ -1010,6 +1014,26 @@ describe('ToggleVisibilityCommand', () => {
 
   it('should have description "Toggle visibility"', () => {
     expect(new ToggleVisibilityCommand(mockSvc(), 'l1').description).toBe('Toggle visibility');
+  });
+});
+
+describe('RenameElementCommand', () => {
+  it('sets new data-name on execute', () => {
+    const svc = mockSvc({ setElementDataName: vi.fn() });
+    const cmd = new RenameElementCommand(svc, 'layer1', null, 'New name');
+    cmd.execute();
+    expect(svc.setElementDataName).toHaveBeenCalledWith('layer1', 'New name');
+  });
+
+  it('restores old data-name on undo, including removal', () => {
+    const svc = mockSvc({ setElementDataName: vi.fn() });
+    const cmd = new RenameElementCommand(svc, 'clip-carrier', null, 'Custom');
+    cmd.undo();
+    expect(svc.setElementDataName).toHaveBeenCalledWith('clip-carrier', null);
+  });
+
+  it('should have description "Rename layer"', () => {
+    expect(new RenameElementCommand(mockSvc(), 'l1', null, 'x').description).toBe('Rename layer');
   });
 });
 

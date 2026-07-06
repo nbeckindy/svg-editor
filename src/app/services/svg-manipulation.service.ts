@@ -9,7 +9,7 @@ import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgGradientDefsService } from './svg-gradient-defs.service';
 import { SvgLayerStructureService } from './svg-layer-structure.service';
 import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
-import type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
+import type { LayerStackItem, LayerTreeNode, LayerRowKind } from './svg-layer-structure.port';
 import { SvgShapeContentService } from './svg-shape-content.service';
 import { SvgClipPathService } from './svg-clip-path.service';
 import type { ClipPathSvgPort } from '../history/clip-path-svg.port';
@@ -38,7 +38,6 @@ import type { AxisAlignedRect } from '../utils/marquee-selection';
 
 export type { CreatableShapeType, InsertRasterImageAttrs, ShapeCreationAttrs } from './svg-shape-content.port';
 export type { LayerStackItem, LayerTreeNode, LayerRowKind } from './svg-layer-structure.port';
-export { isLayerBranchKind } from './svg-layer-structure.port';
 
 @Injectable({
   providedIn: 'root'
@@ -540,6 +539,18 @@ export class SvgManipulationService
 
   renameElement(elementId: string, newName: string): void {
     this.layers.renameElement(elementId, newName);
+  }
+
+  getElementDataName(elementId: string): string | null {
+    return this.layers.getElementDataName(elementId);
+  }
+
+  setElementDataName(elementId: string, value: string | null): void {
+    this.layers.setElementDataName(elementId, value);
+  }
+
+  resolveLayerDisplayName(elementId: string, kind: LayerRowKind): string {
+    return this.layers.resolveLayerDisplayName(elementId, kind);
   }
 
   getElementName(elementId: string): string {

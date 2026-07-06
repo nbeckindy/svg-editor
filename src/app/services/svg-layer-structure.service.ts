@@ -259,12 +259,31 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
   }
 
   renameElement(elementId: string, newName: string): void {
+    const trimmed = newName.trim();
+    this.setElementDataName(elementId, trimmed.length > 0 ? trimmed : null);
+  }
+
+  getElementDataName(elementId: string): string | null {
+    if (!this.doc.getSVGInstance()) return null;
+    const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return null;
+    const name = el.attr('data-name') as string | null | undefined;
+    return name?.length ? name : null;
+  }
+
+  setElementDataName(elementId: string, value: string | null): void {
     if (!this.doc.getSVGInstance()) return;
     const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (el) {
-      el.attr('data-name', newName);
-      this.doc.bumpDocumentRevision();
-    }
+    if (!el) return;
+    el.attr('data-name', value?.length ? value : null);
+    this.doc.bumpDocumentRevision();
+  }
+
+  resolveLayerDisplayName(elementId: string, kind: LayerRowKind): string {
+    if (!this.doc.getSVGInstance()) return elementId;
+    const node = this.doc.getSVGInstance()!.findOne(`#${elementId}`)?.node as Element | undefined;
+    if (!node) return elementId;
+    return this.resolveLayerDisplayNameFromElement(node, kind);
   }
 
   getElementName(elementId: string): string {
@@ -510,11 +529,7 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
             ? 'group'
             : 'shape';
       const displayType = isClipMaskCarrier ? 'clip' : isMaskCarrier ? 'mask' : tagName;
-      const name = isClipMaskCarrier
-        ? this.resolveClipMaskCarrierName(child)
-        : isMaskCarrier
-          ? child.getAttribute('data-name') || id || 'Mask'
-          : child.getAttribute('data-name') || id || tagName;
+      const name = this.resolveLayerDisplayNameFromElement(child, kind);
       const visible = !isSvgEditorNodeHidden(child);
       const locked = child.getAttribute(EDITOR_LAYER_LOCKED_ATTR) === 'true';
       const elementMarkup = child.outerHTML;
@@ -728,15 +743,24 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
     return id.replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
   }
 
-  /** Layer name for clip-path carriers: data-name → clip source shape id → carrier id. */
-  private resolveClipMaskCarrierName(carrier: Element): string {
-    const dataName = carrier.getAttribute('data-name');
+  /** Layer row label: data-name when set, else kind-specific fallbacks (matches rename no-op rules). */
+  private resolveLayerDisplayNameFromElement(el: Element, kind: LayerRowKind): string {
+    const dataName = el.getAttribute('data-name');
     if (dataName) return dataName;
 
-    const sourceShapeId = this.resolveClipSourceShapeIdFromCarrier(carrier);
-    if (sourceShapeId) return sourceShapeId;
+    const id = el.id || '';
+    const tagName = el.tagName?.toLowerCase?.() || '';
 
-    return carrier.id || 'clip';
+    switch (kind) {
+      case 'clipMask': {
+        const sourceShapeId = this.resolveClipSourceShapeIdFromCarrier(el);
+        return sourceShapeId ?? (id || 'clip');
+      }
+      case 'mask':
+        return id || 'Mask';
+      default:
+        return id || tagName;
+    }
   }
 
   private resolveClipSourceShapeIdFromCarrier(carrier: Element): string | null {

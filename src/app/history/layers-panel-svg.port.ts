@@ -1,7 +1,7 @@
 import type { Signal } from '@angular/core';
 import type { Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../models/shape-properties.interface';
-import type { LayerTreeNode, ElementParentSnapshot } from '../services/svg-layer-structure.port';
+import type { LayerRowKind, LayerTreeNode, ElementParentSnapshot } from '../services/svg-layer-structure.port';
 
 /**
  * Svg slice for layer reorder / visibility / group commands (`ReorderCommand`,
@@ -46,6 +46,9 @@ export interface LayerReorderGroupSvgPort {
   isGroupClipMaskCarrier(groupId: string): boolean;
   /** Undo for {@link ReorderCommand}: move `elementId` back to `oldIndex` among its parent's element children. */
   restoreElementSiblingOrder(elementId: string, oldIndex: number): void;
+  getElementDataName(elementId: string): string | null;
+  setElementDataName(elementId: string, value: string | null): void;
+  resolveLayerDisplayName(elementId: string, kind: LayerRowKind): string;
 }
 
 /**

@@ -311,6 +311,25 @@
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  cursor: text;
+}
+
+.layer-name-input {
+  font-size: 12px;
+  font-weight: 600;
+  color: #222;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  margin: 0;
+  border: none;
+  border-radius: 2px;
+  outline: 1px solid #4a90d9;
+  outline-offset: -1px;
+  background: #fff;
+  font-family: inherit;
+  line-height: inherit;
+  box-sizing: border-box;
 }
 
 .layer-type {
