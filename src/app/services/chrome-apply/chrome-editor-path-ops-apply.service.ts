@@ -10,6 +10,7 @@ import {
 } from '../../models/path-boolean';
 import { buildOutlineToPathMarkup } from '../../models/outline-to-path';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
+import type { LiveTreeMarkup } from '../../utils/svg-sanitize';
 
 const PATH_BOOLEAN_LABELS: Record<BooleanOp, string> = {
   union: 'Union shapes',
@@ -86,7 +87,8 @@ export class ChromeEditorPathOpsApplyService {
         new OutlineToPathCommand(
           this.shapeLifecycleSvg,
           shapeId,
-          pathMarkup,
+          // buildOutlineToPathMarkup produces editor-generated markup, safe to brand (ADR 0002).
+          pathMarkup as LiveTreeMarkup,
           insertionIndex,
           this.shapeSelection
         )
@@ -142,7 +144,8 @@ export class ChromeEditorPathOpsApplyService {
           this.shapeLifecycleSvg,
           built.operandIds,
           built.resultId,
-          built.resultMarkup,
+          // buildBooleanResultPathMarkup produces editor-generated markup, safe to brand (ADR 0002).
+          built.resultMarkup as LiveTreeMarkup,
           built.topmostOperandIndex,
           description,
           this.shapeSelection

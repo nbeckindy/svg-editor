@@ -19,6 +19,7 @@ import { SvgShapeRectService } from './shape-content/svg-shape-rect.service';
 import { SvgSelectionHitTestService } from './shape-content/svg-selection-hit-test.service';
 import { SvgClipboardService } from './shape-content/svg-clipboard.service';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
+import { LiveTreeMarkup } from '../utils/svg-sanitize';
 
 @Injectable({ providedIn: 'root' })
 export class SvgShapeContentService implements SvgShapeContentPort {
@@ -159,9 +160,13 @@ export class SvgShapeContentService implements SvgShapeContentPort {
 
   restoreRemovedShapesInContentGroup(
     shapeIds: string[],
-    serializedMarkup: ReadonlyMap<string, string>,
+    serializedMarkup: ReadonlyMap<string, LiveTreeMarkup>,
     insertionIndices: ReadonlyMap<string, number>
   ): void {
+    // Invariant (ADR 0002): serializedMarkup contains snapshots of live-DOM shapes
+    // that were already sanitized at ingest via insertShapeMarkup. Do NOT re-sanitize
+    // here — it would corrupt shapes on every undo cycle. Any path that writes raw
+    // markup directly into history (bypassing insertShapeMarkup) breaks this contract.
     if (!this.doc.getSVGInstance()) return;
     const contentGroup = this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
     const contentNode = contentGroup?.node as Element | undefined;
@@ -401,7 +406,7 @@ export class SvgShapeContentService implements SvgShapeContentPort {
    * Re-insert a serialized shape element (outerHTML) into the content group at the specified
    * DOM index. Used by redo of AddShapeCommand.
    */
-  insertShapeMarkup(markup: string, insertionIndex?: number): void {
+  insertShapeMarkup(markup: LiveTreeMarkup, insertionIndex?: number): void {
     if (!this.doc.getSVGInstance()) return;
     const contentGroup = this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`);
     if (!contentGroup?.node) return;
@@ -428,7 +433,7 @@ export class SvgShapeContentService implements SvgShapeContentPort {
   pasteClipboardPayload(
     payload: ClipboardPayload,
     offset: { dx: number; dy: number }
-  ): { insertedIds: string[]; insertedMarkup: string[] } {
+  ): { insertedIds: string[]; insertedMarkup: LiveTreeMarkup[] } {
     return this.clipboard.pasteClipboardPayload(payload, offset);
   }
 }

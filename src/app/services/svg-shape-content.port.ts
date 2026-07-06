@@ -3,6 +3,7 @@ import type { ShapeProperties } from '../models/shape-properties.interface';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 import type { ClipboardPayload } from '../models/clipboard-payload';
 import type { SvgShapePaintReadout } from './shape-content/svg-shape-paint.port';
+import type { LiveTreeMarkup } from '../utils/svg-sanitize';
 
 export type { SvgShapePaintReadout } from './shape-content/svg-shape-paint.port';
 
@@ -98,7 +99,7 @@ export interface SvgShapeContentPort {
   /** Re-insert shapes removed by {@link removeShapes} using captured outerHTML and content-group indices. */
   restoreRemovedShapesInContentGroup(
     shapeIds: string[],
-    serializedMarkup: ReadonlyMap<string, string>,
+    serializedMarkup: ReadonlyMap<string, LiveTreeMarkup>,
     insertionIndices: ReadonlyMap<string, number>
   ): void;
   translateShape(shapeId: string, dx: number, dy: number): void;
@@ -116,11 +117,11 @@ export interface SvgShapeContentPort {
     options?: { closedPath?: boolean }
   ): string | null;
   insertRasterImageIntoContentGroup(attrs: InsertRasterImageAttrs): string | null;
-  insertShapeMarkup(markup: string, insertionIndex?: number): void;
+  insertShapeMarkup(markup: LiveTreeMarkup, insertionIndex?: number): void;
 
   createClipboardPayload(shapeIds: string[]): ClipboardPayload;
   pasteClipboardPayload(
     payload: ClipboardPayload,
     offset: { dx: number; dy: number }
-  ): { insertedIds: string[]; insertedMarkup: string[] };
+  ): { insertedIds: string[]; insertedMarkup: LiveTreeMarkup[] };
 }

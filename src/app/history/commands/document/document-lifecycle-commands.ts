@@ -3,11 +3,12 @@ import type { ClipboardPayload } from '../../../models/clipboard-payload';
 import type { EditorCommand } from '../../../models/editor-command';
 import type { SelectionSyncPort } from '../../history-selection.port';
 import type { EditorShapeLifecycleSvgPort } from '../../editor-shape-lifecycle-svg.port';
+import type { LiveTreeMarkup } from '../../../utils/svg-sanitize';
 
 export class RemoveShapesCommand implements EditorCommand {
   readonly description = 'Remove shapes';
 
-  private readonly serializedMarkup: Map<string, string>;
+  private readonly serializedMarkup: Map<string, LiveTreeMarkup>;
   private readonly insertionIndices: Map<string, number>;
 
   constructor(
@@ -15,7 +16,7 @@ export class RemoveShapesCommand implements EditorCommand {
     private readonly shapeIds: string[],
     private readonly selectionSync?: SelectionSyncPort
   ) {
-    this.serializedMarkup = new Map();
+    this.serializedMarkup = new Map<string, LiveTreeMarkup>();
     this.insertionIndices = new Map();
 
     const svgInstance = this.svc.getSVGInstance();
@@ -26,7 +27,8 @@ export class RemoveShapesCommand implements EditorCommand {
     for (const id of this.shapeIds) {
       const shape = svgInstance.findOne(`#${id}`) as SvgJsElement | undefined;
       if (!shape?.node) continue;
-      this.serializedMarkup.set(id, (shape.node as Element).outerHTML);
+      // outerHTML comes from the Live tree, which was sanitized at ingest (ADR 0002).
+      this.serializedMarkup.set(id, (shape.node as Element).outerHTML as LiveTreeMarkup);
       if (contentNode) {
         const children = Array.from(contentNode.children);
         const idx = children.indexOf(shape.node as Element);
@@ -65,7 +67,7 @@ export class RemoveShapesCommand implements EditorCommand {
 export class PasteCommand implements EditorCommand {
   readonly description = 'Paste shapes';
   private insertedIds: string[] = [];
-  private insertedMarkup: string[] = [];
+  private insertedMarkup: LiveTreeMarkup[] = [];
 
   constructor(
     private readonly svc: EditorShapeLifecycleSvgPort,
@@ -108,7 +110,7 @@ export class DuplicateCommand implements EditorCommand {
   readonly description = 'Duplicate shapes';
   private readonly payload: ClipboardPayload;
   private insertedIds: string[] = [];
-  private insertedMarkup: string[] = [];
+  private insertedMarkup: LiveTreeMarkup[] = [];
 
   constructor(
     private readonly svc: EditorShapeLifecycleSvgPort,

@@ -35,6 +35,8 @@ import {
   GroupCommand,
   UngroupCommand,
   UngroupElementsCommand,
+  MakeClipPathCommand,
+  ReleaseClipPathCommand,
   AddShapeCommand,
   AddPathCommand,
   CompositeCommand,
@@ -254,6 +256,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     canDelete: false,
     canGroup: false,
     canUngroup: false,
+    canMakeClipPath: false,
+    canReleaseClipPath: false,
     canOutlineToPath: false,
     canRotate: false
   });
@@ -901,6 +905,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     return this.shapeSelection.getSelectedShapes().map((s) => s.id);
   }
 
+  getExpandedDragShapeIds(): string[] {
+    return this.svgManipulation.expandSelectionForClipPathTransform(this.getSelectedShapeIds());
+  }
+
   // --- Keyboard shortcuts (policy in `svg-canvas-keyboard.controller.ts`) ---
   onKeyDown(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
@@ -1265,6 +1273,59 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.drilledIntoGroupId = null;
   }
 
+  private resolveTopmostShapeId(ids: string[]): string | null {
+    const idSet = new Set(ids);
+    let topmost: string | null = null;
+    for (const item of this.svgManipulation.getLayerStackItems()) {
+      if (idSet.has(item.id)) topmost = item.id;
+    }
+    return topmost;
+  }
+
+  private makeClipPathFromSelection(): void {
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length < 2) return;
+    const ids = selected.map((s) => s.id);
+    if (this.selectionTouchesLocked(ids)) return;
+    const clipShapeId = this.resolveTopmostShapeId(ids);
+    if (!clipShapeId) return;
+    const contentIds = ids.filter((id) => id !== clipShapeId);
+    const cmd = new MakeClipPathCommand(this.svgManipulation, contentIds, clipShapeId);
+    this.editorHistory.pushAndExecute(cmd);
+    const svg = this.svgManipulation.getSVGInstance();
+    const clipGeomId = cmd.createdClipGeometryId;
+    if (clipGeomId && svg) {
+      const geomEl = svg.findOne(`#${clipGeomId}`) as SVGElement | undefined;
+      if (geomEl) {
+        this.shapeSelection.selectShapes([this.svgManipulation.getShapeProperties(geomEl)]);
+      }
+    }
+    this.drilledIntoGroupId = null;
+  }
+
+  private releaseClipPathFromSelection(): void {
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length === 0) return;
+    const ids = selected.map((s) => s.id);
+    if (this.selectionTouchesLocked(ids)) return;
+    const cmd = new ReleaseClipPathCommand(this.svgManipulation, ids);
+    this.editorHistory.pushAndExecute(cmd);
+    const svg = this.svgManipulation.getSVGInstance();
+    const releasedShapes: ShapeProperties[] = [];
+    for (const id of cmd.releasedChildIds) {
+      const el = svg?.findOne(`#${id}`) as SVGElement | undefined;
+      if (el) releasedShapes.push(this.svgManipulation.getShapeProperties(el));
+    }
+    if (cmd.restoredClipShapeId) {
+      const clipEl = svg?.findOne(`#${cmd.restoredClipShapeId}`) as SVGElement | undefined;
+      if (clipEl) releasedShapes.push(this.svgManipulation.getShapeProperties(clipEl));
+    }
+    if (releasedShapes.length > 0) {
+      this.shapeSelection.selectShapes(releasedShapes);
+    }
+    this.drilledIntoGroupId = null;
+  }
+
   private syncDrillAfterGroupStructureChange(payload: {
     movedElementIds: string[];
     targetGroupId?: string | null;
@@ -1369,8 +1430,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       getNearestGroupAncestorId: (id) => this.getNearestGroupAncestorId(id),
       isGroupAClipMaskCarrier: (groupId) => this.isGroupAClipMaskCarrier(groupId),
       getShapeProperties: (el) => this.svgManipulation.getShapeProperties(el),
-      getShapePropertiesInSameClipGroup: (el) =>
-        this.svgManipulation.getShapePropertiesInSameClipGroup(el),
+      getSelectorSelectionForShape: (el) => this.svgManipulation.getSelectorSelectionForShape(el),
       selectShapes: (shapes) => this.shapeSelection.selectShapes(shapes),
       getDrilledIntoGroupId: () => this.drilledIntoGroupId,
       setDrilledIntoGroupId: (id) => {
@@ -1412,7 +1472,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         hasClipboardContent: this.clipboard.hasContent(),
         isSelectorMode: this.editorTool.currentTool() === 'selector',
         isElementOrAncestorLocked: (id) => this.svgManipulation.isElementOrAncestorLocked(id),
-        getOutlineToPathElement: (id) => this.pathBooleanSelectionRead.getOutlineToPathElement(id)
+        getOutlineToPathElement: (id) => this.pathBooleanSelectionRead.getOutlineToPathElement(id),
+        canMakeClipPathForSelection: (ids) => this.svgManipulation.canMakeClipPath(ids),
+        canReleaseClipPathForSelection: (ids) => this.svgManipulation.canReleaseClipPath(ids)
       })
     );
 
@@ -1447,6 +1509,14 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   onContextMenuUngroup(): void {
     this.ungroupSelectedShape();
+  }
+
+  onContextMenuMakeClipPath(): void {
+    this.makeClipPathFromSelection();
+  }
+
+  onContextMenuReleaseClipPath(): void {
+    this.releaseClipPathFromSelection();
   }
 
   onContextMenuOutlineToPath(): void {
@@ -1554,6 +1624,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       isShapeSelected: (id) => this.isShapeSelected(id),
       getNearestGroupAncestorId: (id) => this.getNearestGroupAncestorId(id),
       getSelectedShapeIds: () => this.getSelectedShapeIds(),
+      getExpandedDragShapeIds: () => this.getExpandedDragShapeIds(),
       isSelectionMarquee: () => this.isSelectionMarquee,
       isResizingSelection: () => this.isResizingSelection,
       isSkewingSelection: () => this.isSkewingSelection,
@@ -1604,7 +1675,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       getSvgInstanceForClick: () => this.svgManipulation.getSVGInstance(),
       getShapePropertiesForClick: (el) => this.svgManipulation.getShapeProperties(el),
       getShapePropertiesInSameClipGroupForClick: (el) =>
-        this.svgManipulation.getShapePropertiesInSameClipGroup(el),
+        this.svgManipulation.getSelectorSelectionForShape(el),
       selectShapesForClick: (shapes) => this.shapeSelection.selectShapes(shapes),
       toggleShapeGroupInSelectionForClick: (shapes) =>
         this.shapeSelection.toggleShapeGroupInSelection(shapes),

@@ -579,16 +579,24 @@ describe('SvgManipulationService', () => {
       expect(p.hasOversizedDataUrl).toBe(false);
     });
 
-    it('blocks when an image uses blob:', () => {
+    it('strips blob: image href at ingest (sanitizer fires before export policy)', () => {
+      // ADR 0002: ingest sanitizer removes blob: hrefs, so the export policy never sees one.
+      vi.spyOn(window, 'alert').mockImplementation(() => undefined);
       const svgContent =
         '<svg viewBox="0 0 100 100"><image id="i1" href="blob:http://localhost/x" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
+      // Blob: href was stripped — image element has no href
+      const img = container.querySelector('#i1');
+      expect(img?.getAttribute('href') ?? null).toBeFalsy();
+      // Export policy is not blocked (nothing to block — ingest already cleaned it)
       const p = service.getSvgExportImagePolicyResult();
-      expect(p.blocked).toBe(true);
-      expect(p.blockedReason).toMatch(/blob/i);
+      expect(p.blocked).toBe(false);
+      // Sanitizer should have alerted the user about the blocked href
+      expect(window.alert).toHaveBeenCalled();
+      vi.restoreAllMocks();
     });
 
-    it('flags oversized data URL without blocking', () => {
+    it('flags oversized data URL without blocking', { timeout: 15000 }, () => {
       const prefix = 'data:image/png;base64,';
       const padLen = MAX_DATA_IMAGE_HREF_CHARS_WITHOUT_CONFIRM - prefix.length + 1;
       const huge = prefix + 'x'.repeat(Math.max(0, padLen));

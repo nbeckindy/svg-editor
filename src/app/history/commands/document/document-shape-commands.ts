@@ -2,6 +2,7 @@ import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { EditorCommand } from '../../../models/editor-command';
 import type { SelectionSyncPort } from '../../history-selection.port';
 import type { EditorShapeLifecycleSvgPort } from '../../editor-shape-lifecycle-svg.port';
+import type { LiveTreeMarkup } from '../../../utils/svg-sanitize';
 
 /**
  * Undoable shape creation. The shape is created before the command is pushed
@@ -11,7 +12,7 @@ import type { EditorShapeLifecycleSvgPort } from '../../editor-shape-lifecycle-s
 export class AddShapeCommand implements EditorCommand {
   readonly description: string;
 
-  private serializedMarkup: string | null = null;
+  private serializedMarkup: LiveTreeMarkup | null = null;
   private insertionIndex: number | null = null;
   private executed = false;
 
@@ -30,7 +31,8 @@ export class AddShapeCommand implements EditorCommand {
     if (!svgInstance) return;
     const shape = svgInstance.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
     if (!shape?.node) return;
-    this.serializedMarkup = (shape.node as Element).outerHTML;
+    // outerHTML comes from the Live tree, which was sanitized at ingest (ADR 0002).
+    this.serializedMarkup = (shape.node as Element).outerHTML as LiveTreeMarkup;
     const contentGroup = svgInstance.findOne('[data-editor-content-group]');
     if (contentGroup?.node) {
       const children = Array.from((contentGroup.node as Element).children);
@@ -68,7 +70,7 @@ export class AddShapeCommand implements EditorCommand {
 export class AddImageCommand implements EditorCommand {
   readonly description = 'Add image';
 
-  private serializedMarkup: string | null = null;
+  private serializedMarkup: LiveTreeMarkup | null = null;
   private insertionIndex: number | null = null;
   private executed = false;
 
@@ -86,7 +88,8 @@ export class AddImageCommand implements EditorCommand {
     if (!svgInstance) return;
     const shape = svgInstance.findOne(`#${this.shapeId}`) as SvgJsElement | undefined;
     if (!shape?.node) return;
-    this.serializedMarkup = (shape.node as Element).outerHTML;
+    // outerHTML comes from the Live tree, which was sanitized at ingest (ADR 0002).
+    this.serializedMarkup = (shape.node as Element).outerHTML as LiveTreeMarkup;
     const contentGroup = svgInstance.findOne('[data-editor-content-group]');
     if (contentGroup?.node) {
       const children = Array.from((contentGroup.node as Element).children);

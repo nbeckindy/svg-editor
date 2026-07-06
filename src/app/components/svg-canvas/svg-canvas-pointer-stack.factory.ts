@@ -70,6 +70,7 @@ export interface CreateSvgCanvasPointerStackArgs {
   isShapeSelected: SelectorCanvasToolDeps['isShapeSelected'];
   getNearestGroupAncestorId: SelectorCanvasToolDeps['getNearestGroupAncestorId'];
   getSelectedShapeIds: SelectorCanvasToolDeps['getSelectedShapeIds'];
+  getExpandedDragShapeIds: SelectorCanvasToolDeps['getExpandedDragShapeIds'];
   isSelectionMarquee: SelectorCanvasToolDeps['isSelectionMarquee'];
   isResizingSelection: SelectorCanvasToolDeps['isResizingSelection'];
   isSkewingSelection: SelectorCanvasToolDeps['isSkewingSelection'];
@@ -84,7 +85,7 @@ export interface CreateSvgCanvasPointerStackArgs {
   clearHighlight: SelectorCanvasToolDeps['clearHighlight'];
   getSvgInstanceForClick: SelectorCanvasToolDeps['getSvgInstance'];
   getShapePropertiesForClick: SelectorCanvasToolDeps['getShapeProperties'];
-  getShapePropertiesInSameClipGroupForClick: SelectorCanvasToolDeps['getShapePropertiesInSameClipGroup'];
+  getShapePropertiesInSameClipGroupForClick: SelectorCanvasToolDeps['getSelectorSelectionForShape'];
   selectShapesForClick: SelectorCanvasToolDeps['selectShapes'];
   toggleShapeGroupInSelectionForClick: SelectorCanvasToolDeps['toggleShapeGroupInSelection'];
   clearSelectionForClick: SelectorCanvasToolDeps['clearSelection'];
@@ -175,6 +176,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     isShapeSelected: args.isShapeSelected,
     getNearestGroupAncestorId: args.getNearestGroupAncestorId,
     getSelectedShapeIds: args.getSelectedShapeIds,
+    getExpandedDragShapeIds: args.getExpandedDragShapeIds,
     isSelectionMarquee: args.isSelectionMarquee,
     isResizingSelection: args.isResizingSelection,
     isSkewingSelection: args.isSkewingSelection,
@@ -183,7 +185,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     getKeyboardActions: args.getSelectorKeyboardActions,
     getSvgInstance: args.getSvgInstanceForClick,
     getShapeProperties: args.getShapePropertiesForClick,
-    getShapePropertiesInSameClipGroup: args.getShapePropertiesInSameClipGroupForClick,
+    getSelectorSelectionForShape: args.getShapePropertiesInSameClipGroupForClick,
     selectShapes: args.selectShapesForClick,
     toggleShapeGroupInSelection: args.toggleShapeGroupInSelectionForClick,
     clearSelection: args.clearSelectionForClick,

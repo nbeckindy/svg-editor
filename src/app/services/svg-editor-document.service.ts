@@ -1,4 +1,4 @@
-import { Injectable, signal, computed } from '@angular/core';
+import { Injectable, signal, computed, inject } from '@angular/core';
 import type { DocumentReadinessPort } from '../history/document-readiness.port';
 import { SVG, Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import {
@@ -23,6 +23,7 @@ import {
   classifyImageHrefForExport,
   readImageElementHref
 } from '../utils/svg-export-image-href-policy';
+import { SvgIngestService } from './svg-ingest.service';
 
 /**
  * Owns the mounted editor-stage SVG instance, document revision signal, and artboard/viewBox
@@ -42,6 +43,8 @@ export class SvgEditorDocumentService implements DocumentReadinessPort {
   private readonly _artboardResizeAnchor = signal<ArtboardResizeAnchor>(DEFAULT_ARTBOARD_RESIZE_ANCHOR);
   /** Fixed point used when changing artboard dimensions (editor preference, not exported). */
   readonly artboardResizeAnchor = computed(() => this._artboardResizeAnchor());
+
+  private readonly ingestService = inject(SvgIngestService);
 
   private svgInstance: Svg | null = null;
   /** Stored document viewBox for export and overlay (e.g. "0 0 100 100"). */
@@ -173,8 +176,11 @@ export class SvgEditorDocumentService implements DocumentReadinessPort {
 
   initializeSVG(container: HTMLElement, svgContent: string): void {
     container.innerHTML = '';
+
+    const sanitizedMarkup = this.ingestService.ingestDocument(svgContent);
+
     const parser = new DOMParser();
-    const doc = parser.parseFromString(svgContent, 'image/svg+xml');
+    const doc = parser.parseFromString(sanitizedMarkup, 'image/svg+xml');
     const svgElement = doc.querySelector('svg');
     if (!svgElement) {
       return;

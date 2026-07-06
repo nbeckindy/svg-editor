@@ -5,6 +5,7 @@ import { ArtboardModel, ArtboardResizeAnchor } from '../models/artboard.model';
 import { ShapeProperties } from '../models/shape-properties.interface';
 import type { ClipboardPayload } from '../models/clipboard-payload';
 import type { CreatableShapeType, InsertRasterImageAttrs, ShapeCreationAttrs } from './svg-shape-content.port';
+import type { LiveTreeMarkup } from '../utils/svg-sanitize';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgGradientDefsService } from './svg-gradient-defs.service';
 import { SvgLayerStructureService } from './svg-layer-structure.service';
@@ -281,7 +282,7 @@ export class SvgManipulationService
 
   restoreRemovedShapesInContentGroup(
     shapeIds: string[],
-    serializedMarkup: ReadonlyMap<string, string>,
+    serializedMarkup: ReadonlyMap<string, LiveTreeMarkup>,
     insertionIndices: ReadonlyMap<string, number>
   ): void {
     this.shapes.restoreRemovedShapesInContentGroup(shapeIds, serializedMarkup, insertionIndices);
@@ -412,7 +413,7 @@ export class SvgManipulationService
     this.gradients.purgeUnreferencedGradientDefs();
   }
 
-  insertShapeMarkup(markup: string, insertionIndex?: number): void {
+  insertShapeMarkup(markup: LiveTreeMarkup, insertionIndex?: number): void {
     this.shapes.insertShapeMarkup(markup, insertionIndex);
   }
 
@@ -423,7 +424,7 @@ export class SvgManipulationService
   pasteClipboardPayload(
     payload: ClipboardPayload,
     offset: { dx: number; dy: number }
-  ): { insertedIds: string[]; insertedMarkup: string[] } {
+  ): { insertedIds: string[]; insertedMarkup: LiveTreeMarkup[] } {
     return this.shapes.pasteClipboardPayload(payload, offset);
   }
 

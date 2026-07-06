@@ -1,11 +1,13 @@
-import { Injectable } from '@angular/core';
+import { Injectable, inject } from '@angular/core';
 import { Observable, from } from 'rxjs';
 import { map } from 'rxjs/operators';
+import { SvgIngestService } from './svg-ingest.service';
 
 @Injectable({
   providedIn: 'root'
 })
 export class SvgService {
+  private readonly ingestService = inject(SvgIngestService);
   private currentSVGContent: string = '';
 
   /**
@@ -15,8 +17,9 @@ export class SvgService {
     return from(this.readFileAsText(file)).pipe(
       map(content => {
         if (this.validateSVG(content)) {
-          this.currentSVGContent = content;
-          return content;
+          const sanitized = this.ingestService.ingestDocument(content);
+          this.currentSVGContent = sanitized;
+          return sanitized;
         }
         throw new Error('Invalid SVG file');
       })

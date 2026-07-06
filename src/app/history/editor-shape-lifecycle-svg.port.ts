@@ -1,6 +1,7 @@
 import type { Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../models/shape-properties.interface';
 import type { ClipboardPayload } from '../models/clipboard-payload';
+import type { LiveTreeMarkup } from '../utils/svg-sanitize';
 
 /**
  * Svg seam for **History** commands that add/remove/repaste shapes in the **Live tree**
@@ -13,15 +14,15 @@ export interface EditorShapeLifecycleSvgPort {
   removeShape(shapeId: string): void;
   restoreRemovedShapesInContentGroup(
     shapeIds: string[],
-    serializedMarkup: ReadonlyMap<string, string>,
+    serializedMarkup: ReadonlyMap<string, LiveTreeMarkup>,
     insertionIndices: ReadonlyMap<string, number>
   ): void;
-  insertShapeMarkup(markup: string, insertionIndex?: number): void;
+  insertShapeMarkup(markup: LiveTreeMarkup, insertionIndex?: number): void;
   createClipboardPayload(shapeIds: string[]): ClipboardPayload;
   pasteClipboardPayload(
     payload: ClipboardPayload,
     offset: { dx: number; dy: number }
-  ): { insertedIds: string[]; insertedMarkup: string[] };
+  ): { insertedIds: string[]; insertedMarkup: LiveTreeMarkup[] };
   updateTextContent(textId: string, text: string): void;
 }
 
