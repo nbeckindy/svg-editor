@@ -2,33 +2,6 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { FileUploadComponent } from './file-upload.component';
 import { vi, afterEach, beforeEach, describe, expect, it } from 'vitest';
 
-function stubFileReaderWith(content: string): void {
-  const mockReader = {
-    onload: null as ((e: ProgressEvent) => void) | null,
-    onerror: null as (() => void) | null,
-    readAsText(this: typeof mockReader): void {
-      Promise.resolve().then(() => {
-        this.onload?.({ target: { result: content } } as unknown as ProgressEvent);
-      });
-    },
-  };
-  vi.stubGlobal('FileReader', vi.fn(() => mockReader));
-}
-
-function stubFileReaderWithError(): void {
-  const mockReader = {
-    error: new DOMException('Read error'),
-    onload: null as ((e: ProgressEvent) => void) | null,
-    onerror: null as (() => void) | null,
-    readAsText(this: typeof mockReader): void {
-      Promise.resolve().then(() => {
-        this.onerror?.();
-      });
-    },
-  };
-  vi.stubGlobal('FileReader', vi.fn(() => mockReader));
-}
-
 describe('FileUploadComponent', () => {
   let component: FileUploadComponent;
   let fixture: ComponentFixture<FileUploadComponent>;
@@ -44,7 +17,7 @@ describe('FileUploadComponent', () => {
   });
 
   afterEach(() => {
-    vi.unstubAllGlobals();
+    vi.restoreAllMocks();
   });
 
   it('should create', () => {
@@ -53,7 +26,8 @@ describe('FileUploadComponent', () => {
 
   it('should emit svgLoaded event when file is successfully loaded', async () => {
     const svgContent = '<svg><circle cx="50" cy="50" r="40"/></svg>';
-    stubFileReaderWith(svgContent);
+    vi.spyOn(component as any, 'readFileAsText').mockResolvedValue(svgContent);
+    vi.spyOn(component as any, 'isValidSvg').mockReturnValue(true);
 
     let emittedContent = '';
     component.svgLoaded.subscribe((content: string) => {
@@ -69,6 +43,25 @@ describe('FileUploadComponent', () => {
     expect(emittedContent).toBe(svgContent);
   });
 
+  it('should also emit fileNameLoaded when file is successfully loaded', async () => {
+    const svgContent = '<svg></svg>';
+    vi.spyOn(component as any, 'readFileAsText').mockResolvedValue(svgContent);
+    vi.spyOn(component as any, 'isValidSvg').mockReturnValue(true);
+
+    let emittedName = '';
+    component.fileNameLoaded.subscribe((name: string) => {
+      emittedName = name;
+    });
+
+    const file = new File([svgContent], 'test.svg', { type: 'image/svg+xml' });
+    const event = { target: { files: [file] } } as unknown as Event;
+
+    component.onFileSelected(event);
+    await new Promise((resolve) => setTimeout(resolve, 0));
+
+    expect(emittedName).toBe('test.svg');
+  });
+
   it('should show error message for non-SVG files', () => {
     const file = new File(['test'], 'test.txt', { type: 'text/plain' });
     const event = { target: { files: [file] } } as unknown as Event;
@@ -79,7 +72,7 @@ describe('FileUploadComponent', () => {
   });
 
   it('should show error message when file reading fails', async () => {
-    stubFileReaderWithError();
+    vi.spyOn(component as any, 'readFileAsText').mockRejectedValue(new Error('Read failed'));
 
     const file = new File(['<svg></svg>'], 'test.svg', { type: 'image/svg+xml' });
     const event = { target: { files: [file] } } as unknown as Event;
@@ -92,7 +85,8 @@ describe('FileUploadComponent', () => {
 
   it('should show error message when content is not valid SVG', async () => {
     const invalidContent = '<div>Not an SVG</div>';
-    stubFileReaderWith(invalidContent);
+    vi.spyOn(component as any, 'readFileAsText').mockResolvedValue(invalidContent);
+    vi.spyOn(component as any, 'isValidSvg').mockReturnValue(false);
 
     const file = new File([invalidContent], 'test.svg', { type: 'image/svg+xml' });
     const event = { target: { files: [file] } } as unknown as Event;
@@ -124,7 +118,8 @@ describe('FileUploadComponent', () => {
 
   it('should handle drop event with SVG file', async () => {
     const svgContent = '<svg><rect width="100" height="100"/></svg>';
-    stubFileReaderWith(svgContent);
+    vi.spyOn(component as any, 'readFileAsText').mockResolvedValue(svgContent);
+    vi.spyOn(component as any, 'isValidSvg').mockReturnValue(true);
 
     let emittedContent = '';
     component.svgLoaded.subscribe((content: string) => {
@@ -147,7 +142,8 @@ describe('FileUploadComponent', () => {
 
   it('should clear error message when loading new file', async () => {
     const svgContent = '<svg></svg>';
-    stubFileReaderWith(svgContent);
+    vi.spyOn(component as any, 'readFileAsText').mockResolvedValue(svgContent);
+    vi.spyOn(component as any, 'isValidSvg').mockReturnValue(true);
     component.errorMessage = 'Previous error';
 
     const file = new File([svgContent], 'test.svg', { type: 'image/svg+xml' });
