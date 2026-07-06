@@ -12,7 +12,7 @@ import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaul
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
-import type { LayerLockReadPort } from '../../history/layer-lock-read.port';
+import { LAYER_LOCK_READ_PORT } from '../../services/manipulation-port-tokens';
 import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-node-anchor-tools.component';
 
 @Component({
@@ -46,7 +46,7 @@ export class PropertiesPanelComponent {
   private chromeApply = inject(ChromeEditorApplyService);
   private readonly svg = inject(SvgManipulationService);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
-  private readonly layerLock = inject(SvgManipulationService) as LayerLockReadPort;
+  private readonly layerLock = inject(LAYER_LOCK_READ_PORT);
   readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
   readonly selectionTransformReadout = this.transformReadoutSvc.selectionTransformReadout;
   readonly selectionBBoxFieldModel = this.transformReadoutSvc.selectionBBoxFieldModel;

@@ -15,22 +15,23 @@ import {
   ReleaseClipPathCommand,
   type ReparentElementsMode
 } from '../../models/editor-commands';
-import type { LayerReorderGroupSvgPort } from '../../history/layers-panel-svg.port';
 import type { LayerRowKind } from '../svg-layer-structure.port';
-import type { ClipPathSvgPort } from '../../history/clip-path-svg.port';
-import type { PropertiesPanelSvgPort } from '../../history/properties-panel-svg.port';
-import type { ChromeEditorApplySvgPort } from '../../history/chrome-editor-apply-svg.port';
-import { SvgManipulationService } from '../svg-manipulation.service';
+import {
+  CHROME_EDITOR_APPLY_SVG_PORT,
+  CLIP_PATH_SVG_PORT,
+  LAYER_REORDER_GROUP_SVG_PORT,
+  PROPERTIES_PANEL_SVG_PORT
+} from '../manipulation-port-tokens';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
 import { GroupStructureChangeService } from './group-structure-change.service';
 
 @Injectable({ providedIn: 'root' })
 export class ChromeEditorLayersApplyService {
   private readonly support = inject(ChromeEditorApplySupport);
-  private readonly layerSvg: LayerReorderGroupSvgPort = inject(SvgManipulationService);
-  private readonly clipPathSvg: ClipPathSvgPort = inject(SvgManipulationService);
-  private readonly paintSvg: ChromeEditorApplySvgPort = inject(SvgManipulationService);
-  private readonly propertiesSvg: PropertiesPanelSvgPort = inject(SvgManipulationService);
+  private readonly layerSvg = inject(LAYER_REORDER_GROUP_SVG_PORT);
+  private readonly clipPathSvg = inject(CLIP_PATH_SVG_PORT);
+  private readonly paintSvg = inject(CHROME_EDITOR_APPLY_SVG_PORT);
+  private readonly propertiesSvg = inject(PROPERTIES_PANEL_SVG_PORT);
   private readonly groupStructureChange = inject(GroupStructureChangeService);
 
   private get shapeSelection() { return this.support.shapeSelection; }

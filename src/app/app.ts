@@ -6,9 +6,8 @@ import { EditorTopBarComponent } from './components/editor-top-bar/editor-top-ba
 import { EditorToolContextBarComponent } from './components/editor-tool-context-bar/editor-tool-context-bar.component';
 import { EditorLeftRailComponent } from './components/editor-left-rail/editor-left-rail.component';
 import { EditorRightDockComponent } from './components/editor-right-dock/editor-right-dock.component';
-import type { AppRootSvgManipulationPort } from './history/editor-chrome-svg.port';
 import { DEFAULT_DOCUMENT_SVG } from './models/default-document';
-import { SvgManipulationService } from './services/svg-manipulation.service';
+import { APP_ROOT_SVG_MANIPULATION_PORT } from './services/manipulation-port-tokens';
 import { EditorHistoryService } from './services/editor-history.service';
 import { EditorLayoutService } from './services/editor-layout.service';
 import { EditorDocumentBridgeService } from './services/editor-document-bridge.service';
@@ -28,7 +27,7 @@ import { EditorDocumentBridgeService } from './services/editor-document-bridge.s
   styleUrl: './app.css'
 })
 export class AppComponent {
-  private readonly svg: AppRootSvgManipulationPort = inject(SvgManipulationService);
+  private readonly svg = inject(APP_ROOT_SVG_MANIPULATION_PORT);
   private readonly editorHistory = inject(EditorHistoryService);
   private readonly documentBridge = inject(EditorDocumentBridgeService);
   protected readonly layout = inject(EditorLayoutService);

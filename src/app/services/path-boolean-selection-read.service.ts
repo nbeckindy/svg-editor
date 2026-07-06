@@ -1,15 +1,15 @@
 import { Injectable, inject } from '@angular/core';
 import type { PathBooleanSelectionReadPort } from '../history/path-boolean-selection-read.port';
-import type { LayerLockReadPort } from '../history/layer-lock-read.port';
 import { isOutlineToPathPrimitiveType } from '../models/primitive-to-path';
 import { SvgManipulationService } from './svg-manipulation.service';
+import { LAYER_LOCK_READ_PORT } from './manipulation-port-tokens';
 
 const COMPOUND_OPERAND_TAGS = new Set(['path', 'rect', 'circle', 'ellipse']);
 
 @Injectable({ providedIn: 'root' })
 export class PathBooleanSelectionReadService implements PathBooleanSelectionReadPort {
   private readonly svg = inject(SvgManipulationService);
-  private readonly layerLock = inject(SvgManipulationService) as LayerLockReadPort;
+  private readonly layerLock = inject(LAYER_LOCK_READ_PORT);
 
   isElementOrAncestorLocked(elementId: string): boolean {
     return this.layerLock.isElementOrAncestorLocked(elementId);

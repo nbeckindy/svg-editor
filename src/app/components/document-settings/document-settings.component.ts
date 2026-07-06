@@ -1,8 +1,7 @@
 import { Component, inject, computed } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import type { DocumentSettingsSvgPort } from '../../history/document-settings-svg.port';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { DOCUMENT_SETTINGS_SVG_PORT } from '../../services/manipulation-port-tokens';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
 import { ArtboardResizeAnchor } from '../../models/artboard.model';
@@ -15,7 +14,7 @@ import { ArtboardSizeCommand, ArtboardBackgroundCommand } from '../../models/edi
   styleUrl: './document-settings.component.css'
 })
 export class DocumentSettingsComponent {
-  private readonly svg: DocumentSettingsSvgPort = inject(SvgManipulationService);
+  private readonly svg = inject(DOCUMENT_SETTINGS_SVG_PORT);
   private readonly editorHistory = inject(EditorHistoryService);
 
   readonly artboard = this.svg.artboard;

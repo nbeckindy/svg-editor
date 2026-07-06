@@ -1,7 +1,6 @@
 import { Injectable, inject } from '@angular/core';
 import { BooleanPathCommand, OutlineToPathCommand } from '../../models/editor-commands';
-import type { EditorShapeLifecycleSvgPort } from '../../history/editor-shape-lifecycle-svg.port';
-import { SvgManipulationService } from '../svg-manipulation.service';
+import { EDITOR_SHAPE_LIFECYCLE_SVG_PORT } from '../manipulation-port-tokens';
 import { EditorToolService } from '../editor-tool.service';
 import { PathBooleanGeometryService } from '../path-boolean-geometry.service';
 import { ShapeSelectionService } from '../shape-selection.service';
@@ -21,7 +20,7 @@ const PATH_BOOLEAN_LABELS: Record<BooleanOp, string> = {
 @Injectable({ providedIn: 'root' })
 export class ChromeEditorPathOpsApplyService {
   private readonly support = inject(ChromeEditorApplySupport);
-  private readonly shapeLifecycleSvg: EditorShapeLifecycleSvgPort = inject(SvgManipulationService);
+  private readonly shapeLifecycleSvg = inject(EDITOR_SHAPE_LIFECYCLE_SVG_PORT);
   private readonly pathBooleanGeometry = inject(PathBooleanGeometryService);
   private readonly editorTool = inject(EditorToolService);
   private readonly shapeSelection = inject(ShapeSelectionService);

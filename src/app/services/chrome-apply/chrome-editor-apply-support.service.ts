@@ -1,12 +1,11 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
-import type { ChromeEditorApplySvgPort } from '../../history/chrome-editor-apply-svg.port';
-import type { EditorShapeLifecycleSvgPort } from '../../history/editor-shape-lifecycle-svg.port';
-import type { LayerReorderGroupSvgPort } from '../../history/layers-panel-svg.port';
-import type { PropertiesPanelSvgPort } from '../../history/properties-panel-svg.port';
-import type { SelectionTransformApplySvgPort } from '../../history/transform-gesture-svg.port';
 import { ShapeSelectionService } from '../shape-selection.service';
-import { SvgManipulationService } from '../svg-manipulation.service';
+import {
+  CHROME_EDITOR_APPLY_SVG_PORT,
+  LAYER_REORDER_GROUP_SVG_PORT,
+  PROPERTIES_PANEL_SVG_PORT
+} from '../manipulation-port-tokens';
 import { DrawingStyleDefaultsService } from '../drawing-style-defaults.service';
 import { EditorHistoryService } from '../editor-history.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
@@ -15,9 +14,9 @@ import { EditorCommand, CompositeCommand } from '../../models/editor-commands';
 @Injectable({ providedIn: 'root' })
 export class ChromeEditorApplySupport {
   readonly shapeSelection = inject(ShapeSelectionService);
-  readonly paintSvg: ChromeEditorApplySvgPort = inject(SvgManipulationService);
-  readonly propertiesSvg: PropertiesPanelSvgPort = inject(SvgManipulationService);
-  readonly layerSvg: LayerReorderGroupSvgPort = inject(SvgManipulationService);
+  readonly paintSvg = inject(CHROME_EDITOR_APPLY_SVG_PORT);
+  readonly propertiesSvg = inject(PROPERTIES_PANEL_SVG_PORT);
+  readonly layerSvg = inject(LAYER_REORDER_GROUP_SVG_PORT);
   readonly drawingDefaults = inject(DrawingStyleDefaultsService);
   readonly editorHistory = inject(EditorHistoryService);
 

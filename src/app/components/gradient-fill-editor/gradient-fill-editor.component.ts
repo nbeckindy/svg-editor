@@ -1,8 +1,7 @@
 import { Component, computed, effect, inject, input, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
-import type { GradientFillEditorSvgPort } from '../../history/gradient-fill-editor-svg.port';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { GRADIENT_FILL_EDITOR_SVG_PORT } from '../../services/manipulation-port-tokens';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import {
   type EditableGradientModel,
@@ -36,7 +35,7 @@ export class GradientFillEditorComponent {
   readonly paintProperty = input<'fill' | 'stroke'>('fill');
   readonly disabled = input(false);
 
-  private readonly svc: GradientFillEditorSvgPort = inject(SvgManipulationService);
+  private readonly svc = inject(GRADIENT_FILL_EDITOR_SVG_PORT);
   private readonly history = inject(EditorHistoryService);
 
   readonly draftModel = signal<EditableGradientModel | null>(null);

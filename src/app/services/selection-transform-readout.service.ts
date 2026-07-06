@@ -1,8 +1,7 @@
 import { Injectable, computed, inject } from '@angular/core';
 import { Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
-import type { SelectionTransformReadoutSvgPort } from '../history/selection-transform-readout-svg.port';
 import { ShapeSelectionService } from './shape-selection.service';
-import { SvgManipulationService } from './svg-manipulation.service';
+import { SELECTION_TRANSFORM_READOUT_SVG_PORT } from './manipulation-port-tokens';
 import { EditorHistoryService } from './editor-history.service';
 import { EditorToolService } from './editor-tool.service';
 import {
@@ -20,7 +19,7 @@ import {
 })
 export class SelectionTransformReadoutService {
   private readonly shapeSelection = inject(ShapeSelectionService);
-  private readonly svg: SelectionTransformReadoutSvgPort = inject(SvgManipulationService);
+  private readonly svg = inject(SELECTION_TRANSFORM_READOUT_SVG_PORT);
   private readonly editorHistory = inject(EditorHistoryService);
   private readonly editorTool = inject(EditorToolService);
 

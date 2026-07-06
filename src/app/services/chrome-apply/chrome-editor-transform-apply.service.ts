@@ -8,9 +8,10 @@ import {
   DistributeCommand,
   RectCornerRadiusCommand
 } from '../../models/editor-commands';
-import type { PropertiesPanelSvgPort } from '../../history/properties-panel-svg.port';
-import type { SelectionTransformApplySvgPort } from '../../history/transform-gesture-svg.port';
-import { SvgManipulationService } from '../svg-manipulation.service';
+import {
+  PROPERTIES_PANEL_SVG_PORT,
+  SELECTION_TRANSFORM_APPLY_SVG_PORT
+} from '../manipulation-port-tokens';
 import { EditorToolService } from '../editor-tool.service';
 import { SelectionTransformReadoutService } from '../selection-transform-readout.service';
 import { MIN_UNION_SIZE } from '../../utils/selection-resize';
@@ -26,8 +27,8 @@ import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service'
 @Injectable({ providedIn: 'root' })
 export class ChromeEditorTransformApplyService {
   private readonly support = inject(ChromeEditorApplySupport);
-  private readonly propertiesSvg: PropertiesPanelSvgPort = inject(SvgManipulationService);
-  private readonly transformSvg: SelectionTransformApplySvgPort = inject(SvgManipulationService);
+  private readonly propertiesSvg = inject(PROPERTIES_PANEL_SVG_PORT);
+  private readonly transformSvg = inject(SELECTION_TRANSFORM_APPLY_SVG_PORT);
   private readonly editorTool = inject(EditorToolService);
   private readonly transformReadout = inject(SelectionTransformReadoutService);
 

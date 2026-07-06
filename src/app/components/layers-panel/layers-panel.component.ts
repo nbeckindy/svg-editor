@@ -7,8 +7,7 @@ import { openEditorContextMenuAtPointer } from '../editor-context-menu/open-edit
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { LayerTreeNode, isLayerBranchKind } from '../../services/svg-layer-structure.port';
-import type { LayersPanelSvgPort } from '../../history/layers-panel-svg.port';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { LAYERS_PANEL_SVG_PORT } from '../../services/manipulation-port-tokens';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import {
   LayersPanelDndService,
@@ -53,7 +52,7 @@ interface PreviewPaintData {
   styleUrl: './layers-panel.component.css'
 })
 export class LayersPanelComponent {
-  private readonly svg: LayersPanelSvgPort = inject(SvgManipulationService);
+  private readonly svg = inject(LAYERS_PANEL_SVG_PORT);
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly chromeApply = inject(ChromeEditorApplyService);
   private readonly dnd = inject(LayersPanelDndService);
