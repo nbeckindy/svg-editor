@@ -28,20 +28,10 @@ import { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   EditorCommand,
   TranslateCommand,
-  AlignCommand,
-  DistributeCommand,
   UnionRotateCommand,
-  RemoveShapesCommand,
-  GroupCommand,
-  UngroupCommand,
-  UngroupElementsCommand,
-  MakeClipPathCommand,
-  ReleaseClipPathCommand,
   AddShapeCommand,
   AddPathCommand,
   CompositeCommand,
-  PasteCommand,
-  DuplicateCommand,
 } from '../../models/editor-commands';
 import {
   DragGesture,
@@ -69,7 +59,7 @@ import {
 } from './path-node-edit-geometry';
 import { createCanvasAdapterContext } from '../../tools/create-canvas-adapter-context';
 import type { SelectorKeyboardActionsPort } from './selector-canvas-tool-keyboard';
-import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
+import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext, CanvasEditorCommandController } from './svg-canvas-keyboard.controller';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
 import type { CanvasToolHost } from '../../tools/canvas-tool-host.interface';
@@ -144,14 +134,6 @@ const CONTENT_SHAPE_TAGS = new Set([
 ]);
 
 const PATH_NODE_EDIT_FEEDBACK_DURATION_MS = 1400;
-const ALIGN_LEFT_SHORTCUT = 'ArrowLeft';
-const ALIGN_RIGHT_SHORTCUT = 'ArrowRight';
-const ALIGN_TOP_SHORTCUT = 'ArrowUp';
-const ALIGN_CENTER_SHORTCUT = 'ArrowDown';
-const ALIGN_MIDDLE_SHORTCUT = 'm';
-const ALIGN_BOTTOM_SHORTCUT = 'b';
-const DISTRIBUTE_HORIZONTAL_SHORTCUT = 'h';
-const DISTRIBUTE_VERTICAL_SHORTCUT = 'v';
 
 interface PathNodePoint {
   x: number;
@@ -736,8 +718,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   drilledIntoGroupId: string | null = null;
-  private duplicateInvocationCount = 0;
-  private duplicateSelectionKey = '';
+  private readonly commandController: CanvasEditorCommandController;
 
   private penInsertCursorRaf = 0;
   private pendingPenInsertHoverClient: { x: number; y: number } | null = null;
@@ -970,19 +951,20 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   private getSelectorKeyboardActions(): SelectorKeyboardActionsPort {
+    const ctrl = this.commandController;
     return {
       getSvgContent: () => this.svgContent(),
       svgManipulation: this.svgManipulation,
       shapeSelection: this.shapeSelection,
       editorHistory: this.editorHistory,
-      selectAllShapesFromDocument: () => this.selectAllShapesFromDocument(),
-      copySelectionToClipboard: () => this.copySelectionToClipboard(),
-      cutSelectionToClipboard: () => this.cutSelectionToClipboard(),
-      pasteFromClipboard: () => this.pasteFromClipboard(),
-      duplicateSelection: () => this.duplicateSelection(),
-      groupSelectedShapes: () => this.groupSelectedShapes(),
-      ungroupSelectedShape: () => this.ungroupSelectedShape(),
-      handleAlignmentShortcut: (key: string) => this.handleAlignmentShortcut(key)
+      selectAllShapesFromDocument: () => ctrl.selectAllShapesFromDocument(),
+      copySelectionToClipboard: () => ctrl.copySelectionToClipboard(),
+      cutSelectionToClipboard: () => ctrl.cutSelectionToClipboard(),
+      pasteFromClipboard: () => ctrl.pasteFromClipboard(),
+      duplicateSelection: () => ctrl.duplicateSelection(),
+      groupSelectedShapes: () => ctrl.groupSelectedShapes(),
+      ungroupSelectedShape: () => ctrl.ungroupSelectedShape(),
+      handleAlignmentShortcut: (key: string) => ctrl.handleAlignmentShortcut(key)
     };
   }
 
@@ -1132,200 +1114,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     if (changed) this.cdr.detectChanges();
   }
 
-  private selectAllShapesFromDocument(): void {
-    const svg = this.svgManipulation.getSVGInstance();
-    if (!svg) return;
-    const items = this.svgManipulation.getLayerStackItems();
-    if (items.length === 0) return;
-    const shapes: ShapeProperties[] = [];
-    for (const item of items) {
-      const el = svg.findOne(`#${item.id}`) as SVGElement | undefined;
-      if (el) shapes.push(this.svgManipulation.getShapeProperties(el));
-    }
-    if (shapes.length === 0) return;
-    const expanded = this.svgManipulation.expandSelectionByClipGroups(shapes);
-    this.shapeSelection.selectShapes(expanded);
-    this.svgManipulation.clearHighlight();
-  }
-
-  private getExpandedSelectedShapeIds(): string[] {
-    const selected = this.shapeSelection.getSelectedShapes();
-    if (selected.length === 0) return [];
-    const expanded = this.svgManipulation.expandSelectionByClipGroups(selected);
-    const ids = expanded.map((shape) => shape.id);
-    return this.svgManipulation.getShapeIdsInDomOrder(ids);
-  }
-
-  private copySelectionToClipboard(): boolean {
-    const ids = this.getExpandedSelectedShapeIds();
-    if (ids.length === 0) return false;
-    const payload = this.svgManipulation.createClipboardPayload(ids);
-    if (payload.shapes.length === 0) return false;
-    this.clipboard.set(payload);
-    return true;
-  }
-
-  private cutSelectionToClipboard(): boolean {
-    const ids = this.getExpandedSelectedShapeIds();
-    if (ids.length === 0) return false;
-    const payload = this.svgManipulation.createClipboardPayload(ids);
-    if (payload.shapes.length === 0) return false;
-    this.clipboard.set(payload);
-    const cmd = new RemoveShapesCommand(this.svgManipulation, ids, this.shapeSelection);
-    this.editorHistory.pushAndExecute(cmd);
-    this.svgManipulation.clearHighlight();
-    return true;
-  }
-
-  private pasteFromClipboard(): boolean {
-    const payload = this.clipboard.get();
-    if (!payload || payload.shapes.length === 0) return false;
-    const cmd = new PasteCommand(
-      this.svgManipulation,
-      payload,
-      this.clipboard.nextPasteOffset(),
-      this.shapeSelection
-    );
-    this.editorHistory.pushAndExecute(cmd);
-    this.svgManipulation.clearHighlight();
-    return true;
-  }
-
-  private selectionTouchesLocked(shapeIds: string[]): boolean {
-    return shapeIds.some((id) => this.svgManipulation.isElementOrAncestorLocked(id));
-  }
-
-  private duplicateSelection(): boolean {
-    const ids = this.getExpandedSelectedShapeIds();
-    if (ids.length === 0) return false;
-    if (this.selectionTouchesLocked(ids)) return false;
-    this.duplicateInvocationCount += 1;
-    const delta = this.duplicateInvocationCount * 10;
-    const cmd = new DuplicateCommand(
-      this.svgManipulation,
-      ids,
-      { dx: delta, dy: delta },
-      this.shapeSelection
-    );
-    this.editorHistory.pushAndExecute(cmd);
-    this.svgManipulation.clearHighlight();
-    return true;
-  }
-
-  private handleAlignmentShortcut(key: string): boolean {
-    const normalized = key.length === 1 ? key.toLowerCase() : key;
-    switch (normalized) {
-      case ALIGN_LEFT_SHORTCUT:
-        return this.alignSelection('left');
-      case ALIGN_RIGHT_SHORTCUT:
-        return this.alignSelection('right');
-      case ALIGN_TOP_SHORTCUT:
-        return this.alignSelection('top');
-      case ALIGN_CENTER_SHORTCUT:
-        return this.alignSelection('center');
-      case ALIGN_MIDDLE_SHORTCUT:
-        return this.alignSelection('middle');
-      case ALIGN_BOTTOM_SHORTCUT:
-        return this.alignSelection('bottom');
-      case DISTRIBUTE_HORIZONTAL_SHORTCUT:
-        return this.distributeSelection('horizontal');
-      case DISTRIBUTE_VERTICAL_SHORTCUT:
-        return this.distributeSelection('vertical');
-      default:
-        return false;
-    }
-  }
-
-  private alignSelection(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'): boolean {
-    const ids = this.getExpandedSelectedShapeIds();
-    if (ids.length < 2) return false;
-    if (this.selectionTouchesLocked(ids)) return false;
-    this.editorHistory.pushAndExecute(new AlignCommand(this.svgManipulation, ids, direction));
-    this.svgManipulation.clearHighlight();
-    return true;
-  }
-
-  private distributeSelection(direction: 'horizontal' | 'vertical'): boolean {
-    const ids = this.getExpandedSelectedShapeIds();
-    if (ids.length < 3) return false;
-    if (this.selectionTouchesLocked(ids)) return false;
-    this.editorHistory.pushAndExecute(new DistributeCommand(this.svgManipulation, ids, direction));
-    this.svgManipulation.clearHighlight();
-    return true;
-  }
-
-  private groupSelectedShapes(): void {
-    const selected = this.shapeSelection.getSelectedShapes();
-    if (selected.length < 2) return;
-    const ids = selected.map((s) => s.id);
-    if (this.selectionTouchesLocked(ids)) return;
-    const cmd = new GroupCommand(this.svgManipulation, ids);
-    this.editorHistory.pushAndExecute(cmd);
-    const newGroupId = cmd.createdGroupId;
-    if (newGroupId) {
-      const svg = this.svgManipulation.getSVGInstance();
-      const groupEl = svg?.findOne(`#${newGroupId}`) as SVGElement | undefined;
-      if (groupEl) {
-        const groupProps = this.svgManipulation.getShapeProperties(groupEl);
-        this.shapeSelection.selectShapes([groupProps]);
-      }
-    }
-    this.drilledIntoGroupId = null;
-  }
-
-  private resolveTopmostShapeId(ids: string[]): string | null {
-    const idSet = new Set(ids);
-    let topmost: string | null = null;
-    for (const item of this.svgManipulation.getLayerStackItems()) {
-      if (idSet.has(item.id)) topmost = item.id;
-    }
-    return topmost;
-  }
-
-  private makeClipPathFromSelection(): void {
-    const selected = this.shapeSelection.getSelectedShapes();
-    if (selected.length < 2) return;
-    const ids = selected.map((s) => s.id);
-    if (this.selectionTouchesLocked(ids)) return;
-    const clipShapeId = this.resolveTopmostShapeId(ids);
-    if (!clipShapeId) return;
-    const contentIds = ids.filter((id) => id !== clipShapeId);
-    const cmd = new MakeClipPathCommand(this.svgManipulation, contentIds, clipShapeId);
-    this.editorHistory.pushAndExecute(cmd);
-    const svg = this.svgManipulation.getSVGInstance();
-    const clipGeomId = cmd.createdClipGeometryId;
-    if (clipGeomId && svg) {
-      const geomEl = svg.findOne(`#${clipGeomId}`) as SVGElement | undefined;
-      if (geomEl) {
-        this.shapeSelection.selectShapes([this.svgManipulation.getShapeProperties(geomEl)]);
-      }
-    }
-    this.drilledIntoGroupId = null;
-  }
-
-  private releaseClipPathFromSelection(): void {
-    const selected = this.shapeSelection.getSelectedShapes();
-    if (selected.length === 0) return;
-    const ids = selected.map((s) => s.id);
-    if (this.selectionTouchesLocked(ids)) return;
-    const cmd = new ReleaseClipPathCommand(this.svgManipulation, ids);
-    this.editorHistory.pushAndExecute(cmd);
-    const svg = this.svgManipulation.getSVGInstance();
-    const releasedShapes: ShapeProperties[] = [];
-    for (const id of cmd.releasedChildIds) {
-      const el = svg?.findOne(`#${id}`) as SVGElement | undefined;
-      if (el) releasedShapes.push(this.svgManipulation.getShapeProperties(el));
-    }
-    if (cmd.restoredClipShapeId) {
-      const clipEl = svg?.findOne(`#${cmd.restoredClipShapeId}`) as SVGElement | undefined;
-      if (clipEl) releasedShapes.push(this.svgManipulation.getShapeProperties(clipEl));
-    }
-    if (releasedShapes.length > 0) {
-      this.shapeSelection.selectShapes(releasedShapes);
-    }
-    this.drilledIntoGroupId = null;
-  }
-
   private syncDrillAfterGroupStructureChange(payload: {
     movedElementIds: string[];
     targetGroupId?: string | null;
@@ -1360,54 +1148,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     if (!drilledNode) {
       this.drilledIntoGroupId = null;
     }
-  }
-
-  private ungroupSelectedShape(): void {
-    const selected = this.shapeSelection.getSelectedShapes();
-    const groupIds = selected.filter((s) => s.type === 'g').map((s) => s.id);
-    if (groupIds.length === 0) return;
-    if (groupIds.some((id) => this.svgManipulation.isElementOrAncestorLocked(id))) return;
-
-    const svg = this.svgManipulation.getSVGInstance();
-    if (!svg) return;
-
-    const collectChildShapes = (childIds: string[]): void => {
-      const childShapes: ShapeProperties[] = [];
-      for (const id of childIds) {
-        const el = svg.findOne(`#${id}`) as SVGElement | undefined;
-        if (el) childShapes.push(this.svgManipulation.getShapeProperties(el));
-      }
-      if (childShapes.length > 0) {
-        this.shapeSelection.selectShapes(childShapes);
-      }
-    };
-
-    if (groupIds.length === 1) {
-      const groupId = groupIds[0];
-      const groupNode = svg.findOne(`#${groupId}`)?.node as Element | null;
-      if (!groupNode || groupNode.tagName?.toLowerCase() !== 'g') return;
-      const childIds: string[] = [];
-      for (const child of Array.from(groupNode.children)) {
-        if (child.id) childIds.push(child.id);
-      }
-      const cmd = new UngroupCommand(this.svgManipulation, groupId);
-      this.editorHistory.pushAndExecute(cmd);
-      collectChildShapes(childIds);
-    } else {
-      const cmd = new UngroupElementsCommand(this.svgManipulation, groupIds);
-      this.editorHistory.pushAndExecute(cmd);
-      collectChildShapes(cmd.ungroupedChildIds);
-    }
-    this.drilledIntoGroupId = null;
-  }
-
-  private deleteSelectedShapes(): void {
-    const ids = this.shapeSelection.getSelectedShapes().map((s) => s.id);
-    if (ids.length === 0) return;
-    if (ids.some((id) => this.svgManipulation.isElementOrAncestorLocked(id))) return;
-    const cmd = new RemoveShapesCommand(this.svgManipulation, ids, this.shapeSelection);
-    this.editorHistory.pushAndExecute(cmd);
-    this.svgManipulation.clearHighlight();
   }
 
   private rotateSelectionByDegrees(deltaDeg: number): void {
@@ -1488,35 +1228,35 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   onContextMenuCut(): void {
-    this.cutSelectionToClipboard();
+    this.commandController.cutSelectionToClipboard();
   }
 
   onContextMenuCopy(): void {
-    this.copySelectionToClipboard();
+    this.commandController.copySelectionToClipboard();
   }
 
   onContextMenuPaste(): void {
-    this.pasteFromClipboard();
+    this.commandController.pasteFromClipboard();
   }
 
   onContextMenuDelete(): void {
-    this.deleteSelectedShapes();
+    this.commandController.deleteSelectedShapes();
   }
 
   onContextMenuGroup(): void {
-    this.groupSelectedShapes();
+    this.commandController.groupSelectedShapes();
   }
 
   onContextMenuUngroup(): void {
-    this.ungroupSelectedShape();
+    this.commandController.ungroupSelectedShape();
   }
 
   onContextMenuMakeClipPath(): void {
-    this.makeClipPathFromSelection();
+    this.commandController.makeClipPathFromSelection();
   }
 
   onContextMenuReleaseClipPath(): void {
-    this.releaseClipPathFromSelection();
+    this.commandController.releaseClipPathFromSelection();
   }
 
   onContextMenuOutlineToPath(): void {
@@ -1593,6 +1333,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     private toolRegistry: ToolRegistryService,
     private canvasBoundToolRegistrar: CanvasBoundToolRegistrar
   ) {
+    this.commandController = new CanvasEditorCommandController({
+      svgManipulation: this.svgManipulation,
+      shapeSelection: this.shapeSelection,
+      editorHistory: this.editorHistory,
+      clipboard: this.clipboard,
+      setDrilledIntoGroupId: (id) => { this.drilledIntoGroupId = id; },
+    });
     this.pathNodeEditSession = new PathNodeEditSession(this.createPathNodeEditSessionPorts());
     const pointerStack = createSvgCanvasPointerStack({
       cdr: this.cdr,
@@ -1793,11 +1540,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     });
     effect(() => {
       const shapes = this.shapeSelection.selectedShapes();
-      const duplicateKey = shapes.map((shape) => shape.id).sort().join('|');
-      if (duplicateKey !== this.duplicateSelectionKey) {
-        this.duplicateSelectionKey = duplicateKey;
-        this.duplicateInvocationCount = 0;
-      }
+      this.commandController.resetDuplicateCounterIfSelectionChanged(shapes);
       if (
         this.pathNodeEditSession.getPathNodeEditState() &&
         !shapes.some((shape) => this.pathNodeEditSession.getPathNodeEditState()?.paths.some((state) => state.pathId === shape.id))
