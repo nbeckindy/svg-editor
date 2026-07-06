@@ -7,6 +7,7 @@ import type { ClipboardPayload } from '../models/clipboard-payload';
 import type { CreatableShapeType, InsertRasterImageAttrs, ShapeCreationAttrs } from './svg-shape-content.port';
 import type { LiveTreeMarkup } from '../utils/svg-sanitize';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
+import { SvgExportService } from './svg-export.service';
 import { SvgGradientDefsService } from './svg-gradient-defs.service';
 import { SvgLayerStructureService } from './svg-layer-structure.service';
 import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
@@ -62,6 +63,7 @@ export class SvgManipulationService
     ClipPathSvgPort
 {
   private readonly doc = inject(SvgEditorDocumentService);
+  private readonly exportSvc = inject(SvgExportService);
   private readonly gradients = inject(SvgGradientDefsService);
   private readonly layers = inject(SvgLayerStructureService);
   private readonly geometry = inject(SvgSelectionGeometryService);
@@ -101,11 +103,11 @@ export class SvgManipulationService
   }
 
   exportSVG(): string {
-    return this.doc.exportSVG();
+    return this.exportSvc.exportSVG();
   }
 
   getSvgExportImagePolicyResult(): SvgExportImagePolicyResult {
-    return this.doc.getSvgExportImagePolicyResult();
+    return this.exportSvc.getSvgExportImagePolicyResult();
   }
 
   getSVGInstance(): Svg | null {

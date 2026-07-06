@@ -1,16 +1,19 @@
 import { TestBed } from '@angular/core/testing';
 import { EDITOR_DOCUMENT_DEFS_ATTR } from './svg-editor-stage.constants';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
+import { SvgExportService } from './svg-export.service';
 import { SvgGradientDefsService } from './svg-gradient-defs.service';
 
 describe('SvgGradientDefsService', () => {
   let doc: SvgEditorDocumentService;
+  let exportSvc: SvgExportService;
   let gradients: SvgGradientDefsService;
   let container: HTMLElement;
 
   beforeEach(() => {
     TestBed.configureTestingModule({});
     doc = TestBed.inject(SvgEditorDocumentService);
+    exportSvc = TestBed.inject(SvgExportService);
     gradients = TestBed.inject(SvgGradientDefsService);
     container = document.createElement('div');
     container.id = 'test-gradient-defs';
@@ -40,7 +43,7 @@ describe('SvgGradientDefsService', () => {
     expect(documentDefs).not.toBeNull();
     expect(documentDefs!.getAttribute(EDITOR_DOCUMENT_DEFS_ATTR)).toBe('true');
     expect(documentDefs!.querySelector(`#${gradId}`)).not.toBeNull();
-    const exported = doc.exportSVG();
+    const exported = exportSvc.exportSVG();
     expect(exported).toContain('<linearGradient');
     expect(exported).toContain(`id="${gradId}"`);
     expect(exported).toContain(`url(#${gradId})`);
@@ -56,7 +59,7 @@ describe('SvgGradientDefsService', () => {
     (svg.findOne('#r1')!.node as SVGRectElement).setAttribute('fill', '#ff0000');
     gradients.purgeGradientDefIfUnreferenced('g1');
     expect(gradients.findGradientDomElement('g1')).toBeNull();
-    expect(doc.exportSVG()).not.toContain('linearGradient');
+    expect(exportSvc.exportSVG()).not.toContain('linearGradient');
   });
 
   it('purgeGradientDefIfUnreferenced keeps def still referenced by another shape', () => {
@@ -85,7 +88,7 @@ describe('SvgGradientDefsService', () => {
     expect(defsChildren[0].getAttribute(EDITOR_DOCUMENT_DEFS_ATTR)).toBe('true');
     expect(defsChildren[0].querySelector('#g1')).not.toBeNull();
     expect(defsChildren[0].querySelector('#cp')).not.toBeNull();
-    const exported = doc.exportSVG();
+    const exported = exportSvc.exportSVG();
     expect(exported).toContain('linearGradient');
     expect(exported).toContain('clipPath');
   });
