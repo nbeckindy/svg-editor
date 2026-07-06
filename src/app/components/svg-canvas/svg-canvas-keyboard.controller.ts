@@ -37,7 +37,9 @@ import {
   ReleaseClipPathCommand,
   PasteCommand,
   DuplicateCommand,
+  UnionRotateCommand,
 } from '../../models/editor-commands';
+import { unionRotationPivot } from '../../utils/selection-rotate';
 import { buildEditorToolShortcutMap } from '../../tools/tool-bundles';
 import { tryHandleViewKeyDown, type ViewKeyboardActionsPort } from './view-canvas-tool-keyboard';
 
@@ -98,6 +100,18 @@ export class CanvasEditorCommandController {
 
   private selectionTouchesLocked(ids: string[]): boolean {
     return ids.some((id) => this.deps.svgManipulation.isElementOrAncestorLocked(id));
+  }
+
+  rotateSelectionByDegrees(deltaDeg: number): void {
+    const { svgManipulation, editorHistory } = this.deps;
+    const ids = this.getExpandedSelectedShapeIds();
+    if (ids.length === 0 || this.selectionTouchesLocked(ids)) return;
+    const union = svgManipulation.getUnionBBox(ids);
+    if (!union) return;
+    const pivot = svgManipulation.getSelectionRotationPivot(ids) ?? unionRotationPivot(union);
+    const snap = svgManipulation.snapshotSelectionTransforms(ids);
+    editorHistory.pushAndExecute(new UnionRotateCommand(svgManipulation, ids, pivot, deltaDeg, snap));
+    svgManipulation.clearHighlight();
   }
 
   private resolveTopmostShapeId(ids: string[]): string | null {

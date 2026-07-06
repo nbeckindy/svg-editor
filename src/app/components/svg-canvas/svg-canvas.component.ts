@@ -18,7 +18,6 @@ import {
 } from '../../utils/selection-resize';
 import { type SkewEdge } from '../../utils/selection-skew';
 import {
-  unionRotationPivot,
   rotationDeltaFromPointerMoveRad,
   radiansToDegrees,
   rotateGhostWorldToUnionMatrix
@@ -28,7 +27,6 @@ import { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   EditorCommand,
   TranslateCommand,
-  UnionRotateCommand,
   AddShapeCommand,
   AddPathCommand,
   CompositeCommand,
@@ -1150,20 +1148,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     }
   }
 
-  private rotateSelectionByDegrees(deltaDeg: number): void {
-    const ids = this.getExpandedSelectedShapeIds();
-    if (ids.length === 0 || this.selectionTouchesLocked(ids)) return;
-    const union = this.svgManipulation.getUnionBBox(ids);
-    if (!union) return;
-    const pivot =
-      this.svgManipulation.getSelectionRotationPivot(ids) ?? unionRotationPivot(union);
-    const snap = this.svgManipulation.snapshotSelectionTransforms(ids);
-    this.editorHistory.pushAndExecute(
-      new UnionRotateCommand(this.svgManipulation, ids, pivot, deltaDeg, snap)
-    );
-    this.svgManipulation.clearHighlight();
-  }
-
   private getCanvasContextMenuSelectionDeps(): CanvasContextMenuSelectionDeps {
     return {
       getSvgInstance: () => this.svgManipulation.getSVGInstance(),
@@ -1266,11 +1250,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   onContextMenuRotateCw(): void {
-    this.rotateSelectionByDegrees(90);
+    this.commandController.rotateSelectionByDegrees(90);
   }
 
   onContextMenuRotateCcw(): void {
-    this.rotateSelectionByDegrees(-90);
+    this.commandController.rotateSelectionByDegrees(-90);
   }
 
   // --- Mouse event orchestration ---
