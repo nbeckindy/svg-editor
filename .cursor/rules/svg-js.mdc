@@ -13,3 +13,7 @@ When modifying, creating, or manipulating SVG content in this project, **always 
 - **Create new SVG structures** with `SVG()`, `SVG(domElement)`, or shape constructors (e.g. `.rect()`, `.circle()`) from the library, not `document.createElementNS('http://www.w3.org/2000/svg', ...)` for elements that live inside the canvas.
 
 This keeps behavior consistent, avoids duplication of logic, and ensures transforms/attributes are applied in a way the rest of the app expects.
+
+## Exception: pure geometry helpers in `models/`
+
+Files under `src/app/models/` that are pure math/geometry utilities (e.g. `outline-to-path.ts`, `path-boolean.ts`) may use `document.createElementNS` and `setAttribute` to construct transient `<path>` elements solely for geometry computation — these elements are never inserted into the live canvas. This is intentional: these helpers are framework-agnostic and must not import svg.js. Do not treat these as violations when reviewing.

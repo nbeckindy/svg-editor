@@ -1,7 +1,6 @@
 import {
   Component,
   ElementRef,
-  HostListener,
   isDevMode,
   output,
   signal,
@@ -12,10 +11,12 @@ import { ToolStripComponent } from '../tool-strip/tool-strip.component';
 
 @Component({
   selector: 'app-editor-left-rail',
-  standalone: true,
   imports: [ToolStripComponent, IconPaletteComponent],
   templateUrl: './editor-left-rail.component.html',
-  styleUrl: './editor-left-rail.component.css'
+  styleUrl: './editor-left-rail.component.css',
+  host: {
+    '(document:click)': 'onDocumentClick($event)'
+  }
 })
 export class EditorLeftRailComponent {
   readonly svgLoaded = output<string>();
@@ -28,7 +29,6 @@ export class EditorLeftRailComponent {
     this.assetsMenuOpen.update((open) => !open);
   }
 
-  @HostListener('document:click', ['$event'])
   onDocumentClick(event: MouseEvent): void {
     if (!this.assetsMenuOpen()) return;
     const root = this.assetsMenuRoot()?.nativeElement;
