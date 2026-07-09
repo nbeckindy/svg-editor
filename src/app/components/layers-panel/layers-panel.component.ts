@@ -1,5 +1,4 @@
 import { CdkDragDrop, CdkDragMove, DragDropModule } from '@angular/cdk/drag-drop';
-import { CommonModule } from '@angular/common';
 import { Component, computed, ElementRef, inject, Injector, signal, viewChild, afterNextRender, effect } from '@angular/core';
 import { MatIconModule } from '@angular/material/icon';
 import { MatMenu, MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
@@ -46,8 +45,7 @@ interface PreviewPaintData {
 
 @Component({
   selector: 'app-layers-panel',
-  standalone: true,
-  imports: [CommonModule, DragDropModule, MatIconModule, MatMenuModule],
+  imports: [DragDropModule, MatIconModule, MatMenuModule],
   templateUrl: './layers-panel.component.html',
   styleUrl: './layers-panel.component.css'
 })

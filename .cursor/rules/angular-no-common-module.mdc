@@ -1,0 +1,35 @@
+---
+description: Do not import CommonModule — use built-in control flow and individual imports instead
+globs: "**/*.component.ts"
+alwaysApply: false
+---
+
+# Do not import CommonModule
+
+Do **not** add `CommonModule` to a component's `imports` array. It is a legacy barrel module superseded by Angular's built-in control flow and individual imports.
+
+## Replacements
+
+| Old (CommonModule) | New |
+|--------------------|-----|
+| `*ngIf` / `*ngFor` / `*ngSwitch` | `@if` / `@for` / `@switch` (built-in, no import needed) |
+| `AsyncPipe` | Import `AsyncPipe` from `@angular/common` directly |
+| `DatePipe`, `CurrencyPipe`, etc. | Import the specific pipe from `@angular/common` directly |
+| `NgClass` | `[class.foo]="expr"` binding, or import `NgClass` directly |
+| `NgStyle` | `[style.prop]="expr"` binding, or import `NgStyle` directly |
+
+## Example
+
+```typescript
+// ❌ BAD
+imports: [CommonModule, MatIconModule]
+
+// ✅ GOOD — no CommonModule; built-in @if / @for needs no import
+imports: [MatIconModule]
+
+// ✅ GOOD — if you genuinely need AsyncPipe
+import { AsyncPipe } from '@angular/common';
+imports: [AsyncPipe, MatIconModule]
+```
+
+Third-party modules (`DragDropModule`, `MatIconModule`, `MatMenuModule`, etc.) are **not** `CommonModule` and are fine to import normally.

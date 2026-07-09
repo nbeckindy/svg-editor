@@ -1,12 +1,10 @@
 import { Component, computed, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-command-bridge.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 
 @Component({
   selector: 'app-path-node-anchor-tools',
-  standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './path-node-anchor-tools.component.html',
   styleUrl: './path-node-anchor-tools.component.css'
 })

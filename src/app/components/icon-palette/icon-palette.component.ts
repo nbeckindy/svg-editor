@@ -1,5 +1,4 @@
 import { Component, output } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TEST_ICONS, TestIcon } from '../../data/test-icons';
 import {
@@ -18,8 +17,7 @@ const DATA_SVG_ICONS: TestIcon[] = [
 
 @Component({
   selector: 'app-icon-palette',
-  standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './icon-palette.component.html',
   styleUrl: './icon-palette.component.css'
 })
