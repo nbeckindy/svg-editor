@@ -11,8 +11,7 @@ import { EditableGradientModel, parsePaintReferenceId } from '../../models/svg-g
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
-import { LAYER_LOCK_READ_PORT } from '../../services/manipulation-port-tokens';
+import { GRADIENT_FILL_EDITOR_SVG_PORT, LAYER_LOCK_READ_PORT } from '../../services/manipulation-port-tokens';
 import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-node-anchor-tools.component';
 
 @Component({
@@ -44,7 +43,7 @@ export class PropertiesPanelComponent {
   private drawingDefaults = inject(DrawingStyleDefaultsService);
   private editorTool = inject(EditorToolService);
   private chromeApply = inject(ChromeEditorApplyService);
-  private readonly svg = inject(SvgManipulationService);
+  private readonly gradientSvgPort = inject(GRADIENT_FILL_EDITOR_SVG_PORT);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
   private readonly layerLock = inject(LAYER_LOCK_READ_PORT);
   readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
@@ -621,7 +620,7 @@ export class PropertiesPanelComponent {
     const url = paintProperty === 'fill' ? shape.fillUrl : shape.strokeUrl;
     const id = parsePaintReferenceId(url ?? undefined);
     if (!id) return null;
-    return this.svg.readEditableGradientModelById(id);
+    return this.gradientSvgPort.readEditableGradientModelById(id);
   }
 
   fillSwatchMode(shape: ShapeProperties): PaintSwatchMode {

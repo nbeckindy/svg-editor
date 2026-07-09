@@ -1,7 +1,7 @@
 import { Component, computed, effect, inject } from '@angular/core';
 import { evaluatePathBooleanSelection, evaluatePathCompoundSelection, type BooleanOp } from '../../models/path-boolean';
 import { evaluateOutlineToPathSelection } from '../../models/outline-to-path';
-import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
+import { ChromeEditorPathOpsApplyService } from '../../services/chrome-apply/chrome-editor-path-ops-apply.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { PathBooleanPreviewService } from '../../services/path-boolean-preview.service';
 import { PathBooleanSelectionReadService } from '../../services/path-boolean-selection-read.service';
@@ -17,7 +17,7 @@ export class BooleanPathPanelComponent {
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly editorTool = inject(EditorToolService);
   private readonly pathSelectionRead = inject(PathBooleanSelectionReadService);
-  private readonly chromeApply = inject(ChromeEditorApplyService);
+  private readonly chromeApply = inject(ChromeEditorPathOpsApplyService);
   private readonly preview = inject(PathBooleanPreviewService);
 
   readonly previewOp = this.preview.previewOp;

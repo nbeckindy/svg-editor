@@ -1,7 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { LAYERS_PANEL_SVG_PORT } from '../../services/manipulation-port-tokens';
-import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
+import { ChromeEditorLayersApplyService } from '../../services/chrome-apply/chrome-editor-layers-apply.service';
 
 export type DropZone = 'before' | 'after' | 'intoGroup' | 'none';
 
@@ -30,7 +30,7 @@ export interface LayerDropPreviewState {
 @Injectable({ providedIn: 'root' })
 export class LayersPanelDndService {
   private readonly svg = inject(LAYERS_PANEL_SVG_PORT);
-  private readonly chromeApply = inject(ChromeEditorApplyService);
+  private readonly chromeApply = inject(ChromeEditorLayersApplyService);
 
   isStrictAncestor(ancestorId: string, descendantId: string): boolean {
     const svg = this.svg.getSVGInstance();
