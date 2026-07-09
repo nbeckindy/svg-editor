@@ -296,16 +296,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   /** Resize/skew/rotate handle circle radius in overlay px (inverse zoom, clamped 4–8 screen px). */
   get selectionHandleRadiusOverlay(): number {
-    return selectionHandleRadiusOverlayPx(this.canvasView.scale);
+    return selectionHandleRadiusOverlayPx(this.canvasView.scale());
   }
 
   get selectionSkewEdgeOutset(): number {
-    return selectionSkewEdgeOutsetOverlayPx(this.canvasView.scale);
+    return selectionSkewEdgeOutsetOverlayPx(this.canvasView.scale());
   }
 
   /** Rotate stem length and handle offset from selection top (inverse zoom, clamped 20–40 screen px). */
   get rotateHandleOffset(): number {
-    return rotateHandleOffsetOverlayPx(this.canvasView.scale);
+    return rotateHandleOffsetOverlayPx(this.canvasView.scale());
   }
 
   get verticalRulerTicks(): { position: number; value: number; major: boolean }[] {
@@ -562,7 +562,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       return null;
     }
     const idKey = this.shapeSelection.getSelectedShapes().map((s) => s.id).join(',');
-    const key = `${this.lastBbox.x}-${this.lastBbox.y}-${this.lastBbox.width}-${this.lastBbox.height}-${this.wrapperWidth}-${this.wrapperHeight}-${this.canvasView.scale}-${this.canvasView.panX}-${this.canvasView.panY}-${this.svgManipulation.documentRevision()}-${idKey}`;
+    const key = `${this.lastBbox.x}-${this.lastBbox.y}-${this.lastBbox.width}-${this.lastBbox.height}-${this.wrapperWidth}-${this.wrapperHeight}-${this.canvasView.scale()}-${this.canvasView.panX()}-${this.canvasView.panY()}-${this.svgManipulation.documentRevision()}-${idKey}`;
     if (this._highlightRectCacheKey === key) {
       return this._highlightRectCache;
     }
@@ -787,7 +787,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       getZoomMarquee: () => this.zoomMarquee,
       isZoomMarquee: () => this.isZoomMarquee,
       commitZoomMarquee: () => this.commitZoomMarquee(),
-      detectChanges: () => this.cdr.detectChanges(),
       consumeZoomMarqueeJustEnded: () => this.zoomMarquee.consumeJustEnded(),
       screenToSvg: (clientX: number, clientY: number) => {
         const rect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
@@ -947,8 +946,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.isPanning = true;
     this.panStartClientX = event.clientX;
     this.panStartClientY = event.clientY;
-    this.panStartX = this.canvasView.panX;
-    this.panStartY = this.canvasView.panY;
+    this.panStartX = this.canvasView.panX();
+    this.panStartY = this.canvasView.panY();
   }
 
   onCanvasPenPrimaryMouseDown(event: MouseEvent): boolean {
@@ -1098,8 +1097,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   private zoomInAtViewportCenter(): void {
     if (!this.canvasView.isInitialized() || this.wrapperWidth <= 0 || this.wrapperHeight <= 0) return;
-    const svgX = (this.wrapperWidth / 2 - this.canvasView.panX) / this.canvasView.scale;
-    const svgY = (this.wrapperHeight / 2 - this.canvasView.panY) / this.canvasView.scale;
+    const svgX = (this.wrapperWidth / 2 - this.canvasView.panX()) / this.canvasView.scale();
+    const svgY = (this.wrapperHeight / 2 - this.canvasView.panY()) / this.canvasView.scale();
     this.canvasView.zoomInAt(svgX, svgY);
     this.updateViewBoxOverlayRect();
     this.cdr.detectChanges();
@@ -1107,8 +1106,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   private zoomOutAtViewportCenter(): void {
     if (!this.canvasView.isInitialized() || this.wrapperWidth <= 0 || this.wrapperHeight <= 0) return;
-    const svgX = (this.wrapperWidth / 2 - this.canvasView.panX) / this.canvasView.scale;
-    const svgY = (this.wrapperHeight / 2 - this.canvasView.panY) / this.canvasView.scale;
+    const svgX = (this.wrapperWidth / 2 - this.canvasView.panX()) / this.canvasView.scale();
+    const svgY = (this.wrapperHeight / 2 - this.canvasView.panY()) / this.canvasView.scale();
     this.canvasView.zoomOutAt(svgX, svgY);
     this.updateViewBoxOverlayRect();
     this.cdr.detectChanges();
@@ -1134,8 +1133,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     const layoutOffsetY = (vh - svgHpx) / 2;
 
     this.canvasView.zoomToFitRect(0, 0, svgWpx, svgHpx, vw, vh, 64, INITIAL_LOAD_VIEWPORT_FIT_FRACTION);
-    this.canvasView.panX -= layoutOffsetX;
-    this.canvasView.panY -= layoutOffsetY;
+    this.canvasView.panBy(-layoutOffsetX, -layoutOffsetY);
 
     this.updateViewBoxOverlayRect();
     this.cdr.detectChanges();
@@ -1162,8 +1160,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     const layoutOffsetY = (vh - svgHpx) / 2;
 
     this.canvasView.zoomToFitRect(0, 0, svgWpx, svgHpx, vw, vh, 64, INITIAL_LOAD_VIEWPORT_FIT_FRACTION);
-    this.canvasView.panX -= layoutOffsetX;
-    this.canvasView.panY -= layoutOffsetY;
+    this.canvasView.panBy(-layoutOffsetX, -layoutOffsetY);
 
     this.updateViewBoxOverlayRect();
     this.cdr.detectChanges();
@@ -1375,7 +1372,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     }
     const rawRect = this.svgContainer()?.nativeElement?.getBoundingClientRect();
     if (rawRect && this.svgContent() && this.canvasView.isInitialized()) {
-      const scale = this.canvasView.scale;
+      const scale = this.canvasView.scale();
       const marqueeRect = this.zoomMarquee.toSvgRect(rawRect, scale);
       if (marqueeRect && !this.zoomMarquee.isTinyDrag() && marqueeRect.width > 0 && marqueeRect.height > 0 && this.wrapperWidth > 0 && this.wrapperHeight > 0) {
         const { x, y, width, height } = marqueeRect;
@@ -1384,8 +1381,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         if (viewportEl && wrapperEl) {
           const wrapperRect = wrapperEl.getBoundingClientRect();
           const containerRect = viewportEl.getBoundingClientRect();
-          this.canvasView.panX += containerRect.left - wrapperRect.left;
-          this.canvasView.panY += containerRect.top - wrapperRect.top;
+          this.canvasView.panBy(containerRect.left - wrapperRect.left, containerRect.top - wrapperRect.top);
         }
         this.updateViewBoxOverlayRect();
         this.zoomMarquee.finish(true);
@@ -1464,9 +1460,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         getWrapperHeight: () => this.wrapperHeight,
         getRulerOriginOffsetX: () => this.rulerOriginOffsetX,
         getRulerOriginOffsetY: () => this.rulerOriginOffsetY,
-        getCanvasScale: () => this.canvasView.scale,
-        getCanvasPanX: () => this.canvasView.panX,
-        getCanvasPanY: () => this.canvasView.panY,
+        getCanvasScale: () => this.canvasView.scale(),
+        getCanvasPanX: () => this.canvasView.panX(),
+        getCanvasPanY: () => this.canvasView.panY(),
         isGridSnapEnabled: () => this.snap.gridEnabled(),
         hasSvgContent: () => !!this.svgContent(),
         isAltKeyPressed: () => this.altKeyPressed,
@@ -1483,9 +1479,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     effect(() => {
       this.pathBooleanPreview.previewRootUserD();
       this.pathBooleanPreview.previewOp();
-      void this.canvasView.scale;
-      void this.canvasView.panX;
-      void this.canvasView.panY;
+      this.canvasView.scale();
+      this.canvasView.panX();
+      this.canvasView.panY();
       void this.wrapperWidth;
       void this.wrapperHeight;
       this.cdr.markForCheck();
@@ -1868,7 +1864,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         this.svgContainer()?.nativeElement?.firstElementChild as SVGSVGElement | null,
       getOverlayViewBoxString: () => this.overlayViewBox,
       getZoomWrapperElement: () => this.zoomWrapper()?.nativeElement ?? null,
-      getCanvasScale: () => this.canvasView.scale,
+      getCanvasScale: () => this.canvasView.scale(),
       getWrapperWidth: () => this.wrapperWidth,
       getWrapperHeight: () => this.wrapperHeight
     });
@@ -2003,8 +1999,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       INITIAL_LOAD_VIEWPORT_FIT_FRACTION
     );
 
-    this.canvasView.panX -= layoutOffsetX;
-    this.canvasView.panY -= layoutOffsetY;
+    this.canvasView.panBy(-layoutOffsetX, -layoutOffsetY);
 
     this.cdr.markForCheck();
     setTimeout(() => {

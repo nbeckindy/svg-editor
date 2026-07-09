@@ -134,7 +134,6 @@ describe('CanvasBoundToolRegistrar', () => {
         getZoomMarquee: () => new ZoomMarqueeGesture(),
         isZoomMarquee: () => false,
         commitZoomMarquee: vi.fn(),
-        detectChanges: vi.fn(),
         isCanvasReady: () => true,
         consumeZoomMarqueeJustEnded: () => false,
         screenToSvg: () => null,

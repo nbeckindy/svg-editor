@@ -391,9 +391,9 @@ describe('SvgCanvasComponent', () => {
     component.wrapperHeight = 100;
     fixture.detectChanges();
 
-    canvasViewService.panX = 20;
-    canvasViewService.panY = 12;
-    canvasViewService.scale = 2;
+    canvasViewService.panX.set(20);
+    canvasViewService.panY.set(12);
+    canvasViewService.scale.set(2);
 
     const xOriginAtScale2 = component.svgBboxToOverlayPixels({ x: 0, y: 0, width: 0, height: 0 }).x;
     const verticalAtOrigin = component.verticalGridLines.find(
@@ -402,7 +402,7 @@ describe('SvgCanvasComponent', () => {
     expect(verticalAtOrigin).toBeDefined();
 
     const stepAtScale2 = component.gridStepSvgUnits;
-    canvasViewService.scale = 0.5;
+    canvasViewService.scale.set(0.5);
     const stepAtScale05 = component.gridStepSvgUnits;
     expect(stepAtScale05).toBeGreaterThan(stepAtScale2);
   });
@@ -1214,8 +1214,8 @@ describe('SvgCanvasComponent', () => {
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('pan');
-    canvasViewService.panX = 10;
-    canvasViewService.panY = 20;
+    canvasViewService.panX.set(10);
+    canvasViewService.panY.set(20);
 
     const mousedownEvent = {
       button: 0,
@@ -1465,9 +1465,9 @@ describe('SvgCanvasComponent', () => {
 
     // With fitFraction 0.88 and svgWpx=200, viewportW=200:
     // scale = (200*0.88)/200 = 0.88
-    expect(canvasViewService.scale).toBeCloseTo(0.88, 3);
-    expect(canvasViewService.panX).toBeCloseTo(12, 3);
-    expect(canvasViewService.panY).toBeCloseTo(12, 3);
+    expect(canvasViewService.scale()).toBeCloseTo(0.88, 3);
+    expect(canvasViewService.panX()).toBeCloseTo(12, 3);
+    expect(canvasViewService.panY()).toBeCloseTo(12, 3);
   });
 
   it('should refresh viewBox overlay after initial fit-to-view (race-free)', async () => {
@@ -1505,12 +1505,12 @@ describe('SvgCanvasComponent', () => {
     fixture.detectChanges();
 
     // scale = (viewport * fitFraction) / svgWpx = (200*0.88)/150
-    expect(canvasViewService.scale).toBeCloseTo(1.1733333333, 3);
+    expect(canvasViewService.scale()).toBeCloseTo(1.1733333333, 3);
 
     // zoomToFitRect pan (no offset compensation) would be 12.
     // layout offset = (viewport - svgWpx)/2 = 25, so final pan should be -13.
-    expect(canvasViewService.panX).toBeCloseTo(-13, 3);
-    expect(canvasViewService.panY).toBeCloseTo(-13, 3);
+    expect(canvasViewService.panX()).toBeCloseTo(-13, 3);
+    expect(canvasViewService.panY()).toBeCloseTo(-13, 3);
   });
 
   it('should not show overlay rect when getShapeBBox returns null for selected shape', async () => {
@@ -2543,7 +2543,7 @@ describe('SvgCanvasComponent', () => {
       width: 16,
       height: 16
     };
-    canvasViewService.scale = 1;
+    canvasViewService.scale.set(1);
     const r1 = component.highlightRect;
     (component as unknown as { lastBbox: { x: number; y: number; width: number; height: number } }).lastBbox = {
       x: 0,
@@ -2676,9 +2676,9 @@ describe('SvgCanvasComponent', () => {
       expect(snapSpy).toHaveBeenCalled();
       expect(applySpy).not.toHaveBeenCalled();
 
-      canvasViewService.scale = 1;
-      canvasViewService.panX = 0;
-      canvasViewService.panY = 0;
+      canvasViewService.scale.set(1);
+      canvasViewService.panX.set(0);
+      canvasViewService.panY.set(0);
       component.onDocumentMouseMove({
         clientX: 80,
         clientY: 70
@@ -2805,9 +2805,9 @@ describe('SvgCanvasComponent', () => {
       expect(snapSpy).toHaveBeenCalled();
       expect(applySpy).not.toHaveBeenCalled();
 
-      canvasViewService.scale = 1;
-      canvasViewService.panX = 0;
-      canvasViewService.panY = 0;
+      canvasViewService.scale.set(1);
+      canvasViewService.panX.set(0);
+      canvasViewService.panY.set(0);
       component.onDocumentMouseMove({
         clientX: 80,
         clientY: 70
@@ -6822,16 +6822,16 @@ describe('SvgCanvasComponent', () => {
       await new Promise((r) => setTimeout(r, 50));
       fixture.detectChanges();
 
-      canvasViewService.scale = 4;
-      canvasViewService.panX = 10;
-      canvasViewService.panY = 20;
+      canvasViewService.scale.set(4);
+      canvasViewService.panX.set(10);
+      canvasViewService.panY.set(20);
 
       const resetSpy = vi.spyOn(canvasViewService, 'resetZoom');
       component.onKeyDown(new KeyboardEvent('keydown', { key: '0', ctrlKey: true, bubbles: true }));
       expect(resetSpy).toHaveBeenCalled();
-      expect(canvasViewService.scale).toBe(1);
-      expect(canvasViewService.panX).toBe(0);
-      expect(canvasViewService.panY).toBe(0);
+      expect(canvasViewService.scale()).toBe(1);
+      expect(canvasViewService.panX()).toBe(0);
+      expect(canvasViewService.panY()).toBe(0);
     });
 
     it('Ctrl+= does nothing when no SVG content', () => {

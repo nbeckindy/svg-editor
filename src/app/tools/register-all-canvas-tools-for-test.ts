@@ -1,5 +1,4 @@
 import { vi } from 'vitest';
-import type { ChangeDetectorRef } from '@angular/core';
 import { CreationGesture } from '../components/svg-canvas/gestures/creation-gesture';
 import { DragGesture } from '../components/svg-canvas/gestures/drag-gesture';
 import type { GestureRuntimeContext } from '../components/svg-canvas/gestures/gesture-context';
@@ -59,7 +58,6 @@ export interface CanvasToolsTestHostState {
   zoomInAt: (x: number, y: number) => void;
   zoomOutAt: (x: number, y: number) => void;
   refreshViewAfterZoomClick: () => void;
-  detectChanges: () => void;
   scheduleInsertHoverCursorHitTest: (clientX: number, clientY: number) => void;
   getSelectorKeyboardActions: () => SelectorKeyboardActionsPort;
   getDrilledIntoGroupId: () => string | null;
@@ -82,7 +80,6 @@ export interface RegisterAllCanvasToolsForTestOptions {
   runtime?: GestureRuntimeContext;
   hostState?: Partial<CanvasToolsTestHostState>;
   penTool?: PenToolSession;
-  detectChanges?: ChangeDetectorRef['detectChanges'];
 }
 
 export interface RegisterAllCanvasToolsForTestResult {
@@ -132,7 +129,6 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     zoomInAt: vi.fn(),
     zoomOutAt: vi.fn(),
     refreshViewAfterZoomClick: vi.fn(),
-    detectChanges: vi.fn(),
     scheduleInsertHoverCursorHitTest: vi.fn(),
     getDrilledIntoGroupId: () => null,
     setDrilledIntoGroupId: vi.fn(),
@@ -230,10 +226,6 @@ export function registerAllCanvasToolsForTest(
     ...createDefaultCanvasToolsTestHostState(),
     ...options.hostState
   };
-  if (options.detectChanges) {
-    hostState.detectChanges = options.detectChanges;
-  }
-
   const penTool = options.penTool ?? createDefaultPenToolStub();
 
   registrar.registerCreationTools(gestures.creation, () => runtime, () => hostState.isCanvasReady);
@@ -284,7 +276,6 @@ export function registerAllCanvasToolsForTest(
       getZoomMarquee: () => gestures.zoomMarquee,
       isZoomMarquee: () => hostState.isZoomMarquee,
       commitZoomMarquee: hostState.commitZoomMarquee,
-      detectChanges: hostState.detectChanges,
       isCanvasReady: () => hostState.isCanvasReady,
       consumeZoomMarqueeJustEnded: () => hostState.consumeZoomMarqueeJustEnded,
       screenToSvg: hostState.screenToSvg,

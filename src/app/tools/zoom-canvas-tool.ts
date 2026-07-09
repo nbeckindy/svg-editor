@@ -6,7 +6,6 @@ export interface ZoomCanvasToolDeps {
   getZoomMarquee: () => ZoomMarqueeGesture;
   isZoomMarquee: () => boolean;
   commitZoomMarquee: () => void;
-  detectChanges: () => void;
   isCanvasReady: () => boolean;
   consumeZoomMarqueeJustEnded: () => boolean;
   screenToSvg: (clientX: number, clientY: number) => { x: number; y: number } | null;
@@ -28,7 +27,6 @@ export function createZoomCanvasTool(getDeps: () => ZoomCanvasToolDeps): CanvasT
       const deps = getDeps();
       if (!deps.isZoomMarquee()) return false;
       deps.getZoomMarquee().move(event.clientX, event.clientY);
-      deps.detectChanges();
       return true;
     },
     onPointerUp() {

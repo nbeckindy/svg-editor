@@ -1,5 +1,4 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { ChangeDetectorRef } from '@angular/core';
 import { PointerGestureRouter, type SvgCanvasPointerGestureHost } from './pointer-gesture-router';
 import type { GestureRuntimeContext } from './gesture-context';
 import { CreationGesture } from './creation-gesture';
@@ -98,7 +97,6 @@ describe('PointerGestureRouter', () => {
   let skew: SkewGesture;
   let rotate: RotateGesture;
   let drag: DragGesture;
-  let cdr: Pick<ChangeDetectorRef, 'detectChanges'>;
   let registry: ToolRegistryService;
   let hostState: CanvasToolsTestHostState;
 
@@ -110,7 +108,6 @@ describe('PointerGestureRouter', () => {
     skew = new SkewGesture();
     rotate = new RotateGesture();
     drag = new DragGesture();
-    cdr = { detectChanges: vi.fn() };
     vi.spyOn(creation, 'move');
     vi.spyOn(creation, 'end');
     vi.spyOn(selectionMarquee, 'move');
@@ -121,8 +118,7 @@ describe('PointerGestureRouter', () => {
     vi.spyOn(drag, 'move');
 
     const boot = registerAllCanvasToolsForTest({
-      gestures: { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
-      detectChanges: cdr.detectChanges
+      gestures: { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag }
     });
     registry = boot.registry;
     hostState = boot.hostState;
@@ -198,8 +194,7 @@ describe('PointerGestureRouter', () => {
     } as unknown as PenToolSession;
     const boot = registerAllCanvasToolsForTest({
       gestures: { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
-      penTool,
-      detectChanges: cdr.detectChanges
+      penTool
     });
     const penRouter = new PointerGestureRouter(boot.registry);
     const host = makeHost({ getCurrentTool: () => 'pen' }, boot.hostState);
@@ -216,8 +211,7 @@ describe('PointerGestureRouter', () => {
     } as unknown as PenToolSession;
     const boot = registerAllCanvasToolsForTest({
       gestures: { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
-      penTool,
-      detectChanges: cdr.detectChanges
+      penTool
     });
     const penRouter = new PointerGestureRouter(boot.registry);
     const host = makeHost({ getCurrentTool: () => 'pen' }, boot.hostState);
@@ -227,12 +221,11 @@ describe('PointerGestureRouter', () => {
     expect(selectionMarquee.move).not.toHaveBeenCalled();
   });
 
-  it('onDocumentMouseMove calls zoomMarquee.move and detectChanges when zoom marquee is active', () => {
+  it('onDocumentMouseMove calls zoomMarquee.move when zoom marquee is active', () => {
     const host = makeHost({ getCurrentTool: () => 'zoom' }, hostState);
     hostState.isZoomMarquee = true;
     router.onDocumentMouseMove(host, { clientX: 7, clientY: 8, shiftKey: false } as MouseEvent);
     expect(zoomMarquee.move).toHaveBeenCalledWith(7, 8);
-    expect(cdr.detectChanges).toHaveBeenCalled();
   });
 
   it('onDocumentMouseMove routes to resize before skew, rotate, pan, and drag', () => {
@@ -410,8 +403,7 @@ describe('PointerGestureRouter', () => {
     const boot = registerAllCanvasToolsForTest({
       gestures: { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
       penTool,
-      hostState: { tryStartPathNodeDrag, hasPathNodeEditState: true },
-      detectChanges: cdr.detectChanges
+      hostState: { tryStartPathNodeDrag, hasPathNodeEditState: true }
     });
     const penRouter = new PointerGestureRouter(boot.registry);
     const host = makeHost({ getCurrentTool: () => 'pen' }, boot.hostState);
@@ -441,8 +433,7 @@ describe('PointerGestureRouter', () => {
     const boot = registerAllCanvasToolsForTest({
       gestures: { creation, selectionMarquee, zoomMarquee, resize, skew, rotate, drag },
       penTool,
-      hostState: { tryStartPathNodeDrag, hasPathNodeEditState: true },
-      detectChanges: cdr.detectChanges
+      hostState: { tryStartPathNodeDrag, hasPathNodeEditState: true }
     });
     const penRouter = new PointerGestureRouter(boot.registry);
     const host = makeHost({ getCurrentTool: () => 'pen' }, boot.hostState);

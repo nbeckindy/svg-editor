@@ -47,7 +47,7 @@
       <div
         #zoomWrapper
         class="svg-zoom-wrapper"
-        [style.transform]="'translate(' + canvasView.panX + 'px,' + canvasView.panY + 'px) scale(' + canvasView.scale + ')'"
+        [style.transform]="'translate(' + canvasView.panX() + 'px,' + canvasView.panY() + 'px) scale(' + canvasView.scale() + ')'"
         style="transform-origin: 0 0">
         <div #svgContainer class="svg-user-document"></div>
       </div>
@@ -56,8 +56,8 @@
         class="highlight-overlay-container"
         data-testid="canvas-selection-overlay"
         aria-hidden="true"
-        [style.left.px]="canvasView.panX"
-        [style.top.px]="canvasView.panY"
+        [style.left.px]="canvasView.panX()"
+        [style.top.px]="canvasView.panY()"
         [style.width.px]="editorChrome.overlayWidthPx"
         [style.height.px]="editorChrome.overlayHeightPx">
         <svg
@@ -301,8 +301,8 @@
       </div>
       @if (editorChrome.isInlineTextEditModeActive && editorChrome.inlineTextEditOverlayRect; as textRect) {
         <app-inline-text-editor-overlay
-          [panX]="canvasView.panX"
-          [panY]="canvasView.panY"
+          [panX]="canvasView.panX()"
+          [panY]="canvasView.panY()"
           [overlayRect]="textRect"
           [value]="editorChrome.inlineTextEditValue"
           [hint]="editorChrome.inlineTextEditorHint"
