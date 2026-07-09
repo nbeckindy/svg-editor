@@ -1,4 +1,4 @@
-import { Component, output } from '@angular/core';
+import { Component, inject, output } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TEST_ICONS, TestIcon } from '../../data/test-icons';
 import {
@@ -22,11 +22,11 @@ const DATA_SVG_ICONS: TestIcon[] = [
   styleUrl: './icon-palette.component.css'
 })
 export class IconPaletteComponent {
+  private readonly sanitizer = inject(DomSanitizer);
+
   readonly svgLoaded = output<string>();
 
   icons: TestIcon[] = [...TEST_ICONS, ...DATA_SVG_ICONS];
-
-  constructor(private sanitizer: DomSanitizer) {}
 
   private injectTestMarker(svg: string): string {
     const marker = '<!--svg-editor-test-icon-->';

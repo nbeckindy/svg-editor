@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach } from 'vitest';
 import { ToolRegistryService } from './tool-registry.service';
 import type { ToolDescriptor } from './tool-descriptor';
 import type { CanvasTool } from './canvas-tool.interface';
-import type { CanvasToolHost } from './canvas-tool-host.interface';
+import type { CanvasAdapterContext } from './canvas-adapter-context';
 
 function makeTool(toolId: CanvasTool['toolId']): CanvasTool {
   return {
@@ -59,7 +59,7 @@ describe('ToolRegistryService', () => {
     const first = makeTool('rect');
     const second: CanvasTool = {
       ...makeTool('rect'),
-      onActivate: (_host: CanvasToolHost) => {}
+      onActivate: (_ctx: CanvasAdapterContext) => {}
     };
     registry.register(first);
     registry.register(second);

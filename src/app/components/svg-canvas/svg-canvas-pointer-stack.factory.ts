@@ -47,6 +47,7 @@ export interface SvgCanvasPointerStack {
 }
 
 export interface CreateSvgCanvasPointerStackArgs {
+  // Gesture runtime construction
   cdr: ChangeDetectorRef;
   highlightOverlayContainer: Signal<ElementRef<HTMLElement> | undefined>;
   svgManipulation: SvgManipulationService;
@@ -58,54 +59,25 @@ export interface CreateSvgCanvasPointerStackArgs {
   setLastBbox: (bbox: Rect | null) => void;
   getSmartGuideCandidates: () => SnapCandidateShape[];
   isSnapTemporarilyDisabled: () => boolean;
-  createPenToolSessionPorts: () => PenToolSessionPorts;
+  // Tool registration
   toolRegistry: ToolRegistryService;
   canvasBoundToolRegistrar: CanvasBoundToolRegistrar;
   isCanvasReady: () => boolean;
-  getSnappedPenPoint: PenCanvasToolDeps['getSnappedPenPoint'];
-  hasPathNodeEditState: PenCanvasToolDeps['hasPathNodeEditState'];
-  tryStartPathNodeDrag: PenCanvasToolDeps['tryStartPathNodeDrag'];
-  scheduleInsertHoverCursorHitTest: PenCanvasToolDeps['scheduleInsertHoverCursorHitTest'];
-  isEditorContentShapeTarget: SelectorCanvasToolDeps['isEditorContentShapeTarget'];
-  isShapeSelected: SelectorCanvasToolDeps['isShapeSelected'];
-  getNearestGroupAncestorId: SelectorCanvasToolDeps['getNearestGroupAncestorId'];
-  getSelectedShapeIds: SelectorCanvasToolDeps['getSelectedShapeIds'];
-  getExpandedDragShapeIds: SelectorCanvasToolDeps['getExpandedDragShapeIds'];
-  isSelectionMarquee: SelectorCanvasToolDeps['isSelectionMarquee'];
-  isResizingSelection: SelectorCanvasToolDeps['isResizingSelection'];
-  isSkewingSelection: SelectorCanvasToolDeps['isSkewingSelection'];
-  isRotatingSelection: SelectorCanvasToolDeps['isRotatingSelection'];
-  isDraggingShape: SelectorCanvasToolDeps['isDraggingShape'];
-  getSelectorKeyboardActions: SelectorCanvasToolDeps['getKeyboardActions'];
-  getDrilledIntoGroupId: SelectorCanvasToolDeps['getDrilledIntoGroupId'];
-  setDrilledIntoGroupId: SelectorCanvasToolDeps['setDrilledIntoGroupId'];
-  isGroupAClipMaskCarrier: SelectorCanvasToolDeps['isGroupAClipMaskCarrier'];
-  consumeSelectionMarqueeJustEnded: SelectorCanvasToolDeps['consumeSelectionMarqueeJustEnded'];
-  shouldSkipEmptyHitSelectionClear: SelectorCanvasToolDeps['shouldSkipEmptyHitSelectionClear'];
-  clearHighlight: SelectorCanvasToolDeps['clearHighlight'];
-  getSvgInstanceForClick: SelectorCanvasToolDeps['getSvgInstance'];
-  getShapePropertiesForClick: SelectorCanvasToolDeps['getShapeProperties'];
-  getShapePropertiesInSameClipGroupForClick: SelectorCanvasToolDeps['getSelectorSelectionForShape'];
-  selectShapesForClick: SelectorCanvasToolDeps['selectShapes'];
-  toggleShapeGroupInSelectionForClick: SelectorCanvasToolDeps['toggleShapeGroupInSelection'];
-  clearSelectionForClick: SelectorCanvasToolDeps['clearSelection'];
-  getZoomMarquee: ZoomCanvasToolDeps['getZoomMarquee'];
-  isZoomMarquee: ZoomCanvasToolDeps['isZoomMarquee'];
-  commitZoomMarquee: ZoomCanvasToolDeps['commitZoomMarquee'];
-  detectChanges: ZoomCanvasToolDeps['detectChanges'];
-  consumeZoomMarqueeJustEnded: ZoomCanvasToolDeps['consumeZoomMarqueeJustEnded'];
-  screenToSvgForZoom: ZoomCanvasToolDeps['screenToSvg'];
-  zoomInAt: ZoomCanvasToolDeps['zoomInAt'];
-  zoomOutAt: ZoomCanvasToolDeps['zoomOutAt'];
-  refreshViewAfterZoomClick: ZoomCanvasToolDeps['refreshViewAfterZoomClick'];
-  beginPanSession: PanCanvasToolDeps['beginPanSession'];
-  isPanning: PanCanvasToolDeps['isPanning'];
-  applyPanDragFromEvent: PanCanvasToolDeps['applyPanDragFromEvent'];
-  clearPanningFlag: PanCanvasToolDeps['clearPanningFlag'];
-  updateTextToolPreviewFromClient: TextCanvasToolDeps['updateTextToolPreviewFromClient'];
-  createTextAtPoint: TextCanvasToolDeps['createTextAtPoint'];
-  destroyTextToolPreview: TextCanvasToolDeps['destroyTextToolPreview'];
-  sampleEyedropperAt: EyedropperCanvasToolDeps['sampleAt'];
+  createPenToolSessionPorts: () => PenToolSessionPorts;
+  /**
+   * Per-tool dep providers. The factory contributes the fields it owns
+   * (gesture instances, session references, shared isCanvasReady/clientToEditorSvgPoint)
+   * and spreads these provider results to complete each tool's full dep object.
+   */
+  getPenToolDeps: () => Omit<PenCanvasToolDeps, 'getPenTool' | 'isCanvasReady'>;
+  getSelectorToolDeps: () => Omit<
+    SelectorCanvasToolDeps,
+    'getGestures' | 'getRuntime' | 'isCanvasReady' | 'clientToEditorSvgPoint'
+  >;
+  getZoomToolDeps: () => Omit<ZoomCanvasToolDeps, 'isCanvasReady'>;
+  getPanToolDeps: () => PanCanvasToolDeps;
+  getTextToolDeps: () => Omit<TextCanvasToolDeps, 'isCanvasReady'>;
+  getEyedropperToolDeps: () => Omit<EyedropperCanvasToolDeps, 'isCanvasReady'>;
 }
 
 export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArgs): SvgCanvasPointerStack {
@@ -158,74 +130,23 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
 
   args.canvasBoundToolRegistrar.registerPenTool(() => ({
     getPenTool: () => penTool,
-    getSnappedPenPoint: args.getSnappedPenPoint,
-    hasPathNodeEditState: args.hasPathNodeEditState,
-    tryStartPathNodeDrag: args.tryStartPathNodeDrag,
     isCanvasReady: args.isCanvasReady,
-    scheduleInsertHoverCursorHitTest: args.scheduleInsertHoverCursorHitTest
+    ...args.getPenToolDeps()
   }));
 
   args.canvasBoundToolRegistrar.registerSelectorTools(() => ({
     getGestures: () => ({ selectionMarquee, resize, skew, rotate, drag }),
     getRuntime: () => gestureRuntime,
     isCanvasReady: args.isCanvasReady,
-    hasPathNodeEditState: args.hasPathNodeEditState,
-    tryStartPathNodeDrag: args.tryStartPathNodeDrag,
-    isEditorContentShapeTarget: args.isEditorContentShapeTarget,
     clientToEditorSvgPoint: (cx, cy) => args.coordinateMapping.clientToEditorSvgPoint(cx, cy),
-    isShapeSelected: args.isShapeSelected,
-    getNearestGroupAncestorId: args.getNearestGroupAncestorId,
-    getSelectedShapeIds: args.getSelectedShapeIds,
-    getExpandedDragShapeIds: args.getExpandedDragShapeIds,
-    isSelectionMarquee: args.isSelectionMarquee,
-    isResizingSelection: args.isResizingSelection,
-    isSkewingSelection: args.isSkewingSelection,
-    isRotatingSelection: args.isRotatingSelection,
-    isDraggingShape: args.isDraggingShape,
-    getKeyboardActions: args.getSelectorKeyboardActions,
-    getSvgInstance: args.getSvgInstanceForClick,
-    getShapeProperties: args.getShapePropertiesForClick,
-    getSelectorSelectionForShape: args.getShapePropertiesInSameClipGroupForClick,
-    selectShapes: args.selectShapesForClick,
-    toggleShapeGroupInSelection: args.toggleShapeGroupInSelectionForClick,
-    clearSelection: args.clearSelectionForClick,
-    clearHighlight: args.clearHighlight,
-    getDrilledIntoGroupId: args.getDrilledIntoGroupId,
-    setDrilledIntoGroupId: args.setDrilledIntoGroupId,
-    isGroupAClipMaskCarrier: args.isGroupAClipMaskCarrier,
-    consumeSelectionMarqueeJustEnded: args.consumeSelectionMarqueeJustEnded,
-    shouldSkipEmptyHitSelectionClear: args.shouldSkipEmptyHitSelectionClear
+    ...args.getSelectorToolDeps()
   }));
 
   args.canvasBoundToolRegistrar.registerViewUtilityTools({
-    getZoomDeps: () => ({
-      getZoomMarquee: args.getZoomMarquee,
-      isZoomMarquee: args.isZoomMarquee,
-      commitZoomMarquee: args.commitZoomMarquee,
-      detectChanges: args.detectChanges,
-      isCanvasReady: args.isCanvasReady,
-      consumeZoomMarqueeJustEnded: args.consumeZoomMarqueeJustEnded,
-      screenToSvg: args.screenToSvgForZoom,
-      zoomInAt: args.zoomInAt,
-      zoomOutAt: args.zoomOutAt,
-      refreshViewAfterZoomClick: args.refreshViewAfterZoomClick
-    }),
-    getPanDeps: () => ({
-      beginPanSession: args.beginPanSession,
-      isPanning: args.isPanning,
-      applyPanDragFromEvent: args.applyPanDragFromEvent,
-      clearPanningFlag: args.clearPanningFlag
-    }),
-    getTextDeps: () => ({
-      isCanvasReady: args.isCanvasReady,
-      updateTextToolPreviewFromClient: args.updateTextToolPreviewFromClient,
-      createTextAtPoint: args.createTextAtPoint,
-      destroyTextToolPreview: args.destroyTextToolPreview
-    }),
-    getEyedropperDeps: () => ({
-      isCanvasReady: args.isCanvasReady,
-      sampleAt: args.sampleEyedropperAt
-    })
+    getZoomDeps: () => ({ isCanvasReady: args.isCanvasReady, ...args.getZoomToolDeps() }),
+    getPanDeps: () => args.getPanToolDeps(),
+    getTextDeps: () => ({ isCanvasReady: args.isCanvasReady, ...args.getTextToolDeps() }),
+    getEyedropperDeps: () => ({ isCanvasReady: args.isCanvasReady, ...args.getEyedropperToolDeps() })
   });
 
   return {

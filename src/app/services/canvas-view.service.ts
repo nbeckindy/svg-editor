@@ -1,4 +1,4 @@
-import { Injectable } from '@angular/core';
+import { inject, Injectable } from '@angular/core';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 
 /** Minimum zoom (1/64 ≈ 1.56%); mirrors default `zoomToFitRect` maxScale of 64. */
@@ -8,11 +8,11 @@ export const CANVAS_MIN_ZOOM_SCALE = 1 / 64;
   providedIn: 'root'
 })
 export class CanvasViewService {
+  private readonly doc = inject(SvgEditorDocumentService);
+
   scale = 1;
   panX = 0;
   panY = 0;
-
-  constructor(private readonly doc: SvgEditorDocumentService) {}
 
   /**
    * Reset zoom state when a new SVG is loaded. Does not touch the SVG element.
