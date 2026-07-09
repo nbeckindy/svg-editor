@@ -2,107 +2,91 @@
 
 This project uses **bd** (beads) for issue tracking. Run `bd prime` for full workflow context.
 
-## Quick Reference
+## Issue Tracking (beads)
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work atomically
-bd close <id>         # Complete work
-bd dolt push          # Push beads data to remote
+bd ready                  # Find available work
+bd show <id>              # View issue details
+bd update <id> --claim    # Claim work atomically
+bd close <id>             # Complete work
+bd dolt push              # Push beads data to remote
+bd remember               # Persist knowledge — do NOT use MEMORY.md files
 ```
 
-## Standard Beads Workflow
+**Rules:**
+- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
+- Run `bd prime` for detailed command reference and session close protocol
+
+## Build & Test
 
 ```bash
-bd ready                 # Pick the next issue
-bd show <id>             # Confirm scope + acceptance criteria
-bd update <id> --claim   # Claim before making code changes
-# implement + test
-bd close <id>            # Close when acceptance criteria are met
+npm test          # Vitest unit tests
+npm run build     # Production build
 ```
 
-## Architecture (ports, tools, commands)
+## Architecture
 
-Read **[CONTEXT.md](CONTEXT.md)** for editor vocabulary and **[plans/ARCHITECTURE.md](plans/ARCHITECTURE.md)** for current seams.
+Angular SVG editor with a **partially hexagonal** layout: narrow **ports**, **EditorCommand** undo/redo, **ToolRegistryService** + **CanvasTool** adapters, and registry-driven dock/tool strip UI.
 
-When adding or changing a **Tool**:
+| Doc | Purpose |
+|-----|---------|
+| [CONTEXT.md](CONTEXT.md) | Editor-runtime vocabulary (**Tool**, **Ports**, **Canvas adapter**, …) |
+| [plans/ARCHITECTURE.md](plans/ARCHITECTURE.md) | Current seams, gravity wells, **adding a canvas tool** checklist |
+| [plans/epics/hexagonal-architecture-extensibility.md](plans/epics/hexagonal-architecture-extensibility.md) | Phase 1–2 epic history and remaining gaps |
 
-1. Register a **`ToolDescriptor`** + **`CanvasTool`** adapter (`src/app/tools/`) — do not add tool branches to `SvgCanvasComponent` or `PointerGestureRouter`.
-2. For non-trivial session state, extract an orchestrator and define **narrow ports** (`*Ports`, `*SvgPort`) the **Canvas adapter** implements — see `PenToolSession` / `pen-tool-session-ports.ts`.
-3. Committed **Live tree** mutations go through **`EditorCommand`** + **`EditorHistoryService`** (`.cursor/rules/editor-commands.mdc`); inject command ports, not raw DOM.
-4. Inspector / dock writes use **`ChromeEditorApplyService`** → `chrome-apply/*`.
-5. SVG mutations use **svg.js** via **`SvgManipulationService.getSVGInstance()`** (`.cursor/rules/svg-js.mdc`).
+## Coding Conventions
 
-Track work with **`bd`**, not markdown TODO lists.
+These rules fire automatically when you edit matching files — read them for detail:
+
+| Rule | What it governs |
+|------|----------------|
+| `.cursor/rules/canvas-tools-ports.mdc` | Adding a **CanvasTool** adapter, orchestrator + ports pattern |
+| `.cursor/rules/editor-commands.mdc` | `EditorCommand` / `EditorHistoryService` for undo/redo mutations |
+| `.cursor/rules/svg-js.mdc` | SVG mutations via svg.js — `SvgManipulationService.getSVGInstance()` |
+| `.cursor/rules/angular-signals.mdc` | Signals over observables for component state |
+| `.cursor/rules/angular-components.mdc` | Separate HTML/CSS files, no `standalone: true` |
+| `.cursor/rules/angular-input-output.mdc` | `input()` / `output()` over `@Input` / `@Output` |
+| `.cursor/rules/angular-view-child.mdc` | `viewChild()` / `viewChildren()` over `@ViewChild` |
+| `.cursor/rules/angular-host-listener.mdc` | `host: {}` over `@HostListener` / `@HostBinding` |
+| `.cursor/rules/vitest.mdc` | Test setup, mocking, fixture lifecycle |
+| `.cursor/rules/jsdom-svg-compat.mdc` | SVG APIs that break in jsdom unit tests |
+| `.cursor/rules/svg-overlay-components.mdc` | `svg:` prefix in Angular overlay component templates |
+| `.cursor/rules/svg-groups.mdc` | User groups vs clip/mask carrier `<g>` elements |
+| `.cursor/rules/creation-gestures.mdc` | Shape creation ghost previews, shift constraints |
+| `.cursor/rules/playwright-testability.mdc` | `data-testid` and ARIA labels in HTML templates |
+| `.cursor/rules/angular-mcp.mdc` | Use Angular MCP to look up current Angular APIs |
+
+**Chrome → document mutations** go through `ChromeEditorApplyService` → `chrome-apply/*` slices.
 
 ## Non-Interactive Shell Commands
 
-**ALWAYS use non-interactive flags** with file operations to avoid hanging on confirmation prompts.
-
-Shell commands like `cp`, `mv`, and `rm` may be aliased to include `-i` (interactive) mode on some systems, causing the agent to hang indefinitely waiting for y/n input.
-
-**Use these forms instead:**
-```bash
-# Force overwrite without prompting
-cp -f source dest           # NOT: cp source dest
-mv -f source dest           # NOT: mv source dest
-rm -f file                  # NOT: rm file
-
-# For recursive operations
-rm -rf directory            # NOT: rm -r directory
-cp -rf source dest          # NOT: cp -r source dest
-```
-
-**Other commands that may prompt:**
-- `scp` - use `-o BatchMode=yes` for non-interactive
-- `ssh` - use `-o BatchMode=yes` to fail instead of prompting
-- `apt-get` - use `-y` flag
-- `brew` - use `HOMEBREW_NO_AUTO_UPDATE=1` env var
-
-<!-- BEGIN BEADS INTEGRATION v:1 profile:minimal hash:ca08a54f -->
-## Beads Issue Tracker
-
-This project uses **bd (beads)** for issue tracking. Run `bd prime` to see full workflow context and commands.
-
-### Quick Reference
+Shell aliases on many systems add `-i` (interactive) to `cp`, `mv`, and `rm`, causing agents to hang waiting for y/n input. Always use explicit flags:
 
 ```bash
-bd ready              # Find available work
-bd show <id>          # View issue details
-bd update <id> --claim  # Claim work
-bd close <id>         # Complete work
+cp -f source dest       # NOT: cp source dest
+mv -f source dest       # NOT: mv source dest
+rm -f file              # NOT: rm file
+rm -rf directory        # NOT: rm -r directory
+cp -rf source dest      # NOT: cp -r source dest
 ```
 
-### Rules
-
-- Use `bd` for ALL task tracking — do NOT use TodoWrite, TaskCreate, or markdown TODO lists
-- Run `bd prime` for detailed command reference and session close protocol
-- Use `bd remember` for persistent knowledge — do NOT use MEMORY.md files
+Other commands that may prompt: `scp` → `-o BatchMode=yes`, `ssh` → `-o BatchMode=yes`, `apt-get` → `-y`, `brew` → `HOMEBREW_NO_AUTO_UPDATE=1`.
 
 ## Session Completion
 
-**When ending a work session**, you MUST complete ALL steps below. Work is NOT complete until `git push` succeeds.
+**Work is NOT complete until `git push` succeeds.**
 
-**MANDATORY WORKFLOW:**
-
-1. **File issues for remaining work** - Create issues for anything that needs follow-up
-2. **Run quality gates** (if code changed) - Tests, linters, builds
-3. **Update issue status** - Close finished work, update in-progress items
-4. **PUSH TO REMOTE** - This is MANDATORY:
+1. File issues for remaining work
+2. Run quality gates — `npm test`, `npm run build`
+3. Close finished beads, update in-progress items
+4. Push:
    ```bash
    git pull --rebase
    bd dolt push
    git push
    git status  # MUST show "up to date with origin"
    ```
-5. **Clean up** - Clear stashes, prune remote branches
-6. **Verify** - All changes committed AND pushed
-7. **Hand off** - Provide context for next session
+5. Clean up stashes, prune remote branches
+6. Hand off context for the next session
 
-**CRITICAL RULES:**
-- Work is NOT complete until `git push` succeeds
-- NEVER stop before pushing - that leaves work stranded locally
-- NEVER say "ready to push when you are" - YOU must push
-- If push fails, resolve and retry until it succeeds
-<!-- END BEADS INTEGRATION -->
+**Never** stop before pushing — that leaves work stranded locally. **Never** say "ready to push when you are" — push yourself.
