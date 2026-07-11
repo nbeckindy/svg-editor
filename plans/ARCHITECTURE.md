@@ -3,7 +3,7 @@
 > **Epics:** [Phase 1 — j61](./epics/hexagonal-architecture-extensibility.md#phase-1--svg-editor-j61-closed) (closed 2026-06-23) · [Phase 2 — hnv](./epics/hexagonal-architecture-extensibility.md#phase-2--svg-editor-hnv-deepen-seams) (closed 2026-06-23) · [Phase 3 — ywh](./epics/hexagonal-architecture-extensibility.md#phase-3--svg-editor-ywh-dedup--unify) (closed 2026-06-23)
 > **Vocabulary:** [CONTEXT.md](../CONTEXT.md)
 
-## Current architecture (2026-06)
+## Current architecture (2026-07)
 
 The editor is a **partially hexagonal** Angular app: narrow **ports**, **commands**, and **registries** separate intent from SVG mutation. Architecture epics: **`svg-editor-j61`** (foundations), **`svg-editor-hnv`** (deepen seams), **`svg-editor-ywh`** (dedup routing + unified tool bundles).
 
@@ -11,29 +11,29 @@ The editor is a **partially hexagonal** Angular app: narrow **ports**, **command
 
 | Layer | Role |
 |-------|------|
-| **Ports** | `*SvgPort`, `LayerLockReadPort`, `PathBooleanSelectionReadPort`, `GroupStructureChangePort`, `PenToolSessionPorts`, … |
+| **Ports** | Narrow interfaces in `history/*.port.ts`, `services/shape-content/*.port.ts`, `services/chrome-apply/*.port.ts`, and orchestrator `*-ports.ts` (e.g. `LayerLockReadPort`, `PathBooleanSelectionReadPort`, `GroupStructureChangePort`, `PenToolSessionPorts`) |
 | **Commands** | `EditorCommand` → `EditorHistoryService`; implementations in `history/commands/{paint,transform,layers,document,path}/` |
 | **Adapters** | `SvgManipulationService` (façade), `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` |
 | **Registries** | `ToolRegistryService` + `registerDefaultTools()`, `DockPanelRegistryService` + `registerDefaultDockPanels()` |
 
-Large **integration surfaces** remain: `SvgCanvasComponent` (~4.3k lines) orchestrates tools, keyboard, pen session, and inline text.
+Large **integration surfaces** remain: `SvgCanvasComponent` (~2.7k lines) orchestrates tools, keyboard, pen/path-node/inline-text sessions, and pen preview chrome in its template.
 
 ### Tool plugin seam
 
 | Piece | Path |
 |-------|------|
 | Tool contract | `src/app/tools/canvas-tool.interface.ts` |
-| UI metadata | `src/app/tools/tool-bundles.ts` (descriptor + shortcut + registration group) |
+| UI metadata | `src/app/tools/tool-bundles.ts` (descriptor + shortcut + registration group; re-exported by `register-default-tool-descriptors.ts`) |
 | Registry | `src/app/tools/tool-registry.service.ts` |
-| Bootstrap | `register-default-tools.ts` → descriptors at startup; `CanvasBoundToolRegistrar` when canvas is ready |
-| Adapters | `*-canvas-tool.ts` factories (creation, selector, pen, zoom, pan, text, eyedropper, …) |
-| Orchestrator ports | e.g. `PenToolSessionPorts` + `PenToolSessionSvgPort` (narrow slices of the canvas adapter) |
-| Adapter context slices | `canvas-adapter-context.ts` — shared coordinate, tool-state, document-surface, and readiness types consumed by pen ports and pointer/keyboard seams |
-| Coordinate mapping | `canvas-coordinate-mapping.service.ts` — client ↔ SVG user ↔ overlay pixel transforms; bound from `SvgCanvasComponent.syncOverlayViewBox` |
+| Bootstrap | `register-default-tools.ts` → `registerDefaultToolDescriptors` at startup; `CanvasBoundToolRegistrar` binds adapters when the pointer stack is ready |
+| Adapters | `*-canvas-tool.ts` factories (creation, selector + node-edit-selector, pen, zoom, pan, text, eyedropper, …) |
+| Orchestrator ports | e.g. `PenToolSessionPorts` + `PenToolSessionSvgPort`, `PathNodeEditSessionPorts`, `InlineTextEditSessionPorts` (narrow slices of the canvas adapter) |
+| Adapter context slices | `canvas-adapter-context.ts` + `create-canvas-adapter-context.ts` — shared coordinate, tool-state, document-surface, and readiness types consumed by pen ports and pointer/keyboard seams |
+| Coordinate mapping | **Today:** `SvgCanvasComponent.clientToEditorSvgPoint` / `svgBboxToOverlayPixels` (updated from `syncOverlayViewBox`). **Extraction target:** `canvas-coordinate-mapping.service.ts` (exists, not yet wired) |
 
 `CanvasAdapterContext` composes the coordinate, tool-state, and document-surface slices reused across host interfaces; extend it (or individual slices) rather than re-declaring `clientToEditorSvgPoint` / `getCurrentTool` on each seam.
 
-`PointerGestureRouter` and the keyboard controller consult the registry first. The tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)). Dock panels can declare `relevantTools` so the right dock auto-shows for the active tool.
+`PointerGestureRouter` dispatches pointer events to the active `CanvasTool` from the registry. The keyboard controller (`svg-canvas-keyboard.controller.ts`) dispatches `onKeyDown` to the active tool after a few canvas-wide guards (inline-text Escape, path-node delete); tool-letter shortcuts use `tool-bundles.ts`. The tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)). Dock panels can declare `relevantTools` so the right dock auto-shows for the active tool.
 
 #### Adding a canvas tool (ports/adapters)
 
@@ -42,7 +42,7 @@ Prefer this stack for every new **Tool** — do not grow `SvgCanvasComponent` wi
 1. **Bundle** — add a `ToolBundle` entry in `tool-bundles.ts` (descriptor, `canvasRegistrationGroup`, optional shortcut key).
 2. **Orchestrator (optional)** — if the tool has non-trivial session state (like pen), put policy in a dedicated class and inject **narrow ports** (`*HistoryPort`, `*SvgPort`, `*SelectionPort`) defined next to the orchestrator — not the full `SvgManipulationService`.
 3. **CanvasTool adapter** — factory in `src/app/tools/<name>-canvas-tool.ts` with a `*CanvasToolDeps` getter; map pointer/keyboard events to the orchestrator; return `true` when the event is consumed.
-4. **Canvas adapter wiring** — register via `CanvasBoundToolRegistrar` from `SvgCanvasComponent` (or pointer-stack factory); pass only the deps the adapter needs (coordinate mapping, readiness checks, gesture handles).
+4. **Canvas adapter wiring** — register via `CanvasBoundToolRegistrar` from `svg-canvas-pointer-stack.factory.ts` (called by `SvgCanvasComponent`); pass only the deps the adapter needs (coordinate mapping, readiness checks, gesture handles).
 5. **Mutations** — committed edits go through `EditorCommand` + `EditorHistoryService` (see [`.cursor/rules/editor-commands.mdc`](../.cursor/rules/editor-commands.mdc)); use existing command ports or add a new `*.port.ts` under `history/` or `services/shape-content/`.
 6. **Chrome writes** — inspector / dock actions go through `ChromeEditorApplyService` → `chrome-apply/*`, not direct DOM from the tool.
 
@@ -71,7 +71,7 @@ PointerGestureRouter    optional orchestrator (e.g. PenToolSession)
 | Dock auto-show | `src/app/panels/dock-panel-auto-show.service.ts` (`relevantTools`) |
 | Shell layout | `src/app/services/editor-layout.service.ts` |
 | Right dock | `src/app/components/editor-right-dock/` |
-| Canvas overlays | `src/app/components/svg-canvas/overlays/` — selection, path-node, ruler, grid, smart-guide |
+| Canvas overlays | `src/app/components/svg-canvas/overlays/` — selection, path-node, ruler, grid, smart-guide, inline-text-editor |
 
 **Overlay convention:** child components on `<g app-*-overlay>` must use `svg:`-prefixed tags — see [`.cursor/rules/svg-overlay-components.mdc`](../.cursor/rules/svg-overlay-components.mdc).
 
@@ -89,7 +89,7 @@ Group membership changes notify **`GroupStructureChangeService`** (signal port);
 | Shape content | `src/app/services/shape-content/` | paint, path-data, text ports |
 | Chrome apply | `src/app/services/chrome-apply/` | paint, transform, layers, path-ops |
 | Layers DnD | `src/app/components/layers-panel/layers-panel-dnd.service.ts` | intent resolution + drop apply |
-| Path boolean reads | `src/app/services/path-boolean-selection-read.service.ts` | panel + geometry port |
+| Path boolean reads | `path-boolean-selection-read.service.ts` + `history/path-boolean-selection-read.port.ts` | panel + geometry port |
 
 ### Editor shell (layout)
 
@@ -107,12 +107,13 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 
 ### Still centralized (extension touchpoints)
 
-- **`SvgCanvasComponent`** — pen previews, inline text edit, keyboard routing glue, document init. New tools should **not** add logic here; extract orchestrators + ports and register a `CanvasTool` adapter instead.
+- **`SvgCanvasComponent`** — pen preview SVG in its template (`editorChrome.*` readouts), inline-text and path-node session wiring, coordinate mapping, keyboard context assembly, document init. Orchestrators (`PenToolSession`, `PathNodeEditSession`, `InlineTextEditSession`) already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
 - **`SvgManipulationService`** — wide façade; at new panel/tool boundaries inject a **narrow port** (pattern: `PenToolSessionSvgPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`).
 
 ### Next seams (future work)
 
-- Extract remaining pen preview DOM into orchestrator + ports (mirror `PenToolSession`).
+- Wire `CanvasCoordinateMappingService` and drop duplicate mapping from `SvgCanvasComponent`.
+- Extract remaining pen preview DOM from the canvas template into a dedicated overlay component (policy already lives in `PenToolSession`).
 
 ---
 
