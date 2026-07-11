@@ -4,9 +4,11 @@ globs: src/app/tools/**/*.ts,src/app/components/svg-canvas/**/*.ts,src/app/compo
 alwaysApply: false
 ---
 
-# Canvas tools — ports and adapters
+# Canvas tools — ports and typed seams
 
 New **Tool** behavior must plug into `ToolRegistryService`, not add `if (tool === …)` branches in `SvgCanvasComponent` or `PointerGestureRouter`.
+
+Ports are **interface segregation on singletons** (modular monolith), not swappable hexagonal adapters — inject narrow `*Port` types or tokens at boundaries anyway to document intent.
 
 ## Checklist
 

@@ -61,7 +61,6 @@ import type { SelectorKeyboardActionsPort } from './selector-canvas-tool-keyboar
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
-import type { CanvasToolHost } from '../../tools/canvas-tool-host.interface';
 import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createCanvasSessionBundle } from './canvas-session-coordinator';
 import { PenToolChromeReadout } from './pen-tool-chrome-readout';
@@ -96,6 +95,7 @@ import { PathNodeOverlayComponent } from './overlays/path-node-overlay.component
 import { RulerOverlayComponent } from './overlays/ruler-overlay.component';
 import { GridOverlayComponent } from './overlays/grid-overlay.component';
 import { SmartGuideOverlayComponent } from './overlays/smart-guide-overlay.component';
+import { PenPreviewOverlayComponent } from './overlays/pen-preview-overlay.component';
 import { SnapCandidateShape } from '../../services/snap.service';
 import { CanvasViewportChromePresenter, type CanvasViewportChromePresenterHost } from './canvas-viewport-chrome.presenter';
 import type { PenToolSessionSvgPort } from './pen-tool-session/pen-tool-session-svg.port';
@@ -191,6 +191,7 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
     RulerOverlayComponent,
     GridOverlayComponent,
     SmartGuideOverlayComponent,
+    PenPreviewOverlayComponent,
     InlineTextEditorOverlayComponent
   ],
   templateUrl: './svg-canvas.component.html',
@@ -1398,15 +1399,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     const now = typeof performance !== 'undefined' ? performance.now() : Date.now();
     // Cover trailing primary `click` / `dblclick` after close (mousedown-only double-close, slow frames).
     this.penClosePostNodeEditEmptyClickClearUntilMs = now + 320;
-  }
-
-  private createCanvasToolHost(): CanvasToolHost {
-    return {
-      ...this.createCanvasAdapterContextSlice(),
-      svgManipulation: this.svgManipulation,
-      shapeSelection: this.shapeSelection,
-      editorHistory: this.editorHistory
-    };
   }
 
   private createInlineTextEditSessionPorts(): InlineTextEditSessionPorts {

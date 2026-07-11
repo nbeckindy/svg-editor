@@ -4,6 +4,18 @@ export interface EditorCommand {
   undo(): void;
 }
 
+/**
+ * Commands pushed during an in-progress tool session that must be stripped from the undo stack
+ * when the session commits or is discarded (pen segment edits today). Not undoable after finish.
+ */
+export interface ProvisionalCommand extends EditorCommand {
+  readonly provisional: true;
+}
+
+export function isProvisionalCommand(cmd: EditorCommand): cmd is ProvisionalCommand {
+  return (cmd as Partial<ProvisionalCommand>).provisional === true;
+}
+
 export interface CoalesceableCommand extends EditorCommand {
   readonly coalesceKey: string;
   coalesceWith(newer: CoalesceableCommand): CoalesceableCommand;

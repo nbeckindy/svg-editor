@@ -115,6 +115,14 @@ _Avoid_: Implying lock prevents reorder in the panel unless product explicitly s
 The session’s undo and redo stacks of reversible edits to the **Live tree**, distinct from saved-file versioning or browser navigation history.
 _Avoid_: Using **History** for Git commits or **Serialized** file timelines; conflating **History** with **Document** / **Live tree** reactive “revision” counters in code—say which counter or whether you mean undo/redo.
 
+**Provisional command**:
+An `EditorCommand` marked `provisional: true` (e.g. `PenSegmentReplaceCommand`) pushed during an in-progress **Pen authoring session** so Ctrl+Z works on handle tweaks, then stripped from the undo stack via `EditorHistoryService.discardWhere` when the path finishes or the session is discarded — not a separate undo model.
+_Avoid_: Treating provisional steps as permanent document history; using `discardWhere` for committed edits.
+
+**Ghost preview**:
+Ephemeral transform feedback during pointer drags: `GhostSession` clones selected subtrees into the **Live tree** (`data-editor-ghost`) while real shapes are hidden; commit pushes a transform `EditorCommand`, cancel removes the ghost without History. Distinct from overlay-only pen rubber-band previews.
+_Avoid_: Expecting ghost DOM to participate in undo directly; conflating with **Pen authoring session** preview paths.
+
 **Pen authoring session**:
 The in-progress orchestration for the pen **Tool**—preview geometry, pending segment/handle drags, join/continue rules, discard-on-switch or replace-document policy—not stroke/fill appearance or the path-geometry value type alone.
 _Avoid_: “Pen state” when you mean stroke props; “pen mode” as a UI theme; using **PenSession** for discard/confirm/preview policy—that headword is the path model only.

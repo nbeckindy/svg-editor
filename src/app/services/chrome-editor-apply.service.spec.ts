@@ -2,6 +2,13 @@ import { TestBed } from '@angular/core/testing';
 import { signal, computed } from '@angular/core';
 import { vi } from 'vitest';
 import { ChromeEditorApplyService } from './chrome-editor-apply.service';
+import {
+  CHROME_EDITOR_APPLY_SVG_PORT,
+  EDITOR_SHAPE_LIFECYCLE_SVG_PORT,
+  LAYER_REORDER_GROUP_SVG_PORT,
+  PROPERTIES_PANEL_SVG_PORT,
+  SELECTION_TRANSFORM_APPLY_SVG_PORT
+} from './chrome-apply/chrome-apply.tokens';
 import { ShapeSelectionService } from './shape-selection.service';
 import { SvgManipulationService } from './svg-manipulation.service';
 import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
@@ -99,6 +106,11 @@ describe('ChromeEditorApplyService', () => {
         ChromeEditorApplyService,
         { provide: ShapeSelectionService, useValue: shapeSelectionMock },
         { provide: SvgManipulationService, useValue: svgMock },
+        { provide: CHROME_EDITOR_APPLY_SVG_PORT, useValue: svgMock },
+        { provide: PROPERTIES_PANEL_SVG_PORT, useValue: svgMock },
+        { provide: LAYER_REORDER_GROUP_SVG_PORT, useValue: svgMock },
+        { provide: SELECTION_TRANSFORM_APPLY_SVG_PORT, useValue: svgMock },
+        { provide: EDITOR_SHAPE_LIFECYCLE_SVG_PORT, useValue: svgMock },
         { provide: DrawingStyleDefaultsService, useValue: drawingDefaultsMock },
         { provide: EditorHistoryService, useValue: historyMock },
         { provide: EditorToolService, useValue: editorToolMock },

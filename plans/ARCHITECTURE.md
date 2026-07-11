@@ -5,15 +5,15 @@
 
 ## Current architecture (2026-07)
 
-The editor is a **partially hexagonal** Angular app: narrow **ports**, **commands**, and **registries** separate intent from SVG mutation. Architecture epics: **`svg-editor-j61`** (foundations), **`svg-editor-hnv`** (deepen seams), **`svg-editor-ywh`** (dedup routing + unified tool bundles).
+The editor is a **modular monolith with typed seams**: narrow **ports**, **commands**, and **registries** separate intent from SVG mutation at compile time. Runtime remains Angular singletons — ports are **interface segregation** on shared services, not swappable adapters. Architecture epics: **`svg-editor-j61`** (foundations), **`svg-editor-hnv`** (deepen seams), **`svg-editor-ywh`** (dedup routing + unified tool bundles).
 
-### Hexagonal posture
+### Modular monolith posture
 
 | Layer | Role |
 |-------|------|
-| **Ports** | Narrow interfaces in `history/*.port.ts`, `services/shape-content/*.port.ts`, `services/chrome-apply/*.port.ts`, and orchestrator `*-ports.ts` (e.g. `LayerLockReadPort`, `PathBooleanSelectionReadPort`, `GroupStructureChangePort`, `PenToolSessionPorts`) |
+| **Ports** | Narrow interfaces in `history/*.port.ts`, `services/shape-content/*.port.ts`, `services/chrome-apply/*.port.ts`, and orchestrator `*-ports.ts` (e.g. `LayerLockReadPort`, `PathBooleanSelectionReadPort`, `GroupStructureChangePort`, `PenToolSessionPorts`) — typed slices of singleton façades |
 | **Commands** | `EditorCommand` → `EditorHistoryService`; implementations in `history/commands/{paint,transform,layers,document,path}/` |
-| **Adapters** | `SvgManipulationService` (façade), `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` |
+| **Façades** | `SvgManipulationService`, `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` (each implements many port interfaces; chrome apply injects port **tokens** backed by `useExisting`) |
 | **Registries** | `ToolRegistryService` + `registerDefaultTools()`, `DockPanelRegistryService` + `registerDefaultDockPanels()` |
 
 Large **integration surfaces** remain: `SvgCanvasComponent` (~2.7k lines) orchestrates tools, keyboard, pen/path-node/inline-text sessions, and pen preview chrome in its template.
@@ -77,7 +77,7 @@ PointerGestureRouter    optional orchestrator (e.g. PenToolSession)
 
 ### Chrome write path
 
-Inspector and layers panel actions go through **`ChromeEditorApplyService`** (thin façade) → **`chrome-apply/{paint,transform,layers,path-ops}`** → `EditorCommand`s.
+Inspector and layers panel actions go through **`ChromeEditorApplyService`** (thin façade) → **`chrome-apply/{paint,transform,layers,path-ops}`** → `EditorCommand`s. Domain slices inject narrow port **tokens** from `chrome-apply.tokens.ts` (backed by `useExisting: SvgManipulationService` in `app.config.ts`).
 
 Group membership changes notify **`GroupStructureChangeService`** (signal port); canvas drill-in listens via `effect()` — no imperative callback on chrome apply.
 

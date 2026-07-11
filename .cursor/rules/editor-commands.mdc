@@ -40,3 +40,27 @@ export class MyCommand implements EditorCommand {
 - **Use `CompositeCommand`** to batch related commands (e.g. multi-shape property change) into a single undo step.
 - **Toggle commands** (like visibility) can call the same service method in both `execute()` and `undo()` only when the operation is self-inverse.
 - When undo requires restoring exact DOM positions (reorder, delete), store insertion indices or serialized markup in the constructor.
+
+## Undo stack limits and coalescing
+
+`EditorHistoryService` (`src/app/services/editor-history.service.ts`) owns the undo/redo stacks.
+
+- **Stack depth** — `MAX_STACK_DEPTH = 100`. When a push would exceed 100 entries, the **oldest** undo step is dropped **silently** (no merge, no user warning). Same cap applies on redo. This is a known product limit; very long edit sessions cannot undo past the last 100 steps.
+- **Coalescing** — Rapid pushes of `CoalesceableCommand`s with the same `coalesceKey` within `COALESCE_WINDOW_MS` (500 ms) merge into one stack entry via `coalesceWith`. Coalescing clears the redo stack. `CompositeCommand.coalesceWith` assumes **parallel command arrays** of equal length and zips `coalesceWith` per index — do not coalesce composites with mismatched child counts.
+
+## Provisional commands and stack surgery
+
+Some in-progress tool edits are pushed to History for **Ctrl+Z during the session** but must not remain undoable after commit or discard.
+
+- **`ProvisionalCommand`** — marker interface (`readonly provisional: true`) on commands such as `PenSegmentReplaceCommand`. Use `isProvisionalCommand(cmd)` in predicates; `instanceof` is a fallback only when the marker is absent.
+- **`discardWhere(predicate)`** — removes matching commands from the **undo** stack and **always clears redo**. Allowed today for pen provisional segment edits only (`PenToolSession.purgeProvisionalPenSegmentHistory` on path finish and `clearDrawingState`). Do not use for committed document mutations.
+- **Pen lifecycle** — outgoing-handle drags push provisional `PenSegmentReplaceCommand`; undo works while authoring; finish or tool-switch discard strips them before the finished path command (or equivalent) is the sole undo step for that geometry.
+
+## Ghost preview (transform gestures)
+
+Transform drags (move, scale, rotate, skew) preview via **`GhostSession`**, not `EditorCommand`, until the gesture commits.
+
+- **During drag** — `GhostSession` clones subtrees (`cloneNode`), rewrites `url(#…)` refs into ephemeral defs, and mounts ghost fragments in the **Live tree** (`data-editor-ghost`). Selected shapes are hidden; the ghost matrix tracks pointer delta. This is live DOM preview outside History.
+- **Commit (`end`)** — ghost fragments removed, visibility restored, then `pushAndExecute` with `TranslateCommand` / union transform commands capturing a pre-gesture transform snapshot.
+- **Cancel** — ghost removed, visibility restored, **no** History push. A subsequent undo must not affect the cancelled gesture.
+- **Undo after commit** — transform commands restore matrices via `restoreSelectionTransformsFromSnapshot` on `TransformGestureSvgPort`; ghost state is already gone.

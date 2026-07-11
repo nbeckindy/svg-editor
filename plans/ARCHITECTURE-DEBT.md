@@ -92,24 +92,24 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 ## P1 — Structural honesty and extensibility
 
-### DEBT-004 · “Hexagonal” is interface segregation, not isolation
+### DEBT-004 · “Hexagonal” is interface segregation, not isolation ✓
 
 **Problem:** Docs and epics use hexagonal vocabulary; runtime is a **modular monolith** — many `*Port` types implemented by the same `@Injectable` singletons.
 
-**Evidence**
+**Evidence (resolved 2026-07-10)**
 
-- `SvgManipulationService` implements **14** port interfaces (~584 lines, ~104 public methods)
-- `CanvasToolHost` exposes full `SvgManipulationService`, `ShapeSelectionService`, `EditorHistoryService` — not narrow ports
-- `chrome-apply/*` injects `SvgManipulationService` cast to port types (`chrome-editor-apply-support.service.ts` 18–20; same pattern in paint/layers/transform/path-ops)
+- `SvgManipulationService` implements **14** port interfaces (~584 lines, ~104 public methods) — unchanged; ports remain typed slices on one façade
+- ~~`CanvasToolHost` exposes full `SvgManipulationService`, `ShapeSelectionService`, `EditorHistoryService`~~ → `CanvasToolHost` is now a `CanvasAdapterContext` alias; tools use per-tool `*CanvasToolDeps`
+- ~~`chrome-apply/*` injects `SvgManipulationService` cast to port types~~ → chrome apply injects port **tokens** (`chrome-apply.tokens.ts` + `useExisting` in `app.config.ts`)
 
 **Risk:** “Inject a narrow port” is convention only; refactors do not reduce compile-time coupling.
 
 **Remediation**
 
-1. Update ARCHITECTURE.md posture: **“modular monolith with typed seams”** (drop “partially hexagonal” or qualify it heavily).
-2. Split `SvgManipulationService` into port-scoped injectable facades (e.g. `TransformGestureSvgAdapter`) that delegate to sub-services — optional, incremental.
-3. Narrow `CanvasToolHost` to declared port slices per tool bundle.
-4. Chrome-apply: inject `PropertiesPanelSvgPort` token backed by implementation, not `SvgManipulationService` type.
+1. ✓ Update ARCHITECTURE.md posture: **“modular monolith with typed seams”**
+2. Split `SvgManipulationService` into port-scoped injectable facades — optional, incremental (out of scope)
+3. ✓ Narrow `CanvasToolHost` to adapter-context slice; tools stay on `*CanvasToolDeps`
+4. ✓ Chrome-apply: inject port tokens backed by `useExisting: SvgManipulationService`
 
 **Depends on:** Documentation change can land immediately; code splits are incremental.
 
@@ -138,7 +138,7 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 ---
 
-### DEBT-006 · Command undo stack implicit state machine
+### DEBT-006 · Command undo stack implicit state machine ✓
 
 **Problem:** Undo is command-based (good) but stack manipulation and live-DOM preview sit outside a single reversible model.
 
@@ -251,20 +251,21 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 ---
 
-### DEBT-011 · Pen preview chrome in canvas template
+### DEBT-011 · Pen preview chrome in canvas template ✓
 
 **Problem:** Pen policy lives in `PenToolSession`; preview SVG still rendered from canvas template / component bindings.
 
-**Evidence**
+**Evidence (resolved)**
 
-- ARCHITECTURE.md “Still centralized” and “Next seams” sections
-- `svg-canvas.component.html` (341 lines) includes pen preview chrome
+- `PenPreviewOverlayComponent` (`overlays/pen-preview-overlay.component.*`) owns pen path/handle/rubber-band preview SVG
+- Canvas template binds via `editorChrome` → `PenToolChromeReadout` fields on `app-pen-preview-overlay`
+- `svg-canvas.component.html` pen preview blocks removed (path-boolean preview and `path-node-overlay` unchanged)
 
-**Remediation**
+**Remediation (landed)**
 
 1. Dedicated `pen-preview-overlay` component under `overlays/`.
-2. Bind from `PenToolSession` signals via narrow overlay port.
-3. Remove `editorChrome.*` pen readouts from canvas template.
+2. Bind from `PenToolChromeReadout` via individual overlay inputs (`stroke` / `strokeWidth` from drawing defaults).
+3. Remove inline pen preview readouts from canvas template.
 
 **Depends on:** DEBT-003.
 
@@ -335,14 +336,14 @@ Wave 4 (only if product demands)
 | DEBT-001 | `svg-editor-my0.1` | P0 |
 | DEBT-002 | `svg-editor-my0.2` ✓ | P0 |
 | DEBT-003 | `svg-editor-my0.3` | P0 |
-| DEBT-004 | `svg-editor-my0.4` | P1 |
+| DEBT-004 | `svg-editor-my0.4` ✓ | P1 |
 | DEBT-005 | `svg-editor-my0.5` | P1 |
-| DEBT-006 | `svg-editor-my0.6` | P1 |
+| DEBT-006 | `svg-editor-my0.6` ✓ | P1 |
 | DEBT-007 | `svg-editor-my0.7` | P1 |
 | DEBT-008 | `svg-editor-my0.8` ✓ | P2 |
 | DEBT-009 | `svg-editor-my0.9` ✓ | P2 |
 | DEBT-010 | `svg-editor-my0.10` ✓ | P2 |
-| DEBT-011 | `svg-editor-my0.11` | P2 |
+| DEBT-011 | `svg-editor-my0.11` ✓ | P2 |
 | DEBT-012 | `svg-editor-my0.12` | P3 |
 | DEBT-013 | `svg-editor-my0.13` | P3 |
 

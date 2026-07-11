@@ -20,18 +20,16 @@ import {
   BakeStrokeCommand
 } from '../../models/editor-commands';
 import { defaultLinearGradientModel, serializeGradientElementToOuterHtml } from '../../models/svg-gradient';
-import type { PropertiesPanelSvgPort } from '../../history/properties-panel-svg.port';
-import type { LayerReorderGroupSvgPort } from '../../history/layers-panel-svg.port';
-import { SvgManipulationService } from '../svg-manipulation.service';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
+import { LAYER_REORDER_GROUP_SVG_PORT, PROPERTIES_PANEL_SVG_PORT } from './chrome-apply.tokens';
 
 const OVERRIDE_PAINT_SOURCE: PaintSourceInfo = { kind: 'presentation-attr' };
 
 @Injectable({ providedIn: 'root' })
 export class ChromeEditorPaintApplyService {
   private readonly support = inject(ChromeEditorApplySupport);
-  private readonly propertiesSvg: PropertiesPanelSvgPort = inject(SvgManipulationService);
-  private readonly layerSvg: LayerReorderGroupSvgPort = inject(SvgManipulationService);
+  private readonly propertiesSvg = inject(PROPERTIES_PANEL_SVG_PORT);
+  private readonly layerSvg = inject(LAYER_REORDER_GROUP_SVG_PORT);
 
   private get shapeSelection() { return this.support.shapeSelection; }
   private get paintSvg() { return this.support.paintSvg; }

@@ -152,23 +152,6 @@
   pointer-events: none;
 }
 
-.pen-curve-handle {
-  pointer-events: none;
-}
-
-.pen-outgoing-handle-guide {
-  pointer-events: none;
-}
-
-.pen-outgoing-handle {
-  pointer-events: auto;
-  cursor: grab;
-}
-
-.pen-outgoing-handle:active {
-  cursor: grabbing;
-}
-
 .zoom-level {
   position: absolute;
   top: 8px;

@@ -28,7 +28,7 @@ import {
   type PenFirstAnchorP3Draft,
   type PenPathSegment
 } from '../../../models/pen-path';
-import { PenSegmentReplaceCommand } from '../../../models/editor-commands';
+import { PenSegmentReplaceCommand, isProvisionalCommand } from '../../../models/editor-commands';
 import {
   evaluatePenInsertOnPathAt as evaluatePenInsertOnPathAtImpl,
   tryBeginPenInsertOnPathDrag,
@@ -604,7 +604,7 @@ export class PenToolSession {
   }
 
   purgeProvisionalPenSegmentHistory(): void {
-    this.ports.editorHistory.discardWhere((c) => c instanceof PenSegmentReplaceCommand);
+    this.ports.editorHistory.discardWhere((c) => isProvisionalCommand(c));
   }
 
   commitPenDraggedCurve(

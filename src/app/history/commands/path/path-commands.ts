@@ -1,6 +1,6 @@
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { PenPathSegment } from '../../../models/pen-path';
-import type { EditorCommand } from '../../../models/editor-command';
+import type { EditorCommand, ProvisionalCommand } from '../../../models/editor-command';
 import type { SelectionSyncPort } from '../../history-selection.port';
 import type {
   EditorShapeLifecycleSvgPort,
@@ -128,8 +128,9 @@ export class SetPathNodeHandleLinkCommand implements EditorCommand {
  * Undoable edit to a single segment while authoring a pen path (before finish).
  * Dropped from history when the pen session ends so geometry stays baked into the finished path.
  */
-export class PenSegmentReplaceCommand implements EditorCommand {
+export class PenSegmentReplaceCommand implements ProvisionalCommand {
   readonly description = 'Pen segment edit';
+  readonly provisional = true as const;
 
   private appliedAlready: boolean;
 

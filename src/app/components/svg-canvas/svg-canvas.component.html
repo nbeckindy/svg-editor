@@ -156,36 +156,22 @@
                 vector-effect="non-scaling-stroke"/>
             }
           }
-          @if (editorChrome.penInsertOnPathPreviewPathD; as pins) {
-            <path
-              class="creation-ghost-shape"
-              data-testid="canvas-pen-insert-on-path-preview"
-              [attr.d]="pins"
-              fill="none"
-              [attr.stroke]="drawingDefaults.stroke()"
-              [attr.stroke-width]="drawingDefaults.strokeWidth()"
-              vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.penSessionPreviewPathD; as pfull) {
-            <path
-              class="creation-ghost-shape"
-              data-testid="canvas-pen-path-preview"
-              [attr.d]="pfull"
-              fill="none"
-              [attr.stroke]="drawingDefaults.stroke()"
-              [attr.stroke-width]="drawingDefaults.strokeWidth()"
-              vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.penCurvePreviewPathD; as pcurve) {
-            <path
-              class="creation-ghost-shape"
-              data-testid="canvas-pen-curve-preview"
-              [attr.d]="pcurve"
-              fill="none"
-              [attr.stroke]="drawingDefaults.stroke()"
-              [attr.stroke-width]="drawingDefaults.strokeWidth()"
-              vector-effect="non-scaling-stroke"/>
-          }
+          <g
+            app-pen-preview-overlay
+            [stroke]="drawingDefaults.stroke()"
+            [strokeWidth]="drawingDefaults.strokeWidth()"
+            [penInsertOnPathPreviewPathD]="editorChrome.penInsertOnPathPreviewPathD"
+            [penSessionPreviewPathD]="editorChrome.penSessionPreviewPathD"
+            [penCurvePreviewPathD]="editorChrome.penCurvePreviewPathD"
+            [penFirstAnchorMirroredHandleDragActive]="editorChrome.penFirstAnchorMirroredHandleDragActive"
+            [penColocatedTipMirroredHandleDragActive]="editorChrome.penColocatedTipMirroredHandleDragActive"
+            [penCurveHandleOverlays]="editorChrome.penCurveHandleOverlays"
+            [penRubberBandOverlay]="editorChrome.penRubberBandOverlay"
+            [penOutgoingHandleGuideOverlay]="editorChrome.penOutgoingHandleGuideOverlay"
+            [penOutgoingHandleKnobOverlay]="editorChrome.penOutgoingHandleKnobOverlay"
+            [penContinuationGhostPathD]="editorChrome.penContinuationGhostPathD"
+            [penCloseTargetHoverOverlay]="editorChrome.penCloseTargetHoverOverlay"
+            [penOpenPathContinueHoverOverlay]="editorChrome.penOpenPathContinueHoverOverlay"/>
           @if (editorChrome.pathBooleanPreviewOverlayD; as booleanPreviewD) {
             <path
               class="path-boolean-preview"
@@ -194,94 +180,6 @@
               fill="rgba(33, 150, 243, 0.25)"
               stroke="#2196F3"
               stroke-width="1.5"
-              vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.penCurvePreviewPathD || editorChrome.penFirstAnchorMirroredHandleDragActive || editorChrome.penColocatedTipMirroredHandleDragActive) {
-            @for (h of editorChrome.penCurveHandleOverlays; track h.cx + ',' + h.cy) {
-              <circle
-                class="pen-curve-handle"
-                data-testid="canvas-pen-curve-handle"
-                [attr.cx]="h.cx"
-                [attr.cy]="h.cy"
-                r="4"
-                fill="#ffffff"
-                stroke="#2196f3"
-                stroke-width="1.5"
-                vector-effect="non-scaling-stroke"/>
-            }
-          }
-          @if (editorChrome.penRubberBandOverlay; as prb) {
-            <line
-              class="creation-ghost-shape"
-              data-testid="canvas-pen-rubber-band"
-              [attr.x1]="prb.x1"
-              [attr.y1]="prb.y1"
-              [attr.x2]="prb.x2"
-              [attr.y2]="prb.y2"
-              [attr.stroke]="drawingDefaults.stroke()"
-              [attr.stroke-width]="drawingDefaults.strokeWidth()"
-              vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.penOutgoingHandleGuideOverlay; as og) {
-            <line
-              class="pen-outgoing-handle-guide"
-              data-testid="canvas-pen-outgoing-handle-guide"
-              [attr.x1]="og.x1"
-              [attr.y1]="og.y1"
-              [attr.x2]="og.x2"
-              [attr.y2]="og.y2"
-              stroke="#2196f3"
-              stroke-width="1.25"
-              stroke-dasharray="4 3"
-              vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.penOutgoingHandleKnobOverlay; as pk) {
-            <circle
-              class="pen-outgoing-handle"
-              data-pen-outgoing-handle="true"
-              data-testid="canvas-pen-outgoing-handle"
-              [attr.cx]="pk.cx"
-              [attr.cy]="pk.cy"
-              r="4"
-              fill="#ffffff"
-              stroke="#2196f3"
-              stroke-width="1.5"
-              vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.penContinuationGhostPathD; as ghostD) {
-            <path
-              class="creation-ghost-shape"
-              data-testid="canvas-pen-continuation-ghost"
-              [attr.d]="ghostD"
-              fill="none"
-              [attr.stroke]="drawingDefaults.stroke()"
-              [attr.stroke-width]="drawingDefaults.strokeWidth()"
-              vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.penCloseTargetHoverOverlay; as closeRing) {
-            <circle
-              class="creation-ghost-shape pen-close-target-ring"
-              data-testid="canvas-pen-close-hover"
-              [attr.cx]="closeRing.cx"
-              [attr.cy]="closeRing.cy"
-              r="8"
-              fill="none"
-              stroke="#00c853"
-              stroke-width="2"
-              stroke-dasharray="4 3"
-              vector-effect="non-scaling-stroke"/>
-          }
-          @if (editorChrome.penOpenPathContinueHoverOverlay; as continueRing) {
-            <circle
-              class="creation-ghost-shape pen-continue-target-ring"
-              data-testid="canvas-pen-continue-hover"
-              [attr.cx]="continueRing.cx"
-              [attr.cy]="continueRing.cy"
-              r="8"
-              fill="none"
-              stroke="#00c853"
-              stroke-width="2"
-              stroke-dasharray="4 3"
               vector-effect="non-scaling-stroke"/>
           }
           <g

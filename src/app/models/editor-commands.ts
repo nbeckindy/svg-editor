@@ -3,8 +3,8 @@
  * and narrow **ports** those commands depend on. Not a generic `models` package — prefer
  * adding new port types here and keeping command constructors on ports + plain data only.
  */
-export type { EditorCommand, CoalesceableCommand } from './editor-command';
-export { CompositeCommand, isCoalesceable } from './editor-command';
+export type { EditorCommand, CoalesceableCommand, ProvisionalCommand } from './editor-command';
+export { CompositeCommand, isCoalesceable, isProvisionalCommand } from './editor-command';
 export type {
   TransformGestureSvgPort,
   TransformGestureUnionRect,
