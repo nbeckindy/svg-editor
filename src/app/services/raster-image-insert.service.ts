@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { DocumentReadinessPort } from '../history/document-readiness.port';
+import { EDITOR_SHAPE_LIFECYCLE_SVG_PORT } from './chrome-apply/chrome-apply.tokens';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import {
   RASTER_IMAGE_INSERT_HISTORY_PORT,
@@ -40,6 +41,7 @@ export interface InsertRasterFileOptions {
 export class RasterImageInsertService {
   private readonly documentReadiness: DocumentReadinessPort = inject(SvgEditorDocumentService);
   private readonly svg = inject(RASTER_IMAGE_INSERT_SVG_PORT);
+  private readonly shapeLifecycle = inject(EDITOR_SHAPE_LIFECYCLE_SVG_PORT);
   private readonly shapeSelection = inject(RASTER_IMAGE_INSERT_SELECTION_PORT);
   private readonly editorHistory = inject(RASTER_IMAGE_INSERT_HISTORY_PORT);
   private readonly editorTool = inject(RASTER_IMAGE_INSERT_TOOL_PORT);
@@ -106,7 +108,7 @@ export class RasterImageInsertService {
     }
 
     this.shapeSelection.selectShape(this.svg.getShapeProperties(el));
-    const cmd = new AddImageCommand(this.svg, id, this.shapeSelection);
+    const cmd = new AddImageCommand(this.shapeLifecycle, id, this.shapeSelection);
     this.editorHistory.pushAndExecute(cmd);
     this.editorTool.setTool('selector');
     return { kind: 'inserted' };

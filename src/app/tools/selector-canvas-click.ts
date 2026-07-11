@@ -1,3 +1,4 @@
+import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../models/shape-properties.interface';
 
 export interface SelectorCanvasClickDeps {
@@ -7,9 +8,9 @@ export interface SelectorCanvasClickDeps {
   getPenClosePostNodeEditEmptyClickClearUntilMs: () => number;
   getNearestGroupAncestorId: (id: string) => string | null;
   getSvgInstance: () => import('@svgdotjs/svg.js').Svg | null;
-  resolveClickedContentShape: (clickTarget: Element) => SVGElement | null;
-  getShapeProperties: (el: SVGElement) => ShapeProperties;
-  getShapePropertiesInSameClipGroup: (el: SVGElement) => ShapeProperties[];
+  resolveClickedContentShape: (clickTarget: Element) => SvgJsElement | null;
+  getShapeProperties: (el: SvgJsElement) => ShapeProperties;
+  getShapePropertiesInSameClipGroup: (el: SvgJsElement) => ShapeProperties[];
   toggleShapeGroupInSelection: (shapes: ShapeProperties[]) => void;
   selectShapes: (shapes: ShapeProperties[]) => void;
   clearSelection: () => void;
@@ -41,7 +42,7 @@ export function handleSelectorCanvasClick(deps: SelectorCanvasClickDeps, event: 
         }
       } else {
         const svgInstance = deps.getSvgInstance();
-        const groupEl = svgInstance?.findOne(`#${nearestGroupId}`) as SVGElement | undefined;
+        const groupEl = svgInstance?.findOne(`#${nearestGroupId}`) as SvgJsElement | undefined;
         if (groupEl) {
           const groupProps = deps.getShapeProperties(groupEl);
           if (additive) {

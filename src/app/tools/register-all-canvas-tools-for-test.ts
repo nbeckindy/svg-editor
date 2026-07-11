@@ -66,9 +66,9 @@ export interface CanvasToolsTestHostState {
   setDrilledIntoGroupId: (id: string | null) => void;
   isGroupAClipMaskCarrier: (groupId: string) => boolean;
   getPenClosePostNodeEditEmptyClickClearUntilMs: () => number;
-  resolveClickedContentShape: (clickTarget: Element) => SVGElement | null;
-  getShapeProperties: (el: SVGElement) => import('../models/shape-properties.interface').ShapeProperties;
-  getShapePropertiesInSameClipGroup: (el: SVGElement) => import('../models/shape-properties.interface').ShapeProperties[];
+  resolveClickedContentShape: (clickTarget: Element) => import('@svgdotjs/svg.js').Element | null;
+  getShapeProperties: (el: import('@svgdotjs/svg.js').Element) => import('../models/shape-properties.interface').ShapeProperties;
+  getShapePropertiesInSameClipGroup: (el: import('@svgdotjs/svg.js').Element) => import('../models/shape-properties.interface').ShapeProperties[];
   toggleShapeGroupInSelection: (shapes: import('../models/shape-properties.interface').ShapeProperties[]) => void;
   selectShapes: (shapes: import('../models/shape-properties.interface').ShapeProperties[]) => void;
   clearSelection: () => void;
@@ -162,8 +162,8 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     isGroupAClipMaskCarrier: () => false,
     getPenClosePostNodeEditEmptyClickClearUntilMs: () => 0,
     resolveClickedContentShape: () => null,
-    getShapeProperties: (el) => ({ id: el.id }) as import('../models/shape-properties.interface').ShapeProperties,
-    getShapePropertiesInSameClipGroup: (el) => [{ id: el.id }] as import('../models/shape-properties.interface').ShapeProperties[],
+    getShapeProperties: (el) => ({ id: el.node?.id ?? '', type: 'rect' }),
+    getShapePropertiesInSameClipGroup: (el) => [{ id: el.node?.id ?? '', type: 'rect' }],
     toggleShapeGroupInSelection: vi.fn(),
     selectShapes: vi.fn(),
     clearSelection: vi.fn(),

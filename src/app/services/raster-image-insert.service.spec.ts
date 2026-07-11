@@ -8,6 +8,7 @@ import {
   RASTER_IMAGE_INSERT_TOOL_PORT
 } from './raster-image-insert.tokens';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
+import { EDITOR_SHAPE_LIFECYCLE_SVG_PORT } from './chrome-apply/chrome-apply.tokens';
 import { AddImageCommand } from '../models/editor-commands';
 import { stubRasterFileIo } from '../testing/raster-file-io-testing';
 
@@ -23,6 +24,18 @@ function smallPngFile(): File {
 describe('RasterImageInsertService', () => {
   let service: RasterImageInsertService;
   const shapeEl = { node: document.createElementNS('http://www.w3.org/2000/svg', 'image') } as unknown as SvgJsElement;
+
+  const shapeLifecycleMock = {
+    getSVGInstance: vi.fn(),
+    getShapeProperties: vi.fn(() => ({ id: 'img-1', type: 'image' as const })),
+    removeShapes: vi.fn(),
+    removeShape: vi.fn(),
+    restoreRemovedShapesInContentGroup: vi.fn(),
+    insertShapeMarkup: vi.fn(),
+    createClipboardPayload: vi.fn(),
+    pasteClipboardPayload: vi.fn(),
+    updateTextContent: vi.fn()
+  };
 
   const svgMock = {
     getSVGInstance: vi.fn(),
@@ -45,6 +58,7 @@ describe('RasterImageInsertService', () => {
       findOne: vi.fn((sel: string) => (sel === '#img-1' ? shapeEl : null))
     };
     svgMock.getSVGInstance.mockReturnValue(svgInstance as unknown);
+    shapeLifecycleMock.getSVGInstance.mockReturnValue(svgInstance as unknown);
     documentMock.getSVGInstance.mockReturnValue(svgInstance as unknown);
     svgMock.insertRasterImageIntoContentGroup.mockReturnValue('img-1');
     svgMock.insertRasterImageIntoContentGroup.mockClear();
@@ -53,6 +67,7 @@ describe('RasterImageInsertService', () => {
       providers: [
         RasterImageInsertService,
         { provide: RASTER_IMAGE_INSERT_SVG_PORT, useValue: svgMock },
+        { provide: EDITOR_SHAPE_LIFECYCLE_SVG_PORT, useValue: shapeLifecycleMock },
         { provide: SvgEditorDocumentService, useValue: documentMock },
         { provide: RASTER_IMAGE_INSERT_SELECTION_PORT, useValue: selectionMock },
         { provide: RASTER_IMAGE_INSERT_HISTORY_PORT, useValue: historyMock },

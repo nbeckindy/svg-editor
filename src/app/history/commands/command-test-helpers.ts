@@ -1,3 +1,4 @@
+import { vi } from 'vitest';
 import { Matrix } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 
