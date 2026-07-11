@@ -16,7 +16,7 @@ The editor is a **modular monolith with typed seams**: narrow **ports**, **comma
 | **Façades** | `SvgManipulationService`, `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` (each implements many port interfaces; chrome apply injects port **tokens** backed by `useExisting`) |
 | **Registries** | `ToolRegistryService` + `registerDefaultTools()`, `DockPanelRegistryService` + `registerDefaultDockPanels()` |
 
-Large **integration surfaces** remain: `SvgCanvasComponent` (**~2,093** lines TS + **232** lines HTML) orchestrates tools, session wiring, and debug HUD context assembly. Input policy lives in `svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, and `pen-insert-hover-cursor.ts`; preview overlays (`PenPreviewOverlayComponent`, `BooleanPreviewOverlayComponent`) bind via `editorChrome` readouts. Branch features include clip-path commands, outline-to-path, gradient/paint popover, rect corner radius, and SVG ingest sanitization.
+Large **integration surfaces** remain: `SvgCanvasComponent` remains a large integration hub (tools, session wiring, debug HUD context assembly). Input policy lives in `svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, and `pen-insert-hover-cursor.ts`; preview overlays (`PenPreviewOverlayComponent`, `BooleanPreviewOverlayComponent`) bind via `editorChrome` readouts. Branch features include clip-path commands, outline-to-path, gradient/paint popover, rect corner radius, and SVG ingest sanitization.
 
 ### Tool seam (internal refactor)
 
@@ -41,7 +41,7 @@ Descriptors land at **startup**; `CanvasTool` adapters bind **later** when the c
 
 **Future external tools (not implemented):** if third-party or pack-based tools are ever in scope, see the `TOOL_EXTENSION` sketch under [DEBT-005](./ARCHITECTURE-DEBT.md#debt-005--closed-type-plugin-seam-internal-only-) in ARCHITECTURE-DEBT.md.
 
-`PointerGestureRouter` dispatches pointer events to the active `CanvasTool` from the registry. The keyboard controller (`svg-canvas-keyboard.controller.ts`) dispatches `onKeyDown` to the active tool after a few canvas-wide guards (inline-text Escape, path-node delete); tool-letter shortcuts use `tool-bundles.ts`. The tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)). Dock panels can declare `relevantTools` so the right dock auto-shows for the active tool.
+`PointerGestureRouter` dispatches pointer events to the active `CanvasTool` from the registry. The keyboard controller (`svg-canvas-keyboard.controller.ts`) dispatches `onKeyDown` to the active tool first; pre-registry inline-text Escape, then post-registry canvas-wide policy in `svg-canvas-keyboard-policy.ts` (Escape gesture stack, undo/redo, view shortcuts). Tool-letter shortcuts use `tool-bundles.ts`. Clipboard / align / group / clip-path keyboard commands go through `CanvasEditorCommandController` in the same module. The tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)). Dock panels can declare `relevantTools` so the right dock auto-shows for the active tool.
 
 #### Adding a canvas tool (ports/adapters)
 
@@ -85,7 +85,7 @@ PointerGestureRouter    optional orchestrator (e.g. PenToolSession)
 
 ### Chrome write path
 
-Inspector and layers panel actions go through **`ChromeEditorApplyService`** (thin façade) → **`chrome-apply/{paint,transform,layers,path-ops}`** → `EditorCommand`s. Domain slices inject narrow port **tokens** from `chrome-apply.tokens.ts` (backed by `useExisting: SvgManipulationService` in `app.config.ts`).
+Inspector and layers panel actions go through **`ChromeEditorApplyService`** (thin façade) → **`chrome-apply/{paint,transform,layers,path-ops}`** → `EditorCommand`s. Domain slices inject narrow port **tokens** from `chrome-apply.tokens.ts` (including `CLIP_PATH_SVG_PORT` for clip-path make/release; all backed by `useExisting: SvgManipulationService` in `app.config.ts`).
 
 **Raster insert** (`RasterImageInsertService`) uses the same token pattern via `raster-image-insert.tokens.ts` — `RasterImageInsertSvgPort` (reuses `EditorShapeLifecycleSvgPort` reads + raster insert), history, selection, and tool ports; canvas drag-drop delegates coords + file only.
 
@@ -117,7 +117,7 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 
 ### Still centralized (extension touchpoints)
 
-- **`SvgCanvasComponent`** — inline-text and path-node session wiring, coordinate mapping delegation, keyboard/click context assembly, debug HUD, document init. Preview overlays bind via `editorChrome` readouts (`PenToolChromeReadout`, `PathBooleanChromeReadout`). Orchestrators already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
+- **`SvgCanvasComponent`** — inline-text and path-node session wiring, coordinate mapping delegation, keyboard/click context assembly, debug HUD, document init. Preview overlays bind via `editorChrome` readouts (`PenToolChromeReadout`, `PathBooleanChromeReadout`). `CanvasEditorCommandController` centralizes keyboard command dispatch; context menu still splits between `CanvasDocumentActionsService` (clipboard/group/rotate) and command controller (clip-path) plus `ChromeEditorApplyService` (outline-to-path). Orchestrators already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
 - **`SvgManipulationService`** — wide façade; at new panel/tool boundaries inject a **narrow port** (pattern: `PenToolSessionSvgPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`).
 
 ### Architecture debt

@@ -42,7 +42,7 @@ Product-class ceilings and deferred optimizations (large-document performance, c
 
 **Remediation**
 
-1. ✓ `onClick` on selector/node-edit adapters + `selector-canvas-click.ts` helper.
+1. ✓ `onClick` on selector/node-edit adapters + `components/svg-canvas/selector-canvas-click.ts` helper.
 2. ✓ Path-node pointer drag through node-edit adapter.
 3. ✓ Keyboard registry-first; path-node delete in selector adapter.
 4. ✓ **DEBT-001b** (`svg-editor-my0.15`): group drill-in double-click + path-node exit-on-click in selector/session; gesture cursor branches extracted to `canvas-cursor-hint.ts`.
@@ -81,14 +81,14 @@ Product-class ceilings and deferred optimizations (large-document performance, c
 
 **Evidence (2026-07-11, post `svg-editor-bd1`)**
 
-- `svg-canvas.component.ts` — **~2,093** lines TS + **232** lines HTML (down from 2,531 pre-refactor)
+- `svg-canvas.component.ts` — still a large integration hub (grew after `2026-06-25-ao8i` merge: context menu, clip-path, outline-to-path)
 - Direct `pushAndExecute` / `getSVGInstance()` call sites reduced via session bundle + document actions service
 - Pen preview in `PenPreviewOverlayComponent` (DEBT-011 ✓); path-boolean preview in `BooleanPreviewOverlayComponent` via `PathBooleanChromeReadout` (DEBT-012 ✓)
 
 **Remediation (partial — landed + residual)**
 
 1. ✓ `createCanvasSessionBundle` (`canvas-session-coordinator.ts`) owns pen, path-node edit, inline-text session lifecycle + pointer-stack assembly.
-2. ✓ `CanvasDocumentActionsService` routes keyboard align/distribute/group/ungroup through chrome-apply; clipboard cut/paste/duplicate centralized.
+2. ✓ `CanvasDocumentActionsService` routes keyboard align/distribute/group/ungroup through chrome-apply; clipboard cut/paste/duplicate centralized. `CanvasEditorCommandController` (`svg-canvas-keyboard.controller.ts`) owns clip-path make/release and keyboard delete; context menu still delegates clip-path to command controller and clipboard/group/rotate to document actions.
 3. ✓ `PenToolChromeReadout` + pen preview overlay — pen preview SVG no longer inline in canvas template.
 4. ✓ `PathBooleanChromeReadout` + `BooleanPreviewOverlayComponent` — boolean preview getter removed from component (DEBT-012 / `svg-editor-bd1`).
 5. ✓ Click/keyboard policy modules (`svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts`); **residual:** debug HUD pointer-intent assembly only.
@@ -105,8 +105,8 @@ Product-class ceilings and deferred optimizations (large-document performance, c
 
 **Evidence (resolved 2026-07-10)**
 
-- `SvgManipulationService` implements **14** port interfaces (~584 lines, ~104 public methods) — unchanged; ports remain typed slices on one façade
-- ~~`CanvasToolHost` exposes full `SvgManipulationService`, `ShapeSelectionService`, `EditorHistoryService`~~ → `CanvasToolHost` is now a `CanvasAdapterContext` alias; tools use per-tool `*CanvasToolDeps`
+- `SvgManipulationService` implements **16** port interfaces — ports remain typed slices on one façade
+- ~~`CanvasToolHost` exposes full `SvgManipulationService`, `ShapeSelectionService`, `EditorHistoryService`~~ → `CanvasToolHost` removed; tools use per-tool `*CanvasToolDeps` + `CanvasAdapterContext` slices
 - ~~`chrome-apply/*` injects `SvgManipulationService` cast to port types~~ → chrome apply injects port **tokens** (`chrome-apply.tokens.ts` + `useExisting` in `app.config.ts`)
 
 **Risk:** “Inject a narrow port” is convention only; refactors do not reduce compile-time coupling.
@@ -243,7 +243,7 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 
 - `editor-command-implementations.spec.ts` reduced to `CompositeCommand` only; domain specs under `paint/`, `transform/`, `layers/`, `document/`, `path/`
 - `command-port-contracts.spec.ts` — thin port contract tests (`HistoryPaintPort`, `TransformGestureSvgPort`, `EditorShapeLifecycleSvgPort`)
-- `selector-canvas-click.spec.ts` — registry-routed click → selection integration test
+- `components/svg-canvas/selector-canvas-click.spec.ts` — registry-routed click → selection integration test
 - `src/app/testing/svg-geometry-test-harness.ts` — shared jsdom stubs for `getBBox` / `getCTM` / `getScreenCTM`
 
 **Remediation (done)**
@@ -265,7 +265,7 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 
 | Claim | Stale? | Actual |
 |-------|--------|--------|
-| Canvas ~4.3k / ~2.7k / ~2,240 lines TS | Yes | **2,093** TS + **232** HTML (`wc -l` on `svg-canvas.component.*`) |
+| Canvas line-count claims in old epics | Yes | Still a large hub; overlays and policy modules extracted; grew after branch merge |
 | `PointerGestureRouter` ~77 lines with fallbacks | Yes | **65** lines; router dispatches registry only |
 | Residual routing in `PointerGestureRouter` | Yes | Click/keyboard/cursor policy in named modules (`svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts`) |
 | Path-boolean preview inline in canvas template | Yes | `PathBooleanChromeReadout` + `BooleanPreviewOverlayComponent` (`svg-editor-bd1` ✓) |
@@ -363,7 +363,7 @@ Wave 3 (honesty + safety net)
 |---------|-------|----------|--------|
 | DEBT-001 | `svg-editor-my0.1` · `svg-editor-my0.15` · `svg-editor-1sb` | P0 | ✓ Closed |
 | DEBT-002 | `svg-editor-my0.2` | P0 | ✓ Closed |
-| DEBT-003 | `svg-editor-my0.3` | P0 | **Partial** — hub shrunk (~2,093 TS); debug HUD + context wiring remain |
+| DEBT-003 | `svg-editor-my0.3` | P0 | **Partial** — hub shrunk; debug HUD + context wiring remain; context-menu command split (document actions vs command controller) |
 | DEBT-004 | `svg-editor-my0.4` | P1 | ✓ Closed |
 | DEBT-005 | `svg-editor-my0.5` | P1 | ✓ Closed |
 | DEBT-006 | `svg-editor-my0.6` | P1 | ✓ Closed |
