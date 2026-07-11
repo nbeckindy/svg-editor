@@ -1506,7 +1506,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       }
       if (previousTool !== currentTool) {
         this.toolRegistry.get(previousTool)?.onDeactivate?.();
-        this.toolRegistry.get(currentTool)?.onActivate?.(this.createCanvasToolHost());
+        this.toolRegistry.get(currentTool)?.onActivate?.();
       }
       if (!this.toolKeepsOrBuildsPathNodeTopology(currentTool)) {
         this.exitPathNodeEditMode();

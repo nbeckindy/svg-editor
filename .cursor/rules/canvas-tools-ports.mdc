@@ -29,7 +29,7 @@ export interface MyCanvasToolDeps {
 }
 ```
 
-Prefer typed deps over reading [`CanvasToolHost`](src/app/tools/canvas-tool-host.interface.ts) directly; the host still exposes wide services and is a legacy seam.
+Use typed `*CanvasToolDeps` interfaces — each adapter receives only the narrow slice it needs via a lazy `getDeps` getter.
 
 ## Reference files
 
