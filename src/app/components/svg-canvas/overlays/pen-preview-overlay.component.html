@@ -1,0 +1,118 @@
+@if (penInsertOnPathPreviewPathD(); as pins) {
+  <svg:path
+    class="creation-ghost-shape"
+    data-testid="canvas-pen-insert-on-path-preview"
+    [attr.d]="pins"
+    [attr.fill]="'none'"
+    [attr.stroke]="stroke()"
+    [attr.stroke-width]="strokeWidth()"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}
+@if (penSessionPreviewPathD(); as pfull) {
+  <svg:path
+    class="creation-ghost-shape"
+    data-testid="canvas-pen-path-preview"
+    [attr.d]="pfull"
+    [attr.fill]="'none'"
+    [attr.stroke]="stroke()"
+    [attr.stroke-width]="strokeWidth()"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}
+@if (penCurvePreviewPathD(); as pcurve) {
+  <svg:path
+    class="creation-ghost-shape"
+    data-testid="canvas-pen-curve-preview"
+    [attr.d]="pcurve"
+    [attr.fill]="'none'"
+    [attr.stroke]="stroke()"
+    [attr.stroke-width]="strokeWidth()"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}
+@if (penCurvePreviewPathD() || penFirstAnchorMirroredHandleDragActive() || penColocatedTipMirroredHandleDragActive()) {
+  @for (h of penCurveHandleOverlays(); track h.cx + ',' + h.cy) {
+    <svg:circle
+      class="pen-curve-handle"
+      data-testid="canvas-pen-curve-handle"
+      [attr.cx]="h.cx"
+      [attr.cy]="h.cy"
+      [attr.r]="4"
+      [attr.fill]="'#ffffff'"
+      [attr.stroke]="'#2196f3'"
+      [attr.stroke-width]="1.5"
+      [attr.vector-effect]="'non-scaling-stroke'"/>
+  }
+}
+@if (penRubberBandOverlay(); as prb) {
+  <svg:line
+    class="creation-ghost-shape"
+    data-testid="canvas-pen-rubber-band"
+    [attr.x1]="prb.x1"
+    [attr.y1]="prb.y1"
+    [attr.x2]="prb.x2"
+    [attr.y2]="prb.y2"
+    [attr.stroke]="stroke()"
+    [attr.stroke-width]="strokeWidth()"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}
+@if (penOutgoingHandleGuideOverlay(); as og) {
+  <svg:line
+    class="pen-outgoing-handle-guide"
+    data-testid="canvas-pen-outgoing-handle-guide"
+    [attr.x1]="og.x1"
+    [attr.y1]="og.y1"
+    [attr.x2]="og.x2"
+    [attr.y2]="og.y2"
+    [attr.stroke]="'#2196f3'"
+    [attr.stroke-width]="1.25"
+    [attr.stroke-dasharray]="'4 3'"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}
+@if (penOutgoingHandleKnobOverlay(); as pk) {
+  <svg:circle
+    class="pen-outgoing-handle"
+    data-pen-outgoing-handle="true"
+    data-testid="canvas-pen-outgoing-handle"
+    [attr.cx]="pk.cx"
+    [attr.cy]="pk.cy"
+    [attr.r]="4"
+    [attr.fill]="'#ffffff'"
+    [attr.stroke]="'#2196f3'"
+    [attr.stroke-width]="1.5"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}
+@if (penContinuationGhostPathD(); as ghostD) {
+  <svg:path
+    class="creation-ghost-shape"
+    data-testid="canvas-pen-continuation-ghost"
+    [attr.d]="ghostD"
+    [attr.fill]="'none'"
+    [attr.stroke]="stroke()"
+    [attr.stroke-width]="strokeWidth()"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}
+@if (penCloseTargetHoverOverlay(); as closeRing) {
+  <svg:circle
+    class="creation-ghost-shape pen-close-target-ring"
+    data-testid="canvas-pen-close-hover"
+    [attr.cx]="closeRing.cx"
+    [attr.cy]="closeRing.cy"
+    [attr.r]="8"
+    [attr.fill]="'none'"
+    [attr.stroke]="'#00c853'"
+    [attr.stroke-width]="2"
+    [attr.stroke-dasharray]="'4 3'"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}
+@if (penOpenPathContinueHoverOverlay(); as continueRing) {
+  <svg:circle
+    class="creation-ghost-shape pen-continue-target-ring"
+    data-testid="canvas-pen-continue-hover"
+    [attr.cx]="continueRing.cx"
+    [attr.cy]="continueRing.cy"
+    [attr.r]="8"
+    [attr.fill]="'none'"
+    [attr.stroke]="'#00c853'"
+    [attr.stroke-width]="2"
+    [attr.stroke-dasharray]="'4 3'"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}

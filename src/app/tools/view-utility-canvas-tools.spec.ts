@@ -52,7 +52,7 @@ describe('view and utility canvas tools', () => {
       applyPanDragFromEvent: vi.fn(),
       clearPanningFlag: vi.fn()
     }));
-    const ev = { clientX: 1, clientY: 2 } as MouseEvent;
+    const ev = { clientX: 1, clientY: 2, button: 0 } as MouseEvent;
     tool.onPointerDown?.(ev, { x: 0, y: 0 });
     expect(beginPanSession).toHaveBeenCalledWith(ev);
   });
