@@ -50,8 +50,10 @@ export interface CanvasToolsTestHostState {
   commitZoomMarquee: () => void;
   consumeZoomMarqueeJustEnded: boolean;
   updateTextToolPreviewFromClient: (clientX: number, clientY: number) => void;
-  createTextAtPoint: (clientX: number, clientY: number) => void;
+  createTextAtPoint: (clientX: number, clientY: number) => string | undefined;
+  tryEnterTextEditAfterCreate: (newId: string) => void;
   destroyTextToolPreview: () => void;
+  enterInlineTextEditMode: (textId: string) => void;
   sampleEyedropperAt: (event: MouseEvent) => void;
   clientToEditorSvgPoint: (clientX: number, clientY: number) => { x: number; y: number } | null;
   screenToSvg: (clientX: number, clientY: number) => { x: number; y: number } | null;
@@ -122,7 +124,9 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     consumeZoomMarqueeJustEnded: false,
     updateTextToolPreviewFromClient: vi.fn(),
     createTextAtPoint: vi.fn(),
+    tryEnterTextEditAfterCreate: vi.fn(),
     destroyTextToolPreview: vi.fn(),
+    enterInlineTextEditMode: vi.fn(),
     sampleEyedropperAt: vi.fn(),
     clientToEditorSvgPoint: () => ({ x: 0, y: 0 }),
     screenToSvg: () => null,
@@ -268,7 +272,8 @@ export function registerAllCanvasToolsForTest(
     setDrilledIntoGroupId: hostState.setDrilledIntoGroupId,
     isGroupAClipMaskCarrier: hostState.isGroupAClipMaskCarrier,
     consumeSelectionMarqueeJustEnded: hostState.consumeSelectionMarqueeJustEnded,
-    shouldSkipEmptyHitSelectionClear: hostState.shouldSkipEmptyHitSelectionClear
+    shouldSkipEmptyHitSelectionClear: hostState.shouldSkipEmptyHitSelectionClear,
+    enterInlineTextEditMode: hostState.enterInlineTextEditMode
   }));
 
   registrar.registerViewUtilityTools({
@@ -293,7 +298,8 @@ export function registerAllCanvasToolsForTest(
       isCanvasReady: () => hostState.isCanvasReady,
       updateTextToolPreviewFromClient: hostState.updateTextToolPreviewFromClient,
       createTextAtPoint: hostState.createTextAtPoint,
-      destroyTextToolPreview: hostState.destroyTextToolPreview
+      destroyTextToolPreview: hostState.destroyTextToolPreview,
+      tryEnterTextEditAfterCreate: hostState.tryEnterTextEditAfterCreate
     }),
     getEyedropperDeps: () => ({
       isCanvasReady: () => hostState.isCanvasReady,
