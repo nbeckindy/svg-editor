@@ -42,6 +42,19 @@ function makeSelectorDeps() {
     isSkewingSelection: () => false,
     isRotatingSelection: () => false,
     isDraggingShape: () => false,
+    getSvgInstance: () => null,
+    isGroupAClipMaskCarrier: () => false,
+    getShapeProperties: () => ({}) as never,
+    getSelectorSelectionForShape: () => [],
+    selectShapes: vi.fn(),
+    toggleShapeGroupInSelection: vi.fn(),
+    clearSelection: vi.fn(),
+    clearHighlight: vi.fn(),
+    getDrilledIntoGroupId: () => null,
+    setDrilledIntoGroupId: vi.fn(),
+    consumeSelectionMarqueeJustEnded: () => false,
+    shouldSkipEmptyHitSelectionClear: () => false,
+    enterInlineTextEditMode: vi.fn(),
     getKeyboardActions: () =>
       ({
         getSvgContent: () => 'svg',
@@ -150,7 +163,8 @@ describe('CanvasBoundToolRegistrar', () => {
       getTextDeps: () => ({
         isCanvasReady: () => true,
         updateTextToolPreviewFromClient: vi.fn(),
-        createTextAtPoint: vi.fn(),
+        createTextAtPoint: vi.fn().mockReturnValue(undefined),
+        tryEnterTextEditAfterCreate: vi.fn(),
         destroyTextToolPreview: vi.fn()
       }),
       getEyedropperDeps: () => ({

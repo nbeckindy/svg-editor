@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { Svg } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   prepareCanvasContextMenuSelection,
@@ -18,8 +19,8 @@ function makeDeps(over: Partial<CanvasContextMenuSelectionDeps> = {}): CanvasCon
     getSvgInstance: () => null,
     getNearestGroupAncestorId: () => null,
     isGroupAClipMaskCarrier: () => false,
-    getShapeProperties: (el) => rectProps(el.id),
-    getSelectorSelectionForShape: (el) => [rectProps(el.id)],
+    getShapeProperties: (el) => rectProps((el as unknown as SVGElement).id),
+    getSelectorSelectionForShape: (el) => [rectProps((el as unknown as SVGElement).id)],
     selectShapes: vi.fn(),
     getDrilledIntoGroupId: () => null,
     setDrilledIntoGroupId: vi.fn(),
@@ -50,7 +51,7 @@ describe('prepareCanvasContextMenuSelection', () => {
     const deps = makeDeps({
       getSvgInstance: () => ({
         findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
-      }),
+      }) as unknown as Svg,
       getSelectorSelectionForShape: () => [rectProps('child')],
       selectShapes
     });
@@ -72,7 +73,7 @@ describe('prepareCanvasContextMenuSelection', () => {
     const deps = makeDeps({
       getSvgInstance: () => ({
         findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
-      }),
+      }) as unknown as Svg,
       getSelectorSelectionForShape: () => [rectProps('child')],
       getSelectedShapeIds: () => ['child', 'other'],
       selectShapes
@@ -94,7 +95,7 @@ describe('prepareCanvasContextMenuSelection', () => {
           if (sel === '#grp') return { id: 'grp' } as unknown as SVGElement;
           return undefined;
         }
-      }),
+      }) as unknown as Svg,
       getNearestGroupAncestorId: () => 'grp',
       getShapeProperties: () => groupProps('grp'),
       getSelectedShapeIds: () => ['grp'],
@@ -120,7 +121,7 @@ describe('prepareCanvasContextMenuSelection', () => {
           if (sel === '#grp') return group as unknown as SVGElement;
           return undefined;
         }
-      }),
+      }) as unknown as Svg,
       getNearestGroupAncestorId: () => 'grp',
       getShapeProperties: () => groupProps('grp'),
       selectShapes,

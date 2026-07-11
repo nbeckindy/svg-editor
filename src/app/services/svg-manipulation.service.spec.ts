@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import type { LiveTreeMarkup } from '../utils/svg-sanitize';
 import { SvgManipulationService, CreatableShapeType } from './svg-manipulation.service';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { AddPathCommand, AddImageCommand, ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
@@ -2810,7 +2811,7 @@ describe('SvgManipulationService', () => {
     it('inserts markup into content group', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
-      service.insertShapeMarkup('<circle id="inserted-circle" cx="50" cy="50" r="20" fill="#ff0000"/>');
+      service.insertShapeMarkup('<circle id="inserted-circle" cx="50" cy="50" r="20" fill="#ff0000"/>' as unknown as LiveTreeMarkup);
       const el = container.querySelector('#inserted-circle');
       expect(el).not.toBeNull();
       expect(el?.tagName.toLowerCase()).toBe('circle');
@@ -2819,7 +2820,7 @@ describe('SvgManipulationService', () => {
     it('inserts at the specified DOM index', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="20" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
-      service.insertShapeMarkup('<circle id="mid" cx="5" cy="5" r="2"/>', 1);
+      service.insertShapeMarkup('<circle id="mid" cx="5" cy="5" r="2"/>' as unknown as LiveTreeMarkup, 1);
       const contentGroup = container.querySelector('[data-editor-content-group]')!;
       const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
       expect(ids.indexOf('mid')).toBe(1);
@@ -2828,7 +2829,7 @@ describe('SvgManipulationService', () => {
     it('appends when insertionIndex is omitted', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
-      service.insertShapeMarkup('<rect id="appended" x="0" y="0" width="5" height="5"/>');
+      service.insertShapeMarkup('<rect id="appended" x="0" y="0" width="5" height="5"/>' as unknown as LiveTreeMarkup);
       const contentGroup = container.querySelector('[data-editor-content-group]')!;
       const lastChild = contentGroup.lastElementChild;
       expect(lastChild?.id).toBe('appended');
@@ -2838,12 +2839,12 @@ describe('SvgManipulationService', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
       const before = service.documentRevision();
-      service.insertShapeMarkup('<rect id="new" x="0" y="0" width="5" height="5"/>');
+      service.insertShapeMarkup('<rect id="new" x="0" y="0" width="5" height="5"/>' as unknown as LiveTreeMarkup);
       expect(service.documentRevision()).toBe(before + 1);
     });
 
     it('does nothing when not initialized', () => {
-      expect(() => service.insertShapeMarkup('<rect id="noop" x="0" y="0" width="5" height="5"/>')).not.toThrow();
+      expect(() => service.insertShapeMarkup('<rect id="noop" x="0" y="0" width="5" height="5"/>' as unknown as LiveTreeMarkup)).not.toThrow();
     });
 
     it('round-trips with removeShape (add → serialize → remove → reinsert)', () => {
@@ -2855,7 +2856,7 @@ describe('SvgManipulationService', () => {
       const markup = el.outerHTML;
       service.removeShape(id!);
       expect(container.querySelector(`#${id}`)).toBeNull();
-      service.insertShapeMarkup(markup);
+      service.insertShapeMarkup(markup as unknown as LiveTreeMarkup);
       expect(container.querySelector(`#${id}`)).not.toBeNull();
     });
   });

@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { provideRouter } from '@angular/router';
+import type { LiveTreeMarkup } from './utils/svg-sanitize';
 import { AppComponent } from './app';
 import { SvgManipulationService } from './services/svg-manipulation.service';
 import { ShapeSelectionService } from './services/shape-selection.service';
@@ -288,7 +289,7 @@ describe('AppComponent', () => {
       fixture.detectChanges();
 
       const svg = TestBed.inject(SvgManipulationService);
-      svg.insertShapeMarkup('<rect id="stale-rect" x="1" y="2" width="10" height="10"/>');
+      svg.insertShapeMarkup('<rect id="stale-rect" x="1" y="2" width="10" height="10"/>' as unknown as LiveTreeMarkup);
       expect(svg.getSVGInstance()?.findOne('#stale-rect')).toBeTruthy();
 
       fixture.componentInstance.onNewCanvas();

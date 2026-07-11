@@ -1,5 +1,7 @@
 import { Matrix } from '@svgdotjs/svg.js';
 import { BASE_DRAWING_STYLE_DEFAULTS, type DrawingStyleDefaults } from '../../models/drawing-style-defaults';
+import type { LiveTreeMarkup } from '../../utils/svg-sanitize';
+import type { SvgClipPathPort } from '../../services/svg-clip-path.port';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import {
   CompositeCommand,
@@ -1200,7 +1202,7 @@ describe('MakeClipPathCommand', () => {
 
   it('calls makeClipPathFromSelection on execute', () => {
     const svc = mockClipSvc();
-    const cmd = new MakeClipPathCommand(svc, ['back'], 'front');
+    const cmd = new MakeClipPathCommand(svc as unknown as SvgClipPathPort, ['back'], 'front');
     cmd.execute();
     expect(svc.makeClipPathFromSelection).toHaveBeenCalledWith(['back'], 'front');
     expect(cmd.createdCarrierGroupId).toBe('clip-carrier-1');
@@ -1208,7 +1210,7 @@ describe('MakeClipPathCommand', () => {
 
   it('calls undoMakeClipPath on undo', () => {
     const svc = mockClipSvc();
-    const cmd = new MakeClipPathCommand(svc, ['back'], 'front');
+    const cmd = new MakeClipPathCommand(svc as unknown as SvgClipPathPort, ['back'], 'front');
     cmd.execute();
     cmd.undo();
     expect(svc.undoMakeClipPath).toHaveBeenCalledWith(
@@ -1242,7 +1244,7 @@ describe('ReleaseClipPathCommand', () => {
 
   it('calls releaseClipPathForSelection on execute', () => {
     const svc = mockClipSvc();
-    const cmd = new ReleaseClipPathCommand(svc, ['a']);
+    const cmd = new ReleaseClipPathCommand(svc as unknown as SvgClipPathPort, ['a']);
     cmd.execute();
     expect(svc.releaseClipPathForSelection).toHaveBeenCalledWith(['a']);
     expect(cmd.releasedChildIds).toEqual(['a', 'b']);
@@ -1250,7 +1252,7 @@ describe('ReleaseClipPathCommand', () => {
 
   it('calls undoReleaseClipPath on undo', () => {
     const svc = mockClipSvc();
-    const cmd = new ReleaseClipPathCommand(svc, ['a']);
+    const cmd = new ReleaseClipPathCommand(svc as unknown as SvgClipPathPort, ['a']);
     cmd.execute();
     cmd.undo();
     expect(svc.undoReleaseClipPath).toHaveBeenCalled();
@@ -1655,7 +1657,7 @@ describe('OutlineToPathCommand', () => {
     const cmd = new OutlineToPathCommand(
       svc,
       'rect-a',
-      '<path id="rect-a" d="M 0 0 L 10 0 L 10 10 Z"/>',
+      '<path id="rect-a" d="M 0 0 L 10 0 L 10 10 Z"/>' as unknown as LiveTreeMarkup,
       0,
       selectionSvc
     );
@@ -1673,7 +1675,7 @@ describe('OutlineToPathCommand', () => {
     const cmd = new OutlineToPathCommand(
       svc,
       'rect-a',
-      '<path id="rect-a" d="M 0 0 L 10 0 L 10 10 Z"/>',
+      '<path id="rect-a" d="M 0 0 L 10 0 L 10 10 Z"/>' as unknown as LiveTreeMarkup,
       0,
       selectionSvc
     );

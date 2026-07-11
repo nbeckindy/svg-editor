@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { EDITOR_DOCUMENT_DEFS_ATTR } from './svg-editor-stage.constants';
 import { SvgClipPathService } from './svg-clip-path.service';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
@@ -135,7 +136,7 @@ describe('SvgClipPathService', () => {
       <g clip-path="url(#cp)"><rect id="inner" x="5" y="5" width="10" height="10"/></g>
     </svg>`;
     doc.initializeSVG(container, svgContent);
-    const inner = doc.getSVGInstance()!.findOne('#inner')!;
+    const inner = doc.getSVGInstance()!.findOne('#inner') as SvgJsElement;
     const geomId = clipPaths.resolveClipGeometryIdForContentShape(inner);
     expect(geomId).toMatch(/^clip-geom-/);
     expect(doc.getSVGInstance()!.findOne(`#${geomId}`)).toBeTruthy();

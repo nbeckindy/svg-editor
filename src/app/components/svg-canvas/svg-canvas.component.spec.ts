@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import type { LiveTreeMarkup } from '../../utils/svg-sanitize';
 import {
   SvgCanvasComponent,
   clampCanvasScaleForSelectionChrome,
@@ -124,7 +125,7 @@ describe('SvgCanvasComponent', () => {
 
     it('re-inits when content string equals current accepted content', async () => {
       await loadBlankDoc();
-      svgManipulationService.insertShapeMarkup('<rect id="same-str-reset" x="1" y="2" width="10" height="10"/>');
+      svgManipulationService.insertShapeMarkup('<rect id="same-str-reset" x="1" y="2" width="10" height="10"/>' as unknown as LiveTreeMarkup);
       expect(svgManipulationService.getSVGInstance()?.findOne('#same-str-reset')).toBeTruthy();
 
       expect(component.replaceDocument(blankDoc)).toBe(true);

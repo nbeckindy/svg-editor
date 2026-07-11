@@ -57,11 +57,12 @@ describe('view and utility canvas tools', () => {
   });
 
   it('text tool creates text on click', () => {
-    const createTextAtPoint = vi.fn();
+    const createTextAtPoint = vi.fn().mockReturnValue(undefined);
     const tool = createTextCanvasTool(() => ({
       isCanvasReady: () => true,
       updateTextToolPreviewFromClient: vi.fn(),
       createTextAtPoint,
+      tryEnterTextEditAfterCreate: vi.fn(),
       destroyTextToolPreview: vi.fn()
     }));
     tool.onClick?.({ clientX: 10, clientY: 20 } as MouseEvent, { x: 0, y: 0 });
@@ -101,7 +102,8 @@ describe('view and utility canvas tools', () => {
     registerTextCanvasTool(registry, () => ({
       isCanvasReady: () => true,
       updateTextToolPreviewFromClient: vi.fn(),
-      createTextAtPoint: vi.fn(),
+      createTextAtPoint: vi.fn().mockReturnValue(undefined),
+      tryEnterTextEditAfterCreate: vi.fn(),
       destroyTextToolPreview: vi.fn()
     }));
     registerEyedropperCanvasTool(registry, () => ({

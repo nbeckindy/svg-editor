@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { Svg } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   handleSelectorCanvasClick,
@@ -18,8 +19,8 @@ function makeClickDeps(over: Partial<SelectorCanvasClickDeps> = {}): SelectorCan
     getSvgInstance: () => null,
     getNearestGroupAncestorId: () => null,
     isGroupAClipMaskCarrier: () => false,
-    getShapeProperties: (el) => rectProps(el.id),
-    getSelectorSelectionForShape: (el) => [rectProps(el.id)],
+    getShapeProperties: (el) => rectProps((el as unknown as SVGElement).id),
+    getSelectorSelectionForShape: (el) => [rectProps((el as unknown as SVGElement).id)],
     selectShapes: vi.fn(),
     toggleShapeGroupInSelection: vi.fn(),
     clearSelection: vi.fn(),
@@ -74,8 +75,8 @@ describe('handleSelectorCanvasClick', () => {
     const selectShapes = vi.fn();
     const deps = makeClickDeps({
       getSvgInstance: () => ({
-        findOne: (sel) => (sel === '#leaf' ? (child as unknown as SVGElement) : undefined)
-      }),
+        findOne: (sel: string) => (sel === '#leaf' ? (child as unknown as SVGElement) : undefined)
+      }) as unknown as Svg,
       getNearestGroupAncestorId: () => null,
       getSelectorSelectionForShape: () => [rectProps('leaf')],
       selectShapes
@@ -95,12 +96,12 @@ describe('handleSelectorCanvasClick', () => {
     const setDrilled = vi.fn();
     const deps = makeClickDeps({
       getSvgInstance: () => ({
-        findOne: (sel) => {
+        findOne: (sel: string) => {
           if (sel === '#child') return child as unknown as SVGElement;
           if (sel === '#grp') return group as unknown as SVGElement;
           return undefined;
         }
-      }),
+      }) as unknown as Svg,
       getNearestGroupAncestorId: () => 'grp',
       getShapeProperties: () => groupProps('grp'),
       selectShapes,
@@ -119,8 +120,8 @@ describe('handleSelectorCanvasClick', () => {
     const selectShapes = vi.fn();
     const deps = makeClickDeps({
       getSvgInstance: () => ({
-        findOne: (sel) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
-      }),
+        findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
+      }) as unknown as Svg,
       getNearestGroupAncestorId: () => 'grp',
       getDrilledIntoGroupId: () => 'grp',
       getSelectorSelectionForShape: () => [rectProps('child')],
@@ -138,8 +139,8 @@ describe('handleSelectorCanvasClick', () => {
     const selectShapes = vi.fn();
     const deps = makeClickDeps({
       getSvgInstance: () => ({
-        findOne: (sel) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
-      }),
+        findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
+      }) as unknown as Svg,
       getNearestGroupAncestorId: () => 'clip-g',
       isGroupAClipMaskCarrier: (id) => id === 'clip-g',
       getSelectorSelectionForShape: () => [rectProps('clip-geom')],
@@ -157,8 +158,8 @@ describe('handleSelectorCanvasClick', () => {
     const toggle = vi.fn();
     const deps = makeClickDeps({
       getSvgInstance: () => ({
-        findOne: (sel) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
-      }),
+        findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
+      }) as unknown as Svg,
       getSelectorSelectionForShape: () => [rectProps('child')],
       toggleShapeGroupInSelection: toggle
     });

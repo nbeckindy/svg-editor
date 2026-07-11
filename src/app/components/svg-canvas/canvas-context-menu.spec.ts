@@ -1,4 +1,5 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
+import type { Svg } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 import { UnionRotateCommand } from '../../models/editor-commands';
 import {
@@ -18,8 +19,8 @@ describe('canvas context menu integration helpers', () => {
         getSvgInstance: () => null,
         getNearestGroupAncestorId: () => null,
         isGroupAClipMaskCarrier: () => false,
-        getShapeProperties: (el) => rectProps(el.id),
-        getSelectorSelectionForShape: (el) => [rectProps(el.id)],
+        getShapeProperties: (el) => rectProps((el as unknown as SVGElement).id),
+        getSelectorSelectionForShape: (el) => [rectProps((el as unknown as SVGElement).id)],
         selectShapes: vi.fn(),
         getDrilledIntoGroupId: () => null,
         setDrilledIntoGroupId: vi.fn(),
@@ -50,28 +51,24 @@ describe('canvas context menu integration helpers', () => {
   });
 
   describe('rotateSelectionByDegrees contract', () => {
-    let pushAndExecute: ReturnType<typeof vi.fn>;
+    const pushAndExecute = vi.fn();
 
     beforeEach(() => {
-      pushAndExecute = vi.fn();
+      pushAndExecute.mockReset();
     });
 
-    function rotateSelectionByDegrees(
-      deltaDeg: number,
-      ids: string[],
-      svc: {
-        getUnionBBox: ReturnType<typeof vi.fn>;
-        getSelectionRotationPivot: ReturnType<typeof vi.fn>;
-        snapshotSelectionTransforms: ReturnType<typeof vi.fn>;
-        isElementOrAncestorLocked: ReturnType<typeof vi.fn>;
-      }
-    ): void {
+    function rotateSelectionByDegrees(deltaDeg: number, ids: string[], svc: {
+      getUnionBBox: (ids: string[]) => { x: number; y: number; width: number; height: number } | null | undefined;
+      getSelectionRotationPivot: (ids: string[]) => { x: number; y: number } | null | undefined;
+      snapshotSelectionTransforms: (ids: string[]) => unknown;
+      isElementOrAncestorLocked: (id: string) => boolean;
+    }): void {
       if (ids.length === 0 || ids.some((id) => svc.isElementOrAncestorLocked(id))) return;
       const union = svc.getUnionBBox(ids);
       if (!union) return;
       const pivot = svc.getSelectionRotationPivot(ids) ?? { x: union.x + union.width / 2, y: union.y + union.height / 2 };
       const snap = svc.snapshotSelectionTransforms(ids);
-      pushAndExecute(new UnionRotateCommand(svc as never, ids, pivot, deltaDeg, snap));
+      pushAndExecute(new UnionRotateCommand(svc as never, ids, pivot, deltaDeg, snap as never));
     }
 
     it('dispatches UnionRotateCommand with ±90 degrees', () => {
