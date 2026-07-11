@@ -1,4 +1,5 @@
 import type { Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
+import { isOutlineToPathPrimitiveType } from '../../models/primitive-to-path';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 
 export interface CanvasContextMenuSelectionDeps {
@@ -6,7 +7,7 @@ export interface CanvasContextMenuSelectionDeps {
   getNearestGroupAncestorId(id: string): string | null;
   isGroupAClipMaskCarrier(groupId: string): boolean;
   getShapeProperties(el: SvgJsElement): ShapeProperties;
-  getShapePropertiesInSameClipGroup(el: SvgJsElement): ShapeProperties[];
+  getSelectorSelectionForShape(el: SvgJsElement): ShapeProperties[];
   selectShapes(shapes: ShapeProperties[]): void;
   getDrilledIntoGroupId(): string | null;
   setDrilledIntoGroupId(id: string | null): void;
@@ -16,6 +17,8 @@ export interface CanvasContextMenuSelectionDeps {
 export interface CanvasContextMenuSelectionResult {
   /** True when the pointer hit a content shape (not empty canvas). */
   hitShape: boolean;
+  /** True when the pointer target is a rect, circle, ellipse, line, polyline, or polygon. */
+  hitOutlineToPathPrimitive: boolean;
 }
 
 /**
@@ -35,8 +38,12 @@ export function prepareCanvasContextMenuSelection(
     : undefined;
 
   if (!clickedContentShapeEl) {
-    return { hitShape: false };
+    return { hitShape: false, hitOutlineToPathPrimitive: false };
   }
+
+  const hitOutlineToPathPrimitive = isOutlineToPathPrimitiveType(
+    deps.getShapeProperties(clickedContentShapeEl).type
+  );
 
   const selectedIds = new Set(deps.getSelectedShapeIds());
   const resolvedIds = resolveContextMenuTargetIds(clickTarget.id, clickedContentShapeEl, deps);
@@ -46,7 +53,7 @@ export function prepareCanvasContextMenuSelection(
     applyContextMenuSelection(clickTarget.id, clickedContentShapeEl, deps);
   }
 
-  return { hitShape: true };
+  return { hitShape: true, hitOutlineToPathPrimitive };
 }
 
 function resolveContextMenuTargetIds(
@@ -54,18 +61,17 @@ function resolveContextMenuTargetIds(
   svgElement: SvgJsElement,
   deps: CanvasContextMenuSelectionDeps
 ): string[] {
-  const svgInstance = deps.getSvgInstance();
   const nearestGroupId = deps.getNearestGroupAncestorId(targetId);
   const groupIsClipCarrier = nearestGroupId ? deps.isGroupAClipMaskCarrier(nearestGroupId) : false;
 
   if (nearestGroupId && !groupIsClipCarrier) {
     if (deps.getDrilledIntoGroupId() === nearestGroupId) {
-      return deps.getShapePropertiesInSameClipGroup(svgElement).map((s) => s.id);
+      return deps.getSelectorSelectionForShape(svgElement).map((s) => s.id);
     }
     return [nearestGroupId];
   }
 
-  return deps.getShapePropertiesInSameClipGroup(svgElement).map((s) => s.id);
+  return deps.getSelectorSelectionForShape(svgElement).map((s) => s.id);
 }
 
 function applyContextMenuSelection(
@@ -79,7 +85,7 @@ function applyContextMenuSelection(
 
   if (nearestGroupId && !groupIsClipCarrier) {
     if (deps.getDrilledIntoGroupId() === nearestGroupId) {
-      deps.selectShapes(deps.getShapePropertiesInSameClipGroup(svgElement));
+      deps.selectShapes(deps.getSelectorSelectionForShape(svgElement));
     } else {
       const groupEl = (svgInstance?.findOne(`#${nearestGroupId}`) as SvgJsElement | null) ?? undefined;
       if (groupEl) {
@@ -88,6 +94,6 @@ function applyContextMenuSelection(
       }
     }
   } else {
-    deps.selectShapes(deps.getShapePropertiesInSameClipGroup(svgElement));
+    deps.selectShapes(deps.getSelectorSelectionForShape(svgElement));
   }
 }

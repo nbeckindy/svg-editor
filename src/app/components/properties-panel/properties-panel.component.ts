@@ -3,16 +3,15 @@ import { CommonModule } from '@angular/common';
 import { FormsModule } from '@angular/forms';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
-import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-properties.interface';
-import { ColorPickerComponent } from '../color-picker/color-picker.component';
+import { PaintSourceInfo, ShapeProperties } from '../../models/shape-properties.interface';
+import { PaintSwatchPopoverComponent, PaintSwatchMode } from '../paint-swatch-popover/paint-swatch-popover.component';
 import { DocumentSettingsComponent } from '../document-settings/document-settings.component';
 import { GradientFillEditorComponent } from '../gradient-fill-editor/gradient-fill-editor.component';
-import { parsePaintReferenceId } from '../../models/svg-gradient';
+import { EditableGradientModel, parsePaintReferenceId } from '../../models/svg-gradient';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
-import type { LayerLockReadPort } from '../../history/layer-lock-read.port';
+import { GRADIENT_FILL_EDITOR_SVG_PORT, LAYER_LOCK_READ_PORT } from '../../services/manipulation-port-tokens';
 import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-node-anchor-tools.component';
 
 @Component({
@@ -20,7 +19,7 @@ import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-nod
   imports: [
     CommonModule,
     FormsModule,
-    ColorPickerComponent,
+    PaintSwatchPopoverComponent,
     DocumentSettingsComponent,
     GradientFillEditorComponent,
     PathNodeAnchorToolsComponent
@@ -44,8 +43,9 @@ export class PropertiesPanelComponent {
   private drawingDefaults = inject(DrawingStyleDefaultsService);
   private editorTool = inject(EditorToolService);
   private chromeApply = inject(ChromeEditorApplyService);
+  private readonly gradientSvgPort = inject(GRADIENT_FILL_EDITOR_SVG_PORT);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
-  private readonly layerLock = inject(SvgManipulationService) as LayerLockReadPort;
+  private readonly layerLock = inject(LAYER_LOCK_READ_PORT);
   readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
   readonly selectionTransformReadout = this.transformReadoutSvc.selectionTransformReadout;
   readonly selectionBBoxFieldModel = this.transformReadoutSvc.selectionBBoxFieldModel;
@@ -256,6 +256,57 @@ export class PropertiesPanelComponent {
   selectedTextAnchorValue(): 'start' | 'middle' | 'end' {
     const value = this.textSelectionValue((s) => s.textAnchor, 'start');
     return value === 'middle' || value === 'end' ? value : 'start';
+  }
+
+  private rectSelection(): ShapeProperties[] {
+    return this.selectedShapesList().filter((s) => s.type === 'rect');
+  }
+
+  hasRectSelection(): boolean {
+    return this.rectSelection().length > 0;
+  }
+
+  /** Linked corner radius when rx and ry match; null when asymmetric. */
+  private effectiveCornerRadius(shape: ShapeProperties): number | null {
+    const rx = shape.rx ?? 0;
+    const ry = shape.ry ?? shape.rx ?? 0;
+    if (rx !== ry) return null;
+    return rx;
+  }
+
+  rectCornerRadiiMixed(): boolean {
+    const rects = this.rectSelection();
+    if (rects.length === 0) return false;
+    if (rects.some((s) => this.effectiveCornerRadius(s) === null)) return true;
+    if (rects.length <= 1) return false;
+    const keys = new Set(rects.map((s) => String(this.effectiveCornerRadius(s))));
+    return keys.size > 1;
+  }
+
+  /** Slider max = smallest per-rect clamp limit so full travel reaches max on every selected rect. */
+  rectCornerRadiusSliderMax(): number {
+    const rects = this.rectSelection();
+    if (rects.length === 0) return 0;
+    const limits = rects
+      .map((s) => s.rectMaxCornerRadius)
+      .filter((m): m is number => m != null && Number.isFinite(m) && m > 0);
+    if (limits.length === 0) return 0;
+    return Math.min(...limits);
+  }
+
+  rectCornerRadiusValue(): number {
+    const rects = this.rectSelection();
+    if (rects.length === 0 || this.rectCornerRadiiMixed()) return 0;
+    return this.effectiveCornerRadius(rects[0]!) ?? 0;
+  }
+
+  onRectCornerRadiusChange(event: Event): void {
+    if (this.rectCornerRadiiMixed()) return;
+    const raw = (event.target as HTMLInputElement).value.trim();
+    if (raw === '') return;
+    const parsed = Number.parseFloat(raw);
+    if (!Number.isFinite(parsed) || parsed < 0) return;
+    this.chromeApply.applyRectCornerRadiusFromChrome(parsed);
   }
 
   onFontFamilyChange(event: Event): void {
@@ -485,54 +536,19 @@ export class PropertiesPanelComponent {
     this.chromeApply.selectParentGroupForSingleSelection();
   }
 
-  /** True when the fill is a url(#...) reference (gradient or pattern) that the hex picker can't edit. */
-  isGradientOrPatternFill(shape: ShapeProperties): boolean {
-    return shape.fillPaintType === 'gradient' || shape.fillPaintType === 'pattern';
+  gradientEditorSummaryLabel(paintProperty: 'fill' | 'stroke'): string {
+    return paintProperty === 'fill' ? 'Edit gradient fill' : 'Edit gradient stroke';
   }
 
-  /** Single solid (or none) fill selection — offer creating a new gradient fill. */
-  canCreateGradientFill(shape: ShapeProperties): boolean {
-    if (this.selectionCount() !== 1 || !this.supportsFill(shape)) return false;
-    if (shape.fillPaintType === 'gradient' || shape.fillPaintType === 'pattern') return false;
-    return true;
-  }
-
-  onCreateGradientFill(shape: ShapeProperties): void {
-    if (this.selectionCount() !== 1) return;
-    const from =
-      shape.fill && shape.fill.trim() !== '' && shape.fill.toLowerCase() !== 'none'
-        ? shape.fill
-        : '#000000';
-    this.chromeApply.applyAddLinearGradientFillFromChrome(shape, from);
-  }
-
-  isGradientOrPatternStroke(shape: ShapeProperties): boolean {
-    return shape.strokePaintType === 'gradient' || shape.strokePaintType === 'pattern';
-  }
-
-  paintTypeLabel(paintType: PaintType | undefined): string {
-    switch (paintType) {
-      case 'gradient': return 'Gradient';
-      case 'pattern': return 'Pattern';
-      default: return 'Reference';
-    }
+  canShowGradientEditor(shape: ShapeProperties, paintProperty: 'fill' | 'stroke'): boolean {
+    if (this.selectionCount() !== 1) return false;
+    const paintType = paintProperty === 'fill' ? shape.fillPaintType : shape.strokePaintType;
+    return paintType === 'gradient';
   }
 
   /** Def id extracted from a raw `url(#id)` paint reference (for inspector labels). */
   paintDefIdFromUrl(url: string | undefined | null): string | null {
     return parsePaintReferenceId(url?.trim() ?? null);
-  }
-
-  fillPaintRefAriaLabel(shape: ShapeProperties): string {
-    const id = this.paintDefIdFromUrl(shape.fillUrl);
-    const kind = shape.fillPaintType === 'pattern' ? 'Pattern' : 'Gradient';
-    return id ? `${kind} fill, definition id ${id}` : `${kind} fill`;
-  }
-
-  strokePaintRefAriaLabel(shape: ShapeProperties): string {
-    const id = this.paintDefIdFromUrl(shape.strokeUrl);
-    const kind = shape.strokePaintType === 'pattern' ? 'Pattern' : 'Gradient';
-    return id ? `${kind} stroke, definition id ${id}` : `${kind} stroke`;
   }
 
   private static readonly NO_FILL_TYPES = new Set(['line', 'polyline']);
@@ -557,6 +573,144 @@ export class PropertiesPanelComponent {
   hasStrokeColor(shape: ShapeProperties): boolean {
     const s = shape.stroke;
     return s != null && s.trim() !== '' && s.toLowerCase() !== 'none';
+  }
+
+  /** Mixed fill paint across selection (solid hex, paint type, or gradient def). */
+  fillPaintMixed(): boolean {
+    if (this.fillMixed()) return true;
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const types = new Set(
+      shapes.map((s) => s.fillPaintType ?? (this.hasFillColor(s) ? 'solid' : 'none'))
+    );
+    if (types.size > 1) return true;
+    if (types.has('gradient') || types.has('pattern')) {
+      return new Set(shapes.map((s) => s.fillUrl ?? '')).size > 1;
+    }
+    return false;
+  }
+
+  /** Mixed stroke paint across selection. */
+  strokePaintMixed(): boolean {
+    if (this.strokeMixed()) return true;
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const types = new Set(
+      shapes.map((s) => s.strokePaintType ?? (this.hasStrokeColor(s) ? 'solid' : 'none'))
+    );
+    if (types.size > 1) return true;
+    if (types.has('gradient') || types.has('pattern')) {
+      return new Set(shapes.map((s) => s.strokeUrl ?? '')).size > 1;
+    }
+    return false;
+  }
+
+  fillGradientModesDisabled(): boolean {
+    return this.selectionCount() > 1;
+  }
+
+  strokeGradientModesDisabled(): boolean {
+    return this.selectionCount() > 1;
+  }
+
+  gradientModelForShape(
+    shape: ShapeProperties,
+    paintProperty: 'fill' | 'stroke'
+  ): EditableGradientModel | null {
+    const url = paintProperty === 'fill' ? shape.fillUrl : shape.strokeUrl;
+    const id = parsePaintReferenceId(url ?? undefined);
+    if (!id) return null;
+    return this.gradientSvgPort.readEditableGradientModelById(id);
+  }
+
+  fillSwatchMode(shape: ShapeProperties): PaintSwatchMode {
+    if (shape.fillPaintType === 'none' || (!this.hasFillColor(shape) && shape.fillPaintType !== 'gradient')) {
+      return 'none';
+    }
+    if (shape.fillPaintType === 'gradient') {
+      const model = this.gradientModelForShape(shape, 'fill');
+      return model?.kind === 'radial' ? 'radial' : 'linear';
+    }
+    return 'solid';
+  }
+
+  strokeSwatchMode(shape: ShapeProperties): PaintSwatchMode {
+    const hasStroke =
+      this.hasStrokeColor(shape) ||
+      shape.strokePaintType === 'gradient' ||
+      (shape.strokeWidth ?? 0) > 0;
+    if (!hasStroke && shape.strokePaintType !== 'gradient') {
+      return 'none';
+    }
+    if (shape.strokePaintType === 'gradient') {
+      const model = this.gradientModelForShape(shape, 'stroke');
+      return model?.kind === 'radial' ? 'radial' : 'linear';
+    }
+    return 'solid';
+  }
+
+  defaultFillSwatchMode(): PaintSwatchMode {
+    return this.hasDefaultSolidFill() ? 'solid' : 'none';
+  }
+
+  defaultStrokeSwatchMode(): PaintSwatchMode {
+    return this.hasDefaultSolidStroke() ? 'solid' : 'none';
+  }
+
+  isPatternFill(shape: ShapeProperties): boolean {
+    return shape.fillPaintType === 'pattern';
+  }
+
+  isPatternStroke(shape: ShapeProperties): boolean {
+    return shape.strokePaintType === 'pattern';
+  }
+
+  onFillPaintModeChange(mode: PaintSwatchMode): void {
+    const shape = this.selectedShape();
+    if (shape && this.selectionCount() === 1 && this.supportsFill(shape)) {
+      this.chromeApply.applyPaintModeFromChrome(shape, 'fill', mode);
+      return;
+    }
+    if (mode === 'none') {
+      this.chromeApply.applyFillColor('none');
+      return;
+    }
+    if (mode === 'solid') {
+      this.chromeApply.applyFillColor(this.resolveSolidFillColorForApply(shape));
+    }
+  }
+
+  onStrokePaintModeChange(mode: PaintSwatchMode): void {
+    const shape = this.selectedShape();
+    if (shape && this.selectionCount() === 1) {
+      this.chromeApply.applyPaintModeFromChrome(shape, 'stroke', mode);
+      return;
+    }
+    if (mode === 'none') {
+      this.chromeApply.applyStrokeColor('none');
+      return;
+    }
+    if (mode === 'solid') {
+      this.chromeApply.applyStrokeColor(this.resolveSolidStrokeColorForApply(shape));
+    }
+  }
+
+  private resolveSolidFillColorForApply(shape: ShapeProperties | null): string {
+    if (!shape) {
+      const d = this.defaultFillPickerColor();
+      return d && d.toLowerCase() !== 'none' ? d : '#000000';
+    }
+    const c = this.fillPickerColor(shape);
+    return c && c.toLowerCase() !== 'none' ? c : '#000000';
+  }
+
+  private resolveSolidStrokeColorForApply(shape: ShapeProperties | null): string {
+    if (!shape) {
+      const d = this.defaultStrokePickerColor();
+      return d && d.toLowerCase() !== 'none' ? d : '#000000';
+    }
+    const c = this.strokePickerColor(shape);
+    return c && c.toLowerCase() !== 'none' ? c : '#000000';
   }
 
   onFillColorChange(color: string): void {

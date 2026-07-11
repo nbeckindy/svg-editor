@@ -1,6 +1,7 @@
 import type { Provider } from '@angular/core';
 import {
   CHROME_EDITOR_APPLY_SVG_PORT,
+  CLIP_PATH_SVG_PORT,
   EDITOR_SHAPE_LIFECYCLE_SVG_PORT,
   LAYER_REORDER_GROUP_SVG_PORT,
   PROPERTIES_PANEL_SVG_PORT,
@@ -24,6 +25,7 @@ export const editorPortTestProviders: Provider[] = [
   { provide: LAYER_REORDER_GROUP_SVG_PORT, useExisting: SvgManipulationService },
   { provide: SELECTION_TRANSFORM_APPLY_SVG_PORT, useExisting: SvgManipulationService },
   { provide: EDITOR_SHAPE_LIFECYCLE_SVG_PORT, useExisting: SvgManipulationService },
+  { provide: CLIP_PATH_SVG_PORT, useExisting: SvgManipulationService },
   { provide: RASTER_IMAGE_INSERT_SVG_PORT, useExisting: SvgManipulationService },
   { provide: RASTER_IMAGE_INSERT_HISTORY_PORT, useExisting: EditorHistoryService },
   { provide: RASTER_IMAGE_INSERT_SELECTION_PORT, useExisting: ShapeSelectionService },

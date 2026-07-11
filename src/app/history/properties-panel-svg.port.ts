@@ -1,8 +1,14 @@
 import type { Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../models/shape-properties.interface';
-import type { PaintGradientSnapshot } from '../models/svg-gradient';
+import type { EditableGradientModel, PaintGradientSnapshot } from '../models/svg-gradient';
 import type { AlignDistributeSvgPort } from './align-distribute-svg.port';
 import type { GradientFillSnapshotSvgPort } from './gradient-fill-editor-svg.port';
+
+/** Svg slice for rect corner radius commands from the properties panel. */
+export interface PropertiesPanelRectSvgPort {
+  updateRectCornerRadius(shapeId: string, radius: number): void;
+  restoreRectCornerRadii(shapeId: string, rx: number, ry: number): void;
+}
 
 /** Typography + text presentation commands used from the properties panel. */
 export interface PropertiesPanelTextSvgPort {
@@ -40,10 +46,12 @@ export interface PropertiesPanelSvgPort
   extends AlignDistributeSvgPort,
     GradientFillSnapshotSvgPort,
     PropertiesPanelTextSvgPort,
+    PropertiesPanelRectSvgPort,
     BakePresentationSvgPort {
   clearHighlight(): void;
   getNearestGroupAncestorId(shapeId: string): string | null;
   getShapeProperties(element: SvgJsElement): ShapeProperties;
   allocateUniqueDefId(prefix: string): string;
   capturePaintGradientSnapshot(shapeId: string, paintProperty: 'fill' | 'stroke'): PaintGradientSnapshot;
+  readEditableGradientModelById(gradientId: string): EditableGradientModel | null;
 }

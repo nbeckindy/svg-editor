@@ -1,0 +1,57 @@
+---
+description: Use inject() instead of constructor injection in Angular components and services
+globs: "**/*.ts"
+alwaysApply: false
+---
+
+# Use inject() over constructor injection
+
+In Angular components, directives, and `@Injectable` services, use the **`inject()`** function instead of constructor parameter injection (Angular 14+).
+
+```typescript
+// ❌ BAD — constructor injection
+@Injectable({ providedIn: 'root' })
+export class MyService {
+  constructor(private readonly dep: OtherService) {}
+}
+
+// ✅ GOOD — inject()
+@Injectable({ providedIn: 'root' })
+export class MyService {
+  private readonly dep = inject(OtherService);
+}
+```
+
+```typescript
+// ❌ BAD — constructor injection in a component
+@Component({ ... })
+export class MyComponent {
+  constructor(private sanitizer: DomSanitizer) {}
+}
+
+// ✅ GOOD
+@Component({ ... })
+export class MyComponent {
+  private readonly sanitizer = inject(DomSanitizer);
+}
+```
+
+## When constructor injection is still appropriate
+
+Plain TypeScript classes that are **not** Angular-managed (no `@Injectable`, `@Component`, `@Directive` decorator) and receive dependencies manually do not use Angular DI at all — constructor injection there is correct and should stay:
+
+```typescript
+// ✅ CORRECT — plain class, not Angular DI
+export class PenToolSession {
+  constructor(private readonly ports: PenToolSessionPorts) {}
+}
+```
+
+## Tokens and injection flags
+
+`inject()` also accepts `InjectionToken`s and supports optional/self/skip-self flags:
+
+```typescript
+private readonly port = inject(MY_PORT_TOKEN);
+private readonly optional = inject(SomeService, { optional: true });
+```

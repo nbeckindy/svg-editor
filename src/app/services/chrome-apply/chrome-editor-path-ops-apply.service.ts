@@ -1,20 +1,21 @@
 import { Injectable, inject } from '@angular/core';
-import { BooleanPathCommand } from '../../models/editor-commands';
+import { BooleanPathCommand, OutlineToPathCommand } from '../../models/editor-commands';
 import { EditorToolService } from '../editor-tool.service';
 import { PathBooleanGeometryService } from '../path-boolean-geometry.service';
 import { ShapeSelectionService } from '../shape-selection.service';
 import {
-  sortPathIdsByDocumentOrder,
   sortCompoundOperandIdsByDocumentOrder,
   type BooleanOp
 } from '../../models/path-boolean';
+import { buildOutlineToPathMarkup } from '../../models/outline-to-path';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
 import { EDITOR_SHAPE_LIFECYCLE_SVG_PORT } from './chrome-apply.tokens';
+import type { LiveTreeMarkup } from '../../utils/svg-sanitize';
 
 const PATH_BOOLEAN_LABELS: Record<BooleanOp, string> = {
-  union: 'Union paths',
-  subtract: 'Subtract paths',
-  intersect: 'Intersect paths'
+  union: 'Union shapes',
+  subtract: 'Subtract shapes',
+  intersect: 'Intersect shapes'
 };
 
 @Injectable({ providedIn: 'root' })
@@ -62,6 +63,40 @@ export class ChromeEditorPathOpsApplyService {
     );
   }
 
+  applyOutlineToPath(shapeId: string): void {
+    if (this.shapeIdsTouchLocked([shapeId])) return;
+    if (this.editorTool.currentTool() !== 'selector') return;
+
+    const svg = this.shapeLifecycleSvg.getSVGInstance();
+    if (!svg) return;
+    const contentGroup = svg.findOne('[data-editor-content-group]');
+    if (!contentGroup?.node) return;
+
+    const element = svg.findOne(`#${shapeId}`)?.node as Element | null;
+    if (!element) return;
+
+    const pathMarkup = buildOutlineToPathMarkup(element);
+    if (!pathMarkup) return;
+
+    const children = Array.from((contentGroup.node as Element).children);
+    const insertionIndex = children.indexOf(element);
+    if (insertionIndex < 0) return;
+
+    this.pushCommandsAndSyncSelection(
+      [
+        new OutlineToPathCommand(
+          this.shapeLifecycleSvg,
+          shapeId,
+          // buildOutlineToPathMarkup produces editor-generated markup, safe to brand (ADR 0002).
+          pathMarkup as LiveTreeMarkup,
+          insertionIndex,
+          this.shapeSelection
+        )
+      ],
+      'Outline to path'
+    );
+  }
+
   private applyPathShapeOperation(
     pathIds: string[],
     build: (
@@ -84,14 +119,10 @@ export class ChromeEditorPathOpsApplyService {
     const port = this.pathBooleanGeometry.createGeometryPort();
     if (!port) return;
 
-    const sorted =
-      mode === 'compound'
-        ? sortCompoundOperandIdsByDocumentOrder(pathIds, port)
-        : sortPathIdsByDocumentOrder(pathIds, port);
+    const sorted = sortCompoundOperandIdsByDocumentOrder(pathIds, port);
     const topmostId = sorted[sorted.length - 1];
     if (!topmostId) return;
-    const topmostNode =
-      mode === 'compound' ? port.getCompoundOperandElement(topmostId) : port.getPathElement(topmostId);
+    const topmostNode = port.getCompoundOperandElement(topmostId);
     if (!topmostNode) return;
 
     const children = Array.from((contentGroup.node as Element).children);
@@ -113,7 +144,8 @@ export class ChromeEditorPathOpsApplyService {
           this.shapeLifecycleSvg,
           built.operandIds,
           built.resultId,
-          built.resultMarkup,
+          // buildBooleanResultPathMarkup produces editor-generated markup, safe to brand (ADR 0002).
+          built.resultMarkup as LiveTreeMarkup,
           built.topmostOperandIndex,
           description,
           this.shapeSelection

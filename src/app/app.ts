@@ -6,11 +6,11 @@ import { EditorTopBarComponent } from './components/editor-top-bar/editor-top-ba
 import { EditorToolContextBarComponent } from './components/editor-tool-context-bar/editor-tool-context-bar.component';
 import { EditorLeftRailComponent } from './components/editor-left-rail/editor-left-rail.component';
 import { EditorRightDockComponent } from './components/editor-right-dock/editor-right-dock.component';
-import type { AppRootSvgManipulationPort } from './history/editor-chrome-svg.port';
-import { SvgManipulationService } from './services/svg-manipulation.service';
-import { ShapeSelectionService } from './services/shape-selection.service';
+import { DEFAULT_DOCUMENT_SVG } from './models/default-document';
+import { APP_ROOT_SVG_MANIPULATION_PORT } from './services/manipulation-port-tokens';
 import { EditorHistoryService } from './services/editor-history.service';
 import { EditorLayoutService } from './services/editor-layout.service';
+import { EditorDocumentBridgeService } from './services/editor-document-bridge.service';
 
 @Component({
   selector: 'app-root',
@@ -27,16 +27,13 @@ import { EditorLayoutService } from './services/editor-layout.service';
   styleUrl: './app.css'
 })
 export class AppComponent {
-  private static readonly DEFAULT_SVG =
-    '<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600"></svg>';
-
-  private readonly svg: AppRootSvgManipulationPort = inject(SvgManipulationService);
-  private readonly shapeSelection = inject(ShapeSelectionService);
+  private readonly svg = inject(APP_ROOT_SVG_MANIPULATION_PORT);
   private readonly editorHistory = inject(EditorHistoryService);
+  private readonly documentBridge = inject(EditorDocumentBridgeService);
   protected readonly layout = inject(EditorLayoutService);
 
   /** Blank 800×600 document on first paint and on full page reload. */
-  svgContent: string = AppComponent.DEFAULT_SVG;
+  svgContent: string = DEFAULT_DOCUMENT_SVG;
   uploadedFileName: string = '';
 
   onNewCanvas(): void {
@@ -44,14 +41,9 @@ export class AppComponent {
         !window.confirm('You have unsaved changes. Create a new document?')) {
       return;
     }
-    this.shapeSelection.clearSelection();
-    this.svg.clearHighlight();
-    this.editorHistory.clear();
-    this.svgContent = '';
+    if (!this.documentBridge.resetDocument()) return;
     this.uploadedFileName = '';
-    queueMicrotask(() => {
-      this.svgContent = AppComponent.DEFAULT_SVG;
-    });
+    this.svgContent = DEFAULT_DOCUMENT_SVG;
   }
 
   onSVGLoaded(content: string): void {

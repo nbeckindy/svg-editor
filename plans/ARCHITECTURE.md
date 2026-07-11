@@ -16,7 +16,7 @@ The editor is a **modular monolith with typed seams**: narrow **ports**, **comma
 | **Façades** | `SvgManipulationService`, `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` (each implements many port interfaces; chrome apply injects port **tokens** backed by `useExisting`) |
 | **Registries** | `ToolRegistryService` + `registerDefaultTools()`, `DockPanelRegistryService` + `registerDefaultDockPanels()` |
 
-Large **integration surfaces** remain: `SvgCanvasComponent` (~2,240 lines) orchestrates tools, keyboard, pen/path-node/inline-text sessions, and path-boolean preview chrome in its template (pen preview lives in `PenPreviewOverlayComponent` — DEBT-011 closed).
+Large **integration surfaces** remain: `SvgCanvasComponent` (~2.4k lines) orchestrates tools, keyboard, pen/path-node/inline-text sessions, and path-boolean preview chrome in its template (pen preview lives in `PenPreviewOverlayComponent` — DEBT-011 closed). Branch features include clip-path commands, outline-to-path, gradient/paint popover, rect corner radius, and SVG ingest sanitization.
 
 ### Tool seam (internal refactor)
 
@@ -33,7 +33,7 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~2,240 lines) orche
 | Adapters | `*-canvas-tool.ts` factories (creation, selector + node-edit-selector, pen, zoom, pan, text, eyedropper, …) |
 | Orchestrator ports | e.g. `PenToolSessionPorts` + `PenToolSessionSvgPort`, `PathNodeEditSessionPorts`, `InlineTextEditSessionPorts` (narrow slices of the canvas adapter) |
 | Adapter context slices | `canvas-adapter-context.ts` + `create-canvas-adapter-context.ts` — shared coordinate, tool-state, document-surface, and readiness types consumed by pen ports and pointer/keyboard seams |
-| Coordinate mapping | `CanvasCoordinateMappingService` — bound from canvas lifecycle; `SvgCanvasComponent` delegates `clientToEditorSvgPoint` / `svgBboxToOverlayPixels` (wired `svg-editor-my0.2`) |
+| Coordinate mapping | `CanvasCoordinateMappingService` — bound from canvas lifecycle; `SvgCanvasComponent` delegates via `createCanvasSessionBundle` → `svg-canvas-pointer-stack.factory.ts` |
 
 Descriptors land at **startup**; `CanvasTool` adapters bind **later** when the canvas pointer stack initializes — two-phase registration, not a single plug-in moment.
 
@@ -126,7 +126,7 @@ Prioritized gaps between documented seams and runtime behavior: **[ARCHITECTURE-
 
 ### Next seams (future work)
 
-- Extract path-boolean preview DOM from the canvas template into a dedicated overlay component — **DEBT-012** / `svg-editor-my0.16` (pen preview overlay pattern; policy already in chrome readout).
+- Extract path-boolean preview DOM from the canvas template into a dedicated overlay component — **DEBT-012** / `svg-editor-my0.16` (pen preview overlay pattern; policy already in chrome readout). Clip-path, outline-to-path, and gradient paint features are wired through chrome-apply and canvas context menu.
 
 ---
 

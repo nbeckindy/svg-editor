@@ -5,12 +5,22 @@ import { ArtboardModel, ArtboardResizeAnchor } from '../models/artboard.model';
 import { ShapeProperties } from '../models/shape-properties.interface';
 import type { ClipboardPayload } from '../models/clipboard-payload';
 import type { CreatableShapeType, InsertRasterImageAttrs, ShapeCreationAttrs } from './svg-shape-content.port';
+import type { LiveTreeMarkup } from '../utils/svg-sanitize';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
+import { SvgExportService } from './svg-export.service';
 import { SvgGradientDefsService } from './svg-gradient-defs.service';
 import { SvgLayerStructureService } from './svg-layer-structure.service';
 import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
-import type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
+import type { LayerStackItem, LayerTreeNode, LayerRowKind } from './svg-layer-structure.port';
 import { SvgShapeContentService } from './svg-shape-content.service';
+import { SvgClipPathService } from './svg-clip-path.service';
+import type { ClipPathSvgPort } from '../history/clip-path-svg.port';
+import type {
+  MakeClipPathResult,
+  MakeClipPathUndoSnapshot,
+  ReleaseClipPathResult,
+  ReleaseClipPathUndoSnapshot
+} from './svg-clip-path.port';
 import type {
   TransformGestureDocSvgPort,
   SelectionTransformApplySvgPort
@@ -30,7 +40,7 @@ import type { ResizeHandle } from '../utils/selection-resize';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 
 export type { CreatableShapeType, InsertRasterImageAttrs, ShapeCreationAttrs } from './svg-shape-content.port';
-export type { LayerStackItem, LayerTreeNode } from './svg-layer-structure.port';
+export type { LayerStackItem, LayerTreeNode, LayerRowKind } from './svg-layer-structure.port';
 
 @Injectable({
   providedIn: 'root'
@@ -51,13 +61,16 @@ export class SvgManipulationService
     EditorShapeLifecycleSvgPort,
     RasterImageInsertSvgPort,
     PathDataEditorSvgPort,
-    PathNodeHandleLinkSvgPort
+    PathNodeHandleLinkSvgPort,
+    ClipPathSvgPort
 {
   private readonly doc = inject(SvgEditorDocumentService);
+  private readonly exportSvc = inject(SvgExportService);
   private readonly gradients = inject(SvgGradientDefsService);
   private readonly layers = inject(SvgLayerStructureService);
   private readonly geometry = inject(SvgSelectionGeometryService);
   private readonly shapes = inject(SvgShapeContentService);
+  private readonly clipPaths = inject(SvgClipPathService);
 
   readonly documentRevision = this.doc.documentRevision;
   readonly artboard = this.doc.artboard;
@@ -92,11 +105,11 @@ export class SvgManipulationService
   }
 
   exportSVG(): string {
-    return this.doc.exportSVG();
+    return this.exportSvc.exportSVG();
   }
 
   getSvgExportImagePolicyResult(): SvgExportImagePolicyResult {
-    return this.doc.getSvgExportImagePolicyResult();
+    return this.exportSvc.getSvgExportImagePolicyResult();
   }
 
   getSVGInstance(): Svg | null {
@@ -111,6 +124,35 @@ export class SvgManipulationService
     return this.shapes.getShapePropertiesInSameClipGroupReadingWith(shape, (el) =>
       this.getShapeProperties(el)
     );
+  }
+
+  /**
+   * Selector-tool selection: when the hit is clipped content, select the clip-path geometry in defs.
+   */
+  getSelectorSelectionForShape(shape: SvgJsElement): ShapeProperties[] {
+    const clipGeomId = this.clipPaths.resolveClipGeometryIdForContentShape(shape);
+    if (clipGeomId) {
+      const geom = this.doc.getSVGInstance()?.findOne(`#${clipGeomId}`) as SvgJsElement | undefined;
+      if (geom) return [this.getShapeProperties(geom)];
+    }
+    return [this.getShapeProperties(shape)];
+  }
+
+  resolveSelectorMarqueeSelection(hits: ShapeProperties[]): ShapeProperties[] {
+    if (hits.length === 0) return [];
+    const seen = new Set<string>();
+    const result: ShapeProperties[] = [];
+    for (const hit of hits) {
+      const shape = this.doc.getSVGInstance()?.findOne(`#${hit.id}`) as SvgJsElement | undefined;
+      if (!shape) continue;
+      for (const props of this.getSelectorSelectionForShape(shape)) {
+        if (!seen.has(props.id)) {
+          seen.add(props.id);
+          result.push(props);
+        }
+      }
+    }
+    return result;
   }
 
   expandSelectionByClipGroups(shapes: ShapeProperties[]): ShapeProperties[] {
@@ -203,6 +245,14 @@ export class SvgManipulationService
     this.shapes.updateTextVectorEffect(textId, effect);
   }
 
+  updateRectCornerRadius(shapeId: string, radius: number): void {
+    this.shapes.updateRectCornerRadius(shapeId, radius);
+  }
+
+  restoreRectCornerRadii(shapeId: string, rx: number, ry: number): void {
+    this.shapes.restoreRectCornerRadii(shapeId, rx, ry);
+  }
+
   getNearestGroupAncestorId(shapeId: string): string | null {
     return this.shapes.getNearestGroupAncestorId(shapeId);
   }
@@ -236,7 +286,7 @@ export class SvgManipulationService
 
   restoreRemovedShapesInContentGroup(
     shapeIds: string[],
-    serializedMarkup: ReadonlyMap<string, string>,
+    serializedMarkup: ReadonlyMap<string, LiveTreeMarkup>,
     insertionIndices: ReadonlyMap<string, number>
   ): void {
     this.shapes.restoreRemovedShapesInContentGroup(shapeIds, serializedMarkup, insertionIndices);
@@ -367,7 +417,7 @@ export class SvgManipulationService
     this.gradients.purgeUnreferencedGradientDefs();
   }
 
-  insertShapeMarkup(markup: string, insertionIndex?: number): void {
+  insertShapeMarkup(markup: LiveTreeMarkup, insertionIndex?: number): void {
     this.shapes.insertShapeMarkup(markup, insertionIndex);
   }
 
@@ -378,7 +428,7 @@ export class SvgManipulationService
   pasteClipboardPayload(
     payload: ClipboardPayload,
     offset: { dx: number; dy: number }
-  ): { insertedIds: string[]; insertedMarkup: string[] } {
+  ): { insertedIds: string[]; insertedMarkup: LiveTreeMarkup[] } {
     return this.shapes.pasteClipboardPayload(payload, offset);
   }
 
@@ -496,6 +546,18 @@ export class SvgManipulationService
     this.layers.renameElement(elementId, newName);
   }
 
+  getElementDataName(elementId: string): string | null {
+    return this.layers.getElementDataName(elementId);
+  }
+
+  setElementDataName(elementId: string, value: string | null): void {
+    this.layers.setElementDataName(elementId, value);
+  }
+
+  resolveLayerDisplayName(elementId: string, kind: LayerRowKind): string {
+    return this.layers.resolveLayerDisplayName(elementId, kind);
+  }
+
   getElementName(elementId: string): string {
     return this.layers.getElementName(elementId);
   }
@@ -582,5 +644,85 @@ export class SvgManipulationService
     preserveStopsFrom: EditableGradientModel
   ): EditableGradientModel {
     return this.gradients.setGradientKindForShape(shapeId, paintProperty, kind, preserveStopsFrom);
+  }
+
+  getShapeBBoxForGradient(shapeId: string): { x: number; y: number; width: number; height: number } | null {
+    return this.getShapeBBox(shapeId, { preferScreenBounds: false });
+  }
+
+  makeClipPathFromSelection(contentIds: string[], clipShapeId: string): MakeClipPathResult | null {
+    return this.clipPaths.makeClipPathFromSelection(contentIds, clipShapeId);
+  }
+
+  undoMakeClipPath(
+    snapshot: MakeClipPathUndoSnapshot,
+    carrierGroupId: string,
+    clipPathDefId: string
+  ): void {
+    this.clipPaths.undoMakeClipPath(snapshot, carrierGroupId, clipPathDefId);
+  }
+
+  releaseClipPathForSelection(shapeIds: string[]): ReleaseClipPathResult | null {
+    return this.clipPaths.releaseClipPathForSelection(shapeIds);
+  }
+
+  undoReleaseClipPath(snapshot: ReleaseClipPathUndoSnapshot): string | null {
+    return this.clipPaths.undoReleaseClipPath(snapshot);
+  }
+
+  findClipCarrierForShape(shapeId: string): string | null {
+    return this.clipPaths.findClipCarrierForShape(shapeId);
+  }
+
+  resolveClipGeometryIdForContentShape(shape: SvgJsElement): string | null {
+    return this.clipPaths.resolveClipGeometryIdForContentShape(shape);
+  }
+
+  resolveClipCarrierForShapeId(shapeId: string): Element | null {
+    return this.clipPaths.resolveClipCarrierForShapeId(shapeId);
+  }
+
+  canMakeClipPath(shapeIds: string[]): boolean {
+    return this.clipPaths.canMakeClipPath(shapeIds);
+  }
+
+  canReleaseClipPath(shapeIds: string[]): boolean {
+    return this.clipPaths.canReleaseClipPath(shapeIds);
+  }
+
+  getClipPathTransformMemberIds(seedShapeId: string): string[] | null {
+    return this.clipPaths.getClipPathTransformMemberIds(seedShapeId);
+  }
+
+  /**
+   * Expand selection for drag/transform so clip-path content and clip geometry move together.
+   */
+  expandSelectionForClipPathTransform(selectedIds: string[]): string[] {
+    if (selectedIds.length === 0) return [];
+    const expanded = new Set<string>();
+    for (const id of selectedIds) {
+      const members = this.clipPaths.getClipPathTransformMemberIds(id);
+      if (members) {
+        for (const memberId of members) expanded.add(memberId);
+      } else {
+        expanded.add(id);
+      }
+    }
+    const shapes = [...expanded]
+      .map((id) => this.doc.getSVGInstance()?.findOne(`#${id}`) as SvgJsElement | undefined)
+      .filter((el): el is SvgJsElement => el != null)
+      .map((el) => this.getShapeProperties(el));
+    for (const props of this.shapes.expandSelectionByClipGroups(shapes)) {
+      expanded.add(props.id);
+      const members = this.clipPaths.getClipPathTransformMemberIds(props.id);
+      if (members) {
+        for (const memberId of members) expanded.add(memberId);
+      }
+    }
+    const all = [...expanded];
+    const inContentOrder = this.getShapeIdsInDomOrder(all);
+    const contentSet = new Set(inContentOrder);
+    const defsMembers = all.filter((id) => !contentSet.has(id));
+    return [...inContentOrder, ...defsMembers];
   }
 }

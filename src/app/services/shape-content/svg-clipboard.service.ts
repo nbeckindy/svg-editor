@@ -5,12 +5,15 @@ import { SvgEditorDocumentService } from '../svg-editor-document.service';
 import { EDITOR_CONTENT_GROUP_ID, SVG_NS } from '../svg-editor-stage.constants';
 import type { SvgClipboardPort } from './svg-clipboard.port';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
+import type { LiveTreeMarkup } from '../../utils/svg-sanitize';
+import { SvgIngestService } from '../svg-ingest.service';
 
 const URL_REF_RE = /url\(\s*(['"]?)#([^)'"\\s]+)\1\s*\)/g;
 
 @Injectable({ providedIn: 'root' })
 export class SvgClipboardService implements SvgClipboardPort {
   private readonly doc = inject(SvgEditorDocumentService);
+  private readonly ingestService = inject(SvgIngestService);
 
   createClipboardPayload(shapeIds: string[]): ClipboardPayload {
     if (!this.doc.getSVGInstance() || shapeIds.length === 0) return { shapes: [] };
@@ -37,7 +40,7 @@ export class SvgClipboardService implements SvgClipboardPort {
   pasteClipboardPayload(
     payload: ClipboardPayload,
     offset: { dx: number; dy: number }
-  ): { insertedIds: string[]; insertedMarkup: string[] } {
+  ): { insertedIds: string[]; insertedMarkup: LiveTreeMarkup[] } {
     if (!this.doc.getSVGInstance() || payload.shapes.length === 0) {
       return { insertedIds: [], insertedMarkup: [] };
     }
@@ -52,11 +55,12 @@ export class SvgClipboardService implements SvgClipboardPort {
     });
 
     const insertedIds: string[] = [];
-    const insertedMarkup: string[] = [];
+    const insertedMarkup: LiveTreeMarkup[] = [];
 
     for (const shape of payload.shapes) {
+      const sanitizedShape = this.ingestService.ingestFragment(shape.markup);
       const wrapper = document.createElementNS(SVG_NS, 'g');
-      wrapper.innerHTML = shape.markup;
+      wrapper.innerHTML = sanitizedShape;
       const root = wrapper.firstElementChild;
       if (!root) continue;
 
@@ -94,7 +98,7 @@ export class SvgClipboardService implements SvgClipboardPort {
       const insertedId = inserted.id;
       if (insertedId) insertedIds.push(insertedId);
 
-      insertedMarkup.push(inserted.outerHTML);
+      insertedMarkup.push(inserted.outerHTML as LiveTreeMarkup);
     }
 
     if (insertedIds.length > 0) {

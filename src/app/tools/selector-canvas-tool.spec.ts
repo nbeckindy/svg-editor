@@ -38,6 +38,7 @@ function makeSelectorDeps(over: Partial<SelectorCanvasToolDeps> = {}): () => Sel
     isShapeSelected: () => true,
     getNearestGroupAncestorId: () => null,
     getSelectedShapeIds: () => ['a'],
+    getExpandedDragShapeIds: () => ['a'],
     isSelectionMarquee: () => false,
     isResizingSelection: () => false,
     isSkewingSelection: () => false,
@@ -52,15 +53,15 @@ function makeSelectorDeps(over: Partial<SelectorCanvasToolDeps> = {}): () => Sel
     getDrilledIntoGroupId: () => null,
     setDrilledIntoGroupId: vi.fn(),
     isGroupAClipMaskCarrier: () => false,
-    getPenClosePostNodeEditEmptyClickClearUntilMs: () => 0,
-    resolveClickedContentShape: () => null,
-    getShapeProperties: (el) => ({ id: el.id }) as never,
-    getShapePropertiesInSameClipGroup: (el) => [{ id: el.id }] as never,
-    toggleShapeGroupInSelection: vi.fn(),
+    getShapeProperties: () => ({ id: 'a', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }),
+    getShapePropertiesInSameClipGroup: () => [{ id: 'a', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }],
+    getSelectorSelectionForShape: () => [],
     selectShapes: vi.fn(),
+    toggleShapeGroupInSelection: vi.fn(),
     clearSelection: vi.fn(),
     clearHighlight: vi.fn(),
     consumeSelectionMarqueeJustEnded: () => false,
+    shouldSkipEmptyHitSelectionClear: () => false,
     getKeyboardActions: () =>
       ({
         getSvgContent: () => 'svg',
@@ -148,95 +149,25 @@ describe('createSelectorCanvasTool', () => {
     expect(finishPathNodeDrag).toHaveBeenCalled();
   });
 
-  describe('onClick', () => {
-    it('selects shape on content click', () => {
-      const selectShapes = vi.fn();
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.id = 'rect1';
-      const deps = makeSelectorDeps({
-        resolveClickedContentShape: () => rect as never,
-        getShapePropertiesInSameClipGroup: () => [{ id: 'rect1' }] as never,
-        selectShapes
-      });
-      const tool = createSelectorCanvasTool('selector', deps);
+  it('clears selection on empty hit via onClick', () => {
+    const clearSelection = vi.fn();
+    const deps = makeSelectorDeps({ clearSelection });
+    const tool = createSelectorCanvasTool('selector', deps);
 
-      tool.onClick?.(
-        { target: rect, shiftKey: false, ctrlKey: false, metaKey: false } as unknown as MouseEvent,
-        {
-          x: 0,
-          y: 0
-        }
-      );
+    const consumed = tool.onClick?.(
+      { target: document.createElement('svg') } as unknown as MouseEvent,
+      { x: 0, y: 0 }
+    );
 
-      expect(selectShapes).toHaveBeenCalledWith([{ id: 'rect1' }]);
-    });
-
-    it('selects group when clicking child before drill-in', () => {
-      const selectShapes = vi.fn();
-      const setDrilledIntoGroupId = vi.fn();
-      const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
-      rect.id = 'child1';
-      const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
-      group.id = 'group1';
-      const deps = makeSelectorDeps({
-        resolveClickedContentShape: () => rect as never,
-        getNearestGroupAncestorId: () => 'group1',
-        getDrilledIntoGroupId: () => null,
-        setDrilledIntoGroupId,
-        getShapeProperties: () => ({ id: 'group1' }) as never,
-        getSvgInstance: () => ({ findOne: () => ({ node: group }) }) as never,
-        selectShapes
-      });
-      const tool = createSelectorCanvasTool('selector', deps);
-
-      tool.onClick?.(
-        { target: rect, shiftKey: false, ctrlKey: false, metaKey: false } as unknown as MouseEvent,
-        {
-          x: 0,
-          y: 0
-        }
-      );
-
-      expect(selectShapes).toHaveBeenCalledWith([{ id: 'group1' }]);
-      expect(setDrilledIntoGroupId).toHaveBeenCalledWith(null);
-    });
-
-    it('clears selection on empty canvas click', () => {
-      const clearSelection = vi.fn();
-      const clearHighlight = vi.fn();
-      const setDrilledIntoGroupId = vi.fn();
-      const deps = makeSelectorDeps({
-        resolveClickedContentShape: () => null,
-        clearSelection,
-        clearHighlight,
-        setDrilledIntoGroupId
-      });
-      const tool = createSelectorCanvasTool('selector', deps);
-
-      tool.onClick?.({ target: document.createElement('div') } as unknown as MouseEvent, { x: 0, y: 0 });
-
-      expect(clearSelection).toHaveBeenCalled();
-      expect(clearHighlight).toHaveBeenCalled();
-      expect(setDrilledIntoGroupId).toHaveBeenCalledWith(null);
-    });
-
-    it('skips clear when marquee just ended', () => {
-      const clearSelection = vi.fn();
-      const deps = makeSelectorDeps({
-        consumeSelectionMarqueeJustEnded: () => true,
-        clearSelection
-      });
-      const tool = createSelectorCanvasTool('selector', deps);
-
-      tool.onClick?.({ target: document.createElement('div') } as unknown as MouseEvent, { x: 0, y: 0 });
-
-      expect(clearSelection).not.toHaveBeenCalled();
-    });
+    expect(consumed).toBe(true);
+    expect(clearSelection).toHaveBeenCalled();
   });
 
   describe('onDoubleClick', () => {
-    function makeSvgInstanceFor(id: string, node: Element): any {
-      return { findOne: (sel: string) => (sel === `#${id}` ? { node } : null) };
+    function makeSvgInstanceFor(id: string, node: Element) {
+      return {
+        findOne: (sel: string) => (sel === `#${id}` ? { node } : null)
+      } as unknown as import('@svgdotjs/svg.js').Svg;
     }
 
     it('enters inline text edit mode when selected shape is <text>', () => {
@@ -306,7 +237,6 @@ describe('createSelectorCanvasTool', () => {
       expect(consumed).toBe(true);
       expect(enterInlineTextEditMode).toHaveBeenCalledWith('txt1');
     });
-
     it('drills into group on double-click and selects clicked child', () => {
       const setDrilledIntoGroupId = vi.fn();
       const selectShapes = vi.fn();
@@ -325,7 +255,7 @@ describe('createSelectorCanvasTool', () => {
             }
           }) as never,
         setDrilledIntoGroupId,
-        getShapePropertiesInSameClipGroup: () => [{ id: 'child1' }] as never,
+        getShapePropertiesInSameClipGroup: () => [{ id: 'child1', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }],
         selectShapes
       });
       const tool = createSelectorCanvasTool('selector', deps);
@@ -337,7 +267,7 @@ describe('createSelectorCanvasTool', () => {
 
       expect(consumed).toBe(true);
       expect(setDrilledIntoGroupId).toHaveBeenCalledWith('group1');
-      expect(selectShapes).toHaveBeenCalledWith([{ id: 'child1' }]);
+      expect(selectShapes).toHaveBeenCalledWith([{ id: 'child1', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }]);
     });
 
     it('does not drill into group for node-edit-selector', () => {

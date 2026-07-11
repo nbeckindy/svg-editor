@@ -1,21 +1,26 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
+import type { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   ReorderCommand,
   buildReorderToExtremeCommand,
   ToggleVisibilityCommand,
   ToggleLayerLockCommand,
+  RenameElementCommand,
   ReorderBeforeSiblingCommand,
   GroupCommand,
   UngroupCommand,
   UngroupElementsCommand,
   ReparentElementsCommand,
+  ReleaseClipPathCommand,
   type ReparentElementsMode
 } from '../../models/editor-commands';
+import type { LayerRowKind } from '../svg-layer-structure.port';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
 import { GroupStructureChangeService } from './group-structure-change.service';
 import {
   CHROME_EDITOR_APPLY_SVG_PORT,
+  CLIP_PATH_SVG_PORT,
   LAYER_REORDER_GROUP_SVG_PORT,
   PROPERTIES_PANEL_SVG_PORT
 } from './chrome-apply.tokens';
@@ -24,6 +29,7 @@ import {
 export class ChromeEditorLayersApplyService {
   private readonly support = inject(ChromeEditorApplySupport);
   private readonly layerSvg = inject(LAYER_REORDER_GROUP_SVG_PORT);
+  private readonly clipPathSvg = inject(CLIP_PATH_SVG_PORT);
   private readonly paintSvg = inject(CHROME_EDITOR_APPLY_SVG_PORT);
   private readonly propertiesSvg = inject(PROPERTIES_PANEL_SVG_PORT);
   private readonly groupStructureChange = inject(GroupStructureChangeService);
@@ -38,6 +44,22 @@ export class ChromeEditorLayersApplyService {
 
   toggleLayerLock(layerId: string): void {
     this.editorHistory.pushAndExecute(new ToggleLayerLockCommand(this.layerSvg, layerId));
+  }
+
+  renameLayer(layerId: string, kind: LayerRowKind, newName: string): void {
+    const trimmed = newName.trim();
+    const newDataName = trimmed.length > 0 ? trimmed : null;
+    const oldDataName = this.layerSvg.getElementDataName(layerId);
+    if (newDataName === oldDataName) return;
+    if (
+      oldDataName === null &&
+      newDataName === this.layerSvg.resolveLayerDisplayName(layerId, kind)
+    ) {
+      return;
+    }
+    this.editorHistory.pushAndExecute(
+      new RenameElementCommand(this.layerSvg, layerId, oldDataName, newDataName)
+    );
   }
 
   moveLayerBeforeSibling(draggedLayerId: string, referenceNextSiblingId: string | null): void {
@@ -191,6 +213,30 @@ export class ChromeEditorLayersApplyService {
     mode: ReparentElementsMode
   ): void {
     this.reparentLayersFromPanel(elementIds, mode);
+  }
+
+  releaseClipPathFromLayersPanel(carrierGroupId: string): void {
+    if (this.shapeIdsTouchLocked([carrierGroupId])) return;
+    if (!this.clipPathSvg.canReleaseClipPath([carrierGroupId])) return;
+
+    const cmd = new ReleaseClipPathCommand(this.clipPathSvg, [carrierGroupId]);
+    this.editorHistory.pushAndExecute(cmd);
+
+    const svg = this.paintSvg.getSVGInstance();
+    const releasedShapes: ShapeProperties[] = [];
+    for (const id of cmd.releasedChildIds) {
+      const el = svg?.findOne(`#${id}`) as SvgJsElement | null;
+      if (el) releasedShapes.push(this.propertiesSvg.getShapeProperties(el));
+    }
+    if (cmd.restoredClipShapeId) {
+      const clipEl = svg?.findOne(`#${cmd.restoredClipShapeId}`) as SvgJsElement | null;
+      if (clipEl) releasedShapes.push(this.propertiesSvg.getShapeProperties(clipEl));
+    }
+    if (releasedShapes.length > 0) {
+      this.shapeSelection.selectShapes(releasedShapes);
+    } else {
+      this.shapeSelection.clearSelection();
+    }
   }
 
   private selectReparentedElements(elementIds: string[]): void {

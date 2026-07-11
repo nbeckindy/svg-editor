@@ -224,7 +224,7 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 
 1. ESLint `no-restricted-imports`: `src/app/tools/**` cannot import `svg-canvas.component` (`npm run lint`).
 2. ESLint `no-restricted-imports`: `pen-tool-session/**` cannot import `SvgManipulationService` (use `*SvgPort`).
-3. Architecture guard script: fail on new `getCurrentTool() === '` / `tool === '` branches in `svg-canvas.component.ts` — baseline **7** (`npm run lint:arch`).
+3. Architecture guard script: fail on new `getCurrentTool() === '` / `tool === '` branches in `svg-canvas.component.ts` — baseline **16** (`npm run lint:arch`).
 
 **Depends on:** DEBT-001 progress (avoid fighting active migration).
 

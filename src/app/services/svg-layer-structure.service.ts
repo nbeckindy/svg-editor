@@ -3,11 +3,12 @@ import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import {
   CONTENT_SHAPE_SELECTOR,
+  EDITOR_CLIP_SOURCE_ID_ATTR,
   EDITOR_CONTENT_GROUP_ID,
   EDITOR_LAYER_LOCKED_ATTR,
   LAYER_TREE_SKIP_TAGS
 } from './svg-editor-stage.constants';
-import type { LayerStackItem, LayerTreeNode, SvgLayerStructurePort, ElementParentSnapshot } from './svg-layer-structure.port';
+import type { LayerStackItem, LayerTreeNode, LayerRowKind, SvgLayerStructurePort, ElementParentSnapshot } from './svg-layer-structure.port';
 import { SvgShapeContentService } from './svg-shape-content.service';
 import { getShapeIdsInDomOrderFromSvg } from '../utils/svg-shape-ids-dom-order';
 import { isSvgEditorNodeHidden } from '../utils/svg-node-visibility';
@@ -258,12 +259,31 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
   }
 
   renameElement(elementId: string, newName: string): void {
+    const trimmed = newName.trim();
+    this.setElementDataName(elementId, trimmed.length > 0 ? trimmed : null);
+  }
+
+  getElementDataName(elementId: string): string | null {
+    if (!this.doc.getSVGInstance()) return null;
+    const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;
+    if (!el?.node) return null;
+    const name = el.attr('data-name') as string | null | undefined;
+    return name?.length ? name : null;
+  }
+
+  setElementDataName(elementId: string, value: string | null): void {
     if (!this.doc.getSVGInstance()) return;
     const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;
-    if (el) {
-      el.attr('data-name', newName);
-      this.doc.bumpDocumentRevision();
-    }
+    if (!el) return;
+    el.attr('data-name', value?.length ? value : null);
+    this.doc.bumpDocumentRevision();
+  }
+
+  resolveLayerDisplayName(elementId: string, kind: LayerRowKind): string {
+    if (!this.doc.getSVGInstance()) return elementId;
+    const node = this.doc.getSVGInstance()!.findOne(`#${elementId}`)?.node as Element | undefined;
+    if (!node) return elementId;
+    return this.resolveLayerDisplayNameFromElement(node, kind);
   }
 
   getElementName(elementId: string): string {
@@ -499,7 +519,17 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
       if (LAYER_TREE_SKIP_TAGS.has(tagName)) return null;
 
       const id = child.id || '';
-      const name = child.getAttribute('data-name') || id || tagName;
+      const isClipMaskCarrier = tagName === 'g' && child.hasAttribute('clip-path');
+      const isMaskCarrier = tagName === 'g' && !isClipMaskCarrier && child.hasAttribute('mask');
+      const kind: LayerRowKind = isClipMaskCarrier
+        ? 'clipMask'
+        : isMaskCarrier
+          ? 'mask'
+          : tagName === 'g'
+            ? 'group'
+            : 'shape';
+      const displayType = isClipMaskCarrier ? 'clip' : isMaskCarrier ? 'mask' : tagName;
+      const name = this.resolveLayerDisplayNameFromElement(child, kind);
       const visible = !isSvgEditorNodeHidden(child);
       const locked = child.getAttribute(EDITOR_LAYER_LOCKED_ATTR) === 'true';
       const elementMarkup = child.outerHTML;
@@ -511,7 +541,21 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
           if (node) children.push(node);
         }
         const paint = this.shapes.getRenderedPaint(child);
-        return { id, type: 'g', name, children, visible, locked, elementMarkup, ...paint };
+        const previewMarkup = isClipMaskCarrier
+          ? this.buildClipMaskPreviewMarkup(child)
+          : undefined;
+        return {
+          id,
+          type: displayType,
+          kind,
+          name,
+          children,
+          visible,
+          locked,
+          elementMarkup,
+          previewMarkup,
+          ...paint
+        };
       }
 
       if (!contentShapeTags.has(tagName)) return null;
@@ -547,7 +591,19 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
         ? renderedPaint.opacity
         : (Number.isFinite(rawOpacity) ? rawOpacity : undefined);
 
-      return { id, type: tagName, name, visible, locked, elementMarkup, fill, stroke, strokeWidth, opacity };
+      return {
+        id,
+        type: displayType,
+        kind,
+        name,
+        visible,
+        locked,
+        elementMarkup,
+        fill,
+        stroke,
+        strokeWidth,
+        opacity
+      };
     };
 
     const root = contentGroup.node as Element;
@@ -657,6 +713,67 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
       (this.doc.getSVGInstance()!.findOne(`[${EDITOR_CONTENT_GROUP_ID}]`)?.node as Element | null) ??
       null
     );
+  }
+
+  private buildClipMaskPreviewMarkup(carrier: Element): string {
+    const clipPathAttr = carrier.getAttribute('clip-path');
+    const defId = this.parseClipPathUrlDefId(clipPathAttr ?? '');
+    if (!defId) return carrier.outerHTML;
+
+    const defs = this.doc.getDocumentDefsNode();
+    const clipPathEl = defs?.querySelector(`#${this.cssEscapeForSelector(defId)}`);
+    if (!clipPathEl || clipPathEl.tagName?.toLowerCase() !== 'clippath') {
+      return carrier.outerHTML;
+    }
+
+    const childrenMarkup = Array.from(carrier.children)
+      .map((c) => c.outerHTML)
+      .join('');
+    return `<defs>${clipPathEl.outerHTML}</defs><g clip-path="url(#${defId})">${childrenMarkup}</g>`;
+  }
+
+  private parseClipPathUrlDefId(value: string): string | null {
+    const match = /url\(\s*#([^)\s]+)\s*\)/i.exec(value);
+    return match?.[1] ?? null;
+  }
+
+  private cssEscapeForSelector(id: string): string {
+    const g = globalThis as unknown as { CSS?: { escape?: (s: string) => string } };
+    if (typeof g.CSS?.escape === 'function') return g.CSS.escape(id);
+    return id.replace(/([!"#$%&'()*+,./:;<=>?@[\\\]^`{|}~])/g, '\\$1');
+  }
+
+  /** Layer row label: data-name when set, else kind-specific fallbacks (matches rename no-op rules). */
+  private resolveLayerDisplayNameFromElement(el: Element, kind: LayerRowKind): string {
+    const dataName = el.getAttribute('data-name');
+    if (dataName) return dataName;
+
+    const id = el.id || '';
+    const tagName = el.tagName?.toLowerCase?.() || '';
+
+    switch (kind) {
+      case 'clipMask': {
+        const sourceShapeId = this.resolveClipSourceShapeIdFromCarrier(el);
+        return sourceShapeId ?? (id || 'clip');
+      }
+      case 'mask':
+        return id || 'Mask';
+      default:
+        return id || tagName;
+    }
+  }
+
+  private resolveClipSourceShapeIdFromCarrier(carrier: Element): string | null {
+    const clipPathAttr = carrier.getAttribute('clip-path');
+    const defId = this.parseClipPathUrlDefId(clipPathAttr ?? '');
+    if (!defId) return null;
+
+    const defs = this.doc.getDocumentDefsNode();
+    const clipPathEl = defs?.querySelector(`#${this.cssEscapeForSelector(defId)}`);
+    const geom = clipPathEl?.firstElementChild ?? null;
+    if (!geom) return null;
+
+    return geom.getAttribute(EDITOR_CLIP_SOURCE_ID_ATTR) || null;
   }
 
   private isUserGroupElement(el: Element): boolean {

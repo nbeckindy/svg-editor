@@ -32,7 +32,6 @@ describe('view and utility canvas tools', () => {
       getZoomMarquee: () => zoomMarquee,
       isZoomMarquee: () => false,
       commitZoomMarquee: vi.fn(),
-      detectChanges: vi.fn(),
       isCanvasReady: () => true,
       consumeZoomMarqueeJustEnded: () => false,
       screenToSvg: () => ({ x: 1, y: 2 }),
@@ -58,13 +57,13 @@ describe('view and utility canvas tools', () => {
   });
 
   it('text tool creates text on click', () => {
-    const createTextAtPoint = vi.fn();
+    const createTextAtPoint = vi.fn().mockReturnValue(undefined);
     const tool = createTextCanvasTool(() => ({
       isCanvasReady: () => true,
       updateTextToolPreviewFromClient: vi.fn(),
       createTextAtPoint,
-      destroyTextToolPreview: vi.fn(),
-      tryEnterTextEditAfterCreate: vi.fn()
+      tryEnterTextEditAfterCreate: vi.fn(),
+      destroyTextToolPreview: vi.fn()
     }));
     tool.onClick?.({ clientX: 10, clientY: 20 } as MouseEvent, { x: 0, y: 0 });
     expect(createTextAtPoint).toHaveBeenCalledWith(10, 20);
@@ -89,7 +88,6 @@ describe('view and utility canvas tools', () => {
       getZoomMarquee: () => new ZoomMarqueeGesture(),
       isZoomMarquee: () => false,
       commitZoomMarquee: vi.fn(),
-      detectChanges: vi.fn(),
       isCanvasReady: () => true,
       consumeZoomMarqueeJustEnded: () => false,
       screenToSvg: () => null,
@@ -106,9 +104,9 @@ describe('view and utility canvas tools', () => {
     registerTextCanvasTool(registry, () => ({
       isCanvasReady: () => true,
       updateTextToolPreviewFromClient: vi.fn(),
-      createTextAtPoint: vi.fn(),
-      destroyTextToolPreview: vi.fn(),
-      tryEnterTextEditAfterCreate: vi.fn()
+      createTextAtPoint: vi.fn().mockReturnValue(undefined),
+      tryEnterTextEditAfterCreate: vi.fn(),
+      destroyTextToolPreview: vi.fn()
     }));
     registerEyedropperCanvasTool(registry, () => ({
       isCanvasReady: () => true,

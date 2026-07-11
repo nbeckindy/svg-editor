@@ -150,6 +150,35 @@ describe('PathBooleanGeometryService', () => {
     circleNode.remove();
   });
 
+  it('buildBooleanResult supports rect and circle operands', () => {
+    const port = mockPort({
+      rect: { tag: 'rect', attrs: { x: '0', y: '0', width: '10', height: '10' } },
+      circle: { tag: 'circle', attrs: { cx: '20', cy: '20', r: '5' } }
+    });
+    const rectNode = port.getCompoundOperandElement('rect')!;
+    const circleNode = port.getCompoundOperandElement('circle')!;
+    document.body.appendChild(rectNode);
+    document.body.appendChild(circleNode);
+
+    const built = service.buildBooleanResult('union', ['rect', 'circle'], port, new Set(), 1);
+    expect(built).not.toBeNull();
+    expect(built!.resultMarkup).toContain('<path');
+    expect(built!.resultMarkup).toContain('d=');
+
+    rectNode.remove();
+    circleNode.remove();
+  });
+
+  it('unionLocalD returns merged d for rect and path operands', () => {
+    const port = mockPort({
+      rect: { tag: 'rect', attrs: { x: '0', y: '0', width: '10', height: '10' } },
+      path: { tag: 'path', d: 'M 5 0 L 15 0 L 15 10 L 5 10 Z' }
+    });
+    const d = service.unionLocalD(['rect', 'path'], port);
+    expect(d).toBeTruthy();
+    expect(d).toContain('Z');
+  });
+
   it('createGeometryPort delegates DOM reads to PathBooleanSelectionReadService', () => {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.id = 'p1';

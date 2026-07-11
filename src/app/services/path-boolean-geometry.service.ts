@@ -9,9 +9,8 @@ import {
   geometryHasHoles,
   geometryIsEmpty,
   geometryToRings,
-  pathHasClosedSubpaths,
   rootUserRingsToLocalPathD,
-  sortPathIdsByDocumentOrder,
+  shapeLocalClosedSubpaths,
   sortCompoundOperandIdsByDocumentOrder,
   subtractPathGeometries,
   intersectPathGeometries,
@@ -53,18 +52,18 @@ export class PathBooleanGeometryService {
     };
   }
 
-  private localDForOp(op: BooleanOp, pathIds: string[], port: PathBooleanGeometryPort): string | null {
-    if (pathIds.length < 2) return null;
-    for (const id of pathIds) {
-      const d = port.getPathD(id);
-      if (!d || !pathHasClosedSubpaths(d)) return null;
+  private localDForOp(op: BooleanOp, operandIds: string[], port: PathBooleanGeometryPort): string | null {
+    if (operandIds.length < 2) return null;
+    for (const id of operandIds) {
+      const el = port.getCompoundOperandElement(id);
+      if (!el || shapeLocalClosedSubpaths(el) == null) return null;
     }
     const rings =
       op === 'union'
-        ? unionPathGeometries(pathIds, port)
+        ? unionPathGeometries(operandIds, port)
         : op === 'subtract'
-          ? subtractPathGeometries(pathIds, port)
-          : intersectPathGeometries(pathIds, port);
+          ? subtractPathGeometries(operandIds, port)
+          : intersectPathGeometries(operandIds, port);
     if (!rings) return null;
     return rootUserRingsToLocalPathD(rings);
   }
@@ -95,11 +94,10 @@ export class PathBooleanGeometryService {
   ): PathBooleanResult | null {
     if (pathIds.length < 2) return null;
 
-    const sorted = sortPathIdsByDocumentOrder(pathIds, port);
+    const sorted = sortCompoundOperandIdsByDocumentOrder(pathIds, port);
     for (const id of sorted) {
-      const d = port.getPathD(id);
-      if (!d || !pathHasClosedSubpaths(d)) return null;
-      if (!port.getPathElement(id)) return null;
+      const el = port.getCompoundOperandElement(id);
+      if (!el || shapeLocalClosedSubpaths(el) == null) return null;
     }
 
     const geometry = computeBooleanGeometry(op, sorted, port);
@@ -110,7 +108,7 @@ export class PathBooleanGeometryService {
     const localD = rootUserRingsToLocalPathD(rings);
 
     const topmostId = sorted[sorted.length - 1]!;
-    const styleSource = port.getPathElement(topmostId);
+    const styleSource = port.getCompoundOperandElement(topmostId);
     if (!styleSource) return null;
 
     const resultId = allocateShapeId(usedIds);

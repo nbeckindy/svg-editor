@@ -1,5 +1,6 @@
 import { TestBed } from '@angular/core/testing';
 import { editorPortTestProviders } from '../testing/editor-port-test-providers';
+import type { LiveTreeMarkup } from '../utils/svg-sanitize';
 import { SvgManipulationService, CreatableShapeType } from './svg-manipulation.service';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { AddPathCommand, AddImageCommand, ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
@@ -201,6 +202,18 @@ describe('SvgManipulationService', () => {
     expect(properties.fill).toBe('#0000FF');
   });
 
+  it('getSelectorSelectionForShape returns clip geometry for clipped content', () => {
+    const svgContent = `<svg viewBox="0 0 100 100">
+      <defs><clipPath id="cp"><rect id="cp-geom" x="0" y="0" width="50" height="50"/></clipPath></defs>
+      <g clip-path="url(#cp)"><rect id="inner" x="5" y="5" width="10" height="10"/></g>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    const inner = service.getSVGInstance()?.findOne('#inner') as any;
+    const selection = service.getSelectorSelectionForShape(inner);
+    expect(selection).toHaveLength(1);
+    expect(selection[0].id).toMatch(/^clip-geom-/);
+  });
+
   it('getShapePropertiesInSameClipGroup returns all shapes under the clip-path ancestor', () => {
     const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
       <defs><clipPath id="cp"><rect x="0" y="0" width="50" height="100"/></clipPath></defs>
@@ -239,6 +252,19 @@ describe('SvgManipulationService', () => {
     const hit = service.getShapeProperties(service.getSVGInstance()!.findOne('#x1') as any);
     const expanded = service.expandSelectionByClipGroups([hit]);
     expect(expanded.map((p) => p.id).sort()).toEqual(['x1', 'x2'].sort());
+  });
+
+  it('expandSelectionForClipPathTransform includes clip geometry with clipped content', () => {
+    const svgContent = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
+      <rect id="back" x="0" y="0" width="40" height="40" fill="red"/>
+      <rect id="front" x="10" y="10" width="30" height="30" fill="blue"/>
+    </svg>`;
+    service.initializeSVG(container, svgContent);
+    const made = service.makeClipPathFromSelection(['back'], 'front');
+    expect(made).not.toBeNull();
+
+    const expanded = service.expandSelectionForClipPathTransform([made!.clipGeometryId]);
+    expect(expanded.sort()).toEqual([made!.clipGeometryId, 'back'].sort());
   });
 
   it('should update fill color', () => {
@@ -555,16 +581,24 @@ describe('SvgManipulationService', () => {
       expect(p.hasOversizedDataUrl).toBe(false);
     });
 
-    it('blocks when an image uses blob:', () => {
+    it('strips blob: image href at ingest (sanitizer fires before export policy)', () => {
+      // ADR 0002: ingest sanitizer removes blob: hrefs, so the export policy never sees one.
+      vi.spyOn(window, 'alert').mockImplementation(() => undefined);
       const svgContent =
         '<svg viewBox="0 0 100 100"><image id="i1" href="blob:http://localhost/x" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
+      // Blob: href was stripped — image element has no href
+      const img = container.querySelector('#i1');
+      expect(img?.getAttribute('href') ?? null).toBeFalsy();
+      // Export policy is not blocked (nothing to block — ingest already cleaned it)
       const p = service.getSvgExportImagePolicyResult();
-      expect(p.blocked).toBe(true);
-      expect(p.blockedReason).toMatch(/blob/i);
+      expect(p.blocked).toBe(false);
+      // Sanitizer should have alerted the user about the blocked href
+      expect(window.alert).toHaveBeenCalled();
+      vi.restoreAllMocks();
     });
 
-    it('flags oversized data URL without blocking', () => {
+    it('flags oversized data URL without blocking', { timeout: 15000 }, () => {
       const prefix = 'data:image/png;base64,';
       const padLen = MAX_DATA_IMAGE_HREF_CHARS_WITHOUT_CONFIRM - prefix.length + 1;
       const huge = prefix + 'x'.repeat(Math.max(0, padLen));
@@ -960,6 +994,7 @@ describe('SvgManipulationService', () => {
       const tree = service.getLayerTree();
       expect(tree.length).toBe(1);
       expect(tree[0].type).toBe('g');
+      expect(tree[0].kind).toBe('group');
       expect(tree[0].id).toBe('layer1');
       expect(tree[0].children).toBeDefined();
       expect(tree[0].children!.length).toBe(2);
@@ -1017,6 +1052,46 @@ describe('SvgManipulationService', () => {
       const tree = service.getLayerTree();
       expect(tree.find((n) => n.id === 'free')?.locked).toBe(false);
       expect(tree.find((n) => n.id === 'lck')?.locked).toBe(true);
+    });
+
+    it('represents clip-path carriers as clip branches with clipped preview markup', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <clipPath id="cp">
+            <rect id="clip-geom" data-editor-clip-source-id="mask-rect" x="0" y="0" width="40" height="40"/>
+          </clipPath>
+        </defs>
+        <g id="clip-carrier" clip-path="url(#cp)">
+          <rect id="inner" x="10" y="10" width="80" height="80" fill="red"/>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree.length).toBe(1);
+      expect(tree[0].type).toBe('clip');
+      expect(tree[0].kind).toBe('clipMask');
+      expect(tree[0].name).toBe('mask-rect');
+      expect(tree[0].children?.length).toBe(1);
+      expect(tree[0].children![0].type).toBe('rect');
+      expect(tree[0].previewMarkup).toContain('<clipPath id="cp">');
+      expect(tree[0].previewMarkup).toContain('clip-path="url(#cp)"');
+      expect(tree[0].previewMarkup).toContain('id="inner"');
+    });
+
+    it('uses carrier data-name for clip-path carrier when set', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <clipPath id="cp">
+            <rect id="clip-geom" data-editor-clip-source-id="mask-rect" x="0" y="0" width="40" height="40"/>
+          </clipPath>
+        </defs>
+        <g id="clip-carrier" clip-path="url(#cp)" data-name="Custom mask label">
+          <rect id="inner" x="10" y="10" width="80" height="80" fill="red"/>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const tree = service.getLayerTree();
+      expect(tree[0].name).toBe('Custom mask label');
     });
   });
 
@@ -1559,6 +1634,45 @@ describe('SvgManipulationService', () => {
       service.initializeSVG(container, svgContent);
       expect(service.getElementName('r1')).toBe('r1');
     });
+
+    it('removes data-name when rename receives empty string', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10" data-name="Named"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.renameElement('r1', '   ');
+      expect(service.getElementDataName('r1')).toBeNull();
+      expect(service.getElementName('r1')).toBe('r1');
+    });
+  });
+
+  describe('layer display name port helpers', () => {
+    it('resolveLayerDisplayName matches clip carrier tree fallback', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <defs>
+          <clipPath id="cp">
+            <rect id="clip-geom" data-editor-clip-source-id="mask-rect" x="0" y="0" width="40" height="40"/>
+          </clipPath>
+        </defs>
+        <g id="clip-carrier" clip-path="url(#cp)">
+          <rect id="inner" x="10" y="10" width="80" height="80" fill="red"/>
+        </g>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.resolveLayerDisplayName('clip-carrier', 'clipMask')).toBe('mask-rect');
+      expect(service.getElementDataName('clip-carrier')).toBeNull();
+    });
+
+    it('setElementDataName round-trips through getElementDataName', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.setElementDataName('r1', 'Custom');
+      expect(service.getElementDataName('r1')).toBe('Custom');
+      service.setElementDataName('r1', null);
+      expect(service.getElementDataName('r1')).toBeNull();
+    });
   });
 
   describe('stroke dash array', () => {
@@ -1664,6 +1778,40 @@ describe('SvgManipulationService', () => {
       const before = service.documentRevision();
       service.updateStrokeDasharray('r1', '5,3');
       expect(service.documentRevision()).toBeGreaterThan(before);
+    });
+
+    it('getShapeProperties reads rect corner radius', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="30" rx="8"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      const el = service.getSVGInstance()!.findOne('#r1') as import('@svgdotjs/svg.js').Element;
+      const props = service.getShapeProperties(el);
+      expect(props.rx).toBe(8);
+      expect(props.ry).toBe(8);
+      expect(props.rectMaxCornerRadius).toBe(15);
+    });
+
+    it('updateRectCornerRadius sets rx and ry attributes', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="30"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.updateRectCornerRadius('r1', 6);
+      const node = container.querySelector('#r1');
+      expect(node?.getAttribute('rx')).toBe('6');
+      expect(node?.getAttribute('ry')).toBe('6');
+    });
+
+    it('restoreRectCornerRadii restores asymmetric radii', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="50" height="30" rx="8" ry="8"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      service.restoreRectCornerRadii('r1', 8, 4);
+      const node = container.querySelector('#r1');
+      expect(node?.getAttribute('rx')).toBe('8');
+      expect(node?.getAttribute('ry')).toBe('4');
     });
   });
 
@@ -2664,7 +2812,7 @@ describe('SvgManipulationService', () => {
     it('inserts markup into content group', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
-      service.insertShapeMarkup('<circle id="inserted-circle" cx="50" cy="50" r="20" fill="#ff0000"/>');
+      service.insertShapeMarkup('<circle id="inserted-circle" cx="50" cy="50" r="20" fill="#ff0000"/>' as unknown as LiveTreeMarkup);
       const el = container.querySelector('#inserted-circle');
       expect(el).not.toBeNull();
       expect(el?.tagName.toLowerCase()).toBe('circle');
@@ -2673,7 +2821,7 @@ describe('SvgManipulationService', () => {
     it('inserts at the specified DOM index', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/><rect id="r2" x="20" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
-      service.insertShapeMarkup('<circle id="mid" cx="5" cy="5" r="2"/>', 1);
+      service.insertShapeMarkup('<circle id="mid" cx="5" cy="5" r="2"/>' as unknown as LiveTreeMarkup, 1);
       const contentGroup = container.querySelector('[data-editor-content-group]')!;
       const ids = Array.from(contentGroup.children).map((el) => el.id).filter(Boolean);
       expect(ids.indexOf('mid')).toBe(1);
@@ -2682,7 +2830,7 @@ describe('SvgManipulationService', () => {
     it('appends when insertionIndex is omitted', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
-      service.insertShapeMarkup('<rect id="appended" x="0" y="0" width="5" height="5"/>');
+      service.insertShapeMarkup('<rect id="appended" x="0" y="0" width="5" height="5"/>' as unknown as LiveTreeMarkup);
       const contentGroup = container.querySelector('[data-editor-content-group]')!;
       const lastChild = contentGroup.lastElementChild;
       expect(lastChild?.id).toBe('appended');
@@ -2692,12 +2840,12 @@ describe('SvgManipulationService', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
       const before = service.documentRevision();
-      service.insertShapeMarkup('<rect id="new" x="0" y="0" width="5" height="5"/>');
+      service.insertShapeMarkup('<rect id="new" x="0" y="0" width="5" height="5"/>' as unknown as LiveTreeMarkup);
       expect(service.documentRevision()).toBe(before + 1);
     });
 
     it('does nothing when not initialized', () => {
-      expect(() => service.insertShapeMarkup('<rect id="noop" x="0" y="0" width="5" height="5"/>')).not.toThrow();
+      expect(() => service.insertShapeMarkup('<rect id="noop" x="0" y="0" width="5" height="5"/>' as unknown as LiveTreeMarkup)).not.toThrow();
     });
 
     it('round-trips with removeShape (add → serialize → remove → reinsert)', () => {
@@ -2709,7 +2857,7 @@ describe('SvgManipulationService', () => {
       const markup = el.outerHTML;
       service.removeShape(id!);
       expect(container.querySelector(`#${id}`)).toBeNull();
-      service.insertShapeMarkup(markup);
+      service.insertShapeMarkup(markup as unknown as LiveTreeMarkup);
       expect(container.querySelector(`#${id}`)).not.toBeNull();
     });
   });

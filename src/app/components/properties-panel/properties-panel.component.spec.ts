@@ -1,5 +1,4 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { HttpTestingController } from '@angular/common/http/testing';
 import { computed, signal, WritableSignal } from '@angular/core';
 import { Matrix } from '@svgdotjs/svg.js';
 import { PropertiesPanelComponent } from './properties-panel.component';
@@ -10,7 +9,6 @@ import { EditorToolService } from '../../services/editor-tool.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import { DEFAULT_ARTBOARD, ArtboardResizeAnchor } from '../../models/artboard.model';
-import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
 import { editorPortTestProviders } from '../../testing/editor-port-test-providers';
 import { vi } from 'vitest';
 
@@ -96,6 +94,8 @@ describe('PropertiesPanelComponent', () => {
       updateTextAnchor: vi.fn(),
       updateTextPaintOrder: vi.fn(),
       updateTextVectorEffect: vi.fn(),
+      updateRectCornerRadius: vi.fn(),
+      restoreRectCornerRadii: vi.fn(),
       getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 50 }),
       snapshotSelectionTransforms: vi.fn(() => new Map<string, Matrix>()),
       snapshotVectorEffectsForShapes: vi.fn(() => new Map<string, (string | null)[]>()),
@@ -112,6 +112,8 @@ describe('PropertiesPanelComponent', () => {
         gradientOuterHtml: null
       })),
       applyPaintGradientSnapshot: vi.fn(),
+      countPaintUrlReferencesToDefId: vi.fn().mockReturnValue(0),
+      removeGradientDefById: vi.fn(),
       isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
       isElementDirectLocked: vi.fn().mockReturnValue(false),
       setLayerLocked: vi.fn(),
@@ -162,7 +164,6 @@ describe('PropertiesPanelComponent', () => {
       imports: [PropertiesPanelComponent],
       providers: [
         ...editorPortTestProviders,
-        ...mdiIconHttpTestProviders,
         { provide: ShapeSelectionService, useValue: shapeSelectionServiceMock },
         { provide: SvgManipulationService, useValue: svgManipulationServiceMock },
         { provide: EditorToolService, useValue: editorToolServiceMock },
@@ -171,21 +172,12 @@ describe('PropertiesPanelComponent', () => {
       ]
     }).compileComponents();
 
-    registerMdiSvgIconSetForTests();
-
     shapeSelectionService = TestBed.inject(ShapeSelectionService);
     svgManipulationService = TestBed.inject(SvgManipulationService);
     editorToolService = TestBed.inject(EditorToolService);
     fixture = TestBed.createComponent(PropertiesPanelComponent);
     component = fixture.componentInstance;
     fixture.detectChanges();
-    flushMdiSvgIfPending();
-    fixture.detectChanges();
-  });
-
-  afterEach(() => {
-    flushMdiSvgIfPending();
-    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
   });
 
   it('should create', () => {
@@ -452,7 +444,7 @@ describe('PropertiesPanelComponent', () => {
     const compiled = fixture.nativeElement;
     expect(compiled.textContent).toContain('Fill Color');
     expect(compiled.textContent).toContain('Stroke Color');
-    expect(compiled.querySelectorAll('app-color-picker').length).toBeGreaterThan(0);
+    expect(compiled.querySelectorAll('app-paint-swatch-popover').length).toBeGreaterThan(0);
   });
 
   it('should update fill color when color picker changes', () => {
@@ -473,6 +465,8 @@ describe('PropertiesPanelComponent', () => {
     expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('shape-1', newColor);
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       fill: newColor,
+      fillPaintType: 'solid',
+      fillUrl: undefined,
       fillSource: { kind: 'presentation-attr' }
     });
     expect(drawingDefaultsSignal().fill).toBe(newColor);
@@ -511,6 +505,8 @@ describe('PropertiesPanelComponent', () => {
     expect(svgManipulationService.updateStrokeColor).toHaveBeenCalledWith('shape-1', newColor);
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       stroke: newColor,
+      strokePaintType: 'solid',
+      strokeUrl: undefined,
       strokeSource: { kind: 'presentation-attr' }
     });
     expect(drawingDefaultsSignal().stroke).toBe(newColor);
@@ -532,6 +528,8 @@ describe('PropertiesPanelComponent', () => {
     expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('shape-1', 'none');
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       fill: undefined,
+      fillPaintType: 'none',
+      fillUrl: undefined,
       fillSource: { kind: 'default' }
     });
     expect(drawingDefaultsSignal().fill).toBe('none');
@@ -555,6 +553,8 @@ describe('PropertiesPanelComponent', () => {
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       stroke: undefined,
       strokeWidth: 0,
+      strokePaintType: 'none',
+      strokeUrl: undefined,
       strokeSource: { kind: 'default' }
     });
   });
@@ -714,7 +714,7 @@ describe('PropertiesPanelComponent', () => {
     });
   });
 
-  it('shows color pickers with empty stroke/fill when paint is absent', () => {
+  it('shows paint swatches with empty stroke/fill when paint is absent', () => {
     selectedShapesSignal.set([
       {
         id: 'shape-1',
@@ -724,30 +724,30 @@ describe('PropertiesPanelComponent', () => {
     ]);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('[data-testid="properties-fill-color-picker"]')).toBeTruthy();
-    expect(el.querySelector('[data-testid="properties-stroke-color-picker"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="properties-fill-paint-swatch"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="properties-stroke-paint-swatch"]')).toBeTruthy();
   });
 
   describe('layer lock disables inspector inputs', () => {
-    function fillColorPickerRoot(): HTMLElement | null {
+    function fillPaintSwatchRoot(): HTMLElement | null {
       const host = fixture.nativeElement.querySelector(
-        '[data-testid="properties-fill-color-picker"]'
+        '[data-testid="properties-fill-paint-swatch"]'
       ) as HTMLElement | null;
-      return host?.querySelector('[data-testid="color-picker"]') as HTMLElement | null;
+      return host?.querySelector('[data-testid="paint-swatch-popover"]') as HTMLElement | null;
     }
 
     it('uses read-only fill swatch when selection is under a locked layer', () => {
       vi.mocked(svgManipulationService.isElementOrAncestorLocked).mockReturnValue(true);
       selectedShapesSignal.set([{ id: 'r1', type: 'rect', fill: '#aabbcc' }]);
       fixture.detectChanges();
-      const inner = fillColorPickerRoot();
-      expect(inner?.classList.contains('color-picker--disabled')).toBe(true);
+      const inner = fillPaintSwatchRoot();
+      expect(inner?.classList.contains('paint-swatch-popover--disabled')).toBe(true);
     });
 
-    it('uses interactive fill picker when selection is not locked', () => {
+    it('uses interactive fill swatch when selection is not locked', () => {
       selectedShapesSignal.set([{ id: 'r1', type: 'rect', fill: '#aabbcc' }]);
       fixture.detectChanges();
-      const inner = fillColorPickerRoot();
+      const inner = fillPaintSwatchRoot();
       expect(inner?.tagName.toLowerCase()).toBe('details');
     });
 
@@ -760,8 +760,8 @@ describe('PropertiesPanelComponent', () => {
         { id: 't1', type: 'text', fontFamily: 'Arial, sans-serif' }
       ]);
       fixture.detectChanges();
-      const inner = fillColorPickerRoot();
-      expect(inner?.classList.contains('color-picker--disabled')).toBe(true);
+      const inner = fillPaintSwatchRoot();
+      expect(inner?.classList.contains('paint-swatch-popover--disabled')).toBe(true);
       const font = fixture.nativeElement.querySelector('#font-family') as HTMLSelectElement | null;
       expect(font?.disabled).toBe(false);
     });
@@ -782,31 +782,128 @@ describe('PropertiesPanelComponent', () => {
     expect(svgManipulationService.updateFillColor).toHaveBeenCalledWith('shape-1', '#000000');
   });
 
-  it('onCreateGradientFill captures snapshot and pushes history', () => {
+  it('onFillPaintModeChange routes linear mode through chrome apply', () => {
     const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
     selectedShapesSignal.set([
       { id: 'shape-1', type: 'rect', fill: '#00aa00', fillPaintType: 'solid' }
     ]);
     fixture.detectChanges();
-    component.onCreateGradientFill(selectedShapesSignal()[0]);
+    component.onFillPaintModeChange('linear');
     expect(svgManipulationService.allocateUniqueDefId).toHaveBeenCalled();
     expect(svgManipulationService.capturePaintGradientSnapshot).toHaveBeenCalledWith('shape-1', 'fill');
     expect(history.pushAndExecute).toHaveBeenCalled();
   });
 
-  it('canCreateGradientFill is false for gradient or pattern fills', () => {
-    selectedShapesSignal.set([{ id: 'x', type: 'rect', fillPaintType: 'gradient' } as ShapeProperties]);
+  it('onStrokePaintModeChange routes linear mode through chrome apply', () => {
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+    selectedShapesSignal.set([
+      {
+        id: 'shape-1',
+        type: 'rect',
+        stroke: '#00aa00',
+        strokePaintType: 'solid',
+        strokeWidth: 2
+      } as ShapeProperties
+    ]);
     fixture.detectChanges();
-    expect(component.canCreateGradientFill(selectedShapesSignal()[0])).toBe(false);
-    selectedShapesSignal.set([{ id: 'x', type: 'rect', fillPaintType: 'pattern' } as ShapeProperties]);
-    fixture.detectChanges();
-    expect(component.canCreateGradientFill(selectedShapesSignal()[0])).toBe(false);
+    component.onStrokePaintModeChange('linear');
+    expect(svgManipulationService.allocateUniqueDefId).toHaveBeenCalled();
+    expect(svgManipulationService.capturePaintGradientSnapshot).toHaveBeenCalledWith('shape-1', 'stroke');
+    expect(history.pushAndExecute).toHaveBeenCalled();
   });
 
-  it('canCreateGradientFill is true for single solid rect', () => {
-    selectedShapesSignal.set([{ id: 'x', type: 'rect', fillPaintType: 'solid' } as ShapeProperties]);
+  it('onFillPaintModeChange routes solid mode to gradient revert', () => {
+    selectedShapesSignal.set([
+      {
+        id: 'shape-1',
+        type: 'rect',
+        fillPaintType: 'gradient',
+        fillUrl: 'url(#g1)'
+      } as ShapeProperties
+    ]);
+    (svgManipulationService.capturePaintGradientSnapshot as ReturnType<typeof vi.fn>).mockReturnValue({
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    });
+    (svgManipulationService.readEditableGradientModelById as ReturnType<typeof vi.fn>).mockReturnValue({
+      id: 'g1',
+      kind: 'linear',
+      gradientUnits: 'objectBoundingBox',
+      stops: [{ offset: '0%', color: '#334455' }]
+    });
     fixture.detectChanges();
-    expect(component.canCreateGradientFill(selectedShapesSignal()[0])).toBe(true);
+    component.onFillPaintModeChange('solid');
+    expect(svgManipulationService.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      'shape-1',
+      'fill',
+      expect.objectContaining({ shapePaintAttr: '#334455' })
+    );
+  });
+
+  it('onFillPaintModeChange routes none from gradient fill through gradient snapshot', () => {
+    selectedShapesSignal.set([
+      {
+        id: 'shape-1',
+        type: 'rect',
+        fillPaintType: 'gradient',
+        fillUrl: 'url(#g1)'
+      } as ShapeProperties
+    ]);
+    (svgManipulationService.capturePaintGradientSnapshot as ReturnType<typeof vi.fn>).mockReturnValue({
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    });
+    fixture.detectChanges();
+    component.onFillPaintModeChange('none');
+    expect(svgManipulationService.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      'shape-1',
+      'fill',
+      expect.objectContaining({
+        gradientId: null,
+        shapePaintAttr: 'none',
+        gradientOuterHtml: null
+      })
+    );
+  });
+
+  it('fillSwatchMode returns none after gradient fill cleared in selection state', () => {
+    const shape = {
+      id: 'shape-1',
+      type: 'rect',
+      fillPaintType: 'none',
+      fillUrl: undefined
+    } as ShapeProperties;
+    expect(component.fillSwatchMode(shape)).toBe('none');
+  });
+
+  it('fillGradientModesDisabled is true when multi-select paint types differ', () => {
+    selectedShapesSignal.set([
+      { id: 'a', type: 'rect', fillPaintType: 'solid', fill: '#000000' } as ShapeProperties,
+      { id: 'b', type: 'rect', fillPaintType: 'gradient', fillUrl: 'url(#g1)' } as ShapeProperties
+    ]);
+    fixture.detectChanges();
+    expect(component.fillGradientModesDisabled()).toBe(true);
+  });
+
+  it('fillGradientModesDisabled is true when multi-select paint types match', () => {
+    selectedShapesSignal.set([
+      { id: 'a', type: 'rect', fillPaintType: 'solid', fill: '#000000' } as ShapeProperties,
+      { id: 'b', type: 'rect', fillPaintType: 'solid', fill: '#000000' } as ShapeProperties
+    ]);
+    fixture.detectChanges();
+    expect(component.fillGradientModesDisabled()).toBe(true);
+  });
+
+  it('onFillPaintModeChange applies solid fill when selection has no fill', () => {
+    const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
+    selectedShapesSignal.set([
+      { id: 'shape-1', type: 'rect', fillPaintType: 'none' } as ShapeProperties
+    ]);
+    fixture.detectChanges();
+    component.onFillPaintModeChange('solid');
+    expect(history.pushAndExecute).toHaveBeenCalled();
   });
 
   describe('gradient / pattern paint UI (a19)', () => {
@@ -815,7 +912,17 @@ describe('PropertiesPanelComponent', () => {
       expect(component.paintDefIdFromUrl(undefined)).toBeNull();
     });
 
-    it('shows fill paint def id for gradient fill from fillUrl', () => {
+    it('shows fill paint swatch for gradient fill', () => {
+      const model = {
+        id: 'gradA',
+        kind: 'linear' as const,
+        gradientUnits: 'objectBoundingBox' as const,
+        stops: [
+          { offset: '0%', color: '#000000' },
+          { offset: '100%', color: '#ffffff' }
+        ]
+      };
+      (svgManipulationService.readEditableGradientModelById as ReturnType<typeof vi.fn>).mockReturnValue(model);
       selectedShapesSignal.set([
         {
           id: 'r1',
@@ -825,14 +932,12 @@ describe('PropertiesPanelComponent', () => {
         } as ShapeProperties
       ]);
       fixture.detectChanges();
-      const code = fixture.nativeElement.querySelector(
-        '[data-testid="properties-fill-paint-def-id"]'
-      ) as HTMLElement | null;
-      expect(code?.textContent?.trim()).toBe('#gradA');
-      expect(fixture.nativeElement.textContent).toContain('Solid color picker does not apply');
+      expect(component.fillSwatchMode(selectedShapesSignal()[0])).toBe('linear');
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-fill-paint-swatch"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-fill-paint-def-id"]')).toBeNull();
     });
 
-    it('shows fill paint def id for pattern fill', () => {
+    it('shows read-only fill swatch and hint for pattern fill', () => {
       selectedShapesSignal.set([
         {
           id: 'r1',
@@ -842,14 +947,22 @@ describe('PropertiesPanelComponent', () => {
         } as ShapeProperties
       ]);
       fixture.detectChanges();
-      const code = fixture.nativeElement.querySelector(
-        '[data-testid="properties-fill-paint-def-id"]'
-      ) as HTMLElement | null;
-      expect(code?.textContent?.trim()).toBe('#pat1');
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-fill-paint-swatch"]')).toBeTruthy();
       expect(fixture.nativeElement.textContent).toContain('Pattern fill');
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-fill-paint-def-id"]')).toBeNull();
     });
 
-    it('shows stroke paint def id for gradient stroke', () => {
+    it('shows stroke paint swatch for gradient stroke', () => {
+      const model = {
+        id: 'sg1',
+        kind: 'linear' as const,
+        gradientUnits: 'objectBoundingBox' as const,
+        stops: [
+          { offset: '0%', color: '#000000' },
+          { offset: '100%', color: '#ffffff' }
+        ]
+      };
+      (svgManipulationService.readEditableGradientModelById as ReturnType<typeof vi.fn>).mockReturnValue(model);
       selectedShapesSignal.set([
         {
           id: 'r1',
@@ -861,22 +974,17 @@ describe('PropertiesPanelComponent', () => {
         } as ShapeProperties
       ]);
       fixture.detectChanges();
-      const code = fixture.nativeElement.querySelector(
-        '[data-testid="properties-stroke-paint-def-id"]'
-      ) as HTMLElement | null;
-      expect(code?.textContent?.trim()).toBe('#sg1');
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-stroke-paint-swatch"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-stroke-paint-def-id"]')).toBeNull();
     });
 
-    it('shows Add gradient fill when single solid rect is selected', () => {
+    it('does not show Add gradient fill button for solid rect', () => {
       selectedShapesSignal.set([
         { id: 'shape-1', type: 'rect', fill: '#00aa00', fillPaintType: 'solid' } as ShapeProperties
       ]);
       fixture.detectChanges();
-      const btn = fixture.nativeElement.querySelector(
-        '[data-testid="properties-add-gradient-fill"]'
-      ) as HTMLButtonElement | null;
-      expect(btn).toBeTruthy();
-      expect(btn?.textContent?.trim()).toContain('Add gradient fill');
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-add-gradient-fill"]')).toBeNull();
+      expect(fixture.nativeElement.querySelector('[data-testid="paint-swatch-mode-linear"]')).toBeTruthy();
     });
 
     it('renders gradient fill editor when single selection has gradient fill', () => {
@@ -911,7 +1019,41 @@ describe('PropertiesPanelComponent', () => {
 
       expect(fixture.nativeElement.querySelector('[data-testid="properties-gradient-fill-details"]')).toBeTruthy();
       expect(fixture.nativeElement.querySelector('[data-testid="gradient-fill-editor-root"]')).toBeTruthy();
-      expect(svgManipulationService.ensureDedicatedPaintGradient).toHaveBeenCalled();
+      expect(svgManipulationService.ensureDedicatedPaintGradient).toHaveBeenCalledWith('shape-1', 'fill');
+    });
+
+    it('renders gradient stroke editor when single selection has gradient stroke', () => {
+      const model = {
+        id: 'sg1',
+        kind: 'linear' as const,
+        gradientUnits: 'objectBoundingBox' as const,
+        stops: [
+          { offset: '0%', color: '#000000' },
+          { offset: '100%', color: '#ffffff' }
+        ]
+      };
+      const shapeStub = { attr: vi.fn((name: string) => (name === 'stroke' ? 'url(#sg1)' : null)) };
+      (svgManipulationService.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({
+        findOne: vi.fn(() => shapeStub)
+      });
+      (svgManipulationService.readEditableGradientModelById as ReturnType<typeof vi.fn>).mockReturnValue(model);
+
+      selectedShapesSignal.set([
+        {
+          id: 'shape-1',
+          type: 'rect',
+          strokePaintType: 'gradient',
+          strokeUrl: 'url(#sg1)',
+          strokeWidth: 2
+        } as ShapeProperties
+      ]);
+      fixture.detectChanges();
+
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-gradient-stroke-details"]')).toBeTruthy();
+      expect(fixture.nativeElement.querySelector('[data-testid="properties-gradient-stroke-summary"]')?.textContent).toContain(
+        'Edit gradient stroke'
+      );
+      expect(svgManipulationService.ensureDedicatedPaintGradient).toHaveBeenCalledWith('shape-1', 'stroke');
     });
 
     it('does not render gradient fill editor when multiple shapes are selected', () => {
@@ -951,6 +1093,8 @@ describe('PropertiesPanelComponent', () => {
     expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({
       stroke: '#112233',
       strokeWidth: 2,
+      strokePaintType: 'solid',
+      strokeUrl: undefined,
       strokeSource: { kind: 'presentation-attr' }
     });
   });
@@ -1016,6 +1160,58 @@ describe('PropertiesPanelComponent', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('#font-family')).toBeNull();
     expect(el.textContent).not.toContain('Text Align');
+  });
+
+  it('shows corner radius control when a rect is selected', () => {
+    selectedShapesSignal.set([
+      { id: 'rect-1', type: 'rect', rx: 4, ry: 4, rectMaxCornerRadius: 15 }
+    ]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const slider = el.querySelector('#properties-rect-corner-radius') as HTMLInputElement;
+    expect(slider).toBeTruthy();
+    expect(slider.max).toBe('15');
+    const numberInput = el.querySelector(
+      '[data-testid="properties-rect-corner-radius"]'
+    ) as HTMLInputElement;
+    expect(numberInput.value).toBe('4');
+    expect(numberInput.max).toBe('15');
+  });
+
+  it('hides corner radius control when selection is not a rect', () => {
+    selectedShapesSignal.set([{ id: 'ellipse-1', type: 'ellipse', rx: 10, ry: 5 }]);
+    fixture.detectChanges();
+    expect(
+      fixture.nativeElement.querySelector('[data-testid="properties-rect-corner-radius"]')
+    ).toBeNull();
+  });
+
+  it('shows mixed corner radius when rects disagree', () => {
+    selectedShapesSignal.set([
+      { id: 'rect-1', type: 'rect', rx: 4, ry: 4, rectMaxCornerRadius: 15 },
+      { id: 'rect-2', type: 'rect', rx: 8, ry: 8, rectMaxCornerRadius: 20 }
+    ]);
+    fixture.detectChanges();
+    expect(component.rectCornerRadiiMixed()).toBe(true);
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="properties-rect-corner-radius"]'
+    ) as HTMLInputElement;
+    expect(input.placeholder).toBe('—');
+  });
+
+  it('uses the smallest rect clamp limit as the corner radius slider max', () => {
+    selectedShapesSignal.set([
+      { id: 'rect-1', type: 'rect', rectMaxCornerRadius: 15 },
+      { id: 'rect-2', type: 'rect', rectMaxCornerRadius: 40 }
+    ]);
+    expect(component.rectCornerRadiusSliderMax()).toBe(15);
+  });
+
+  it('updates rect corner radius through command path', () => {
+    selectedShapesSignal.set([{ id: 'rect-1', type: 'rect' }]);
+    fixture.detectChanges();
+    component.onRectCornerRadiusChange({ target: { value: '6' } } as unknown as Event);
+    expect(svgManipulationService.updateRectCornerRadius).toHaveBeenCalledWith('rect-1', 6);
   });
 
   it('updates text font family through command path', () => {

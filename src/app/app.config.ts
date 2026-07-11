@@ -1,13 +1,13 @@
 import { ApplicationConfig, inject, provideAppInitializer, provideBrowserGlobalErrorListeners } from '@angular/core';
 import { provideHttpClient } from '@angular/common/http';
 import { provideRouter } from '@angular/router';
-import { MatIconRegistry } from '@angular/material/icon';
-import { DomSanitizer } from '@angular/platform-browser';
+import { MAT_ICON_DEFAULT_OPTIONS } from '@angular/material/icon';
 import { routes } from './app.routes';
 import { DockPanelRegistryService } from './panels/dock-panel-registry.service';
 import { registerDefaultDockPanels } from './panels/register-default-dock-panels';
 import {
   CHROME_EDITOR_APPLY_SVG_PORT,
+  CLIP_PATH_SVG_PORT,
   EDITOR_SHAPE_LIFECYCLE_SVG_PORT,
   LAYER_REORDER_GROUP_SVG_PORT,
   PROPERTIES_PANEL_SVG_PORT,
@@ -37,17 +37,12 @@ export const appConfig: ApplicationConfig = {
     { provide: LAYER_REORDER_GROUP_SVG_PORT, useExisting: SvgManipulationService },
     { provide: SELECTION_TRANSFORM_APPLY_SVG_PORT, useExisting: SvgManipulationService },
     { provide: EDITOR_SHAPE_LIFECYCLE_SVG_PORT, useExisting: SvgManipulationService },
+    { provide: CLIP_PATH_SVG_PORT, useExisting: SvgManipulationService },
     { provide: RASTER_IMAGE_INSERT_SVG_PORT, useExisting: SvgManipulationService },
     { provide: RASTER_IMAGE_INSERT_HISTORY_PORT, useExisting: EditorHistoryService },
     { provide: RASTER_IMAGE_INSERT_SELECTION_PORT, useExisting: ShapeSelectionService },
     { provide: RASTER_IMAGE_INSERT_TOOL_PORT, useExisting: EditorToolService },
-    provideAppInitializer(() => {
-      const matIconRegistry = inject(MatIconRegistry);
-      const domSanitizer = inject(DomSanitizer);
-      matIconRegistry.addSvgIconSet(
-        domSanitizer.bypassSecurityTrustResourceUrl('assets/mdi.svg')
-      );
-    }),
+    { provide: MAT_ICON_DEFAULT_OPTIONS, useValue: { fontSet: 'material-symbols-outlined' } },
     provideAppInitializer(() => {
       registerDefaultDockPanels(inject(DockPanelRegistryService));
     }),

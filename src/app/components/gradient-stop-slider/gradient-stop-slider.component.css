@@ -1,0 +1,60 @@
+.gradient-stop-slider {
+  display: block;
+  width: 100%;
+  outline: none;
+}
+
+.gradient-stop-slider--disabled {
+  opacity: 0.72;
+  pointer-events: none;
+}
+
+.gradient-stop-slider__track {
+  position: relative;
+  block-size: 32px;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  box-sizing: border-box;
+  background-color: #fafafa;
+  background-size: 100% 100%;
+  background-repeat: no-repeat;
+  cursor: crosshair;
+  touch-action: none;
+}
+
+.gradient-stop-slider__endpoint,
+.gradient-stop-slider__stop {
+  position: absolute;
+  top: 50%;
+  translate: -50% -50%;
+  padding: 0;
+  border: none;
+  cursor: grab;
+  touch-action: none;
+}
+
+.gradient-stop-slider__endpoint:active,
+.gradient-stop-slider__stop:active {
+  cursor: grabbing;
+}
+
+.gradient-stop-slider__endpoint {
+  inline-size: 6px;
+  block-size: 28px;
+  border-radius: 2px;
+  background: rgba(255, 255, 255, 0.92);
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  z-index: 2;
+}
+
+.gradient-stop-slider__stop {
+  inline-size: 16px;
+  block-size: 16px;
+  border-radius: 50%;
+  box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.35);
+  z-index: 3;
+}
+
+.gradient-stop-slider__stop--selected {
+  box-shadow: 0 0 0 2px var(--app-focus, #1976d2), 0 0 0 3px rgba(25, 118, 210, 0.35);
+}

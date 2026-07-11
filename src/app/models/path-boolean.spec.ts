@@ -212,22 +212,26 @@ describe('path-boolean union', () => {
   });
 
   it('folds union over multiple operand geometries', () => {
+    const r1 = makePathNode('r1', 'M 0 0 L 5 0 L 5 5 L 0 5 Z');
+    const r2 = makePathNode('r2', 'M 3 0 L 8 0 L 8 5 L 3 5 Z');
     const g1 = operandPathToGeometry(
       'r1',
       identityPort({
-        r1: { d: 'M 0 0 L 5 0 L 5 5 L 0 5 Z' }
+        r1: { d: r1.getAttribute('d')!, node: r1 }
       })
     );
     const g2 = operandPathToGeometry(
       'r2',
       identityPort({
-        r2: { d: 'M 3 0 L 8 0 L 8 5 L 3 5 Z' }
+        r2: { d: r2.getAttribute('d')!, node: r2 }
       })
     );
     expect(g1).not.toBeNull();
     expect(g2).not.toBeNull();
     const merged = foldMartinezUnion([g1!, g2!]);
     expect(merged).not.toBeNull();
+    r1.remove();
+    r2.remove();
   });
 
   it('subtracts front rect from back overlap', () => {
@@ -263,15 +267,26 @@ describe('path-boolean union', () => {
 });
 
 describe('evaluatePathBooleanSelection', () => {
-  const closedD = 'M 0 0 L 10 0 L 10 10 L 0 10 Z';
+  const closedPath = makePathNode('closed-path', 'M 0 0 L 10 0 L 10 10 L 0 10 Z');
 
-  it('requires selector mode and two closed paths', () => {
+  afterEach(() => {
+    closedPath.remove();
+  });
+
+  it('requires selector mode and two closed operands', () => {
     expect(
-      evaluatePathBooleanSelection(false, [{ id: 'a', type: 'path' }, { id: 'b', type: 'path' }], () => false, () => closedD)
-        .eligible
+      evaluatePathBooleanSelection(
+        false,
+        [
+          { id: 'a', type: 'path' },
+          { id: 'b', type: 'path' }
+        ],
+        () => false,
+        () => closedPath
+      ).eligible
     ).toBe(false);
     expect(
-      evaluatePathBooleanSelection(true, [{ id: 'a', type: 'path' }], () => false, () => closedD).eligible
+      evaluatePathBooleanSelection(true, [{ id: 'a', type: 'path' }], () => false, () => closedPath).eligible
     ).toBe(false);
     expect(
       evaluatePathBooleanSelection(
@@ -281,33 +296,87 @@ describe('evaluatePathBooleanSelection', () => {
           { id: 'b', type: 'path' }
         ],
         () => false,
-        () => closedD
+        () => closedPath
       ).eligible
     ).toBe(true);
   });
 
-  it('rejects non-path and open geometry', () => {
+  it('allows rect and path operands when geometry is valid', () => {
+    const rect = makeShapeNode('rect-a', 'rect', { x: '0', y: '0', width: '10', height: '10' });
+    const state = evaluatePathBooleanSelection(
+      true,
+      [
+        { id: 'rect-a', type: 'rect' },
+        { id: 'path-b', type: 'path' }
+      ],
+      () => false,
+      (id) => (id === 'rect-a' ? rect : closedPath)
+    );
+    expect(state.eligible).toBe(true);
+    rect.remove();
+  });
+
+  it('rejects unsupported types and open path geometry', () => {
+    const line = makeShapeNode('line-a', 'line', { x1: '0', y1: '0', x2: '10', y2: '10' });
     expect(
       evaluatePathBooleanSelection(
         true,
         [
-          { id: 'a', type: 'rect' },
-          { id: 'b', type: 'path' }
+          { id: 'line-a', type: 'line' },
+          { id: 'path-b', type: 'path' }
         ],
         () => false,
-        () => closedD
+        (id) => (id === 'line-a' ? line : closedPath)
       ).reason
-    ).toContain('Only <path>');
+    ).toContain('Only paths, rectangles, circles, and ellipses');
+
+    const openPath = makePathNode('open-path', 'M 0 0 L 10 10');
     expect(
       evaluatePathBooleanSelection(
         true,
         [
-          { id: 'a', type: 'path' },
-          { id: 'b', type: 'path' }
+          { id: 'open-path', type: 'path' },
+          { id: 'path-b', type: 'path' }
         ],
         () => false,
-        (id) => (id === 'a' ? closedD : 'M 0 0 L 10 10')
+        (id) => (id === 'open-path' ? openPath : closedPath)
       ).eligible
     ).toBe(false);
+    line.remove();
+    openPath.remove();
+  });
+});
+
+describe('path-boolean primitive operands', () => {
+  it('unions overlapping rect and path operands', () => {
+    const rect = makeShapeNode('rect-a', 'rect', { x: '0', y: '0', width: '10', height: '10' });
+    const path = makePathNode('path-b', 'M 5 0 L 15 0 L 15 10 L 5 10 Z');
+    const port = identityPort({
+      'rect-a': { d: '', node: rect, tag: 'rect' },
+      'path-b': { d: path.getAttribute('d')!, node: path }
+    });
+
+    const rings = unionPathGeometries(['rect-a', 'path-b'], port);
+    expect(rings).not.toBeNull();
+    expect(ringsToPathD(rings!)).toContain('Z');
+
+    rect.remove();
+    path.remove();
+  });
+
+  it('intersects circle and ellipse operands', () => {
+    const circle = makeShapeNode('circle-a', 'circle', { cx: '10', cy: '10', r: '10' });
+    const ellipse = makeShapeNode('ellipse-b', 'ellipse', { cx: '15', cy: '10', rx: '10', ry: '8' });
+    const port = identityPort({
+      'circle-a': { d: '', node: circle, tag: 'circle' },
+      'ellipse-b': { d: '', node: ellipse, tag: 'ellipse' }
+    });
+
+    const rings = intersectPathGeometries(['circle-a', 'ellipse-b'], port);
+    expect(rings).not.toBeNull();
+    expect(ringsToPathD(rings!)).toContain('Z');
+
+    circle.remove();
+    ellipse.remove();
   });
 });

@@ -1,3 +1,10 @@
+/** Layer-panel row semantics — groups, clip/mask carriers, and leaf shapes differ in UI affordances. */
+export type LayerRowKind = 'shape' | 'group' | 'clipMask' | 'mask';
+
+export function isLayerBranchKind(kind: LayerRowKind): boolean {
+  return kind === 'group' || kind === 'clipMask' || kind === 'mask';
+}
+
 export interface LayerStackItem {
   id: string;
   type: string;
@@ -18,13 +25,17 @@ export interface ElementParentSnapshot {
 
 export interface LayerTreeNode {
   id: string;
+  /** Short label in the layer row type column (e.g. `rect`, `clip`). */
   type: string;
+  kind: LayerRowKind;
   name: string;
   children?: LayerTreeNode[];
   visible: boolean;
   /** Direct `data-editor-locked` on this row's element (not inherited). */
   locked: boolean;
   elementMarkup: string;
+  /** When set, used for the layer-row thumbnail instead of {@link elementMarkup}. */
+  previewMarkup?: string;
   fill?: string;
   stroke?: string;
   strokeWidth?: number;

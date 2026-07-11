@@ -9,6 +9,7 @@ import type { SvgManipulationService } from '../../services/svg-manipulation.ser
 import type { ShapeSelectionService } from '../../services/shape-selection.service';
 import type { EditorHistoryService } from '../../services/editor-history.service';
 import type { SnapCandidateShape, SnapService } from '../../services/snap.service';
+import type { CanvasCoordinateMappingService } from '../../services/canvas-coordinate-mapping.service';
 import type { ToolRegistryService } from '../../tools/tool-registry.service';
 import type { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
 import type { PenCanvasToolDeps } from '../../tools/pen-canvas-tool';
@@ -46,22 +47,23 @@ export interface SvgCanvasPointerStack {
 }
 
 export interface CreateSvgCanvasPointerStackArgs {
+  // Gesture runtime construction
   cdr: ChangeDetectorRef;
   highlightOverlayContainer: Signal<ElementRef<HTMLElement> | undefined>;
   svgManipulation: SvgManipulationService;
   shapeSelection: ShapeSelectionService;
   editorHistory: EditorHistoryService;
   snap: SnapService;
-  clientToEditorSvgPoint: (clientX: number, clientY: number) => { x: number; y: number } | null;
-  svgBboxToOverlayPixels: (bbox: Rect) => Rect;
+  coordinateMapping: CanvasCoordinateMappingService;
   invalidateHighlightCache: () => void;
   setLastBbox: (bbox: Rect | null) => void;
   getSmartGuideCandidates: () => SnapCandidateShape[];
   isSnapTemporarilyDisabled: () => boolean;
-  createPenToolSessionPorts: () => PenToolSessionPorts;
+  // Tool registration
   toolRegistry: ToolRegistryService;
   canvasBoundToolRegistrar: CanvasBoundToolRegistrar;
   isCanvasReady: () => boolean;
+  createPenToolSessionPorts: () => PenToolSessionPorts;
   getSnappedPenPoint: PenCanvasToolDeps['getSnappedPenPoint'];
   hasPathNodeEditState: PenCanvasToolDeps['hasPathNodeEditState'];
   tryStartPathNodeDrag: PenCanvasToolDeps['tryStartPathNodeDrag'];
@@ -81,10 +83,11 @@ export interface CreateSvgCanvasPointerStackArgs {
   getDrilledIntoGroupId: SelectorCanvasToolDeps['getDrilledIntoGroupId'];
   setDrilledIntoGroupId: SelectorCanvasToolDeps['setDrilledIntoGroupId'];
   isGroupAClipMaskCarrier: SelectorCanvasToolDeps['isGroupAClipMaskCarrier'];
-  getPenClosePostNodeEditEmptyClickClearUntilMs: SelectorCanvasToolDeps['getPenClosePostNodeEditEmptyClickClearUntilMs'];
-  resolveClickedContentShape: SelectorCanvasToolDeps['resolveClickedContentShape'];
   getShapeProperties: SelectorCanvasToolDeps['getShapeProperties'];
+  getSelectorSelectionForShape: SelectorCanvasToolDeps['getSelectorSelectionForShape'];
   getShapePropertiesInSameClipGroup: SelectorCanvasToolDeps['getShapePropertiesInSameClipGroup'];
+  getExpandedDragShapeIds: SelectorCanvasToolDeps['getExpandedDragShapeIds'];
+  shouldSkipEmptyHitSelectionClear: SelectorCanvasToolDeps['shouldSkipEmptyHitSelectionClear'];
   toggleShapeGroupInSelection: SelectorCanvasToolDeps['toggleShapeGroupInSelection'];
   selectShapes: SelectorCanvasToolDeps['selectShapes'];
   clearSelection: SelectorCanvasToolDeps['clearSelection'];
@@ -99,7 +102,6 @@ export interface CreateSvgCanvasPointerStackArgs {
   getZoomMarquee: ZoomCanvasToolDeps['getZoomMarquee'];
   isZoomMarquee: ZoomCanvasToolDeps['isZoomMarquee'];
   commitZoomMarquee: ZoomCanvasToolDeps['commitZoomMarquee'];
-  detectChanges: ZoomCanvasToolDeps['detectChanges'];
   consumeZoomMarqueeJustEnded: ZoomCanvasToolDeps['consumeZoomMarqueeJustEnded'];
   screenToSvgForZoom: ZoomCanvasToolDeps['screenToSvg'];
   zoomInAt: ZoomCanvasToolDeps['zoomInAt'];
@@ -140,8 +142,8 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     pointer: {
       cdr: args.cdr,
       highlightOverlayContainer: args.highlightOverlayContainer,
-      clientToEditorSvgPoint: (cx, cy) => args.clientToEditorSvgPoint(cx, cy),
-      svgBboxToOverlayPixels: (bbox) => args.svgBboxToOverlayPixels(bbox),
+      clientToEditorSvgPoint: (cx, cy) => args.coordinateMapping.clientToEditorSvgPoint(cx, cy),
+      svgBboxToOverlayPixels: (bbox) => args.coordinateMapping.svgBboxToOverlayPixels(bbox),
       invalidateHighlightCache: () => args.invalidateHighlightCache(),
       setLastBbox: (bbox) => args.setLastBbox(bbox)
     },
@@ -166,12 +168,12 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
 
   args.canvasBoundToolRegistrar.registerPenTool(() => ({
     getPenTool: () => penTool,
-    getSnappedPenPoint: args.getSnappedPenPoint,
-    hasPathNodeEditState: args.hasPathNodeEditState,
-    tryStartPathNodeDrag: args.tryStartPathNodeDrag,
     isCanvasReady: args.isCanvasReady,
     scheduleInsertHoverCursorHitTest: args.scheduleInsertHoverCursorHitTest,
-    markForCheck: args.markForCheck
+    markForCheck: args.markForCheck,
+    getSnappedPenPoint: args.getSnappedPenPoint,
+    hasPathNodeEditState: args.hasPathNodeEditState,
+    tryStartPathNodeDrag: args.tryStartPathNodeDrag
   }));
 
   args.canvasBoundToolRegistrar.registerSelectorTools(() => ({
@@ -182,7 +184,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     tryStartPathNodeDrag: args.tryStartPathNodeDrag,
     tryDeleteSelectedPathNode: args.tryDeleteSelectedPathNode,
     isEditorContentShapeTarget: args.isEditorContentShapeTarget,
-    clientToEditorSvgPoint: args.clientToEditorSvgPoint,
+    clientToEditorSvgPoint: (cx, cy) => args.coordinateMapping.clientToEditorSvgPoint(cx, cy),
     isShapeSelected: args.isShapeSelected,
     getNearestGroupAncestorId: args.getNearestGroupAncestorId,
     getSelectedShapeIds: args.getSelectedShapeIds,
@@ -200,10 +202,11 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     getDrilledIntoGroupId: args.getDrilledIntoGroupId,
     setDrilledIntoGroupId: args.setDrilledIntoGroupId,
     isGroupAClipMaskCarrier: args.isGroupAClipMaskCarrier,
-    getPenClosePostNodeEditEmptyClickClearUntilMs: args.getPenClosePostNodeEditEmptyClickClearUntilMs,
-    resolveClickedContentShape: args.resolveClickedContentShape,
     getShapeProperties: args.getShapeProperties,
+    getSelectorSelectionForShape: args.getSelectorSelectionForShape,
     getShapePropertiesInSameClipGroup: args.getShapePropertiesInSameClipGroup,
+    getExpandedDragShapeIds: args.getExpandedDragShapeIds,
+    shouldSkipEmptyHitSelectionClear: args.shouldSkipEmptyHitSelectionClear,
     toggleShapeGroupInSelection: args.toggleShapeGroupInSelection,
     selectShapes: args.selectShapes,
     clearSelection: args.clearSelection,
@@ -216,7 +219,6 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
       getZoomMarquee: args.getZoomMarquee,
       isZoomMarquee: args.isZoomMarquee,
       commitZoomMarquee: args.commitZoomMarquee,
-      detectChanges: args.detectChanges,
       isCanvasReady: args.isCanvasReady,
       consumeZoomMarqueeJustEnded: args.consumeZoomMarqueeJustEnded,
       screenToSvg: args.screenToSvgForZoom,

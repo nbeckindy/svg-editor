@@ -1,7 +1,6 @@
 import { Component, computed, effect, inject, output, signal } from '@angular/core';
 import { CommonModule } from '@angular/common';
-import type { SvgDebugPanelSvgPort } from '../../history/editor-chrome-svg.port';
-import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { SVG_DEBUG_PANEL_SVG_PORT } from '../../services/manipulation-port-tokens';
 import { EditorPointerIntentDebugService } from '../../services/editor-pointer-intent-debug.service';
 import {
   formatSvgXmlPlain,
@@ -15,7 +14,7 @@ import {
   styleUrl: './svg-debug-panel.component.css'
 })
 export class SvgDebugPanelComponent {
-  private readonly svg: SvgDebugPanelSvgPort = inject(SvgManipulationService);
+  private readonly svg = inject(SVG_DEBUG_PANEL_SVG_PORT);
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
 
   readonly svgContentApplied = output<string>();

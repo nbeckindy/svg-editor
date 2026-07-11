@@ -13,6 +13,8 @@ export const OUTSIDE_VIEWBOX_FILL = '#bfbfbf';
 
 /** When `true`, the layer row subtree is guarded from canvas/inspector mutations (not reorder/visibility/lock). */
 export const EDITOR_LAYER_LOCKED_ATTR = 'data-editor-locked';
+/** Original canvas shape id preserved on clip-path geometry in defs for release. */
+export const EDITOR_CLIP_SOURCE_ID_ATTR = 'data-editor-clip-source-id';
 
 /** Tags skipped when building the layer tree (non-content structural elements). */
 export const LAYER_TREE_SKIP_TAGS = new Set(['defs', 'clippath', 'mask', 'style', 'title', 'desc']);

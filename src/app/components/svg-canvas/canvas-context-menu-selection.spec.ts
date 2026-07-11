@@ -24,7 +24,7 @@ function makeDeps(over: Partial<CanvasContextMenuSelectionDeps> = {}): CanvasCon
     getNearestGroupAncestorId: () => null,
     isGroupAClipMaskCarrier: () => false,
     getShapeProperties: (el) => rectProps(elementId(el)),
-    getShapePropertiesInSameClipGroup: (el) => [rectProps(elementId(el))],
+    getSelectorSelectionForShape: (el) => [rectProps(elementId(el))],
     selectShapes: vi.fn(),
     getDrilledIntoGroupId: () => null,
     setDrilledIntoGroupId: vi.fn(),
@@ -44,6 +44,7 @@ describe('prepareCanvasContextMenuSelection', () => {
     );
 
     expect(result.hitShape).toBe(false);
+    expect(result.hitOutlineToPathPrimitive).toBe(false);
     expect(selectShapes).not.toHaveBeenCalled();
   });
 
@@ -54,9 +55,9 @@ describe('prepareCanvasContextMenuSelection', () => {
     const deps = makeDeps({
       getSvgInstance: () =>
         ({
-          findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
+          findOne: (sel: string) => (sel === '#child' ? (child as unknown as SvgJsElement) : undefined)
         }) as unknown as Svg,
-      getShapePropertiesInSameClipGroup: () => [rectProps('child')],
+      getSelectorSelectionForShape: () => [rectProps('child')],
       selectShapes
     });
 
@@ -66,6 +67,7 @@ describe('prepareCanvasContextMenuSelection', () => {
     );
 
     expect(result.hitShape).toBe(true);
+    expect(result.hitOutlineToPathPrimitive).toBe(true);
     expect(selectShapes).toHaveBeenCalledWith([rectProps('child')]);
   });
 
@@ -76,9 +78,9 @@ describe('prepareCanvasContextMenuSelection', () => {
     const deps = makeDeps({
       getSvgInstance: () =>
         ({
-          findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
+          findOne: (sel: string) => (sel === '#child' ? (child as unknown as SvgJsElement) : undefined)
         }) as unknown as Svg,
-      getShapePropertiesInSameClipGroup: () => [rectProps('child')],
+      getSelectorSelectionForShape: () => [rectProps('child')],
       getSelectedShapeIds: () => ['child', 'other'],
       selectShapes
     });
@@ -96,8 +98,8 @@ describe('prepareCanvasContextMenuSelection', () => {
       getSvgInstance: () =>
         ({
           findOne: (sel: string) => {
-            if (sel === '#child') return child as unknown as SVGElement;
-            if (sel === '#grp') return { id: 'grp' } as unknown as SVGElement;
+            if (sel === '#child') return child as unknown as SvgJsElement;
+            if (sel === '#grp') return { node: { id: 'grp' } } as unknown as SvgJsElement;
             return undefined;
           }
         }) as unknown as Svg,
@@ -123,8 +125,8 @@ describe('prepareCanvasContextMenuSelection', () => {
       getSvgInstance: () =>
         ({
           findOne: (sel: string) => {
-            if (sel === '#child') return child as unknown as SVGElement;
-            if (sel === '#grp') return group as unknown as SVGElement;
+            if (sel === '#child') return child as unknown as SvgJsElement;
+            if (sel === '#grp') return group as unknown as SvgJsElement;
             return undefined;
           }
         }) as unknown as Svg,

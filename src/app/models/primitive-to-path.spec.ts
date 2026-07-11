@@ -1,5 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { ellipseToClosedSubpath, rectToClosedSubpath } from './primitive-to-path';
+import {
+  ellipseToClosedSubpath,
+  lineToSubpath,
+  polygonToSubpath,
+  polylineToSubpath,
+  rectToClosedSubpath
+} from './primitive-to-path';
 
 describe('primitive-to-path', () => {
   it('rectToClosedSubpath builds a closed axis-aligned rectangle', () => {
@@ -19,6 +25,33 @@ describe('primitive-to-path', () => {
     const segs = ellipseToClosedSubpath(50, 50, 20, 10);
     expect(segs[0]).toEqual({ type: 'M', x: 50, y: 40 });
     expect(segs.filter((s) => s.type === 'C')).toHaveLength(4);
+    expect(segs.at(-1)).toEqual({ type: 'Z' });
+  });
+
+  it('lineToSubpath builds an open moveto/lineto pair', () => {
+    expect(lineToSubpath(0, 0, 10, 10)).toEqual([
+      { type: 'M', x: 0, y: 0 },
+      { type: 'L', x: 10, y: 10 }
+    ]);
+  });
+
+  it('polylineToSubpath builds an open chain', () => {
+    const segs = polylineToSubpath([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 }
+    ]);
+    expect(segs).toHaveLength(3);
+    expect(segs.at(-1)).toEqual({ type: 'L', x: 10, y: 10 });
+    expect(segs.some((s) => s.type === 'Z')).toBe(false);
+  });
+
+  it('polygonToSubpath closes with Z', () => {
+    const segs = polygonToSubpath([
+      { x: 0, y: 0 },
+      { x: 10, y: 0 },
+      { x: 10, y: 10 }
+    ]);
     expect(segs.at(-1)).toEqual({ type: 'Z' });
   });
 });

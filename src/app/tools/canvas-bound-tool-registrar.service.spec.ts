@@ -37,6 +37,7 @@ function makeSelectorDeps() {
     isShapeSelected: () => false,
     getNearestGroupAncestorId: () => null,
     getSelectedShapeIds: () => [],
+    getExpandedDragShapeIds: () => [],
     isSelectionMarquee: () => false,
     isResizingSelection: () => false,
     isSkewingSelection: () => false,
@@ -51,15 +52,15 @@ function makeSelectorDeps() {
     getDrilledIntoGroupId: () => null,
     setDrilledIntoGroupId: vi.fn(),
     isGroupAClipMaskCarrier: () => false,
-    getPenClosePostNodeEditEmptyClickClearUntilMs: () => 0,
-    resolveClickedContentShape: () => null,
-    getShapeProperties: (el: SvgJsElement) => ({ id: el.id }) as never,
-    getShapePropertiesInSameClipGroup: (el: SvgJsElement) => [{ id: el.id }] as never,
-    toggleShapeGroupInSelection: vi.fn(),
+    getShapeProperties: () => ({ id: 'a', type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }),
+    getShapePropertiesInSameClipGroup: (el: SvgJsElement) => [{ id: el.id(), type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }],
+    getSelectorSelectionForShape: () => [],
     selectShapes: vi.fn(),
+    toggleShapeGroupInSelection: vi.fn(),
     clearSelection: vi.fn(),
     clearHighlight: vi.fn(),
     consumeSelectionMarqueeJustEnded: () => false,
+    shouldSkipEmptyHitSelectionClear: () => false,
     getKeyboardActions: () =>
       ({
         getSvgContent: () => 'svg',
@@ -154,7 +155,6 @@ describe('CanvasBoundToolRegistrar', () => {
         getZoomMarquee: () => new ZoomMarqueeGesture(),
         isZoomMarquee: () => false,
         commitZoomMarquee: vi.fn(),
-        detectChanges: vi.fn(),
         isCanvasReady: () => true,
         consumeZoomMarqueeJustEnded: () => false,
         screenToSvg: () => null,
@@ -171,9 +171,9 @@ describe('CanvasBoundToolRegistrar', () => {
       getTextDeps: () => ({
         isCanvasReady: () => true,
         updateTextToolPreviewFromClient: vi.fn(),
-        createTextAtPoint: vi.fn(),
-        destroyTextToolPreview: vi.fn(),
-        tryEnterTextEditAfterCreate: vi.fn()
+        createTextAtPoint: vi.fn().mockReturnValue(undefined),
+        tryEnterTextEditAfterCreate: vi.fn(),
+        destroyTextToolPreview: vi.fn()
       }),
       getEyedropperDeps: () => ({
         isCanvasReady: () => true,

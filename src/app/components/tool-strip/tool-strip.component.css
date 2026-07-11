@@ -45,11 +45,7 @@
   line-height: 0;
 }
 
-.tool-icon svg {
-  display: block;
-}
-
-.tool-mdi {
+.tool-mat-icon {
   width: 18px;
   height: 18px;
   font-size: 18px;

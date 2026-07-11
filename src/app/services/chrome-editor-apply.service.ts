@@ -6,7 +6,9 @@ import { ChromeEditorApplySupport } from './chrome-apply/chrome-editor-apply-sup
 import { ChromeEditorPaintApplyService } from './chrome-apply/chrome-editor-paint-apply.service';
 import { ChromeEditorTransformApplyService } from './chrome-apply/chrome-editor-transform-apply.service';
 import { ChromeEditorLayersApplyService } from './chrome-apply/chrome-editor-layers-apply.service';
+import type { LayerRowKind } from './svg-layer-structure.port';
 import { ChromeEditorPathOpsApplyService } from './chrome-apply/chrome-editor-path-ops-apply.service';
+import type { PaintSwatchMode, PaintSwatchTarget } from '../components/paint-swatch-popover/paint-swatch-popover.component';
 
 /**
  * **Chrome** write path for the **Editor runtime**: **History** (`pushAndExecute`), **Live tree**
@@ -55,6 +57,27 @@ export class ChromeEditorApplyService {
   applyAddLinearGradientFillFromChrome(shape: ShapeProperties, solidFrom: string) {
     return this.paint.applyAddLinearGradientFillFromChrome(shape, solidFrom);
   }
+  applyAddGradientPaintFromChrome(
+    shape: ShapeProperties,
+    paintProperty: 'fill' | 'stroke',
+    kind: 'linear' | 'radial',
+    seedFrom?: string
+  ) {
+    return this.paint.applyAddGradientPaintFromChrome(shape, paintProperty, kind, seedFrom);
+  }
+  applyRevertGradientToSolidFromChrome(shape: ShapeProperties, paintProperty: 'fill' | 'stroke') {
+    return this.paint.applyRevertGradientToSolidFromChrome(shape, paintProperty);
+  }
+  applySwitchGradientKindFromChrome(
+    shape: ShapeProperties,
+    paintProperty: 'fill' | 'stroke',
+    kind: 'linear' | 'radial'
+  ) {
+    return this.paint.applySwitchGradientKindFromChrome(shape, paintProperty, kind);
+  }
+  applyPaintModeFromChrome(shape: ShapeProperties, target: PaintSwatchTarget, mode: PaintSwatchMode) {
+    return this.paint.applyPaintModeFromChrome(shape, target, mode);
+  }
 
   applyAlignFromChrome(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom', shapeIds: string[]) {
     return this.transform.applyAlignFromChrome(direction, shapeIds);
@@ -68,6 +91,9 @@ export class ChromeEditorApplyService {
   onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event) {
     return this.transform.onSelectionBBoxFieldCommit(field, event);
   }
+  applyRectCornerRadiusFromChrome(radius: number) {
+    return this.transform.applyRectCornerRadiusFromChrome(radius);
+  }
 
   applyPathBooleanUnion(pathIds: string[]) { return this.pathOps.applyPathBooleanUnion(pathIds); }
   applyPathBooleanSubtract(pathIds: string[]) { return this.pathOps.applyPathBooleanSubtract(pathIds); }
@@ -76,9 +102,13 @@ export class ChromeEditorApplyService {
     return this.pathOps.applyPathBoolean(op, pathIds);
   }
   applyPathCompound(pathIds: string[]) { return this.pathOps.applyPathCompound(pathIds); }
+  applyOutlineToPath(shapeId: string) { return this.pathOps.applyOutlineToPath(shapeId); }
 
   toggleLayerVisibility(layerId: string) { return this.layers.toggleLayerVisibility(layerId); }
   toggleLayerLock(layerId: string) { return this.layers.toggleLayerLock(layerId); }
+  renameLayer(layerId: string, kind: LayerRowKind, newName: string) {
+    return this.layers.renameLayer(layerId, kind, newName);
+  }
   moveLayerBeforeSibling(draggedLayerId: string, referenceNextSiblingId: string | null) {
     return this.layers.moveLayerBeforeSibling(draggedLayerId, referenceNextSiblingId);
   }
@@ -99,6 +129,9 @@ export class ChromeEditorApplyService {
   }
   reparentLayerDrag(elementIds: string[], mode: ReparentElementsMode) {
     return this.layers.reparentLayerDrag(elementIds, mode);
+  }
+  releaseClipPathFromLayersPanel(carrierGroupId: string) {
+    return this.layers.releaseClipPathFromLayersPanel(carrierGroupId);
   }
 
   syncSelectedShapesFromDom() { return this.support.syncSelectedShapesFromDom(); }

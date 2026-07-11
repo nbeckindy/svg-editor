@@ -1,8 +1,6 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { HttpTestingController } from '@angular/common/http/testing';
 import { signal, WritableSignal } from '@angular/core';
 import { vi } from 'vitest';
-import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
 import { editorPortTestProviders } from '../../testing/editor-port-test-providers';
 import { LayersPanelComponent } from './layers-panel.component';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -17,7 +15,9 @@ import {
   UngroupCommand,
   UngroupElementsCommand,
   ReparentElementsCommand,
-  ReorderBeforeSiblingCommand
+  ReleaseClipPathCommand,
+  ReorderBeforeSiblingCommand,
+  RenameElementCommand
 } from '../../models/editor-commands';
 
 describe('LayersPanelComponent', () => {
@@ -31,6 +31,9 @@ describe('LayersPanelComponent', () => {
   let getSVGInstance: ReturnType<typeof vi.fn>;
   let getShapeProperties: ReturnType<typeof vi.fn>;
   let getShapePropertiesInSameClipGroup: ReturnType<typeof vi.fn>;
+  let canReleaseClipPath: ReturnType<typeof vi.fn>;
+  let getElementDataName: ReturnType<typeof vi.fn>;
+  let resolveLayerDisplayName: ReturnType<typeof vi.fn>;
   let pushAndExecute: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -42,6 +45,9 @@ describe('LayersPanelComponent', () => {
     clearSelection = vi.fn();
     getShapeProperties = vi.fn((el: any) => ({ id: el.id(), type: el.type }));
     getShapePropertiesInSameClipGroup = vi.fn(() => []);
+    canReleaseClipPath = vi.fn().mockReturnValue(false);
+    getElementDataName = vi.fn().mockReturnValue(null);
+    resolveLayerDisplayName = vi.fn((_id: string) => 'rect-1');
     getSVGInstance = vi.fn(() => ({ findOne: vi.fn() }));
     pushAndExecute = vi.fn();
 
@@ -49,7 +55,6 @@ describe('LayersPanelComponent', () => {
       imports: [LayersPanelComponent],
       providers: [
         ...editorPortTestProviders,
-        ...mdiIconHttpTestProviders,
         {
           provide: SvgManipulationService,
           useValue: {
@@ -58,12 +63,15 @@ describe('LayersPanelComponent', () => {
             getSVGInstance,
             getShapeProperties,
             getShapePropertiesInSameClipGroup,
+            canReleaseClipPath,
             isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
             isElementDirectLocked: vi.fn().mockReturnValue(false),
             isUserGroupId: vi.fn(
               (id: string) => id.startsWith('g') || id.includes('group')
             ),
             isGroupClipMaskCarrier: vi.fn().mockReturnValue(false),
+            getElementDataName,
+            resolveLayerDisplayName,
             setLayerLocked: vi.fn(),
             moveElementBeforeNextSibling: vi.fn().mockReturnValue(true)
           }
@@ -79,14 +87,7 @@ describe('LayersPanelComponent', () => {
       ]
     }).compileComponents();
 
-    registerMdiSvgIconSetForTests();
-
     fixture = TestBed.createComponent(LayersPanelComponent);
-  });
-
-  afterEach(() => {
-    flushMdiSvgIfPending();
-    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
   });
 
   it('should create', () => {
@@ -1014,5 +1015,295 @@ describe('LayersPanelComponent', () => {
       '[data-testid="layer-row-g1"]'
     );
     expect(groupRow?.classList.contains('drop-into-group')).toBe(true);
+  });
+
+  it('shows clip type label for clip-path carrier rows', () => {
+    getLayerTree.mockReturnValue([
+      {
+        id: 'clip-carrier',
+        type: 'clip',
+        kind: 'clipMask',
+        name: 'Clipping mask',
+        visible: true,
+        locked: false,
+        elementMarkup: '<g id="clip-carrier" clip-path="url(#cp)"><rect id="inner"/></g>',
+        previewMarkup:
+          '<defs><clipPath id="cp"><rect x="0" y="0" width="10" height="10"/></clipPath></defs><g clip-path="url(#cp)"><rect id="inner"/></g>',
+        children: [
+          {
+            id: 'inner',
+            type: 'rect',
+            kind: 'shape',
+            name: 'inner',
+            visible: true,
+            locked: false,
+            elementMarkup: '<rect id="inner" x="0" y="0" width="80" height="80"/>'
+          }
+        ]
+      }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const row = (fixture.nativeElement as HTMLElement).querySelector('[data-testid="layer-row-clip-carrier"]');
+    expect(row?.textContent).toContain('clip');
+    expect(row?.textContent).not.toContain('\ng\n');
+    expect(row?.querySelector('.group-chevron')).toBeTruthy();
+  });
+
+  it('clip-path carrier preview embeds defs so clipping applies in thumbnail', () => {
+    getLayerTree.mockReturnValue([
+      {
+        id: 'clip-carrier',
+        type: 'clip',
+        kind: 'clipMask',
+        name: 'Clipping mask',
+        visible: true,
+        locked: false,
+        elementMarkup: '<g id="clip-carrier" clip-path="url(#cp)"><rect id="inner"/></g>',
+        previewMarkup:
+          '<defs><clipPath id="cp"><rect x="0" y="0" width="10" height="10"/></clipPath></defs><g clip-path="url(#cp)"><rect id="inner"/></g>',
+        children: []
+      }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const preview = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="layer-row-clip-carrier"] .layer-preview'
+    ) as HTMLImageElement | null;
+    expect(preview?.src).toContain(encodeURIComponent('<clipPath id="cp">'));
+    expect(preview?.src).toContain(encodeURIComponent('clip-path="url(#cp)"'));
+  });
+
+  it('shows Release clipping mask in layer context menu for clip carriers', () => {
+    canReleaseClipPath.mockImplementation((ids: string[]) => ids[0] === 'clip-carrier');
+    getLayerTree.mockReturnValue([
+      {
+        id: 'clip-carrier',
+        type: 'clip',
+        kind: 'clipMask',
+        name: 'Clipping mask',
+        visible: true,
+        locked: false,
+        elementMarkup: '<g id="clip-carrier" clip-path="url(#cp)"/>',
+        children: []
+      }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    const row = (fixture.nativeElement as HTMLElement).querySelector(
+      '[data-testid="layer-row-clip-carrier"]'
+    ) as HTMLElement;
+    row.dispatchEvent(new MouseEvent('contextmenu', { bubbles: true, clientX: 10, clientY: 10 }));
+    fixture.detectChanges();
+
+    const releaseItem = document.querySelector('[data-testid="layer-context-menu-release-clip"]');
+    expect(releaseItem).toBeTruthy();
+    expect(releaseItem?.textContent).toContain('Release clipping mask');
+  });
+
+  it('layer context menu release dispatches ReleaseClipPathCommand', () => {
+    canReleaseClipPath.mockReturnValue(true);
+    getLayerTree.mockReturnValue([
+      {
+        id: 'clip-carrier',
+        type: 'clip',
+        kind: 'clipMask',
+        name: 'Clipping mask',
+        visible: true,
+        locked: false,
+        elementMarkup: '<g id="clip-carrier" clip-path="url(#cp)"/>',
+        children: []
+      }
+    ]);
+    documentRevision.set(1);
+    fixture.detectChanges();
+
+    fixture.componentInstance.contextMenuLayerId.set('clip-carrier');
+    fixture.componentInstance.onContextMenuReleaseClipPath();
+
+    expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(ReleaseClipPathCommand);
+  });
+
+  describe('inline layer rename', () => {
+    const rectLayer = {
+      id: 'rect-1',
+      type: 'rect',
+      kind: 'shape' as const,
+      name: 'rect-1',
+      visible: true,
+      locked: false,
+      elementMarkup: '<rect id="rect-1" />'
+    };
+
+    it('double-click layer name shows inline input prefilled with display name', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      const nameEl = (fixture.nativeElement as HTMLElement).querySelector('.layer-name') as HTMLElement;
+      nameEl.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      expect(input).toBeTruthy();
+      expect(input.value).toBe('rect-1');
+    });
+
+    it('context menu rename opens inline input', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.contextMenuLayerId.set('rect-1');
+      fixture.componentInstance.onContextMenuRename();
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="layer-name-input-rect-1"]')
+      ).toBeTruthy();
+    });
+
+    it('blur with changed text dispatches RenameElementCommand', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      getElementDataName.mockReturnValue(null);
+      resolveLayerDisplayName.mockReturnValue('rect-1');
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.startLayerRename({
+        ...rectLayer,
+        depth: 0,
+        isGroup: false,
+        isExpanded: true,
+        selected: false,
+        previewUrl: ''
+      });
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      input.value = 'Renamed layer';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+      fixture.detectChanges();
+
+      expect(pushAndExecute).toHaveBeenCalledTimes(1);
+      expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(RenameElementCommand);
+    });
+
+    it('Escape hides input without dispatching a command', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.startLayerRename({
+        ...rectLayer,
+        depth: 0,
+        isGroup: false,
+        isExpanded: true,
+        selected: false,
+        previewUrl: ''
+      });
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+
+      expect(
+        (fixture.nativeElement as HTMLElement).querySelector('[data-testid="layer-name-input-rect-1"]')
+      ).toBeFalsy();
+      expect(pushAndExecute).not.toHaveBeenCalled();
+    });
+
+    it('commit with unchanged display fallback does not dispatch', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      getElementDataName.mockReturnValue(null);
+      resolveLayerDisplayName.mockReturnValue('rect-1');
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.startLayerRename({
+        ...rectLayer,
+        depth: 0,
+        isGroup: false,
+        isExpanded: true,
+        selected: false,
+        previewUrl: ''
+      });
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      fixture.detectChanges();
+
+      expect(pushAndExecute).not.toHaveBeenCalled();
+    });
+
+    it('Enter commits once without blur double-dispatch', () => {
+      getLayerTree.mockReturnValue([rectLayer]);
+      getElementDataName.mockReturnValue(null);
+      resolveLayerDisplayName.mockReturnValue('rect-1');
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      fixture.componentInstance.startLayerRename({
+        ...rectLayer,
+        depth: 0,
+        isGroup: false,
+        isExpanded: true,
+        selected: false,
+        previewUrl: ''
+      });
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-rect-1"]'
+      ) as HTMLInputElement;
+      input.value = 'New label';
+      input.dispatchEvent(new Event('input', { bubbles: true }));
+      input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', bubbles: true }));
+      input.dispatchEvent(new FocusEvent('blur', { bubbles: true }));
+      fixture.detectChanges();
+
+      expect(pushAndExecute).toHaveBeenCalledTimes(1);
+    });
+
+    it('clip mask row prefills fallback source id label', () => {
+      getLayerTree.mockReturnValue([
+        {
+          id: 'clip-carrier',
+          type: 'clip',
+          kind: 'clipMask' as const,
+          name: 'mask-rect',
+          visible: true,
+          locked: false,
+          elementMarkup: '<g id="clip-carrier" clip-path="url(#cp)"/>',
+          children: []
+        }
+      ]);
+      documentRevision.set(1);
+      fixture.detectChanges();
+
+      const nameEl = (fixture.nativeElement as HTMLElement).querySelector('.layer-name') as HTMLElement;
+      nameEl.dispatchEvent(new MouseEvent('dblclick', { bubbles: true }));
+      fixture.detectChanges();
+
+      const input = (fixture.nativeElement as HTMLElement).querySelector(
+        '[data-testid="layer-name-input-clip-carrier"]'
+      ) as HTMLInputElement;
+      expect(input.value).toBe('mask-rect');
+    });
   });
 });

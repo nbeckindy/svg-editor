@@ -4,6 +4,7 @@ import { vi } from 'vitest';
 import { ChromeEditorApplyService } from './chrome-editor-apply.service';
 import {
   CHROME_EDITOR_APPLY_SVG_PORT,
+  CLIP_PATH_SVG_PORT,
   EDITOR_SHAPE_LIFECYCLE_SVG_PORT,
   LAYER_REORDER_GROUP_SVG_PORT,
   PROPERTIES_PANEL_SVG_PORT,
@@ -62,13 +63,22 @@ describe('ChromeEditorApplyService', () => {
       updateTextAnchor: vi.fn(),
       updateTextPaintOrder: vi.fn(),
       updateTextVectorEffect: vi.fn(),
+      updateRectCornerRadius: vi.fn(),
+      restoreRectCornerRadii: vi.fn(),
       bakeEffectiveFillToLocal: vi.fn(),
       restoreBakedFillPresentation: vi.fn(),
       bakeEffectiveStrokeToLocal: vi.fn(),
       restoreBakedStrokePresentation: vi.fn(),
       applyPaintGradientSnapshot: vi.fn(),
-      allocateUniqueDefId: vi.fn(),
-      capturePaintGradientSnapshot: vi.fn(),
+      allocateUniqueDefId: vi.fn().mockReturnValue('grad-test'),
+      capturePaintGradientSnapshot: vi.fn().mockReturnValue({
+        gradientId: null,
+        shapePaintAttr: '#000000',
+        gradientOuterHtml: null
+      }),
+      readEditableGradientModelById: vi.fn(),
+      countPaintUrlReferencesToDefId: vi.fn().mockReturnValue(0),
+      removeGradientDefById: vi.fn(),
       alignShapes: vi.fn(),
       distributeShapes: vi.fn(),
       translateShape: vi.fn(),
@@ -112,6 +122,15 @@ describe('ChromeEditorApplyService', () => {
         { provide: LAYER_REORDER_GROUP_SVG_PORT, useValue: svgMock },
         { provide: SELECTION_TRANSFORM_APPLY_SVG_PORT, useValue: svgMock },
         { provide: EDITOR_SHAPE_LIFECYCLE_SVG_PORT, useValue: svgMock },
+        {
+          provide: CLIP_PATH_SVG_PORT,
+          useValue: {
+            canMakeClipPath: vi.fn().mockReturnValue(false),
+            canReleaseClipPath: vi.fn().mockReturnValue(false),
+            makeClipPath: vi.fn(),
+            releaseClipPath: vi.fn()
+          }
+        },
         { provide: DrawingStyleDefaultsService, useValue: drawingDefaultsMock },
         { provide: EditorHistoryService, useValue: historyMock },
         { provide: EditorToolService, useValue: editorToolMock },
@@ -182,6 +201,49 @@ describe('ChromeEditorApplyService', () => {
     expect(history.pushAndExecute).not.toHaveBeenCalled();
   });
 
+  it('applyRectCornerRadiusFromChrome pushes history for selected rects only', () => {
+    selectedShapesSignal.set([
+      { id: 'r1', type: 'rect', rx: 2, ry: 2 },
+      { id: 'e1', type: 'ellipse' }
+    ]);
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      updateRectCornerRadius: ReturnType<typeof vi.fn>;
+      getSVGInstance: ReturnType<typeof vi.fn>;
+      getShapeProperties: ReturnType<typeof vi.fn>;
+    };
+    manip.getSVGInstance.mockReturnValue({
+      findOne: vi.fn(() => ({ node: {} }))
+    });
+    manip.getShapeProperties.mockReturnValue({ id: 'r1', type: 'rect', rx: 8, ry: 8 });
+
+    service.applyRectCornerRadiusFromChrome(8);
+
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    expect(history.pushAndExecute).toHaveBeenCalled();
+    expect(manip.updateRectCornerRadius).toHaveBeenCalledWith('r1', 8);
+    expect(manip.updateRectCornerRadius).toHaveBeenCalledTimes(1);
+  });
+
+  it('applyRectCornerRadiusFromChrome does nothing when radius is not finite', () => {
+    selectedShapesSignal.set([{ id: 'r1', type: 'rect' }]);
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    service.applyRectCornerRadiusFromChrome(Number.NaN);
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('applyRectCornerRadiusFromChrome does nothing when no rects are selected', () => {
+    selectedShapesSignal.set([{ id: 'e1', type: 'ellipse' }]);
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    service.applyRectCornerRadiusFromChrome(5);
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
   it('syncSelectedShapesFromDom returns early when there is no SVG instance', () => {
     selectedShapesSignal.set([{ id: 's1', type: 'rect', fill: '#000', stroke: '#111', strokeWidth: 1 }]);
     const shapeSelection = TestBed.inject(ShapeSelectionService) as unknown as {
@@ -230,5 +292,264 @@ describe('ChromeEditorApplyService', () => {
     vi.mocked(manip.getNearestGroupAncestorId).mockReturnValue('g1');
     expect(service.getNearestGroupAncestorId('s1')).toBe('g1');
     expect(manip.getNearestGroupAncestorId).toHaveBeenCalledWith('s1');
+  });
+
+  it('applyAddGradientPaintFromChrome pushes GradientFillSnapshotCommand for stroke linear', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      fill: '#000000',
+      strokeWidth: 0
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      allocateUniqueDefId: ReturnType<typeof vi.fn>;
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      addStroke: ReturnType<typeof vi.fn>;
+    };
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+
+    service.applyAddGradientPaintFromChrome(shape, 'stroke', 'linear');
+
+    expect(manip.allocateUniqueDefId).toHaveBeenCalledWith('grad');
+    expect(manip.capturePaintGradientSnapshot).toHaveBeenCalledWith('s1', 'stroke');
+    expect(manip.addStroke).toHaveBeenCalledWith('s1', '#000000', expect.any(Number));
+    expect(history.pushAndExecute).toHaveBeenCalled();
+  });
+
+  it('applyRevertGradientToSolidFromChrome uses first stop color in snapshot after', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      fillPaintType: 'gradient',
+      fillUrl: 'url(#g1)'
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      readEditableGradientModelById: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+    };
+    manip.capturePaintGradientSnapshot.mockReturnValue({
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    });
+    manip.readEditableGradientModelById.mockReturnValue({
+      id: 'g1',
+      kind: 'linear',
+      gradientUnits: 'objectBoundingBox',
+      stops: [
+        { offset: '0%', color: '#aabbcc' },
+        { offset: '100%', color: '#ffffff' }
+      ]
+    });
+
+    service.applyRevertGradientToSolidFromChrome(shape, 'fill');
+
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'fill',
+      expect.objectContaining({
+        gradientId: null,
+        shapePaintAttr: '#aabbcc',
+        gradientOuterHtml: null
+      })
+    );
+  });
+
+  it('applyPaintModeFromChrome routes solid mode to gradient revert', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      fillPaintType: 'gradient',
+      fillUrl: 'url(#g1)'
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      readEditableGradientModelById: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+    };
+    manip.capturePaintGradientSnapshot.mockReturnValue({
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    });
+    manip.readEditableGradientModelById.mockReturnValue({
+      id: 'g1',
+      kind: 'linear',
+      gradientUnits: 'objectBoundingBox',
+      stops: [{ offset: '0%', color: '#112233' }]
+    });
+
+    service.applyPaintModeFromChrome(shape, 'fill', 'solid');
+
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'fill',
+      expect.objectContaining({ shapePaintAttr: '#112233' })
+    );
+  });
+
+  it('applyPaintModeFromChrome clears gradient fill to none with snapshot', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      fillPaintType: 'gradient',
+      fillUrl: 'url(#g1)'
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+    };
+    manip.capturePaintGradientSnapshot.mockReturnValue({
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    });
+
+    service.applyPaintModeFromChrome(shape, 'fill', 'none');
+
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'fill',
+      expect.objectContaining({
+        gradientId: null,
+        shapePaintAttr: 'none',
+        gradientOuterHtml: null
+      })
+    );
+  });
+
+  it('applyPaintModeFromChrome applies solid fill when paint is none', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      fillPaintType: 'none'
+    };
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+
+    service.applyPaintModeFromChrome(shape, 'fill', 'solid');
+
+    expect(history.pushAndExecute).toHaveBeenCalled();
+  });
+
+  it('applyRevertGradientToSolidFromChrome reverts stroke gradient to first stop', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      strokePaintType: 'gradient',
+      strokeUrl: 'url(#sg1)',
+      strokeWidth: 2
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      readEditableGradientModelById: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+    };
+    manip.capturePaintGradientSnapshot.mockReturnValue({
+      gradientId: 'sg1',
+      shapePaintAttr: 'url(#sg1)',
+      gradientOuterHtml: '<linearGradient id="sg1"></linearGradient>'
+    });
+    manip.readEditableGradientModelById.mockReturnValue({
+      id: 'sg1',
+      kind: 'linear',
+      gradientUnits: 'objectBoundingBox',
+      stops: [
+        { offset: '0%', color: '#445566' },
+        { offset: '100%', color: '#ffffff' }
+      ]
+    });
+
+    service.applyRevertGradientToSolidFromChrome(shape, 'stroke');
+
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'stroke',
+      expect.objectContaining({
+        gradientId: null,
+        shapePaintAttr: '#445566',
+        gradientOuterHtml: null
+      })
+    );
+  });
+
+  it('applyPaintModeFromChrome creates stroke linear gradient from solid stroke', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      stroke: '#ff0000',
+      strokePaintType: 'solid',
+      strokeWidth: 2
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      allocateUniqueDefId: ReturnType<typeof vi.fn>;
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+    };
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+
+    service.applyPaintModeFromChrome(shape, 'stroke', 'linear');
+
+    expect(manip.allocateUniqueDefId).toHaveBeenCalledWith('grad');
+    expect(manip.capturePaintGradientSnapshot).toHaveBeenCalledWith('s1', 'stroke');
+    expect(history.pushAndExecute).toHaveBeenCalled();
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'stroke',
+      expect.objectContaining({
+        shapePaintAttr: expect.stringMatching(/^url\(#grad-/),
+        gradientOuterHtml: expect.stringContaining('linearGradient')
+      })
+    );
+  });
+
+  it('applySwitchGradientKindFromChrome preserves gradient id with new kind', () => {
+    const shape: ShapeProperties = {
+      id: 's1',
+      type: 'rect',
+      fillPaintType: 'gradient',
+      fillUrl: 'url(#g1)'
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      readEditableGradientModelById: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+    };
+    manip.capturePaintGradientSnapshot.mockReturnValue({
+      gradientId: 'g1',
+      shapePaintAttr: 'url(#g1)',
+      gradientOuterHtml: '<linearGradient id="g1"></linearGradient>'
+    });
+    manip.readEditableGradientModelById.mockReturnValue({
+      id: 'g1',
+      kind: 'linear',
+      gradientUnits: 'objectBoundingBox',
+      x1: '0%',
+      y1: '0%',
+      x2: '100%',
+      y2: '0%',
+      stops: [
+        { offset: '0%', color: '#000000' },
+        { offset: '100%', color: '#ffffff' }
+      ]
+    });
+
+    service.applySwitchGradientKindFromChrome(shape, 'fill', 'radial');
+
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'fill',
+      expect.objectContaining({
+        gradientId: 'g1',
+        shapePaintAttr: 'url(#g1)',
+        gradientOuterHtml: expect.stringContaining('radialGradient')
+      })
+    );
   });
 });

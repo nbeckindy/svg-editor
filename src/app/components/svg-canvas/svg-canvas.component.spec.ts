@@ -1,4 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
+import type { LiveTreeMarkup } from '../../utils/svg-sanitize';
 import {
   SvgCanvasComponent,
   clampCanvasScaleForSelectionChrome,
@@ -14,7 +15,7 @@ import { ClipboardService } from '../../services/clipboard.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { SnapService } from '../../services/snap.service';
 import { RasterImageInsertService } from '../../services/raster-image-insert.service';
-import { CompositeCommand, TranslateCommand } from '../../models/editor-commands';
+import { CompositeCommand, TranslateCommand, MakeClipPathCommand, ReleaseClipPathCommand } from '../../models/editor-commands';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
 import { parsePathDForNodeEditing } from '../../models/path-d';
 import { editorPortTestProviders } from '../../testing/editor-port-test-providers';
@@ -112,6 +113,95 @@ describe('SvgCanvasComponent', () => {
 
   it('should create', () => {
     expect(component).toBeTruthy();
+  });
+
+  describe('replaceDocument', () => {
+    const blankDoc = '<svg viewBox="0 0 100 100"></svg>';
+
+    async function loadBlankDoc(): Promise<void> {
+      fixture.componentRef.setInput('svgContent', blankDoc);
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+    }
+
+    it('re-inits when content string equals current accepted content', async () => {
+      await loadBlankDoc();
+      svgManipulationService.insertShapeMarkup('<rect id="same-str-reset" x="1" y="2" width="10" height="10"/>' as unknown as LiveTreeMarkup);
+      expect(svgManipulationService.getSVGInstance()?.findOne('#same-str-reset')).toBeTruthy();
+
+      expect(component.replaceDocument(blankDoc)).toBe(true);
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      expect(svgManipulationService.getSVGInstance()?.findOne('#same-str-reset')).toBeFalsy();
+    });
+
+    it('canceling pen discard blocks replaceDocument and preserves document', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="doc-pen-old" x="1" y="1" width="5" height="5"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      editorToolService.setTool('pen');
+      stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
+      const replaceSvg = '<svg viewBox="0 0 100 100"><circle id="doc-pen-new" cx="20" cy="20" r="5"/></svg>';
+      expect(component.replaceDocument(replaceSvg)).toBe(false);
+
+      const host = component.svgContainer()?.nativeElement;
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(component.isPenSessionActive).toBe(true);
+      expect(host?.querySelector('#doc-pen-old')).toBeTruthy();
+      expect(host?.querySelector('#doc-pen-new')).toBeFalsy();
+      confirmSpy.mockRestore();
+    });
+
+    it('accepting pen discard replaces document via replaceDocument', async () => {
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="doc-pen-old2" x="1" y="1" width="5" height="5"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+      editorToolService.setTool('pen');
+      stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
+      component.onCanvasMouseDown({
+        button: 0,
+        clientX: 10,
+        clientY: 10,
+        detail: 1,
+        preventDefault: vi.fn()
+      } as unknown as MouseEvent);
+      expect(component.isPenSessionActive).toBe(true);
+
+      const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
+      const replaceSvg = '<svg viewBox="0 0 100 100"><circle id="doc-pen-new2" cx="20" cy="20" r="5"/></svg>';
+      expect(component.replaceDocument(replaceSvg)).toBe(true);
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      const host = component.svgContainer()?.nativeElement;
+      expect(confirmSpy).toHaveBeenCalledTimes(1);
+      expect(component.isPenSessionActive).toBe(false);
+      expect(host?.querySelector('#doc-pen-old2')).toBeFalsy();
+      expect(host?.querySelector('#doc-pen-new2')).toBeTruthy();
+      confirmSpy.mockRestore();
+    });
   });
 
   it('raster drop on canvas calls RasterImageInsertService with mapped anchor and silent MIME skips', async () => {
@@ -304,9 +394,9 @@ describe('SvgCanvasComponent', () => {
     component.wrapperHeight = 100;
     fixture.detectChanges();
 
-    canvasViewService.panX = 20;
-    canvasViewService.panY = 12;
-    canvasViewService.scale = 2;
+    canvasViewService.panX.set(20);
+    canvasViewService.panY.set(12);
+    canvasViewService.scale.set(2);
 
     const xOriginAtScale2 = component.svgBboxToOverlayPixels({ x: 0, y: 0, width: 0, height: 0 }).x;
     const verticalAtOrigin = component.verticalGridLines.find(
@@ -315,7 +405,7 @@ describe('SvgCanvasComponent', () => {
     expect(verticalAtOrigin).toBeDefined();
 
     const stepAtScale2 = component.gridStepSvgUnits;
-    canvasViewService.scale = 0.5;
+    canvasViewService.scale.set(0.5);
     const stepAtScale05 = component.gridStepSvgUnits;
     expect(stepAtScale05).toBeGreaterThan(stepAtScale2);
   });
@@ -576,12 +666,12 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should not clear selection when zoom tool is active and user clicks canvas', () => {
-    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
-    const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
-
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('zoom');
+
+    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+    const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
 
     const wrapperEl = component.svgContainer()?.nativeElement as HTMLElement;
     vi.spyOn(wrapperEl, 'getBoundingClientRect').mockReturnValue({
@@ -823,7 +913,7 @@ describe('SvgCanvasComponent', () => {
     expect(selectShapesSpy).toHaveBeenCalledWith([expect.objectContaining({ id: 'a' })]);
   });
 
-  it('should pass marquee hits through expandSelectionByClipGroups before selectShapes', () => {
+  it('should pass marquee hits through resolveSelectorMarqueeSelection before selectShapes', () => {
     const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
     const hitA = {
       id: 'a',
@@ -842,7 +932,9 @@ describe('SvgCanvasComponent', () => {
       opacity: 1
     };
     vi.spyOn(svgManipulationService, 'getShapePropertiesIntersectingRect').mockReturnValue([hitA]);
-    const expandSpy = vi.spyOn(svgManipulationService, 'expandSelectionByClipGroups').mockReturnValue([hitA, hitB]);
+    const resolveSpy = vi
+      .spyOn(svgManipulationService, 'resolveSelectorMarqueeSelection')
+      .mockReturnValue([hitA, hitB]);
 
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><rect id="a" x="0" y="0" width="10" height="10"/></svg>');
     fixture.detectChanges();
@@ -859,11 +951,11 @@ describe('SvgCanvasComponent', () => {
     component.onDocumentMouseMove({ clientX: 50, clientY: 50 } as MouseEvent);
     component.onDocumentMouseUp({ button: 0, shiftKey: false } as MouseEvent);
 
-    expect(expandSpy).toHaveBeenCalledWith([hitA]);
+    expect(resolveSpy).toHaveBeenCalledWith([hitA]);
     expect(selectShapesSpy).toHaveBeenCalledWith([hitA, hitB]);
   });
 
-  it('should expand a single marquee hit to all shapes in the same clip group (real manipulation)', () => {
+  it('should resolve marquee hits in the same clip group to clip-path geometry', () => {
     const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
     const soloHit = {
       id: 'mq-x1',
@@ -878,7 +970,7 @@ describe('SvgCanvasComponent', () => {
     fixture.componentRef.setInput(
       'svgContent',
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-        <defs><clipPath id="cp-mq"><rect x="0" y="0" width="100" height="100"/></clipPath></defs>
+        <defs><clipPath id="cp-mq"><rect id="cp-mq-geom" x="0" y="0" width="100" height="100"/></clipPath></defs>
         <g clip-path="url(#cp-mq)">
           <rect id="mq-x1" x="0" y="0" width="5" height="5"/>
           <rect id="mq-x2" x="10" y="0" width="5" height="5"/>
@@ -900,7 +992,8 @@ describe('SvgCanvasComponent', () => {
     component.onDocumentMouseUp({ button: 0, shiftKey: false } as MouseEvent);
 
     const arg = selectShapesSpy.mock.calls[0]?.[0];
-    expect(arg?.map((s) => s.id).sort()).toEqual(['mq-x1', 'mq-x2'].sort());
+    expect(arg).toHaveLength(1);
+    expect(arg?.[0]?.id).toMatch(/^clip-geom-/);
   });
 
   it('should not call selectShapes on mouseup after tiny selection marquee', () => {
@@ -1034,13 +1127,13 @@ describe('SvgCanvasComponent', () => {
   });
 
   it('should not clear selection or select shape when pan tool is active and user clicks canvas', () => {
-    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
-    const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
-    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
-
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="c1" cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('pan');
+
+    const clearSelectionSpy = vi.spyOn(shapeSelectionService, 'clearSelection');
+    const clearHighlightSpy = vi.spyOn(svgManipulationService, 'clearHighlight');
+    const selectShapesSpy = vi.spyOn(shapeSelectionService, 'selectShapes');
 
     const mockEvent = {
       target: { tagName: 'svg' },
@@ -1124,8 +1217,8 @@ describe('SvgCanvasComponent', () => {
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle cx="50" cy="50" r="40"/></svg>');
     fixture.detectChanges();
     editorToolService.setTool('pan');
-    canvasViewService.panX = 10;
-    canvasViewService.panY = 20;
+    canvasViewService.panX.set(10);
+    canvasViewService.panY.set(20);
 
     const mousedownEvent = {
       button: 0,
@@ -1375,9 +1468,9 @@ describe('SvgCanvasComponent', () => {
 
     // With fitFraction 0.88 and svgWpx=200, viewportW=200:
     // scale = (200*0.88)/200 = 0.88
-    expect(canvasViewService.scale).toBeCloseTo(0.88, 3);
-    expect(canvasViewService.panX).toBeCloseTo(12, 3);
-    expect(canvasViewService.panY).toBeCloseTo(12, 3);
+    expect(canvasViewService.scale()).toBeCloseTo(0.88, 3);
+    expect(canvasViewService.panX()).toBeCloseTo(12, 3);
+    expect(canvasViewService.panY()).toBeCloseTo(12, 3);
   });
 
   it('should refresh viewBox overlay after initial fit-to-view (race-free)', async () => {
@@ -1415,12 +1508,12 @@ describe('SvgCanvasComponent', () => {
     fixture.detectChanges();
 
     // scale = (viewport * fitFraction) / svgWpx = (200*0.88)/150
-    expect(canvasViewService.scale).toBeCloseTo(1.1733333333, 3);
+    expect(canvasViewService.scale()).toBeCloseTo(1.1733333333, 3);
 
     // zoomToFitRect pan (no offset compensation) would be 12.
     // layout offset = (viewport - svgWpx)/2 = 25, so final pan should be -13.
-    expect(canvasViewService.panX).toBeCloseTo(-13, 3);
-    expect(canvasViewService.panY).toBeCloseTo(-13, 3);
+    expect(canvasViewService.panX()).toBeCloseTo(-13, 3);
+    expect(canvasViewService.panY()).toBeCloseTo(-13, 3);
   });
 
   it('should not show overlay rect when getShapeBBox returns null for selected shape', async () => {
@@ -1606,12 +1699,12 @@ describe('SvgCanvasComponent', () => {
     expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['b']);
   });
 
-  it('should select every shape under the same clip-path ancestor on click', () => {
+  it('should select clip-path geometry when clicking clipped content', () => {
     fixture.componentRef.setInput(
       'svgContent',
       `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 100 100">
-        <defs><clipPath id="cp"><rect x="0" y="0" width="50" height="100"/></clipPath></defs>
-        <g clip-path="url(#cp)">
+        <defs><clipPath id="cp"><rect id="cp-geom" x="0" y="0" width="50" height="100"/></clipPath></defs>
+        <g id="clip-carrier" clip-path="url(#cp)">
           <rect id="r-in-1" x="5" y="5" width="10" height="10"/>
           <rect id="r-in-2" x="25" y="25" width="10" height="10"/>
         </g>
@@ -1629,8 +1722,9 @@ describe('SvgCanvasComponent', () => {
       shiftKey: false
     } as unknown as MouseEvent);
 
-    const ids = shapeSelectionService.getSelectedShapes().map((s) => s.id).sort();
-    expect(ids).toEqual(['r-in-1', 'r-in-2'].sort());
+    const ids = shapeSelectionService.getSelectedShapes().map((s) => s.id);
+    expect(ids).toHaveLength(1);
+    expect(ids[0]).toMatch(/^clip-geom-/);
   });
 
   it('should remove from selection on shift-click on already selected shape', () => {
@@ -2452,7 +2546,7 @@ describe('SvgCanvasComponent', () => {
       width: 16,
       height: 16
     };
-    canvasViewService.scale = 1;
+    canvasViewService.scale.set(1);
     const r1 = component.highlightRect;
     (component as unknown as { lastBbox: { x: number; y: number; width: number; height: number } }).lastBbox = {
       x: 0,
@@ -2585,9 +2679,9 @@ describe('SvgCanvasComponent', () => {
       expect(snapSpy).toHaveBeenCalled();
       expect(applySpy).not.toHaveBeenCalled();
 
-      canvasViewService.scale = 1;
-      canvasViewService.panX = 0;
-      canvasViewService.panY = 0;
+      canvasViewService.scale.set(1);
+      canvasViewService.panX.set(0);
+      canvasViewService.panY.set(0);
       component.onDocumentMouseMove({
         clientX: 80,
         clientY: 70
@@ -2714,9 +2808,9 @@ describe('SvgCanvasComponent', () => {
       expect(snapSpy).toHaveBeenCalled();
       expect(applySpy).not.toHaveBeenCalled();
 
-      canvasViewService.scale = 1;
-      canvasViewService.panX = 0;
-      canvasViewService.panY = 0;
+      canvasViewService.scale.set(1);
+      canvasViewService.panX.set(0);
+      canvasViewService.panY.set(0);
       component.onDocumentMouseMove({
         clientX: 80,
         clientY: 70
@@ -6731,16 +6825,16 @@ describe('SvgCanvasComponent', () => {
       await new Promise((r) => setTimeout(r, 50));
       fixture.detectChanges();
 
-      canvasViewService.scale = 4;
-      canvasViewService.panX = 10;
-      canvasViewService.panY = 20;
+      canvasViewService.scale.set(4);
+      canvasViewService.panX.set(10);
+      canvasViewService.panY.set(20);
 
       const resetSpy = vi.spyOn(canvasViewService, 'resetZoom');
       component.onKeyDown(new KeyboardEvent('keydown', { key: '0', ctrlKey: true, bubbles: true }));
       expect(resetSpy).toHaveBeenCalled();
-      expect(canvasViewService.scale).toBe(1);
-      expect(canvasViewService.panX).toBe(0);
-      expect(canvasViewService.panY).toBe(0);
+      expect(canvasViewService.scale()).toBe(1);
+      expect(canvasViewService.panX()).toBe(0);
+      expect(canvasViewService.panY()).toBe(0);
     });
 
     it('Ctrl+= does nothing when no SVG content', () => {
@@ -7061,6 +7155,46 @@ describe('SvgCanvasComponent', () => {
       }
 
       expect(translateSpy).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('clipping mask context menu', () => {
+    it('make then release round-trip via context menu handlers', async () => {
+      editorToolService.setTool('selector');
+      fixture.componentRef.setInput(
+        'svgContent',
+        '<svg viewBox="0 0 100 100"><rect id="back" x="0" y="0" width="40" height="40"/><rect id="front" x="10" y="10" width="30" height="30"/></svg>'
+      );
+      fixture.detectChanges();
+      await new Promise((r) => setTimeout(r, 50));
+      fixture.detectChanges();
+
+      shapeSelectionService.selectShapes([
+        { id: 'back', type: 'rect', fill: '#f00', strokeWidth: 0, opacity: 1 },
+        { id: 'front', type: 'rect', fill: '#00f', strokeWidth: 0, opacity: 1 }
+      ]);
+
+      const makeSpy = vi.spyOn(editorHistoryService, 'pushAndExecute');
+      component.onContextMenuMakeClipPath();
+      expect(makeSpy).toHaveBeenCalled();
+      expect(makeSpy.mock.calls[0][0]).toBeInstanceOf(MakeClipPathCommand);
+
+      const svg = svgManipulationService.getSVGInstance()!;
+      expect(svg.findOne('#front')).toBeFalsy();
+      const carrier = svg.find('[clip-path]')[0] as { node: Element } | undefined;
+      expect(carrier?.node.getAttribute('clip-path')).toMatch(/url\(#clip-/);
+
+      const makeCmd = makeSpy.mock.calls[0][0] as MakeClipPathCommand;
+      expect(makeCmd.createdClipGeometryId).toBeTruthy();
+      expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual([
+        makeCmd.createdClipGeometryId!
+      ]);
+
+      component.onContextMenuReleaseClipPath();
+      expect(makeSpy.mock.calls[1][0]).toBeInstanceOf(ReleaseClipPathCommand);
+      expect(svg.find('[clip-path]').length).toBe(0);
+      expect(svg.findOne('#back')).toBeDefined();
+      expect(svg.findOne('#front')).toBeDefined();
     });
   });
 });

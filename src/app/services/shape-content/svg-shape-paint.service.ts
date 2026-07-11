@@ -4,11 +4,13 @@ import { PaintSourceInfo, PaintType, ShapeProperties } from '../../models/shape-
 import type { SvgShapePaintPort, SvgShapePaintReadout } from './svg-shape-paint.port';
 import { SvgEditorDocumentService } from '../svg-editor-document.service';
 import { SvgShapeTextService } from './svg-shape-text.service';
+import { SvgShapeRectService } from './svg-shape-rect.service';
 
 @Injectable({ providedIn: 'root' })
 export class SvgShapePaintService implements SvgShapePaintPort {
   private readonly doc = inject(SvgEditorDocumentService);
   private readonly text = inject(SvgShapeTextService);
+  private readonly rect = inject(SvgShapeRectService);
 
   private static readonly URL_PAINT_RE = /^\s*url\(\s*(['"]?)#([^)'"\\s]+)\1\s*\)/i;
 
@@ -364,9 +366,11 @@ export class SvgShapePaintService implements SvgShapePaintPort {
     const rawDashoffset = this.readStrokeDashoffset(element, node);
 
     const textFields = this.text.readShapeTextFields(element, node);
+    const rectFields = this.rect.readShapeRectFields(element, node);
 
     return {
       ...textFields,
+      ...rectFields,
       id: element.id() || '',
       type: element.type,
       fill: fillForPicker,

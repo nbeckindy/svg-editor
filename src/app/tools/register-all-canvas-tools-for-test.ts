@@ -1,5 +1,4 @@
 import { vi } from 'vitest';
-import type { ChangeDetectorRef } from '@angular/core';
 import { CreationGesture } from '../components/svg-canvas/gestures/creation-gesture';
 import { DragGesture } from '../components/svg-canvas/gestures/drag-gesture';
 import type { GestureRuntimeContext } from '../components/svg-canvas/gestures/gesture-context';
@@ -10,6 +9,8 @@ import { SkewGesture } from '../components/svg-canvas/gestures/skew-gesture';
 import { ZoomMarqueeGesture } from '../components/svg-canvas/gestures/zoom-marquee-gesture';
 import type { PenToolSession } from '../components/svg-canvas/pen-tool-session/pen-tool-session';
 import type { SelectorKeyboardActionsPort } from '../components/svg-canvas/selector-canvas-tool-keyboard';
+import type { ShapeProperties } from '../models/shape-properties.interface';
+import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { EditorTool } from '../services/editor-tool.service';
 import { CanvasBoundToolRegistrar } from './canvas-bound-tool-registrar.service';
 import type { CanvasTool } from './canvas-tool.interface';
@@ -41,6 +42,7 @@ export interface CanvasToolsTestHostState {
   isShapeSelected: (id: string) => boolean;
   getNearestGroupAncestorId: (id: string) => string | null;
   getSelectedShapeIds: () => string[];
+  getExpandedDragShapeIds: () => string[];
   tryStartPathNodeDrag: (target: Element, event: MouseEvent) => boolean;
   beginPanSession: (event: MouseEvent) => void;
   applyPanDragFromEvent: (event: MouseEvent) => void;
@@ -59,21 +61,20 @@ export interface CanvasToolsTestHostState {
   zoomInAt: (x: number, y: number) => void;
   zoomOutAt: (x: number, y: number) => void;
   refreshViewAfterZoomClick: () => void;
-  detectChanges: () => void;
   scheduleInsertHoverCursorHitTest: (clientX: number, clientY: number) => void;
   getSelectorKeyboardActions: () => SelectorKeyboardActionsPort;
   getDrilledIntoGroupId: () => string | null;
   setDrilledIntoGroupId: (id: string | null) => void;
   isGroupAClipMaskCarrier: (groupId: string) => boolean;
-  getPenClosePostNodeEditEmptyClickClearUntilMs: () => number;
-  resolveClickedContentShape: (clickTarget: Element) => import('@svgdotjs/svg.js').Element | null;
-  getShapeProperties: (el: import('@svgdotjs/svg.js').Element) => import('../models/shape-properties.interface').ShapeProperties;
-  getShapePropertiesInSameClipGroup: (el: import('@svgdotjs/svg.js').Element) => import('../models/shape-properties.interface').ShapeProperties[];
-  toggleShapeGroupInSelection: (shapes: import('../models/shape-properties.interface').ShapeProperties[]) => void;
-  selectShapes: (shapes: import('../models/shape-properties.interface').ShapeProperties[]) => void;
+  getShapeProperties: (el: SvgJsElement) => ShapeProperties;
+  getShapePropertiesInSameClipGroup: (el: SvgJsElement) => ShapeProperties[];
+  getSelectorSelectionForShape: (el: SvgJsElement) => ShapeProperties[];
+  toggleShapeGroupInSelection: (shapes: ShapeProperties[]) => void;
+  selectShapes: (shapes: ShapeProperties[]) => void;
   clearSelection: () => void;
   clearHighlight: () => void;
   consumeSelectionMarqueeJustEnded: () => boolean;
+  shouldSkipEmptyHitSelectionClear: () => boolean;
   getPathNodeDragSession: () => unknown | null;
   updatePathNodeDrag: (clientX: number, clientY: number) => void;
   finishPathNodeDrag: () => void;
@@ -88,7 +89,6 @@ export interface RegisterAllCanvasToolsForTestOptions {
   runtime?: GestureRuntimeContext;
   hostState?: Partial<CanvasToolsTestHostState>;
   penTool?: PenToolSession;
-  detectChanges?: ChangeDetectorRef['detectChanges'];
 }
 
 export interface RegisterAllCanvasToolsForTestResult {
@@ -122,6 +122,7 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     isShapeSelected: () => true,
     getNearestGroupAncestorId: () => null,
     getSelectedShapeIds: () => ['a'],
+    getExpandedDragShapeIds: () => ['a'],
     tryStartPathNodeDrag: () => false,
     beginPanSession: vi.fn(),
     applyPanDragFromEvent: vi.fn(),
@@ -140,7 +141,6 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     zoomInAt: vi.fn(),
     zoomOutAt: vi.fn(),
     refreshViewAfterZoomClick: vi.fn(),
-    detectChanges: vi.fn(),
     scheduleInsertHoverCursorHitTest: vi.fn(),
     getSelectorKeyboardActions: () =>
       ({
@@ -160,15 +160,26 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     getDrilledIntoGroupId: () => null,
     setDrilledIntoGroupId: vi.fn(),
     isGroupAClipMaskCarrier: () => false,
-    getPenClosePostNodeEditEmptyClickClearUntilMs: () => 0,
-    resolveClickedContentShape: () => null,
-    getShapeProperties: (el) => ({ id: el.node?.id ?? '', type: 'rect' }),
-    getShapePropertiesInSameClipGroup: (el) => [{ id: el.node?.id ?? '', type: 'rect' }],
-    toggleShapeGroupInSelection: vi.fn(),
-    selectShapes: vi.fn(),
-    clearSelection: vi.fn(),
-    clearHighlight: vi.fn(),
     consumeSelectionMarqueeJustEnded: () => false,
+    shouldSkipEmptyHitSelectionClear: () => false,
+    clearHighlight: vi.fn(),
+    getShapeProperties: (el) => ({
+      id: el.id(),
+      type: 'rect',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    }),
+    getShapePropertiesInSameClipGroup: (el) => [
+      { id: el.id(), type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
+    ],
+    getSelectorSelectionForShape: (el) => [
+      { id: el.id(), type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
+    ],
+    selectShapes: vi.fn(),
+    toggleShapeGroupInSelection: vi.fn(),
+    clearSelection: vi.fn(),
     getPathNodeDragSession: () => null,
     updatePathNodeDrag: vi.fn(),
     finishPathNodeDrag: vi.fn(),
@@ -235,10 +246,6 @@ export function registerAllCanvasToolsForTest(
     ...createDefaultCanvasToolsTestHostState(),
     ...options.hostState
   };
-  if (options.detectChanges) {
-    hostState.detectChanges = options.detectChanges;
-  }
-
   const penTool = options.penTool ?? createDefaultPenToolStub();
 
   registrar.registerCreationTools(gestures.creation, () => runtime, () => hostState.isCanvasReady);
@@ -265,6 +272,7 @@ export function registerAllCanvasToolsForTest(
     isShapeSelected: hostState.isShapeSelected,
     getNearestGroupAncestorId: hostState.getNearestGroupAncestorId,
     getSelectedShapeIds: hostState.getSelectedShapeIds,
+    getExpandedDragShapeIds: hostState.getExpandedDragShapeIds,
     isSelectionMarquee: () => hostState.isSelectionMarquee,
     isResizingSelection: () => hostState.isResizingSelection,
     isSkewingSelection: () => hostState.isSkewingSelection,
@@ -275,19 +283,19 @@ export function registerAllCanvasToolsForTest(
     finishPathNodeDrag: hostState.finishPathNodeDrag,
     getKeyboardActions: hostState.getSelectorKeyboardActions,
     getSvgInstance: hostState.getSvgInstance,
-    enterInlineTextEditMode: hostState.enterInlineTextEditMode,
+    getShapeProperties: hostState.getShapeProperties,
+    getShapePropertiesInSameClipGroup: hostState.getShapePropertiesInSameClipGroup,
+    getSelectorSelectionForShape: hostState.getSelectorSelectionForShape,
+    selectShapes: hostState.selectShapes,
+    toggleShapeGroupInSelection: hostState.toggleShapeGroupInSelection,
+    clearSelection: hostState.clearSelection,
+    clearHighlight: hostState.clearHighlight,
     getDrilledIntoGroupId: hostState.getDrilledIntoGroupId,
     setDrilledIntoGroupId: hostState.setDrilledIntoGroupId,
     isGroupAClipMaskCarrier: hostState.isGroupAClipMaskCarrier,
-    getPenClosePostNodeEditEmptyClickClearUntilMs: hostState.getPenClosePostNodeEditEmptyClickClearUntilMs,
-    resolveClickedContentShape: hostState.resolveClickedContentShape,
-    getShapeProperties: hostState.getShapeProperties,
-    getShapePropertiesInSameClipGroup: hostState.getShapePropertiesInSameClipGroup,
-    toggleShapeGroupInSelection: hostState.toggleShapeGroupInSelection,
-    selectShapes: hostState.selectShapes,
-    clearSelection: hostState.clearSelection,
-    clearHighlight: hostState.clearHighlight,
-    consumeSelectionMarqueeJustEnded: hostState.consumeSelectionMarqueeJustEnded
+    consumeSelectionMarqueeJustEnded: hostState.consumeSelectionMarqueeJustEnded,
+    shouldSkipEmptyHitSelectionClear: hostState.shouldSkipEmptyHitSelectionClear,
+    enterInlineTextEditMode: hostState.enterInlineTextEditMode
   }));
 
   registrar.registerViewUtilityTools({
@@ -295,7 +303,6 @@ export function registerAllCanvasToolsForTest(
       getZoomMarquee: () => gestures.zoomMarquee,
       isZoomMarquee: () => hostState.isZoomMarquee,
       commitZoomMarquee: hostState.commitZoomMarquee,
-      detectChanges: hostState.detectChanges,
       isCanvasReady: () => hostState.isCanvasReady,
       consumeZoomMarqueeJustEnded: () => hostState.consumeZoomMarqueeJustEnded,
       screenToSvg: hostState.screenToSvg,

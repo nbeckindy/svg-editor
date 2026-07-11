@@ -12,7 +12,7 @@ function createContext(): GestureRuntimeContext {
   const doc = {
     svgManipulation: {
       getShapePropertiesIntersectingRect: vi.fn(),
-      expandSelectionByClipGroups: vi.fn((hits) => hits),
+      resolveSelectorMarqueeSelection: vi.fn((hits) => hits),
       clearHighlight: vi.fn()
     },
     shapeSelection: {
@@ -57,11 +57,14 @@ describe('SelectionMarqueeGesture', () => {
     gesture = new SelectionMarqueeGesture();
   });
 
-  it('selects expanded hits for non-tiny drag', () => {
+  it('selects resolved hits for non-tiny drag', () => {
     const hitA = { id: 'a' } as never;
     const hitB = { id: 'b' } as never;
     (ctx.doc.svgManipulation.getShapePropertiesIntersectingRect as ReturnType<typeof vi.fn>).mockReturnValue([hitA]);
-    (ctx.doc.svgManipulation.expandSelectionByClipGroups as ReturnType<typeof vi.fn>).mockReturnValue([hitA, hitB]);
+    (ctx.doc.svgManipulation.resolveSelectorMarqueeSelection as ReturnType<typeof vi.fn>).mockReturnValue([
+      hitA,
+      hitB
+    ]);
     gesture.startAt(0, 0);
     gesture.move(200, 200, ctx);
     gesture.endAt(200, 200, false, ctx);

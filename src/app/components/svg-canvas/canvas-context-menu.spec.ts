@@ -1,5 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
-import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
+import type { Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 import { UnionRotateCommand } from '../../models/editor-commands';
 import {
@@ -25,7 +25,7 @@ describe('canvas context menu integration helpers', () => {
         getNearestGroupAncestorId: () => null,
         isGroupAClipMaskCarrier: () => false,
         getShapeProperties: (el) => rectProps(elementId(el)),
-        getShapePropertiesInSameClipGroup: (el) => [rectProps(elementId(el))],
+        getSelectorSelectionForShape: (el) => [rectProps(elementId(el))],
         selectShapes: vi.fn(),
         getDrilledIntoGroupId: () => null,
         setDrilledIntoGroupId: vi.fn(),
@@ -38,9 +38,14 @@ describe('canvas context menu integration helpers', () => {
       );
       const state = computeCanvasContextMenuState({
         hitShape: selection.hitShape,
+        hitOutlineToPathPrimitive: selection.hitOutlineToPathPrimitive,
         selectedShapes: [rectProps('kept')],
         hasClipboardContent: true,
-        isElementOrAncestorLocked: () => false
+        isSelectorMode: true,
+        isElementOrAncestorLocked: () => false,
+        getOutlineToPathElement: () => null,
+        canMakeClipPathForSelection: () => false,
+        canReleaseClipPathForSelection: () => false
       });
 
       expect(selection.hitShape).toBe(false);

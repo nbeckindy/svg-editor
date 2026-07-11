@@ -1,6 +1,6 @@
 import type { Signal } from '@angular/core';
 import type { Svg } from '@svgdotjs/svg.js';
-import type { EditableGradientModel, PaintGradientSnapshot } from '../models/svg-gradient';
+import type { EditableGradientModel, PaintGradientSnapshot, ShapeBboxForGradient } from '../models/svg-gradient';
 
 /** Svg slice for `GradientFillSnapshotCommand` (gradient defs + paint attr). */
 export interface GradientFillSnapshotSvgPort {
@@ -25,4 +25,6 @@ export interface GradientFillEditorSvgPort extends GradientFillSnapshotSvgPort {
     kind: 'linear' | 'radial',
     preserveStopsFrom: EditableGradientModel
   ): EditableGradientModel;
+  /** Shape bbox in SVG user space for `userSpaceOnUse` → `objectBoundingBox` normalization. */
+  getShapeBBoxForGradient(shapeId: string): ShapeBboxForGradient | null;
 }

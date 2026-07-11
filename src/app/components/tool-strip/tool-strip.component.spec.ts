@@ -9,8 +9,6 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
 import { RasterImageInsertService } from '../../services/raster-image-insert.service';
-import { HttpTestingController } from '@angular/common/http/testing';
-import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
 
 describe('ToolStripComponent', () => {
   let fixture: ComponentFixture<ToolStripComponent>;
@@ -30,7 +28,6 @@ describe('ToolStripComponent', () => {
     await TestBed.configureTestingModule({
       imports: [ToolStripComponent],
       providers: [
-        ...mdiIconHttpTestProviders,
         EditorToolService,
         ToolRegistryService,
         { provide: SvgEditorDocumentService, useValue: editorDocumentMock },
@@ -41,19 +38,11 @@ describe('ToolStripComponent', () => {
       ]
     }).compileComponents();
 
-    registerMdiSvgIconSetForTests();
-
     registerDefaultToolDescriptors(TestBed.inject(ToolRegistryService));
 
     fixture = TestBed.createComponent(ToolStripComponent);
     editorToolService = TestBed.inject(EditorToolService);
     fixture.detectChanges();
-    flushMdiSvgIfPending();
-    fixture.detectChanges();
-  });
-
-  afterEach(() => {
-    TestBed.inject(HttpTestingController).verify({ ignoreCancelled: true });
   });
 
   it('should create', () => {
@@ -75,8 +64,6 @@ describe('ToolStripComponent', () => {
   it('disables insert image when no SVG instance', () => {
     editorDocumentMock.getSVGInstance.mockReturnValue(null);
     const f = TestBed.createComponent(ToolStripComponent);
-    f.detectChanges();
-    flushMdiSvgIfPending();
     f.detectChanges();
     const btn = (f.nativeElement as HTMLElement).querySelector(
       '[data-testid="tool-insert-image"]'

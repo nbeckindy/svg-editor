@@ -42,6 +42,7 @@ File spike / panel / per-operation / test beads as **children of** `svg-editor-0
 | `svg-editor-0zh.11` | BO-11: E2E and panel updates for primitive boolean ops | BO-9, BO-10 |
 | `svg-editor-0zh.13` | BO-13: Make compound path — combine selection without boolean merge | BO-3 (done) |
 | `svg-editor-0zh.14` | BO-14: Compound path with rect, circle, and ellipse operands | BO-13 |
+| `svg-editor-0zh.15` | Outline to path — convert single primitive to editable path | — |
 
 ### Phase 3 — curve fidelity (future / P4)
 

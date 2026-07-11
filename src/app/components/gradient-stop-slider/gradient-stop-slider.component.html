@@ -1,0 +1,46 @@
+<div
+  class="gradient-stop-slider"
+  [class.gradient-stop-slider--disabled]="disabled()"
+  data-testid="gradient-stop-slider-root">
+  <div
+    #track
+    class="gradient-stop-slider__track"
+    [style.background-image]="trackBackgroundStyle()"
+    data-testid="gradient-stop-slider-track"
+    (pointerdown)="onTrackPointerDown($event)">
+    @if (kind() === 'linear') {
+      <button
+        type="button"
+        class="gradient-stop-slider__endpoint gradient-stop-slider__endpoint--start"
+        [style.inset-inline-start.%]="normalizedSpan().start"
+        [disabled]="disabled()"
+        data-endpoint-handle="start"
+        aria-label="Gradient start"
+        data-testid="gradient-stop-slider-endpoint-start"
+        (pointerdown)="onEndpointPointerDown($event, 'start')"></button>
+      <button
+        type="button"
+        class="gradient-stop-slider__endpoint gradient-stop-slider__endpoint--end"
+        [style.inset-inline-start.%]="normalizedSpan().end"
+        [disabled]="disabled()"
+        data-endpoint-handle="end"
+        aria-label="Gradient end"
+        data-testid="gradient-stop-slider-endpoint-end"
+        (pointerdown)="onEndpointPointerDown($event, 'end')"></button>
+    }
+
+    @for (stop of stops(); track $index) {
+      <button
+        type="button"
+        class="gradient-stop-slider__stop"
+        [class.gradient-stop-slider__stop--selected]="selectedIndex() === $index"
+        [style.inset-inline-start.%]="stopTrackPositions()[$index]"
+        [style.background-color]="stop.color"
+        [disabled]="disabled()"
+        data-stop-handle
+        [attr.aria-label]="ariaStopLabel($index)"
+        [attr.data-testid]="'gradient-stop-slider-stop-' + $index"
+        (pointerdown)="onStopPointerDown($event, $index)"></button>
+    }
+  </div>
+</div>

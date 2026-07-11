@@ -5,7 +5,8 @@ import {
   UnionScaleCommand,
   UnionRotateCommand,
   AlignCommand,
-  DistributeCommand
+  DistributeCommand,
+  RectCornerRadiusCommand
 } from '../../models/editor-commands';
 import { EditorToolService } from '../editor-tool.service';
 import { SelectionTransformReadoutService } from '../selection-transform-readout.service';
@@ -34,6 +35,7 @@ export class ChromeEditorTransformApplyService {
   private get shapeSelection() { return this.support.shapeSelection; }
   private selectedShapesList() { return this.support.selectedShapesList(); }
   private shapeIdsTouchLocked(ids: string[]) { return this.support.shapeIdsTouchLocked(ids); }
+  private shouldBlockShapeOnlyMutations() { return this.support.shouldBlockShapeOnlyMutations(); }
   private pushCommandsAndSyncSelection(cmds: Parameters<ChromeEditorApplySupport['pushCommandsAndSyncSelection']>[0], desc?: string) {
     return this.support.pushCommandsAndSyncSelection(cmds, desc);
   }
@@ -155,5 +157,19 @@ export class ChromeEditorTransformApplyService {
         `Rotate selection toward ${rTarget}°`
       );
     }
+  }
+
+  applyRectCornerRadiusFromChrome(radius: number): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
+    if (!Number.isFinite(radius) || radius < 0) return;
+    const rects = this.selectedShapesList().filter((s) => s.type === 'rect');
+    if (rects.length === 0) return;
+    const commands = rects.map(
+      (s) => new RectCornerRadiusCommand(this.propertiesSvg, s.id, s.rx ?? 0, s.ry ?? 0, radius)
+    );
+    this.pushCommandsAndSyncSelection(
+      commands,
+      radius > 0 ? `Set corner radius to ${radius}` : 'Remove corner radius'
+    );
   }
 }

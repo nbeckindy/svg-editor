@@ -13,11 +13,16 @@ import {
   type SelectorInteractionToolId
 } from './tool-bundles';
 import {
+  handleSelectorCanvasClick,
+  type SelectorCanvasClickDeps
+} from '../components/svg-canvas/selector-canvas-click';
+import {
   tryHandleSelectorKeyDown,
   type SelectorKeyboardActionsPort
 } from '../components/svg-canvas/selector-canvas-tool-keyboard';
 import { selectorCursorHintFromHitTarget } from './canvas-cursor-hint';
-import { handleSelectorCanvasClick, type SelectorCanvasClickDeps } from './selector-canvas-click';
+import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
+import type { ShapeProperties } from '../models/shape-properties.interface';
 
 export type { SelectorInteractionToolId };
 
@@ -39,8 +44,8 @@ export interface SelectorCanvasToolDeps extends SelectorCanvasClickDeps {
   isEditorContentShapeTarget: (target: Element) => boolean;
   clientToEditorSvgPoint: (clientX: number, clientY: number) => { x: number; y: number } | null;
   isShapeSelected: (id: string) => boolean;
-  getNearestGroupAncestorId: (id: string) => string | null;
   getSelectedShapeIds: () => string[];
+  getExpandedDragShapeIds: () => string[];
   isSelectionMarquee: () => boolean;
   isResizingSelection: () => boolean;
   isSkewingSelection: () => boolean;
@@ -50,7 +55,7 @@ export interface SelectorCanvasToolDeps extends SelectorCanvasClickDeps {
   updatePathNodeDrag: (clientX: number, clientY: number) => void;
   finishPathNodeDrag: () => void;
   getKeyboardActions: () => SelectorKeyboardActionsPort;
-  getSvgInstance: () => import('@svgdotjs/svg.js').Svg | null;
+  getShapePropertiesInSameClipGroup: (el: SvgJsElement) => ShapeProperties[];
   enterInlineTextEditMode: (textId: string) => void;
 }
 
@@ -130,8 +135,9 @@ export function createSelectorCanvasTool(
       }
 
       if (target.tagName === 'svg' || !target.id) return false;
+      const dragIds = deps.getExpandedDragShapeIds();
       let effectiveDragId = target.id;
-      if (!deps.isShapeSelected(target.id)) {
+      if (!dragIds.includes(target.id)) {
         const nearestGroupId = deps.getNearestGroupAncestorId(target.id);
         if (nearestGroupId && deps.isShapeSelected(nearestGroupId)) {
           effectiveDragId = nearestGroupId;
@@ -142,8 +148,7 @@ export function createSelectorCanvasTool(
       if (event.shiftKey || event.ctrlKey || event.metaKey) return false;
       const point = deps.clientToEditorSvgPoint(event.clientX, event.clientY);
       if (!point) return false;
-      const selectedIds = deps.getSelectedShapeIds();
-      return gestures.drag.start(runtime, selectedIds, effectiveDragId, point, event);
+      return gestures.drag.start(runtime, dragIds, effectiveDragId, point, event);
     },
     onPointerMove(event) {
       const deps = getDeps();
@@ -206,7 +211,9 @@ export function createSelectorCanvasTool(
       return false;
     },
     onClick(event) {
-      return handleSelectorCanvasClick(getDeps(), event);
+      const deps = getDeps();
+      if (!deps.isCanvasReady()) return false;
+      return handleSelectorCanvasClick(event, deps);
     },
     onDoubleClick(event) {
       const deps = getDeps();

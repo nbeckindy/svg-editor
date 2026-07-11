@@ -1,5 +1,4 @@
-import { Component, output } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject, output } from '@angular/core';
 import { DomSanitizer, SafeHtml } from '@angular/platform-browser';
 import { TEST_ICONS, TestIcon } from '../../data/test-icons';
 import {
@@ -18,17 +17,16 @@ const DATA_SVG_ICONS: TestIcon[] = [
 
 @Component({
   selector: 'app-icon-palette',
-  standalone: true,
-  imports: [CommonModule],
+  imports: [],
   templateUrl: './icon-palette.component.html',
   styleUrl: './icon-palette.component.css'
 })
 export class IconPaletteComponent {
+  private readonly sanitizer = inject(DomSanitizer);
+
   readonly svgLoaded = output<string>();
 
   icons: TestIcon[] = [...TEST_ICONS, ...DATA_SVG_ICONS];
-
-  constructor(private sanitizer: DomSanitizer) {}
 
   private injectTestMarker(svg: string): string {
     const marker = '<!--svg-editor-test-icon-->';
