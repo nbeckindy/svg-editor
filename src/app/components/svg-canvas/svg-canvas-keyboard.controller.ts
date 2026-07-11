@@ -41,7 +41,12 @@ import {
 } from '../../models/editor-commands';
 import { unionRotationPivot } from '../../utils/selection-rotate';
 import { buildEditorToolShortcutMap } from '../../tools/tool-bundles';
-import { tryHandleViewKeyDown, type ViewKeyboardActionsPort } from './view-canvas-tool-keyboard';
+import type { ViewKeyboardActionsPort } from './view-canvas-tool-keyboard';
+import {
+  tryHandleCanvasWideEscape,
+  tryHandleHistoryUndoRedo,
+  tryHandleViewKeyboardShortcuts
+} from './svg-canvas-keyboard-policy';
 
 // ---------------------------------------------------------------------------
 // Command controller — clipboard, align/distribute, group/ungroup, clip-path
@@ -419,38 +424,7 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
   }
 
   if (event.key === 'Escape') {
-    if (ctx.isDraggingShape()) {
-      ctx.drag.cancel(ctx.gestureRuntime);
-      event.preventDefault();
-      return;
-    }
-    if (ctx.isResizingSelection()) {
-      ctx.resize.cancel(ctx.gestureRuntime);
-      event.preventDefault();
-      return;
-    }
-    if (ctx.isSkewingSelection()) {
-      ctx.skew.cancel(ctx.gestureRuntime);
-      event.preventDefault();
-      return;
-    }
-    if (ctx.isRotatingSelection()) {
-      ctx.rotate.cancel(ctx.gestureRuntime);
-      event.preventDefault();
-      return;
-    }
-    if (ctx.isSelectionMarquee() || ctx.isZoomMarquee()) {
-      ctx.cancelActiveMarquees();
-      event.preventDefault();
-      return;
-    }
-    if (ctx.exitPathNodeEditMode()) {
-      event.preventDefault();
-      return;
-    }
-    if (ctx.shapeSelection.getSelectedShapes().length > 0) {
-      ctx.clearSelectionAndHighlight();
-      ctx.setDrilledIntoGroupId(null);
+    if (tryHandleCanvasWideEscape(ctx, event)) {
       event.preventDefault();
     }
     return;
@@ -460,22 +434,12 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
     return;
   }
 
-  if (!ctx.getSvgContent()) return;
-
-  const mod = event.ctrlKey || event.metaKey;
-
-  if (mod && (event.key === 'z' || event.key === 'Z') && !event.shiftKey) {
-    ctx.editorHistory.undo();
-    event.preventDefault();
-    return;
-  }
-  if (mod && (((event.key === 'z' || event.key === 'Z') && event.shiftKey) || event.key === 'y' || event.key === 'Y')) {
-    ctx.editorHistory.redo();
+  if (tryHandleHistoryUndoRedo(ctx, event)) {
     event.preventDefault();
     return;
   }
 
-  if (tryHandleViewKeyDown(ctx.getViewKeyboardActions(), event)) {
+  if (tryHandleViewKeyboardShortcuts(ctx, event)) {
     event.preventDefault();
     return;
   }

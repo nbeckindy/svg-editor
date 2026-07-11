@@ -6,6 +6,7 @@ import {
   DuplicateCommand,
   UnionRotateCommand
 } from '../../models/editor-commands';
+import { unionRotationPivot } from '../../utils/selection-rotate';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -200,13 +201,11 @@ export class CanvasDocumentActionsService {
     if (ids.some((id) => this.svgManipulation.isElementOrAncestorLocked(id))) return;
     const union = this.svgManipulation.getUnionBBox(ids);
     if (!union) return;
-    const pivot = this.svgManipulation.getSelectionRotationPivot(ids) ?? {
-      x: union.x + union.width / 2,
-      y: union.y + union.height / 2
-    };
+    const pivot = this.svgManipulation.getSelectionRotationPivot(ids) ?? unionRotationPivot(union);
     const snap = this.svgManipulation.snapshotSelectionTransforms(ids);
-    const cmd = new UnionRotateCommand(this.svgManipulation, ids, pivot, deltaDeg, snap);
-    this.editorHistory.pushAndExecute(cmd);
+    this.editorHistory.pushAndExecute(
+      new UnionRotateCommand(this.svgManipulation, ids, pivot, deltaDeg, snap)
+    );
     this.svgManipulation.clearHighlight();
   }
 }

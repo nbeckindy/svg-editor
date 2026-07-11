@@ -59,6 +59,9 @@ export function createPenCanvasTool(getDeps: () => PenCanvasToolDeps): CanvasToo
     onClick() {
       return true;
     },
+    onDoubleClick() {
+      return true;
+    },
     onKeyDown(event) {
       const deps = getDeps();
       const penTool = deps.getPenTool();

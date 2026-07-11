@@ -14,7 +14,7 @@ body {
   color: var(--editor-text);
 }
 
-/* Editor context menus — rendered in CDK overlay outside component host */
+/* Editor + layers context menus — rendered in CDK overlay outside component host */
 .editor-context-menu-panel.mat-mdc-menu-panel,
 .layer-context-menu-panel.mat-mdc-menu-panel {
   --mat-menu-container-color: var(--editor-surface);

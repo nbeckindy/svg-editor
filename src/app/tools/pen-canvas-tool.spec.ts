@@ -120,4 +120,10 @@ describe('createPenCanvasTool', () => {
     expect(tool.onKeyDown?.({ key: 'Backspace' } as KeyboardEvent)).toBe(true);
     expect(tryPenBackspaceShortcut).toHaveBeenCalled();
   });
+
+  it('consumes double-click so selector drill-in does not run under pen', () => {
+    const tool = createPenCanvasTool(makePenDeps());
+    const consumed = tool.onDoubleClick?.({} as MouseEvent, { x: 0, y: 0 });
+    expect(consumed).toBe(true);
+  });
 });

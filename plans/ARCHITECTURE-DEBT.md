@@ -19,22 +19,26 @@ Product-class ceilings and deferred optimizations (large-document performance, c
 
 ## P0 — Active routing and mapping debt
 
-### DEBT-001 · Dual input routing (registry + canvas fallbacks)
+### DEBT-001 · Dual input routing (registry + canvas fallbacks) ✓
 
-**Problem:** The tool registry owns pointer down/move/up and most click/keyboard paths, but cursor policy and a few canvas-wide click guards remain outside adapters. New tools must know which events are “registry-pure” vs still canvas-owned.
+**Problem:** The tool registry owns pointer down/move/up and most click/keyboard paths, but cursor policy and a few canvas-wide click guards remained outside adapters. New tools had to know which events are “registry-pure” vs still canvas-owned.
 
-**Evidence (2026-07-11)**
+**Evidence (2026-07-11, post `svg-editor-1sb`)**
 
-| Surface | Registry? | Still in canvas / elsewhere |
-|---------|-----------|------------------------------|
-| Pointer down/move/up | `pointer-gesture-router.ts` (~77 lines) | Path-node drag routed through `node-edit-selector` adapter (`selector-canvas-tool.ts` `onPointerDown`/`Move`/`Up`) |
-| Click | `selector-canvas-tool.ts` `onClick` → `handleSelectorCanvasClick` | Canvas-wide gesture `consumeJustEnded` guards + inline-text commit in `onCanvasClick` |
-| Double-click | `selector-canvas-tool.ts` `onDoubleClick` (text inline edit + group drill-in) | Pen-tool guard in `onCanvasDoubleClick` only |
-| Keyboard | `dispatchRegisteredKeyDown` first (`svg-canvas-keyboard.controller.ts` 103–106) | Canvas-wide Escape gesture cancel + undo/redo + view shortcuts after registry |
-| Cursor | Per-tool `getCursorHint` + `cursorHintForGestureInProgress` helper | Pen insert hover cursor RAF in canvas (~7 tool-literal branches, baseline-enforced) |
+| Surface | Registry / adapter? | Canvas adapter glue |
+|---------|---------------------|---------------------|
+| Pointer down/move/up | `pointer-gesture-router.ts` (~65 lines) → active `CanvasTool` | Path-node drag via `node-edit-selector` adapter — not a router bypass |
+| Click | `tryDispatchRegisteredCanvasClick` → selector `onClick` | Pre-dispatch policy in `svg-canvas-click.controller.ts` (inline-text commit, gesture `consumeJustEnded`, path-node exit) |
+| Double-click | Registry `onDoubleClick` (selector adapter) | Pen consumes via `pen-canvas-tool.ts` `onDoubleClick` |
+| Keyboard | `dispatchRegisteredKeyDown` first (`svg-canvas-keyboard.controller.ts`) | Post-registry policy in `svg-canvas-keyboard-policy.ts` (Escape stack, undo/redo, view) |
+| Cursor | Per-tool `getCursorHint`; `computeExpectedCursorHint` in `canvas-cursor-hint.ts` | Pen-insert hover RAF in `pen-insert-hover-cursor.ts` (viewport deps from canvas) |
 | Pen right-click | `pen-canvas-tool.ts` sole owner | ✓ duplicate removed from canvas |
 
-**Risk:** Contributors follow ARCHITECTURE.md “register a `CanvasTool`” and still must edit the ~2,240-line canvas for cursor RAF, path-node exit guards, and boolean preview template chrome.
+**Status:** Closed (`svg-editor-my0.1`, `svg-editor-my0.15`, `svg-editor-1sb`). Residual rows are **named policy modules** on the canvas adapter — not registry bypasses for tool-specific behavior.
+
+**Merge note (2026-07-11):** DEBT-001 refactor stash reconciled on top of merged `2026-06-25-ao8i` branch features (clip-path / outline-to-path context menu, Material icons, expanded document actions). Arch guard baseline lowered to **6** tool-literal branches in `svg-canvas.component.ts`.
+
+**Risk:** Pen-insert hover still needs viewport element + coordinate deps wired from the canvas adapter (expected for DOM-bound chrome).
 
 **Remediation**
 
@@ -43,52 +47,53 @@ Product-class ceilings and deferred optimizations (large-document performance, c
 3. ✓ Keyboard registry-first; path-node delete in selector adapter.
 4. ✓ **DEBT-001b** (`svg-editor-my0.15`): group drill-in double-click + path-node exit-on-click in selector/session; gesture cursor branches extracted to `canvas-cursor-hint.ts`.
 5. ✓ Pen right-click deduped — adapter sole owner.
+6. ✓ **Residual (2026-07-11):** `svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts`, `computeExpectedCursorHint` in `canvas-cursor-hint.ts`.
 
-**Depends on:** DEBT-002 (coordinate mapping) ✓, DEBT-003 (canvas shrink) partial.
-
----
-
-### DEBT-002 · `CanvasCoordinateMappingService` unwired (dead extraction)
-
-**Problem:** Coordinate mapping was extracted but never bound. Duplicate `clientToEditorSvgPoint` lives on the canvas (line 1925); the service has **zero imports** elsewhere in `src/app`.
-
-**Evidence**
-
-- `src/app/services/canvas-coordinate-mapping.service.ts` (143 lines, complete API)
-- `svg-canvas.component.ts` — 10+ call sites pass `clientToEditorSvgPoint` into tool deps (718, 1371, 1700, …)
-- ARCHITECTURE.md lists wiring as “next seam”; epic phases marked closed
-
-**Risk:** Join tolerance, pen continuation pickup, overlay sync, and zoom fixes must be applied in two places; subtle coordinate bugs.
-
-**Remediation**
-
-1. Bind service from canvas `AfterViewInit` / overlay sync lifecycle.
-2. Replace component method with service delegation; implement `CanvasAdapterCoordinates` via service.
-3. Add unit tests for mapping with mocked bindings (jsdom-safe).
-4. Remove duplicate parsing helpers from component.
-
-**Depends on:** None (can start immediately).
+**Depends on:** DEBT-002 (coordinate mapping) ✓. Hub glue tracked under DEBT-003.
 
 ---
 
-### DEBT-003 · `SvgCanvasComponent` remains integration hub
+### DEBT-002 · `CanvasCoordinateMappingService` unwired (dead extraction) ✓
 
-**Problem:** Extraction moved orchestrators and overlays out, but the canvas still wires sessions, gesture cursor RAF, debug HUD, path-boolean preview template chrome, and keyboard context assembly.
+**Problem:** Coordinate mapping was extracted but never bound. Duplicate `clientToEditorSvgPoint` lived on the canvas; the service had **zero imports** elsewhere in `src/app`.
 
-**Evidence (2026-07-11)**
+**Evidence (resolved 2026-07-11, `svg-editor-my0.2`)**
 
-- `svg-canvas.component.ts` — **~2,240** lines TS + **341** lines HTML (down from 2,531 pre-refactor)
+- `canvas-coordinate-mapping.service.ts` (142 lines) — bound from canvas via `bindCoordinateMapping()` on view init / overlay sync
+- `svg-canvas.component.ts` — `clientToEditorSvgPoint` / `svgBboxToOverlayPixels` delegate to injected service (~1635–1639)
+- `canvas-coordinate-mapping.service.spec.ts` — jsdom-safe unit tests with mocked bindings
+- Residual: `rootUserPathDToOutlineOverlayD` on canvas adapter — consumed by `PathBooleanChromeReadout` (acceptable chrome glue).
+
+**Remediation (done)**
+
+1. ✓ Bind service from canvas lifecycle (`coordinateMapping.bind({ … })`).
+2. ✓ Component methods delegate to service; pointer stack / session ports receive `clientToEditorSvgPoint` via canvas adapter.
+3. ✓ Unit tests for mapping with mocked bindings.
+4. Partial — overlay-path `d` → pixel conversion remains on canvas for boolean preview readout (acceptable chrome glue).
+
+**Depends on:** None.
+
+---
+
+### DEBT-003 · `SvgCanvasComponent` remains integration hub (partial)
+
+**Problem:** Extraction moved orchestrators and overlays out, but the canvas still wires sessions, debug HUD, and keyboard/click context assembly.
+
+**Evidence (2026-07-11, post `svg-editor-bd1`)**
+
+- `svg-canvas.component.ts` — **~2,093** lines TS + **232** lines HTML (down from 2,531 pre-refactor)
 - Direct `pushAndExecute` / `getSVGInstance()` call sites reduced via session bundle + document actions service
-- Pen preview moved to `PenPreviewOverlayComponent` (DEBT-011 ✓); path-boolean preview still inline in canvas template (DEBT-012 / `svg-editor-my0.16`)
+- Pen preview in `PenPreviewOverlayComponent` (DEBT-011 ✓); path-boolean preview in `BooleanPreviewOverlayComponent` via `PathBooleanChromeReadout` (DEBT-012 ✓)
 
 **Remediation (partial — landed + residual)**
 
 1. ✓ `createCanvasSessionBundle` (`canvas-session-coordinator.ts`) owns pen, path-node edit, inline-text session lifecycle + pointer-stack assembly.
 2. ✓ `CanvasDocumentActionsService` routes keyboard align/distribute/group/ungroup through chrome-apply; clipboard cut/paste/duplicate centralized.
-3. ✓ `PenToolChromeReadout` + pen preview overlay — pen preview getters no longer on component.
-4. **Residual:** path-boolean preview template block; `computeExpectedCursorHint` + pen insert hover cursor RAF.
+3. ✓ `PenToolChromeReadout` + pen preview overlay — pen preview SVG no longer inline in canvas template.
+4. ✓ `PathBooleanChromeReadout` + `BooleanPreviewOverlayComponent` — boolean preview getter removed from component (DEBT-012 / `svg-editor-bd1`).
+5. ✓ Click/keyboard policy modules (`svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts`); **residual:** debug HUD pointer-intent assembly only.
 
-**Depends on:** DEBT-001, DEBT-002.
+**Depends on:** DEBT-001 ✓, DEBT-002 ✓.
 
 ---
 
@@ -217,14 +222,14 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 **Evidence**
 
 - No `no-restricted-imports` for tools → `SvgCanvasComponent`
-- Pen right-click duplicated (DEBT-001)
-- Direct `getSVGInstance()` / `pushAndExecute` in canvas (DEBT-003)
+- ~~Pen right-click duplicated (DEBT-001)~~ — closed
+- Direct `getSVGInstance()` / `pushAndExecute` in canvas reduced but not zero (DEBT-003 residual)
 
 **Remediation** (done)
 
 1. ESLint `no-restricted-imports`: `src/app/tools/**` cannot import `svg-canvas.component` (`npm run lint`).
 2. ESLint `no-restricted-imports`: `pen-tool-session/**` cannot import `SvgManipulationService` (use `*SvgPort`).
-3. Architecture guard script: fail on new `getCurrentTool() === '` / `tool === '` branches in `svg-canvas.component.ts` — baseline **16** (`npm run lint:arch`).
+3. Architecture guard script: fail on new `getCurrentTool() === '` / `tool === '` branches in `svg-canvas.component.ts` — baseline **6** (`npm run lint:arch`; lowered after DEBT-001 refactor merged onto `2026-06-25-ao8i` branch features).
 
 **Depends on:** DEBT-001 progress (avoid fighting active migration).
 
@@ -252,24 +257,27 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 
 ---
 
-### DEBT-010 · Stale architecture claims in epics
+### DEBT-010 · Stale architecture claims in epics ✓
 
-**Problem:** Closed epics and ARCHITECTURE.md understate remaining gaps; line counts and fallback locations are wrong.
+**Problem:** Closed epics and ARCHITECTURE.md understate remaining gaps; line counts and fallback locations drift after debt closes.
 
-**Evidence**
+**Evidence (2026-07-11 second pass)**
 
 | Claim | Stale? | Actual |
 |-------|--------|--------|
-| Canvas ~4.3k / ~2.7k lines TS | Yes | **~2,240** (post DEBT-003 shrink) |
-| Residual routing in `PointerGestureRouter` | Yes | Router is clean; residuals in cursor RAF, path-node exit click guard, boolean preview template |
-| Phase 1–3 “closed” | Partial | Coordinate service wired (`svg-editor-my0.2`); selector `onClick` in registry; DEBT-001b policy gaps remain |
+| Canvas ~4.3k / ~2.7k / ~2,240 lines TS | Yes | **2,093** TS + **232** HTML (`wc -l` on `svg-canvas.component.*`) |
+| `PointerGestureRouter` ~77 lines with fallbacks | Yes | **65** lines; router dispatches registry only |
+| Residual routing in `PointerGestureRouter` | Yes | Click/keyboard/cursor policy in named modules (`svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts`) |
+| Path-boolean preview inline in canvas template | Yes | `PathBooleanChromeReadout` + `BooleanPreviewOverlayComponent` (`svg-editor-bd1` ✓) |
+| Phase 1–3 “closed” | OK | Epics closed; follow-on debt in this register — do not reopen j61/hnv/ywh |
 | “All tools registered” | Partial | Descriptors at startup; canvas adapters deferred via `CanvasBoundToolRegistrar` |
+| Coordinate service unwired | Yes | Wired (`svg-editor-my0.2` ✓) |
 
 **Remediation**
 
-1. Add “Architecture debt” section link in ARCHITECTURE.md → this file.
-2. Annotate epic doc with post-close debt pointer; do not reopen epics — track here or via `bd`.
-3. Refresh line counts when DEBT-003 milestones land.
+1. ✓ “Architecture debt” section link in ARCHITECTURE.md → this file.
+2. ✓ Epic doc post-close debt pointer — keep aligned with this register.
+3. ✓ Refresh line counts and overlay extraction status (this pass).
 
 **Depends on:** This file (DEBT-010 self).
 
@@ -283,7 +291,7 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 
 - `PenPreviewOverlayComponent` (`overlays/pen-preview-overlay.component.*`) owns pen path/handle/rubber-band preview SVG
 - Canvas template binds via `editorChrome` → `PenToolChromeReadout` fields on `app-pen-preview-overlay`
-- `svg-canvas.component.html` pen preview blocks removed (path-boolean preview and `path-node-overlay` unchanged)
+- `svg-canvas.component.html` pen preview blocks removed; boolean preview extracted to `BooleanPreviewOverlayComponent` (DEBT-012 ✓)
 
 **Remediation (landed)**
 
@@ -295,6 +303,26 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 
 ---
 
+### DEBT-012 · Path-boolean preview chrome in canvas template ✓
+
+**Problem:** Boolean preview policy lived in services/readouts; preview SVG still rendered from canvas template / component bindings (same pattern as pre–DEBT-011 pen preview).
+
+**Evidence (resolved `svg-editor-my0.16`)**
+
+- `BooleanPreviewOverlayComponent` (`overlays/boolean-preview-overlay.component.*`) owns path-boolean preview SVG
+- `PathBooleanChromeReadout` supplies `pathBooleanPreviewOverlayD`; canvas template binds via `editorChrome`
+- Getter removed from `SvgCanvasComponent` (`svg-editor-bd1` ✓)
+
+**Remediation (landed)**
+
+1. ✓ Dedicated `boolean-preview-overlay` component under `overlays/`.
+2. ✓ Bind from chrome readout; remove inline preview block from canvas template.
+3. ✓ Namespace probe spec passes.
+
+**Depends on:** DEBT-003 (hub shrink).
+
+---
+
 ## Suggested execution order
 
 ```text
@@ -302,7 +330,7 @@ Wave 1 (unblock correctness)
   DEBT-002 → DEBT-001 (click + pen dedup) → DEBT-010 doc sync
 
 Wave 2 (shrink hub)
-  DEBT-003 → DEBT-011
+  DEBT-003 → DEBT-011 → DEBT-012
 
 Wave 3 (honesty + safety net)
   DEBT-004 → DEBT-005 → DEBT-008 → DEBT-009 → DEBT-006 → DEBT-007
@@ -325,24 +353,26 @@ Wave 3 (honesty + safety net)
 | Monolithic command tests | DEBT-009 |
 | Doc vs reality | DEBT-010 |
 | Pen preview in template | DEBT-011 |
+| Boolean preview in template | DEBT-012 |
 
 ---
 
 ## Tracking
 
-| Debt ID | Beads | Priority |
-|---------|-------|----------|
-| DEBT-001 | `svg-editor-my0.1` partial · `svg-editor-my0.15` (001b) | P0 |
-| DEBT-002 | `svg-editor-my0.2` ✓ | P0 |
-| DEBT-003 | `svg-editor-my0.3` | P0 |
-| DEBT-004 | `svg-editor-my0.4` ✓ | P1 |
-| DEBT-005 | `svg-editor-my0.5` ✓ | P1 |
-| DEBT-006 | `svg-editor-my0.6` ✓ | P1 |
-| DEBT-007 | `svg-editor-my0.7` ✓ | P1 |
-| DEBT-008 | `svg-editor-my0.8` ✓ | P2 |
-| DEBT-009 | `svg-editor-my0.9` ✓ | P2 |
-| DEBT-010 | `svg-editor-my0.10` ✓ | P2 |
-| DEBT-011 | `svg-editor-my0.11` ✓ | P2 |
+| Debt ID | Beads | Priority | Status |
+|---------|-------|----------|--------|
+| DEBT-001 | `svg-editor-my0.1` · `svg-editor-my0.15` · `svg-editor-1sb` | P0 | ✓ Closed |
+| DEBT-002 | `svg-editor-my0.2` | P0 | ✓ Closed |
+| DEBT-003 | `svg-editor-my0.3` | P0 | **Partial** — hub shrunk (~2,093 TS); debug HUD + context wiring remain |
+| DEBT-004 | `svg-editor-my0.4` | P1 | ✓ Closed |
+| DEBT-005 | `svg-editor-my0.5` | P1 | ✓ Closed |
+| DEBT-006 | `svg-editor-my0.6` | P1 | ✓ Closed |
+| DEBT-007 | `svg-editor-my0.7` | P1 | ✓ Closed |
+| DEBT-008 | `svg-editor-my0.8` | P2 | ✓ Closed |
+| DEBT-009 | `svg-editor-my0.9` | P2 | ✓ Closed |
+| DEBT-010 | `svg-editor-my0.10` | P2 | ✓ Closed (re-sync when milestones land) |
+| DEBT-011 | `svg-editor-my0.11` | P2 | ✓ Closed |
+| DEBT-012 | `svg-editor-my0.16` · `svg-editor-bd1` | P2 | ✓ Closed |
 
 **Epic:** `svg-editor-my0` — [epic] Architecture debt register (adversarial review 2026-07-10)
 

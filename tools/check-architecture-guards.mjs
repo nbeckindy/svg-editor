@@ -14,8 +14,8 @@ const ROOT = join(fileURLToPath(new URL('.', import.meta.url)), '..');
 const TOOLS_DIR = join(ROOT, 'src/app/tools');
 const CANVAS_COMPONENT = join(ROOT, 'src/app/components/svg-canvas/svg-canvas.component.ts');
 
-/** Baseline from migration (2026-07-10). Fail only when NEW branches are added. */
-const TOOL_BRANCH_BASELINE = 16;
+/** Baseline from DEBT-001 refactor (2026-07-11). Fail only when NEW branches are added. */
+const TOOL_BRANCH_BASELINE = 6;
 
 const CANVAS_COMPONENT_IMPORT =
   /(?:import\s+.*\s+from\s+|export\s+.*\s+from\s+)['"][^'"]*svg-canvas\.component[^'"]*['"]/;

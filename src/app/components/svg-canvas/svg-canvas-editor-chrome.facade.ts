@@ -1,11 +1,13 @@
 import type { SvgCanvasComponent } from './svg-canvas.component';
 import type { PenToolChromeReadout } from './pen-tool-chrome-readout';
+import type { PathBooleanChromeReadout } from './path-boolean-chrome-readout';
 import type { PathNodeEditSession } from './path-node-edit-session/path-node-edit-session';
 import type { InlineTextEditSession } from './inline-text-edit-session/inline-text-edit-session';
 
 export interface SvgCanvasEditorChromeFacadeDeps {
   root: SvgCanvasComponent;
   penChrome: PenToolChromeReadout;
+  pathBooleanChrome: PathBooleanChromeReadout;
   pathNodeEditSession: PathNodeEditSession;
   inlineTextEditSession: InlineTextEditSession;
 }
@@ -152,7 +154,7 @@ export class SvgCanvasEditorChromeFacade {
     return this.deps.penChrome.penSessionPathOutlineOverlayD;
   }
   get pathBooleanPreviewOverlayD(): string | null {
-    return this.root.pathBooleanPreviewOverlayD;
+    return this.deps.pathBooleanChrome.pathBooleanPreviewOverlayD;
   }
   get pathNodeControlHandleOverlays() {
     return this.deps.pathNodeEditSession.getPathNodeControlHandleOverlays();

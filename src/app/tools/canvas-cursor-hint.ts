@@ -111,3 +111,62 @@ export function cursorHintForPathNodeEditHover(
   }
   return null;
 }
+
+export interface ComputeExpectedCursorHintDeps {
+  getCurrentTool: () => string;
+  getViewportInlineCursor: () => string | undefined;
+  getGestureState: () => GestureCursorHintState;
+  hasPathNodeEditState: () => boolean;
+  getToolCursorHint: (ctx: CanvasCursorHintContext) => string | null | undefined;
+  penInsertCopyCursorWouldApply: (clientX: number, clientY: number) => boolean;
+  altKeyPressed: boolean;
+  isPanning: boolean;
+  isCreationToolActive: () => boolean;
+}
+
+/**
+ * Best-effort description of the cursor the editor intends (svg-canvas.component.css + viewport inline).
+ */
+export function computeExpectedCursorHint(
+  deps: ComputeExpectedCursorHintDeps,
+  clientX: number,
+  clientY: number,
+  hitTarget: Element | null,
+  overCanvas: boolean
+): string {
+  const tool = deps.getCurrentTool();
+  const vpCur = deps.getViewportInlineCursor();
+
+  const gestureHint = cursorHintForGestureInProgress(deps.getGestureState());
+  if (gestureHint) return gestureHint;
+
+  const pathNodeHoverHint = cursorHintForPathNodeEditHover(
+    hitTarget,
+    overCanvas,
+    deps.hasPathNodeEditState()
+  );
+  if (pathNodeHoverHint) return pathNodeHoverHint;
+
+  const toolHint = deps.getToolCursorHint({
+    clientX,
+    clientY,
+    hitTarget,
+    overCanvas,
+    viewportInlineCursor: vpCur,
+    altKeyPressed: deps.altKeyPressed,
+    isPanning: deps.isPanning,
+    isCreationToolActive: deps.isCreationToolActive(),
+    penInsertCopyCursorWouldApply: deps.penInsertCopyCursorWouldApply(clientX, clientY)
+  });
+  if (toolHint) return toolHint;
+
+  if (vpCur) {
+    return `Expected cursor: ${vpCur} (#canvasViewport inline)`;
+  }
+
+  if (!overCanvas) {
+    return 'Expected cursor: default (pointer outside #canvasViewport)';
+  }
+
+  return `Expected cursor: default (${tool})`;
+}

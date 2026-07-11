@@ -16,7 +16,7 @@ The editor is a **modular monolith with typed seams**: narrow **ports**, **comma
 | **Façades** | `SvgManipulationService`, `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` (each implements many port interfaces; chrome apply injects port **tokens** backed by `useExisting`) |
 | **Registries** | `ToolRegistryService` + `registerDefaultTools()`, `DockPanelRegistryService` + `registerDefaultDockPanels()` |
 
-Large **integration surfaces** remain: `SvgCanvasComponent` (~2.4k lines) orchestrates tools, keyboard, pen/path-node/inline-text sessions, and path-boolean preview chrome in its template (pen preview lives in `PenPreviewOverlayComponent` — DEBT-011 closed). Branch features include clip-path commands, outline-to-path, gradient/paint popover, rect corner radius, and SVG ingest sanitization.
+Large **integration surfaces** remain: `SvgCanvasComponent` (**~2,093** lines TS + **232** lines HTML) orchestrates tools, session wiring, and debug HUD context assembly. Input policy lives in `svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, and `pen-insert-hover-cursor.ts`; preview overlays (`PenPreviewOverlayComponent`, `BooleanPreviewOverlayComponent`) bind via `editorChrome` readouts. Branch features include clip-path commands, outline-to-path, gradient/paint popover, rect corner radius, and SVG ingest sanitization.
 
 ### Tool seam (internal refactor)
 
@@ -79,7 +79,7 @@ PointerGestureRouter    optional orchestrator (e.g. PenToolSession)
 | Dock auto-show | `src/app/panels/dock-panel-auto-show.service.ts` (`relevantTools`) |
 | Shell layout | `src/app/services/editor-layout.service.ts` |
 | Right dock | `src/app/components/editor-right-dock/` |
-| Canvas overlays | `src/app/components/svg-canvas/overlays/` — selection, path-node, ruler, grid, smart-guide, inline-text-editor |
+| Canvas overlays | `src/app/components/svg-canvas/overlays/` — selection, path-node, pen-preview, boolean-preview, ruler, grid, smart-guide, inline-text-editor |
 
 **Overlay convention:** child components on `<g app-*-overlay>` must use `svg:`-prefixed tags — see [`.cursor/rules/svg-overlay-components.mdc`](../.cursor/rules/svg-overlay-components.mdc).
 
@@ -117,16 +117,16 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 
 ### Still centralized (extension touchpoints)
 
-- **`SvgCanvasComponent`** — path-boolean preview SVG in its template (`editorChrome.pathBooleanPreviewOverlayD`), inline-text and path-node session wiring, coordinate mapping, keyboard context assembly, document init. Orchestrators (`PenToolSession`, `PathNodeEditSession`, `InlineTextEditSession`) already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
+- **`SvgCanvasComponent`** — inline-text and path-node session wiring, coordinate mapping delegation, keyboard/click context assembly, debug HUD, document init. Preview overlays bind via `editorChrome` readouts (`PenToolChromeReadout`, `PathBooleanChromeReadout`). Orchestrators already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
 - **`SvgManipulationService`** — wide façade; at new panel/tool boundaries inject a **narrow port** (pattern: `PenToolSessionSvgPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`).
 
 ### Architecture debt
 
-Prioritized gaps between documented seams and runtime behavior: **[ARCHITECTURE-DEBT.md](./ARCHITECTURE-DEBT.md)** (adversarial review 2026-07-10). High-signal items: dual input routing (registry vs canvas fallbacks), canvas integration hub size, and honest “modular monolith” posture vs hexagonal labeling. Coordinate mapping wired (`svg-editor-my0.2`).
+Prioritized gaps between documented seams and runtime behavior: **[ARCHITECTURE-DEBT.md](./ARCHITECTURE-DEBT.md)** (adversarial review 2026-07-10). P0 routing debt closed (`svg-editor-my0.1`, `svg-editor-1sb`); hub shrink largely closed (`svg-editor-my0.3` partial — debug HUD + context wiring). Closed: coordinate mapping, preview overlays, boolean chrome readout.
 
 ### Next seams (future work)
 
-- Extract path-boolean preview DOM from the canvas template into a dedicated overlay component — **DEBT-012** / `svg-editor-my0.16` (pen preview overlay pattern; policy already in chrome readout). Clip-path, outline-to-path, and gradient paint features are wired through chrome-apply and canvas context menu.
+- Optional: further shrink debug HUD / keyboard context assembly on the canvas adapter (DEBT-003 residual). Clip-path, outline-to-path, and gradient paint features are wired through chrome-apply and canvas context menu.
 
 ---
 
