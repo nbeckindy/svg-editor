@@ -1,6 +1,6 @@
 import type { Type } from '@angular/core';
 import type { EditorTool } from '../services/editor-tool.service';
-import type { CanvasAdapterContext, CanvasSvgPoint } from './canvas-adapter-context';
+import type { CanvasSvgPoint } from './canvas-adapter-context';
 
 /**
  * Contract for a canvas tool registered in the tool registry.
@@ -9,7 +9,7 @@ import type { CanvasAdapterContext, CanvasSvgPoint } from './canvas-adapter-cont
 export interface CanvasTool {
   readonly toolId: EditorTool;
 
-  onActivate?(ctx: CanvasAdapterContext): void;
+  onActivate?(): void;
   onDeactivate?(): void;
 
   onPointerDown?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;

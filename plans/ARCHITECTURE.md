@@ -23,13 +23,12 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~2.6k lines) orches
 | Piece | Path |
 |-------|------|
 | Tool contract | `src/app/tools/canvas-tool.interface.ts` |
-| Host seam | `src/app/tools/canvas-tool-host.interface.ts` |
 | UI metadata | `src/app/tools/tool-bundles.ts` (descriptor + shortcut + registration group) |
 | Registry | `src/app/tools/tool-registry.service.ts` |
 | Bootstrap | `register-default-tools.ts` → descriptors at startup; `CanvasBoundToolRegistrar` when canvas is ready |
 | Adapters | `*-canvas-tool.ts` factories (creation, selector, pen, zoom, pan, text, eyedropper, …) |
 | Orchestrator ports | e.g. `PenToolSessionPorts` + `PenToolSessionSvgPort` (narrow slices of the canvas adapter) |
-| Adapter context slices | `canvas-adapter-context.ts` — shared coordinate, tool-state, document-surface, and readiness types consumed by `CanvasToolHost`, pen ports, and pointer/keyboard seams |
+| Adapter context slices | `canvas-adapter-context.ts` — shared coordinate, tool-state, document-surface, and readiness types consumed by pen ports and pointer/keyboard seams |
 | Coordinate mapping | `canvas-coordinate-mapping.service.ts` — client ↔ SVG user ↔ overlay pixel transforms; bound from `SvgCanvasComponent.syncOverlayViewBox` |
 
 `CanvasAdapterContext` composes the coordinate, tool-state, and document-surface slices reused across host interfaces; extend it (or individual slices) rather than re-declaring `clientToEditorSvgPoint` / `getCurrentTool` on each seam.
@@ -114,7 +113,6 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 ### Next seams (future work)
 
 - Extract **inline text edit** and remaining pen preview DOM into orchestrator + ports (mirror `PenToolSession`).
-- Shrink **`CanvasToolHost`** — prefer typed deps getters over wide service exposure on the host.
 
 ---
 
