@@ -8,13 +8,21 @@
 
 **Handoff docs:** [ARCHITECTURE.md](../ARCHITECTURE.md) (current seams + gravity wells) · [CONTEXT.md](../../CONTEXT.md) (editor vocabulary)
 
+## Post-close architecture debt
+
+Phases 1–3 closed the planned epic work, but **runtime gaps remain** — line counts, routing locations, and registry completeness in this file were stale as of 2026-07-10.
+
+**Track ongoing debt:** [ARCHITECTURE-DEBT.md](../ARCHITECTURE-DEBT.md) (adversarial review) · beads epic [`svg-editor-my0`](../../) — architecture debt register (DEBT-001–013).
+
+High-signal items not finished by phase close: dual input routing (registry + canvas fallbacks) and canvas adapter size (~2,623 lines TS after DEBT-002). Coordinate mapping wired in `svg-editor-my0.2`. See the debt register for evidence and remediation — do not reopen j61 / hnv / ywh epics for these.
+
 ## Goal
 
 Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin seam** so new canvas tools register without deep canvas edits, and (2) a **UI composition layer** for rapid layout/panel/visual iteration.
 
 ## Does it follow hexagonal architecture?
 
-**Mostly at the seams — j61 laid foundations; hnv deepened them.**
+**Modular monolith with typed seams** — j61/hnv/ywh improved extensibility at boundaries; runtime is still Angular singletons and a large canvas adapter, not isolated ports/adapters in the hexagonal sense. Prefer that wording over “partially hexagonal” (see DEBT-004 in [ARCHITECTURE-DEBT.md](../ARCHITECTURE-DEBT.md)).
 
 ### Existing strengths
 
@@ -22,15 +30,17 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 - **`SvgManipulationService`** — façade implementing many ports over sub-services (`shape-content/*`, layer structure, gradient defs, …).
 - **`EditorCommand` / `EditorHistoryService`** — intent vs execution; undoable mutations; implementations split under `history/commands/{paint,transform,layers,document,path}/`.
 - **`PenToolSession` + ports** — testable without the full canvas.
-- **`ToolRegistryService` + `CanvasTool`** — all editor tools registered; pointer and keyboard dispatch consult registry first.
+- **`ToolRegistryService` + `CanvasTool`** — `ToolDescriptor` metadata registers at app startup; `CanvasTool` adapters bind later via `CanvasBoundToolRegistrar` when the canvas pointer stack exists. Pointer down/move/up and many keyboard paths consult the registry first; click, cursor, and some keyboard guards remain canvas-owned (DEBT-001).
 - **Thin chrome apply façade** — `ChromeEditorApplyService` delegates to `chrome-apply/*` domain slices; group-structure notifications use `GroupStructureChangeService` (no canvas callback on chrome apply).
 
-### Remaining gaps (post–phase 2)
+### Remaining gaps (post–phase 3)
 
 | Problem | Where | Notes |
 |---|---|---|
-| **Large canvas adapter** | `SvgCanvasComponent` (~4.3k lines TS) | Overlays extracted; pen previews / inline text / keyboard glue remain inline. |
-| **Legacy tool routing** | `PointerGestureRouter` | Residual fallbacks when a tool is not registered (e.g. unit tests); production tools use `CanvasTool` adapters. |
+| **Large canvas adapter** | `SvgCanvasComponent` (~2,679 lines TS + 341 HTML) | Overlays extracted; pen previews / inline text / cursor RAF / keyboard glue remain inline (DEBT-003). |
+| **Dual input routing** | `onCanvasClick`, `svg-canvas-keyboard.controller.ts`, `computeExpectedCursorHint` | `PointerGestureRouter` is clean (~77 lines) after ywh.5; residuals are selector click, path-node keyboard guards, cursor policy, and pen right-click dedup in the canvas (DEBT-001). |
+| **Coordinate mapping** | `CanvasCoordinateMappingService` | Wired from canvas lifecycle (closed `svg-editor-my0.2`); was duplicate logic on canvas. |
+| **Deferred canvas tool binding** | `CanvasBoundToolRegistrar` | Descriptors at startup; creation/pen/selector/view-utility adapters register when canvas initializes — not a single `registerDefaultTools()` moment (DEBT-005). |
 | **Angular in domain** | Most services | `@Injectable({ providedIn: 'root' })` — acceptable for this app; not pure hexagonal isolation. |
 | **`SvgManipulationService` breadth** | Central façade | Narrow ports at panel boundaries (properties, boolean path, layers DnD); façade still wide for history commands. |
 
@@ -45,7 +55,7 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 | `afterGroupStructureChange` imperative callback | `GroupStructureChangeService` signal port |
 | Layers panel DnD inline (~200 lines) | `LayersPanelDndService` |
 | Duplicate path boolean DOM reads | `PathBooleanSelectionReadService` shared by panel + geometry |
-| Unregistered selector / pen / zoom / pan / text / eyedropper | `CanvasTool` adapters + `registerDefaultTools()` in `app.config.ts` |
+| Unregistered selector / pen / zoom / pan / text / eyedropper | `CanvasTool` adapters + `registerDefaultTools()` / `CanvasBoundToolRegistrar` in `app.config.ts` |
 | Dock auto-show / shell layout ad hoc | `DockPanelAutoShowService`, `EditorLayoutService` |
 | Hardcoded tool strip buttons | `ToolDescriptor` + `registerDefaultToolDescriptors()` + registry-driven strip |
 
@@ -102,7 +112,7 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 
 **Tools**
 
-- [`register-default-tools.ts`](../../src/app/tools/register-default-tools.ts) — bootstrap all `CanvasTool` adapters at app startup.
+- [`register-default-tools.ts`](../../src/app/tools/register-default-tools.ts) — app startup: `ToolDescriptor` registration + attach `CanvasBoundToolRegistrar`; canvas-bound `CanvasTool` adapters register when the canvas adapter initializes.
 - Adapters: creation, selector, pen, zoom, pan, text, eyedropper (+ node-edit where applicable).
 
 **Commands & content**
@@ -150,7 +160,7 @@ flowchart TB
 
   subgraph ToolLayer["Tool Layer"]
     Registry[ToolRegistryService]
-    DefaultTools["registerDefaultTools — all CanvasTool adapters"]
+    DefaultTools["registerDefaultTools + CanvasBoundToolRegistrar"]
   end
 
   subgraph ChromeApply["Chrome write path"]
@@ -184,11 +194,11 @@ flowchart TB
 
 ## Recommended next steps
 
-See **Phase 3 — `svg-editor-ywh`** below (dedup legacy routing, unified tool bundles). After that:
+Phase 3 (`svg-editor-ywh`) is closed. Follow [ARCHITECTURE-DEBT.md](../ARCHITECTURE-DEBT.md) wave order (`svg-editor-my0` epic):
 
-1. Shrink `SvgCanvasComponent` further — pen preview / inline text extraction (if warranted).
-2. Optional: `InjectionToken` per port for explicit DI at remaining call sites.
-3. Optional: drive tool context bar from `ToolDescriptor.contextBarComponent`.
+1. Wire `CanvasCoordinateMappingService` and collapse dual input routing (DEBT-002 → DEBT-001).
+2. Shrink `SvgCanvasComponent` — pen preview overlay, session coordinator (DEBT-003, DEBT-011).
+3. Optional: `InjectionToken` per port; drive tool context bar from `ToolDescriptor.contextBarComponent`.
 
 ---
 
@@ -196,7 +206,7 @@ See **Phase 3 — `svg-editor-ywh`** below (dedup legacy routing, unified tool b
 
 **Epic:** `svg-editor-ywh` · **Plan source:** post–Phase 2 architecture review (2026-06-23)
 
-Phase 2 introduced `CanvasTool` adapters but kept parallel **legacy** paths in `PointerGestureRouter` for tests, scattered tool metadata across 4+ files, and duplicate keyboard/HUD routing. Phase 3 removes that debt so new tools have one registration path.
+Phase 2 introduced `CanvasTool` adapters but kept parallel **legacy** paths in `PointerGestureRouter` for tests, scattered tool metadata across 4+ files, and duplicate keyboard/HUD routing. Phase 3 removed router legacy paths (ywh.5) and unified tool bundles — **post-close**, click/cursor/keyboard residuals and unwired coordinate mapping remain; see [ARCHITECTURE-DEBT.md](../ARCHITECTURE-DEBT.md).
 
 ### Children (bead status)
 
@@ -214,7 +224,7 @@ Phase 2 introduced `CanvasTool` adapters but kept parallel **legacy** paths in `
 
 1. **ywh.1** (test helper) — unblocks legacy router removal  
 2. **ywh.2**, **ywh.3**, **ywh.4** — parallel quick wins  
-3. **ywh.5** — delete ~200 lines of duplicated routing  
+3. **ywh.5** — removed legacy routing from `PointerGestureRouter` (~77 lines remain); canvas click/keyboard/cursor debt tracked as DEBT-001  
 4. **ywh.6** — trim debug HUD third copy  
 5. **ywh.7** — optional host-interface consolidation  
 

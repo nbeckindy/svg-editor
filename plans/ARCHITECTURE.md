@@ -29,7 +29,7 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~2.7k lines) orches
 | Adapters | `*-canvas-tool.ts` factories (creation, selector + node-edit-selector, pen, zoom, pan, text, eyedropper, …) |
 | Orchestrator ports | e.g. `PenToolSessionPorts` + `PenToolSessionSvgPort`, `PathNodeEditSessionPorts`, `InlineTextEditSessionPorts` (narrow slices of the canvas adapter) |
 | Adapter context slices | `canvas-adapter-context.ts` + `create-canvas-adapter-context.ts` — shared coordinate, tool-state, document-surface, and readiness types consumed by pen ports and pointer/keyboard seams |
-| Coordinate mapping | **Today:** `SvgCanvasComponent.clientToEditorSvgPoint` / `svgBboxToOverlayPixels` (updated from `syncOverlayViewBox`). **Extraction target:** `canvas-coordinate-mapping.service.ts` (exists, not yet wired) |
+| Coordinate mapping | `CanvasCoordinateMappingService` — bound from canvas lifecycle; `SvgCanvasComponent` delegates `clientToEditorSvgPoint` / `svgBboxToOverlayPixels` (wired `svg-editor-my0.2`) |
 
 `CanvasAdapterContext` composes the coordinate, tool-state, and document-surface slices reused across host interfaces; extend it (or individual slices) rather than re-declaring `clientToEditorSvgPoint` / `getCurrentTool` on each seam.
 
@@ -110,10 +110,14 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 - **`SvgCanvasComponent`** — pen preview SVG in its template (`editorChrome.*` readouts), inline-text and path-node session wiring, coordinate mapping, keyboard context assembly, document init. Orchestrators (`PenToolSession`, `PathNodeEditSession`, `InlineTextEditSession`) already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
 - **`SvgManipulationService`** — wide façade; at new panel/tool boundaries inject a **narrow port** (pattern: `PenToolSessionSvgPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`).
 
+### Architecture debt
+
+Prioritized gaps between documented seams and runtime behavior: **[ARCHITECTURE-DEBT.md](./ARCHITECTURE-DEBT.md)** (adversarial review 2026-07-10). High-signal items: dual input routing (registry vs canvas fallbacks), canvas integration hub size, and honest “modular monolith” posture vs hexagonal labeling. Coordinate mapping wired (`svg-editor-my0.2`).
+
 ### Next seams (future work)
 
-- Wire `CanvasCoordinateMappingService` and drop duplicate mapping from `SvgCanvasComponent`.
-- Extract remaining pen preview DOM from the canvas template into a dedicated overlay component (policy already lives in `PenToolSession`).
+- Move selector click / drill-in into `CanvasTool.onClick` adapters — **DEBT-001** (unblocked).
+- Extract remaining pen preview DOM from the canvas template into a dedicated overlay component (policy already lives in `PenToolSession`) — **DEBT-011**.
 
 ---
 
