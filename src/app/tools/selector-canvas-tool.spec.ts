@@ -229,7 +229,6 @@ describe('createSelectorCanvasTool', () => {
   });
 
   describe('onDoubleClick', () => {
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
     function makeSvgInstanceFor(id: string, node: Element): any {
       return { findOne: (sel: string) => (sel === `#${id}` ? { node } : null) };
     }

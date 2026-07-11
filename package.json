@@ -9,7 +9,9 @@
     "test": "ng test",
     "e2e": "playwright test",
     "e2e:ui": "playwright test --ui",
-    "embed:data-svgs": "node tools/embed-data-svgs.mjs"
+    "embed:data-svgs": "node tools/embed-data-svgs.mjs",
+    "lint": "eslint src/app/tools src/app/components/svg-canvas/pen-tool-session",
+    "lint:arch": "node tools/check-architecture-guards.mjs"
   },
   "prettier": {
     "printWidth": 100,
@@ -47,10 +49,13 @@
     "@angular/build": "^21.1.3",
     "@angular/cli": "^21.1.3",
     "@angular/compiler-cli": "^21.1.0",
+    "@eslint/js": "~10.0.1",
     "@playwright/test": "~1.51.0",
     "@types/node": "~25.9.1",
+    "eslint": "~10.7.0",
     "jsdom": "^27.1.0",
     "typescript": "~5.9.2",
+    "typescript-eslint": "~8.63.0",
     "vitest": "^4.0.8"
   }
 }

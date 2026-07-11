@@ -1,4 +1,14 @@
 import type { SvgCanvasComponent } from './svg-canvas.component';
+import type { PenToolChromeReadout } from './pen-tool-chrome-readout';
+import type { PathNodeEditSession } from './path-node-edit-session/path-node-edit-session';
+import type { InlineTextEditSession } from './inline-text-edit-session/inline-text-edit-session';
+
+export interface SvgCanvasEditorChromeFacadeDeps {
+  root: SvgCanvasComponent;
+  penChrome: PenToolChromeReadout;
+  pathNodeEditSession: PathNodeEditSession;
+  inlineTextEditSession: InlineTextEditSession;
+}
 
 /**
  * Single object bound from `svg-canvas.component.html` for **Editor chrome** (overlays, rulers,
@@ -6,7 +16,11 @@ import type { SvgCanvasComponent } from './svg-canvas.component';
  * **seam** agents follow when changing on-canvas presentation — see `CONTEXT.md` (**Editor chrome**).
  */
 export class SvgCanvasEditorChromeFacade {
-  constructor(private readonly root: SvgCanvasComponent) {}
+  constructor(private readonly deps: SvgCanvasEditorChromeFacadeDeps) {}
+
+  private get root(): SvgCanvasComponent {
+    return this.deps.root;
+  }
 
   get RULER_SIZE(): number {
     return this.root.RULER_SIZE;
@@ -15,10 +29,10 @@ export class SvgCanvasEditorChromeFacade {
     return this.root.zoomLevelPercent;
   }
   get penFinishFeedbackMessage(): string | null {
-    return this.root.penFinishFeedbackMessage;
+    return this.deps.penChrome.penFinishFeedbackMessage;
   }
   get pathNodeEditFeedbackMessage(): string | null {
-    return this.root.pathNodeEditFeedbackMessage;
+    return this.deps.pathNodeEditSession.pathNodeEditFeedbackMessage;
   }
   get wrapperWidth(): number {
     return this.root.wrapperWidth;
@@ -54,7 +68,7 @@ export class SvgCanvasEditorChromeFacade {
     return this.root.viewBoxOverlayRect;
   }
   get isPathNodeEditModeActive(): boolean {
-    return this.root.isPathNodeEditModeActive;
+    return this.deps.pathNodeEditSession.isPathNodeEditModeActive;
   }
   get hideSelectionHighlightOverlay(): boolean {
     return this.root.hideSelectionHighlightOverlay;
@@ -81,52 +95,52 @@ export class SvgCanvasEditorChromeFacade {
     return this.root.creationGhostLineOverlay;
   }
   get penInsertOnPathPreviewPathD(): string | null {
-    return this.root.penInsertOnPathPreviewPathD;
+    return this.deps.penChrome.penInsertOnPathPreviewPathD;
   }
   get penInsertOnPathNodeAffordanceOverlay() {
-    return this.root.penInsertOnPathNodeAffordanceOverlay;
+    return this.deps.penChrome.penInsertOnPathNodeAffordanceOverlay;
   }
   get penSessionPreviewPathD(): string | null {
-    return this.root.penSessionPreviewPathD;
+    return this.deps.penChrome.penSessionPreviewPathD;
   }
   get penCurvePreviewPathD(): string | null {
-    return this.root.penCurvePreviewPathD;
+    return this.deps.penChrome.penCurvePreviewPathD;
   }
   get penFirstAnchorMirroredHandleDragActive(): boolean {
-    return this.root.penFirstAnchorMirroredHandleDragActive;
+    return this.deps.penChrome.penFirstAnchorMirroredHandleDragActive;
   }
   get penColocatedTipMirroredHandleDragActive(): boolean {
-    return this.root.penColocatedTipMirroredHandleDragActive;
+    return this.deps.penChrome.penColocatedTipMirroredHandleDragActive;
   }
   get penCurveHandleOverlays() {
-    return this.root.penCurveHandleOverlays;
+    return this.deps.penChrome.penCurveHandleOverlays;
   }
   get penPendingCurveHandleGuideOverlays() {
-    return this.root.penPendingCurveHandleGuideOverlays;
+    return this.deps.penChrome.penPendingCurveHandleGuideOverlays;
   }
   get penRubberBandOverlay() {
-    return this.root.penRubberBandOverlay;
+    return this.deps.penChrome.penRubberBandOverlay;
   }
   get penOutgoingHandleGuideOverlay() {
-    return this.root.penOutgoingHandleGuideOverlay;
+    return this.deps.penChrome.penOutgoingHandleGuideOverlay;
   }
   get penOutgoingHandleKnobOverlay() {
-    return this.root.penOutgoingHandleKnobOverlay;
+    return this.deps.penChrome.penOutgoingHandleKnobOverlay;
   }
   get penCloseTargetHoverOverlay() {
-    return this.root.penCloseTargetHoverOverlay;
+    return this.deps.penChrome.penCloseTargetHoverOverlay;
   }
   get penOpenPathContinueHoverOverlay() {
-    return this.root.penOpenPathContinueHoverOverlay;
+    return this.deps.penChrome.penOpenPathContinueHoverOverlay;
   }
   get penContinuationGhostPathD(): string | null {
-    return this.root.penContinuationGhostPathD;
+    return this.deps.penChrome.penContinuationGhostPathD;
   }
   get penPostInsertAnchorOverlays() {
-    return this.root.penPostInsertAnchorOverlays;
+    return this.deps.penChrome.penPostInsertAnchorOverlays;
   }
   get penSessionPathNodeOverlays() {
-    return this.root.penSessionPathNodeOverlays;
+    return this.deps.penChrome.penSessionPathNodeOverlays;
   }
   get showPathNodeEditOverlays(): boolean {
     return this.root.showPathNodeEditOverlays;
@@ -135,16 +149,16 @@ export class SvgCanvasEditorChromeFacade {
     return this.root.pathSelectionOutlineOverlays;
   }
   get penSessionPathOutlineOverlayD(): string | null {
-    return this.root.penSessionPathOutlineOverlayD;
+    return this.deps.penChrome.penSessionPathOutlineOverlayD;
   }
   get pathBooleanPreviewOverlayD(): string | null {
     return this.root.pathBooleanPreviewOverlayD;
   }
   get pathNodeControlHandleOverlays() {
-    return this.root.pathNodeControlHandleOverlays;
+    return this.deps.pathNodeEditSession.getPathNodeControlHandleOverlays();
   }
   get pathNodeAnchorOverlays() {
-    return this.root.pathNodeAnchorOverlays;
+    return this.deps.pathNodeEditSession.getPathNodeAnchorOverlays();
   }
   get showResizeHandles(): boolean {
     return this.root.showResizeHandles;
@@ -162,25 +176,25 @@ export class SvgCanvasEditorChromeFacade {
     return this.root.rotateHandleOffset;
   }
   get isInlineTextEditModeActive(): boolean {
-    return this.root.inlineTextEditSession.isActive;
+    return this.deps.inlineTextEditSession.isActive;
   }
   get inlineTextEditOverlayRect() {
-    return this.root.inlineTextEditSession.overlayRect;
+    return this.deps.inlineTextEditSession.overlayRect;
   }
   get inlineTextEditorHint(): string {
-    return this.root.inlineTextEditSession.inlineTextEditorHint;
+    return this.deps.inlineTextEditSession.inlineTextEditorHint;
   }
   get inlineTextEditValue(): string {
-    return this.root.inlineTextEditSession.value;
+    return this.deps.inlineTextEditSession.value;
   }
   inlineTextEditorTypographyStyle(): string {
-    return this.root.inlineTextEditSession.typographyStyle();
+    return this.deps.inlineTextEditSession.typographyStyle();
   }
   inlineTextEditWidthPx(rect: { width: number }): number {
-    return this.root.inlineTextEditSession.overlayWidthPx(rect);
+    return this.deps.inlineTextEditSession.overlayWidthPx(rect);
   }
   inlineTextEditHeightPx(rect: { height: number }): number {
-    return this.root.inlineTextEditSession.overlayHeightPx(rect);
+    return this.deps.inlineTextEditSession.overlayHeightPx(rect);
   }
   get zoomMarqueeRect() {
     return this.root.zoomMarqueeRect;

@@ -69,26 +69,22 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 ---
 
-### DEBT-003 · `SvgCanvasComponent` remains integration hub
+### DEBT-003 · `SvgCanvasComponent` remains integration hub ✓
 
-**Problem:** Extraction moved orchestrators and overlays out, but the canvas still wires every session, gesture, cursor RAF loop, debug HUD, and direct history mutation.
+**Problem:** Extraction moved orchestrators and overlays out, but the canvas still wired every session, gesture, cursor RAF loop, debug HUD, and direct history mutation.
 
-**Evidence**
+**Evidence (pre-refactor baseline)**
 
-- `svg-canvas.component.ts` — **2,679** lines TS + **341** lines HTML
-- **25** direct `getSVGInstance()` calls
-- **9** direct `pushAndExecute` calls (bypass chrome-apply path)
-- **102** references to `penTool` / `pathNodeEdit` / `inlineTextEdit` (approx.)
-- `PenToolSession` — **813** lines under `svg-canvas/pen-tool-session/`
+- `svg-canvas.component.ts` — **2,531** lines TS + **341** lines HTML
+- **9** direct `pushAndExecute` call sites in canvas
+- **~35** direct `getSVGInstance()` calls
+- Pen preview getters proxied through component for template chrome
 
-**Risk:** Every complex feature touches the hub; review surface and regression risk grow faster than feature count.
+**Remediation (landed)**
 
-**Remediation**
-
-1. Complete DEBT-001 and DEBT-002 first (largest line-count wins).
-2. Extract pen preview chrome from template into overlay component (ARCHITECTURE.md already names this).
-3. Introduce a thin `CanvasSessionCoordinator` (or extend pointer-stack factory) that owns session lifecycle; canvas only binds view refs.
-4. Route remaining `pushAndExecute` through command ports / chrome-apply where the mutation is user-visible chrome intent.
+1. `createCanvasSessionBundle` (`canvas-session-coordinator.ts`) owns pen, path-node edit, inline-text session lifecycle + pointer-stack assembly.
+2. `CanvasDocumentActionsService` routes keyboard align/distribute/group/ungroup through chrome-apply; clipboard cut/paste/duplicate centralized.
+3. `PenToolChromeReadout` + `SvgCanvasEditorChromeFacade` deps — pen preview getters no longer on component.
 
 **Depends on:** DEBT-001, DEBT-002.
 
@@ -190,7 +186,7 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 ## P2 — Enforcement, tests, and doc drift
 
-### DEBT-008 · Anti-patterns documented, not enforced
+### DEBT-008 · Anti-patterns documented, not enforced ✓
 
 **Problem:** ARCHITECTURE.md and `.cursor/rules/canvas-tools-ports.mdc` list anti-patterns; no lint/import guards.
 
@@ -200,32 +196,32 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 - Pen right-click duplicated (DEBT-001)
 - Direct `getSVGInstance()` / `pushAndExecute` in canvas (DEBT-003)
 
-**Remediation**
+**Remediation** (done)
 
-1. ESLint `no-restricted-imports`: `src/app/tools/**` cannot import `svg-canvas.component`.
-2. Optional: restrict `SvgManipulationService` in tool orchestrators where a `*Port` exists.
-3. CI grep check: fail on new `if (tool === '` in `svg-canvas.component.ts` (allowlist cursor module during migration).
+1. ESLint `no-restricted-imports`: `src/app/tools/**` cannot import `svg-canvas.component` (`npm run lint`).
+2. ESLint `no-restricted-imports`: `pen-tool-session/**` cannot import `SvgManipulationService` (use `*SvgPort`).
+3. Architecture guard script: fail on new `getCurrentTool() === '` / `tool === '` branches in `svg-canvas.component.ts` — baseline **8** (`npm run lint:arch`).
 
 **Depends on:** DEBT-001 progress (avoid fighting active migration).
 
 ---
 
-### DEBT-009 · Command test coverage monolith
+### DEBT-009 · Command test coverage monolith ✓
 
 **Problem:** ~45 command classes across `history/commands/` share one spec file; port contracts lack dedicated tests.
 
-**Evidence**
+**Evidence (resolved)**
 
-- `editor-command-implementations.spec.ts` — **1,799** lines, heavy mocking
-- No per-domain specs (`paint/`, `transform/`, `layers/`, `path/`)
-- No integration test: registry-routed click → selection change
-- jsdom gaps on `getBBox` / `getCTM` (noted in CONTEXT.md) affect coordinate and geometry tests
+- `editor-command-implementations.spec.ts` reduced to `CompositeCommand` only; domain specs under `paint/`, `transform/`, `layers/`, `document/`, `path/`
+- `command-port-contracts.spec.ts` — thin port contract tests (`HistoryPaintPort`, `TransformGestureSvgPort`, `EditorShapeLifecycleSvgPort`)
+- `selector-canvas-click.spec.ts` — registry-routed click → selection integration test
+- `src/app/testing/svg-geometry-test-harness.ts` — shared jsdom stubs for `getBBox` / `getCTM` / `getScreenCTM`
 
-**Remediation**
+**Remediation (done)**
 
 1. Split spec by domain mirroring `history/commands/` layout.
 2. Add thin contract tests per port (mock implementation, assert command calls port methods).
-3. One Playwright or component integration test: select shape via click with registry active.
+3. Registry integration test: select shape via click with `ToolRegistryService` active.
 4. Shared test harness for SVG geometry mocks.
 
 **Depends on:** DEBT-001 (click routing) for integration test value.
@@ -343,8 +339,8 @@ Wave 4 (only if product demands)
 | DEBT-005 | `svg-editor-my0.5` | P1 |
 | DEBT-006 | `svg-editor-my0.6` | P1 |
 | DEBT-007 | `svg-editor-my0.7` | P1 |
-| DEBT-008 | `svg-editor-my0.8` | P2 |
-| DEBT-009 | `svg-editor-my0.9` | P2 |
+| DEBT-008 | `svg-editor-my0.8` ✓ | P2 |
+| DEBT-009 | `svg-editor-my0.9` ✓ | P2 |
 | DEBT-010 | `svg-editor-my0.10` ✓ | P2 |
 | DEBT-011 | `svg-editor-my0.11` | P2 |
 | DEBT-012 | `svg-editor-my0.12` | P3 |

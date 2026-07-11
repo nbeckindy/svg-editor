@@ -3164,7 +3164,7 @@ describe('SvgCanvasComponent', () => {
       const commit = (component as unknown as { commitPenInsertOnExistingPath(a: string, b: string, c: string, i?: number): void }).commitPenInsertOnExistingPath.bind(component);
       commit('pcommit', 'M 0 0 L 100 0', 'M 0 0 L 50 0 L 100 0', 1);
       fixture.detectChanges();
-      expect(component.pathNodeAnchorOverlays.some((a) => a.selected)).toBe(true);
+      expect(component.pathNodeEditSession.getPathNodeAnchorOverlays().some((a) => a.selected)).toBe(true);
     });
 
     it('hides path node overlays while pen session is active (new stroke authoring)', async () => {
@@ -3197,7 +3197,7 @@ describe('SvgCanvasComponent', () => {
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
       fixture.detectChanges();
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       expect(component.showPathNodeEditOverlays).toBe(false);
     });
 
@@ -4098,7 +4098,7 @@ describe('SvgCanvasComponent', () => {
         preventDefault
       } as unknown as MouseEvent);
 
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       expect(preventDefault).toHaveBeenCalled();
     });
 
@@ -4279,7 +4279,7 @@ describe('SvgCanvasComponent', () => {
         target: svgRoot,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
 
       const before = pathEl?.getAttribute('d');
       const preventDefault = vi.fn();
@@ -4314,9 +4314,9 @@ describe('SvgCanvasComponent', () => {
       } as unknown as MouseEvent);
       component.onDocumentMouseUp({ button: 0, clientX: 30, clientY: 40 } as MouseEvent);
       fixture.detectChanges();
-      expect(component.isPenSessionActive).toBe(true);
-      expect(component.penSessionPreviewPathD).toMatch(/ L /);
-      expect(component.penSessionPathOutlineOverlayD).toBeTruthy();
+      expect(component.penTool.isPenSessionActive).toBe(true);
+      expect(component.penTool.penSessionPreviewPathD).toMatch(/ L /);
+      expect(component.penTool.penSessionPathOutlineOverlayD).toBeTruthy();
       const penOutline = fixture.nativeElement.querySelector(
         '[data-testid="canvas-pen-session-path-outline"]'
       ) as SVGPathElement;
@@ -4341,7 +4341,7 @@ describe('SvgCanvasComponent', () => {
         preventDefault
       } as unknown as MouseEvent);
 
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       expect(preventDefault).toHaveBeenCalled();
     });
 
@@ -4362,7 +4362,7 @@ describe('SvgCanvasComponent', () => {
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
 
-      expect(component.penSessionPreviewPathD).toContain('M 10 20');
+      expect(component.penTool.penSessionPreviewPathD).toContain('M 10 20');
     });
 
     it('applies smart-guide snapping to pen anchors when shape snap is enabled', async () => {
@@ -4387,7 +4387,7 @@ describe('SvgCanvasComponent', () => {
       } as unknown as MouseEvent);
 
       expect(shapeGuideSpy).toHaveBeenCalled();
-      expect(component.penSessionPreviewPathD).toContain('M 15 16');
+      expect(component.penTool.penSessionPreviewPathD).toContain('M 15 16');
     });
 
     it('still applies grid snap when Shift is held on first anchor (Shift constrains Bézier handles while dragging)', async () => {
@@ -4409,7 +4409,7 @@ describe('SvgCanvasComponent', () => {
       } as unknown as MouseEvent);
 
       expect(shapeGuideSpy).toHaveBeenCalled();
-      expect(component.penSessionPreviewPathD).toContain('M 10 20');
+      expect(component.penTool.penSessionPreviewPathD).toContain('M 10 20');
     });
 
     it('bypasses pen snapping when Cmd/Ctrl is held (j24.1)', async () => {
@@ -4431,7 +4431,7 @@ describe('SvgCanvasComponent', () => {
       } as unknown as MouseEvent);
 
       expect(shapeGuideSpy).not.toHaveBeenCalled();
-      expect(component.penSessionPreviewPathD).toContain('M 12 18');
+      expect(component.penTool.penSessionPreviewPathD).toContain('M 12 18');
     });
 
     it('Control+drag after M authors cubic while Q authoring is disabled (h76)', async () => {
@@ -4798,7 +4798,7 @@ describe('SvgCanvasComponent', () => {
       fixture.detectChanges();
 
       expect(editorToolService.getCurrentTool()).toBe('pen');
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
     });
 
     it('closing segment ends at session moveto before Z (no mirrored corrective cubic)', async () => {
@@ -4880,7 +4880,7 @@ describe('SvgCanvasComponent', () => {
       expect(JSON.stringify(component.penTool.getPenSessionSegments())).toBe(committedJson);
       component.onDocumentMouseMove({ clientX: 95, clientY: 72 } as MouseEvent);
       expect(JSON.stringify(component.penTool.getPenSessionSegments())).toBe(committedJson);
-      expect(component.penCurvePreviewPathD).toBeTruthy();
+      expect(component.penTool.penCurvePreviewPathD).toBeTruthy();
     });
 
     /**
@@ -5002,7 +5002,7 @@ describe('SvgCanvasComponent', () => {
       component.onCanvasMouseDown({ button: 0, clientX: 10, clientY: 10, detail: 1, preventDefault: vi.fn() } as unknown as MouseEvent);
       component.onDocumentMouseMove({ clientX: 12, clientY: 10 } as MouseEvent);
       fixture.detectChanges();
-      expect(component.penCurvePreviewPathD).toBeTruthy();
+      expect(component.penTool.penCurvePreviewPathD).toBeTruthy();
     });
 
     it('closing via start-node click does not add a duplicate anchor at the start position', async () => {
@@ -5076,7 +5076,7 @@ describe('SvgCanvasComponent', () => {
         target: svgRoot
       } as unknown as MouseEvent);
       fixture.detectChanges();
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
 
       component.onCanvasMouseDown({
         button: 0,
@@ -5116,7 +5116,7 @@ describe('SvgCanvasComponent', () => {
         '<svg viewBox="0 0 100 100"><path id="open-a" d="M 10 10 L 50 40" fill="none" stroke="black"/></svg>'
       );
 
-      expect(component.isPenSessionActive).toBe(false);
+      expect(component.penTool.isPenSessionActive).toBe(false);
       component.penTool.updateIdlePenHoverClient(50, 40);
       fixture.detectChanges();
 
@@ -5153,7 +5153,7 @@ describe('SvgCanvasComponent', () => {
       } as unknown as MouseEvent);
       fixture.detectChanges();
 
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       expect(shapeSelectionService.isShapeSelected('open-a')).toBe(true);
       expect(component.isPathNodeEditModeActive).toBe(true);
     });
@@ -5189,7 +5189,7 @@ describe('SvgCanvasComponent', () => {
       } as unknown as MouseEvent);
       fixture.detectChanges();
 
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       expect(shapeSelectionService.isShapeSelected('open-a')).toBe(true);
     });
 
@@ -5263,7 +5263,7 @@ describe('SvgCanvasComponent', () => {
         target: svgRoot
       } as unknown as MouseEvent);
       fixture.detectChanges();
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
 
       component.onCanvasMouseDown({
         button: 0,
@@ -5434,11 +5434,11 @@ describe('SvgCanvasComponent', () => {
         detail: 1,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       const evt = new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true });
       const pd = vi.spyOn(evt, 'preventDefault');
       component.onKeyDown(evt);
-      expect(component.isPenSessionActive).toBe(false);
+      expect(component.penTool.isPenSessionActive).toBe(false);
       expect(pd).toHaveBeenCalled();
     });
 
@@ -5480,10 +5480,10 @@ describe('SvgCanvasComponent', () => {
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
       fixture.detectChanges();
       expect(editorToolService.getCurrentTool()).toBe('pen');
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       const segs = component.penTool.getPenSessionSegments();
       expect(segs.map((s: { type: string }) => s.type).join('')).toBe('ML');
-      expect(component.penSessionPreviewPathD).toBeTruthy();
+      expect(component.penTool.penSessionPreviewPathD).toBeTruthy();
     });
 
     it('Backspace after two anchors clears session (M-only exit)', async () => {
@@ -5509,7 +5509,7 @@ describe('SvgCanvasComponent', () => {
       } as MouseEvent);
 
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
-      expect(component.isPenSessionActive).toBe(false);
+      expect(component.penTool.isPenSessionActive).toBe(false);
     });
 
     it('Backspace cancels in-progress pen segment without removing last committed anchor', async () => {
@@ -5541,14 +5541,14 @@ describe('SvgCanvasComponent', () => {
         detail: 1,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      expect(component.penSessionPreviewPathD).toBeTruthy();
+      expect(component.penTool.penSessionPreviewPathD).toBeTruthy();
 
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Backspace', bubbles: true }));
       fixture.detectChanges();
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       const segs = component.penTool.getPenSessionSegments();
       expect(segs.map((s: { type: string }) => s.type).join('')).toBe('ML');
-      expect(component.penSessionPreviewPathD).toBeTruthy();
+      expect(component.penTool.penSessionPreviewPathD).toBeTruthy();
     });
 
     it('click sequence adds a path; Enter finishes and selects it', async () => {
@@ -5691,7 +5691,7 @@ describe('SvgCanvasComponent', () => {
         detail: 1,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
 
       component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
       fixture.detectChanges();
@@ -5709,14 +5709,14 @@ describe('SvgCanvasComponent', () => {
         detail: 1,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
 
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
       editorToolService.setTool('selector');
       fixture.detectChanges();
 
       expect(confirmSpy).toHaveBeenCalledTimes(1);
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       expect(editorToolService.getCurrentTool()).toBe('pen');
       confirmSpy.mockRestore();
     });
@@ -5730,14 +5730,14 @@ describe('SvgCanvasComponent', () => {
         detail: 1,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
 
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
       editorToolService.setTool('selector');
       fixture.detectChanges();
 
       expect(confirmSpy).toHaveBeenCalledTimes(1);
-      expect(component.isPenSessionActive).toBe(false);
+      expect(component.penTool.isPenSessionActive).toBe(false);
       expect(editorToolService.getCurrentTool()).toBe('selector');
       confirmSpy.mockRestore();
     });
@@ -5751,7 +5751,7 @@ describe('SvgCanvasComponent', () => {
         detail: 1,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
 
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(false);
       fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="doc-new" cx="20" cy="20" r="5"/></svg>');
@@ -5761,7 +5761,7 @@ describe('SvgCanvasComponent', () => {
 
       const host = component.svgContainer()?.nativeElement;
       expect(confirmSpy).toHaveBeenCalledTimes(1);
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
       expect(editorToolService.getCurrentTool()).toBe('pen');
       expect(host?.querySelector('#doc-old')).toBeTruthy();
       expect(host?.querySelector('#doc-new')).toBeFalsy();
@@ -5777,7 +5777,7 @@ describe('SvgCanvasComponent', () => {
         detail: 1,
         preventDefault: vi.fn()
       } as unknown as MouseEvent);
-      expect(component.isPenSessionActive).toBe(true);
+      expect(component.penTool.isPenSessionActive).toBe(true);
 
       const confirmSpy = vi.spyOn(window, 'confirm').mockReturnValue(true);
       fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"><circle id="doc-new" cx="20" cy="20" r="5"/></svg>');
@@ -5787,7 +5787,7 @@ describe('SvgCanvasComponent', () => {
 
       const host = component.svgContainer()?.nativeElement;
       expect(confirmSpy).toHaveBeenCalledTimes(1);
-      expect(component.isPenSessionActive).toBe(false);
+      expect(component.penTool.isPenSessionActive).toBe(false);
       expect(editorToolService.getCurrentTool()).toBe('pen');
       expect(host?.querySelector('#doc-old')).toBeFalsy();
       expect(host?.querySelector('#doc-new')).toBeTruthy();
@@ -6282,7 +6282,7 @@ describe('SvgCanvasComponent', () => {
       component.onDocumentMouseMove({ clientX: 70, clientY: 20 + bend } as MouseEvent);
       fixture.detectChanges();
 
-      expect(component.penCurvePreviewPathD).toContain('C');
+      expect(component.penTool.penCurvePreviewPathD).toContain('C');
       const guides = fixture.nativeElement.querySelectorAll(
         '[data-testid^=\"canvas-pen-pending-curve-handle-guide-\"]'
       );
