@@ -710,7 +710,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   /** Last pointer position in root SVG user space while the text tool is active (placement preview). */
   private textToolPreviewLastPoint: { x: number; y: number } | null = null;
 
-
   private createCanvasAdapterContextSlice() {
     return createCanvasAdapterContext({
       markForCheck: () => this.cdr.markForCheck(),
@@ -1361,6 +1360,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     private canvasBoundToolRegistrar: CanvasBoundToolRegistrar
   ) {
     this.pathNodeEditSession = new PathNodeEditSession(this.createPathNodeEditSessionPorts());
+    this.inlineTextEditSession = new InlineTextEditSession(() => this.createInlineTextEditSessionPorts());
     const pointerStack = createSvgCanvasPointerStack({
       cdr: this.cdr,
       highlightOverlayContainer: this.highlightOverlayContainer,
@@ -1424,6 +1424,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         this.updateTextToolPreviewFromClient(clientX, clientY),
       createTextAtPoint: (clientX, clientY) => this.createTextAtPoint(clientX, clientY),
       destroyTextToolPreview: () => this.destroyTextToolPreview(),
+      tryEnterTextEditAfterCreate: (newId) => this.inlineTextEditSession.tryEnterAfterTextCreate(newId),
+      getSvgInstance: () => this.svgManipulation.getSVGInstance(),
+      enterInlineTextEditMode: (textId) => this.inlineTextEditSession.enterInlineTextEditMode(textId),
       sampleEyedropperAt: (event) => this.tryEyedropperSample(event)
     });
     this.drag = pointerStack.drag;
@@ -1436,7 +1439,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     this.gestureRuntime = pointerStack.gestureRuntime;
     this.pointerGestureRouter = pointerStack.pointerGestureRouter;
     this.penTool = pointerStack.penTool;
-    this.inlineTextEditSession = new InlineTextEditSession(() => this.createInlineTextEditSessionPorts());
     this.viewportChrome = new CanvasViewportChromePresenter({
       getWrapperWidth: () => this.wrapperWidth,
       getWrapperHeight: () => this.wrapperHeight,
@@ -2082,6 +2084,17 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     return tool.onClick(event, svgPoint);
   }
 
+  private tryDispatchRegisteredCanvasDoubleClick(event: MouseEvent): boolean {
+    const tool = this.toolRegistry.get(this.editorTool.getCurrentTool());
+    if (!tool?.onDoubleClick) return false;
+    const svgPoint =
+      this.clientToEditorSvgPoint(event.clientX, event.clientY) ?? {
+        x: event.clientX,
+        y: event.clientY
+      };
+    return !!tool.onDoubleClick(event, svgPoint);
+  }
+
   onCanvasMouseDown(event: MouseEvent): void {
     if (this.editorTool.getCurrentTool() === 'pen' && event.button === 2) {
       this.penTool.onPenRightMouseDown();
@@ -2189,8 +2202,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     }
   }
 
-  private createTextAtPoint(clientX: number, clientY: number): void {
-    if (!this.svgContent()) return;
+  private createTextAtPoint(clientX: number, clientY: number): string | undefined {
+    if (!this.svgContent()) return undefined;
     this.destroyTextToolPreview();
     const point = this.clientToEditorSvgPoint(clientX, clientY) ?? { x: clientX, y: clientY };
     const newId = this.svgManipulation.addShape('text', {
@@ -2198,7 +2211,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       y: point.y,
       textContent: 'Text'
     });
-    if (!newId) return;
+    if (!newId) return undefined;
 
     const svgInstance = this.svgManipulation.getSVGInstance();
     const el = svgInstance?.findOne(`#${newId}`) as SVGElement | undefined;
@@ -2213,12 +2226,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       this._highlightRectCacheKey = '';
     }
     this.editorTool.setTool('selector');
-    this.inlineTextEditSession.tryEnterAfterTextCreate(newId);
     this.cdr.markForCheck();
+    return newId;
   }
 
   onCanvasDoubleClick(event: MouseEvent): void {
     if (this.editorTool.getCurrentTool() === 'pen') return;
+    if (this.tryDispatchRegisteredCanvasDoubleClick(event)) return;
     if (this.editorTool.getCurrentTool() !== 'selector') return;
     const selected = this.shapeSelection.getSelectedShapes();
     if (selected.length !== 1) return;
@@ -2229,15 +2243,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     if (!selectedEl) return;
 
     const selectedTag = selectedEl.tagName?.toLowerCase();
-    if (selectedTag === 'text' || selectedTag === 'tspan') {
-      const resolvedTextId =
-        selectedTag === 'text'
-          ? selectedId
-          : (selectedEl.closest('text') as Element | null)?.id ?? null;
-      if (!resolvedTextId) return;
-      this.inlineTextEditSession.enterInlineTextEditMode(resolvedTextId);
-      return;
-    }
     if (selectedTag !== 'g') return;
 
     this.drilledIntoGroupId = selectedId;

@@ -4,8 +4,9 @@ import type { ToolRegistryService } from './tool-registry.service';
 export interface TextCanvasToolDeps {
   isCanvasReady: () => boolean;
   updateTextToolPreviewFromClient: (clientX: number, clientY: number) => void;
-  createTextAtPoint: (clientX: number, clientY: number) => void;
+  createTextAtPoint: (clientX: number, clientY: number) => string | undefined;
   destroyTextToolPreview: () => void;
+  tryEnterTextEditAfterCreate: (newId: string) => void;
 }
 
 export function createTextCanvasTool(getDeps: () => TextCanvasToolDeps): CanvasTool {
@@ -21,7 +22,8 @@ export function createTextCanvasTool(getDeps: () => TextCanvasToolDeps): CanvasT
     },
     onClick(event) {
       if (!getDeps().isCanvasReady()) return false;
-      getDeps().createTextAtPoint(event.clientX, event.clientY);
+      const newId = getDeps().createTextAtPoint(event.clientX, event.clientY);
+      if (newId) getDeps().tryEnterTextEditAfterCreate(newId);
       return true;
     }
   };

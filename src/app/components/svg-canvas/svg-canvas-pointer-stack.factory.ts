@@ -76,6 +76,8 @@ export interface CreateSvgCanvasPointerStackArgs {
   isRotatingSelection: SelectorCanvasToolDeps['isRotatingSelection'];
   isDraggingShape: SelectorCanvasToolDeps['isDraggingShape'];
   getSelectorKeyboardActions: SelectorCanvasToolDeps['getKeyboardActions'];
+  getSvgInstance: SelectorCanvasToolDeps['getSvgInstance'];
+  enterInlineTextEditMode: SelectorCanvasToolDeps['enterInlineTextEditMode'];
   getZoomMarquee: ZoomCanvasToolDeps['getZoomMarquee'];
   isZoomMarquee: ZoomCanvasToolDeps['isZoomMarquee'];
   commitZoomMarquee: ZoomCanvasToolDeps['commitZoomMarquee'];
@@ -92,6 +94,7 @@ export interface CreateSvgCanvasPointerStackArgs {
   updateTextToolPreviewFromClient: TextCanvasToolDeps['updateTextToolPreviewFromClient'];
   createTextAtPoint: TextCanvasToolDeps['createTextAtPoint'];
   destroyTextToolPreview: TextCanvasToolDeps['destroyTextToolPreview'];
+  tryEnterTextEditAfterCreate: TextCanvasToolDeps['tryEnterTextEditAfterCreate'];
   sampleEyedropperAt: EyedropperCanvasToolDeps['sampleAt'];
 }
 
@@ -168,7 +171,9 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     isSkewingSelection: args.isSkewingSelection,
     isRotatingSelection: args.isRotatingSelection,
     isDraggingShape: args.isDraggingShape,
-    getKeyboardActions: args.getSelectorKeyboardActions
+    getKeyboardActions: args.getSelectorKeyboardActions,
+    getSvgInstance: args.getSvgInstance,
+    enterInlineTextEditMode: args.enterInlineTextEditMode
   }));
 
   args.canvasBoundToolRegistrar.registerViewUtilityTools({
@@ -194,7 +199,8 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
       isCanvasReady: args.isCanvasReady,
       updateTextToolPreviewFromClient: args.updateTextToolPreviewFromClient,
       createTextAtPoint: args.createTextAtPoint,
-      destroyTextToolPreview: args.destroyTextToolPreview
+      destroyTextToolPreview: args.destroyTextToolPreview,
+      tryEnterTextEditAfterCreate: args.tryEnterTextEditAfterCreate
     }),
     getEyedropperDeps: () => ({
       isCanvasReady: args.isCanvasReady,

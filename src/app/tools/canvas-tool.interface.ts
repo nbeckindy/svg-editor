@@ -18,6 +18,7 @@ export interface CanvasTool {
   /** Return `false` when the tool did not handle the event. */
   onPointerUp?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean | void;
   onClick?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;
+  onDoubleClick?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean | void;
   onKeyDown?(event: KeyboardEvent): boolean;
 
   /** Optional component for tool-specific context bar chrome. */

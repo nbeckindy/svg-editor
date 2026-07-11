@@ -44,6 +44,8 @@ export interface SelectorCanvasToolDeps {
   isRotatingSelection: () => boolean;
   isDraggingShape: () => boolean;
   getKeyboardActions: () => SelectorKeyboardActionsPort;
+  getSvgInstance: () => import('@svgdotjs/svg.js').Svg | null;
+  enterInlineTextEditMode: (textId: string) => void;
 }
 
 function isResizeHandle(value: string | null): value is ResizeHandle {
@@ -188,6 +190,26 @@ export function createSelectorCanvasTool(
         return true;
       }
       return false;
+    },
+    onDoubleClick() {
+      const deps = getDeps();
+      if (!deps.isCanvasReady()) return false;
+      const svgInstance = deps.getSvgInstance();
+      if (!svgInstance) return false;
+      const selectedIds = deps.getSelectedShapeIds();
+      if (selectedIds.length !== 1) return false;
+      const selectedId = selectedIds[0];
+      const selectedEl = svgInstance.findOne(`#${selectedId}`)?.node as Element | null;
+      if (!selectedEl) return false;
+      const tag = selectedEl.tagName?.toLowerCase();
+      if (tag !== 'text' && tag !== 'tspan') return false;
+      const resolvedTextId =
+        tag === 'text'
+          ? selectedId
+          : (selectedEl.closest('text') as Element | null)?.id ?? null;
+      if (!resolvedTextId) return false;
+      deps.enterInlineTextEditMode(resolvedTextId);
+      return true;
     },
     onKeyDown(event) {
       return tryHandleSelectorKeyDown(getDeps().getKeyboardActions(), event);

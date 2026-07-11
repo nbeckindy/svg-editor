@@ -112,7 +112,7 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 
 ### Next seams (future work)
 
-- Extract **inline text edit** and remaining pen preview DOM into orchestrator + ports (mirror `PenToolSession`).
+- Extract remaining pen preview DOM into orchestrator + ports (mirror `PenToolSession`).
 
 ---
 

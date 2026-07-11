@@ -43,6 +43,8 @@ function makeSelectorDeps(over: Partial<SelectorCanvasToolDeps> = {}): () => Sel
     isSkewingSelection: () => false,
     isRotatingSelection: () => false,
     isDraggingShape: () => false,
+    getSvgInstance: () => null,
+    enterInlineTextEditMode: vi.fn(),
     getKeyboardActions: () =>
       ({
         getSvgContent: () => 'svg',
@@ -97,5 +99,80 @@ describe('createSelectorCanvasTool', () => {
     registerSelectorCanvasTools(registry, makeSelectorDeps());
     expect(registry.has('selector')).toBe(true);
     expect(registry.has('node-edit-selector')).toBe(true);
+  });
+
+  describe('onDoubleClick', () => {
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    function makeSvgInstanceFor(id: string, node: Element): any {
+      return { findOne: (sel: string) => (sel === `#${id}` ? { node } : null) };
+    }
+
+    it('enters inline text edit mode when selected shape is <text>', () => {
+      const enterInlineTextEditMode = vi.fn();
+      const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      textEl.id = 'txt1';
+      const deps = makeSelectorDeps({
+        getSelectedShapeIds: () => ['txt1'],
+        getSvgInstance: () => makeSvgInstanceFor('txt1', textEl),
+        enterInlineTextEditMode
+      });
+      const tool = createSelectorCanvasTool('selector', deps);
+
+      const consumed = tool.onDoubleClick?.({} as MouseEvent, { x: 0, y: 0 });
+
+      expect(consumed).toBe(true);
+      expect(enterInlineTextEditMode).toHaveBeenCalledWith('txt1');
+    });
+
+    it('returns false when no shapes are selected', () => {
+      const enterInlineTextEditMode = vi.fn();
+      const deps = makeSelectorDeps({
+        getSelectedShapeIds: () => [],
+        enterInlineTextEditMode
+      });
+      const tool = createSelectorCanvasTool('selector', deps);
+
+      const consumed = tool.onDoubleClick?.({} as MouseEvent, { x: 0, y: 0 });
+
+      expect(consumed).toBe(false);
+      expect(enterInlineTextEditMode).not.toHaveBeenCalled();
+    });
+
+    it('returns false when selected shape is not text or tspan', () => {
+      const enterInlineTextEditMode = vi.fn();
+      const rectEl = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      rectEl.id = 'rect1';
+      const deps = makeSelectorDeps({
+        getSelectedShapeIds: () => ['rect1'],
+        getSvgInstance: () => makeSvgInstanceFor('rect1', rectEl),
+        enterInlineTextEditMode
+      });
+      const tool = createSelectorCanvasTool('selector', deps);
+
+      const consumed = tool.onDoubleClick?.({} as MouseEvent, { x: 0, y: 0 });
+
+      expect(consumed).toBe(false);
+      expect(enterInlineTextEditMode).not.toHaveBeenCalled();
+    });
+
+    it('resolves tspan to parent text element id', () => {
+      const enterInlineTextEditMode = vi.fn();
+      const textEl = document.createElementNS('http://www.w3.org/2000/svg', 'text');
+      textEl.id = 'txt1';
+      const tspanEl = document.createElementNS('http://www.w3.org/2000/svg', 'tspan');
+      tspanEl.id = 'tspan1';
+      textEl.appendChild(tspanEl);
+      const deps = makeSelectorDeps({
+        getSelectedShapeIds: () => ['tspan1'],
+        getSvgInstance: () => makeSvgInstanceFor('tspan1', tspanEl),
+        enterInlineTextEditMode
+      });
+      const tool = createSelectorCanvasTool('selector', deps);
+
+      const consumed = tool.onDoubleClick?.({} as MouseEvent, { x: 0, y: 0 });
+
+      expect(consumed).toBe(true);
+      expect(enterInlineTextEditMode).toHaveBeenCalledWith('txt1');
+    });
   });
 });
