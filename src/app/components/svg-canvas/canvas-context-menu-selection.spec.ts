@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { Svg, Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 import {
   prepareCanvasContextMenuSelection,
@@ -13,13 +14,17 @@ function groupProps(id: string): ShapeProperties {
   return { id, type: 'g', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 };
 }
 
+function elementId(el: SvgJsElement): string {
+  return el.node?.id ?? '';
+}
+
 function makeDeps(over: Partial<CanvasContextMenuSelectionDeps> = {}): CanvasContextMenuSelectionDeps {
   return {
     getSvgInstance: () => null,
     getNearestGroupAncestorId: () => null,
     isGroupAClipMaskCarrier: () => false,
-    getShapeProperties: (el) => rectProps(el.id),
-    getShapePropertiesInSameClipGroup: (el) => [rectProps(el.id)],
+    getShapeProperties: (el) => rectProps(elementId(el)),
+    getShapePropertiesInSameClipGroup: (el) => [rectProps(elementId(el))],
     selectShapes: vi.fn(),
     getDrilledIntoGroupId: () => null,
     setDrilledIntoGroupId: vi.fn(),
@@ -47,9 +52,10 @@ describe('prepareCanvasContextMenuSelection', () => {
     child.id = 'child';
     const selectShapes = vi.fn();
     const deps = makeDeps({
-      getSvgInstance: () => ({
-        findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
-      }),
+      getSvgInstance: () =>
+        ({
+          findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
+        }) as unknown as Svg,
       getShapePropertiesInSameClipGroup: () => [rectProps('child')],
       selectShapes
     });
@@ -68,9 +74,10 @@ describe('prepareCanvasContextMenuSelection', () => {
     child.id = 'child';
     const selectShapes = vi.fn();
     const deps = makeDeps({
-      getSvgInstance: () => ({
-        findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
-      }),
+      getSvgInstance: () =>
+        ({
+          findOne: (sel: string) => (sel === '#child' ? (child as unknown as SVGElement) : undefined)
+        }) as unknown as Svg,
       getShapePropertiesInSameClipGroup: () => [rectProps('child')],
       getSelectedShapeIds: () => ['child', 'other'],
       selectShapes
@@ -86,13 +93,14 @@ describe('prepareCanvasContextMenuSelection', () => {
     child.id = 'child';
     const selectShapes = vi.fn();
     const deps = makeDeps({
-      getSvgInstance: () => ({
-        findOne: (sel: string) => {
-          if (sel === '#child') return child as unknown as SVGElement;
-          if (sel === '#grp') return { id: 'grp' } as unknown as SVGElement;
-          return undefined;
-        }
-      }),
+      getSvgInstance: () =>
+        ({
+          findOne: (sel: string) => {
+            if (sel === '#child') return child as unknown as SVGElement;
+            if (sel === '#grp') return { id: 'grp' } as unknown as SVGElement;
+            return undefined;
+          }
+        }) as unknown as Svg,
       getNearestGroupAncestorId: () => 'grp',
       getShapeProperties: () => groupProps('grp'),
       getSelectedShapeIds: () => ['grp'],
@@ -112,13 +120,14 @@ describe('prepareCanvasContextMenuSelection', () => {
     const selectShapes = vi.fn();
     const setDrilled = vi.fn();
     const deps = makeDeps({
-      getSvgInstance: () => ({
-        findOne: (sel: string) => {
-          if (sel === '#child') return child as unknown as SVGElement;
-          if (sel === '#grp') return group as unknown as SVGElement;
-          return undefined;
-        }
-      }),
+      getSvgInstance: () =>
+        ({
+          findOne: (sel: string) => {
+            if (sel === '#child') return child as unknown as SVGElement;
+            if (sel === '#grp') return group as unknown as SVGElement;
+            return undefined;
+          }
+        }) as unknown as Svg,
       getNearestGroupAncestorId: () => 'grp',
       getShapeProperties: () => groupProps('grp'),
       selectShapes,

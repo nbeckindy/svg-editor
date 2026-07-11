@@ -1,4 +1,5 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi } from 'vitest';
+import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 import { UnionRotateCommand } from '../../models/editor-commands';
 import {
@@ -6,9 +7,14 @@ import {
   type CanvasContextMenuSelectionDeps
 } from './canvas-context-menu-selection';
 import { computeCanvasContextMenuState } from './canvas-context-menu-state';
+import { CanvasDocumentActionsService } from './canvas-document-actions.service';
 
 function rectProps(id: string): ShapeProperties {
   return { id, type: 'rect', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 };
+}
+
+function elementId(el: SvgJsElement): string {
+  return el.node?.id ?? '';
 }
 
 describe('canvas context menu integration helpers', () => {
@@ -18,8 +24,8 @@ describe('canvas context menu integration helpers', () => {
         getSvgInstance: () => null,
         getNearestGroupAncestorId: () => null,
         isGroupAClipMaskCarrier: () => false,
-        getShapeProperties: (el) => rectProps(el.id),
-        getShapePropertiesInSameClipGroup: (el) => [rectProps(el.id)],
+        getShapeProperties: (el) => rectProps(elementId(el)),
+        getShapePropertiesInSameClipGroup: (el) => [rectProps(elementId(el))],
         selectShapes: vi.fn(),
         getDrilledIntoGroupId: () => null,
         setDrilledIntoGroupId: vi.fn(),
@@ -44,45 +50,32 @@ describe('canvas context menu integration helpers', () => {
     });
   });
 
-  describe('rotateSelectionByDegrees contract', () => {
-    let pushAndExecute: ReturnType<typeof vi.fn>;
-
-    beforeEach(() => {
-      pushAndExecute = vi.fn();
-    });
-
-    function rotateSelectionByDegrees(
-      deltaDeg: number,
-      ids: string[],
-      svc: {
-        getUnionBBox: ReturnType<typeof vi.fn>;
-        getSelectionRotationPivot: ReturnType<typeof vi.fn>;
-        snapshotSelectionTransforms: ReturnType<typeof vi.fn>;
-        isElementOrAncestorLocked: ReturnType<typeof vi.fn>;
-      }
-    ): void {
-      if (ids.length === 0 || ids.some((id) => svc.isElementOrAncestorLocked(id))) return;
-      const union = svc.getUnionBBox(ids);
-      if (!union) return;
-      const pivot = svc.getSelectionRotationPivot(ids) ?? { x: union.x + union.width / 2, y: union.y + union.height / 2 };
-      const snap = svc.snapshotSelectionTransforms(ids);
-      pushAndExecute(new UnionRotateCommand(svc as never, ids, pivot, deltaDeg, snap));
-    }
-
+  describe('CanvasDocumentActionsService.rotateSelectionByDegrees', () => {
     it('dispatches UnionRotateCommand with ±90 degrees', () => {
+      const pushAndExecute = vi.fn();
       const svc = {
         getUnionBBox: vi.fn(() => ({ x: 0, y: 0, width: 100, height: 50 })),
         getSelectionRotationPivot: vi.fn(() => null),
         snapshotSelectionTransforms: vi.fn(() => new Map()),
-        isElementOrAncestorLocked: vi.fn(() => false)
+        isElementOrAncestorLocked: vi.fn(() => false),
+        clearHighlight: vi.fn()
       };
+      const actions = Object.create(CanvasDocumentActionsService.prototype) as CanvasDocumentActionsService;
+      Object.assign(actions, {
+        svgManipulation: svc,
+        shapeSelection: {
+          getSelectedShapes: () => [rectProps('s1')]
+        },
+        editorHistory: { pushAndExecute },
+        getExpandedSelectedShapeIds: () => ['s1']
+      });
 
-      rotateSelectionByDegrees(90, ['s1'], svc);
+      actions.rotateSelectionByDegrees(90);
       expect(pushAndExecute).toHaveBeenCalledTimes(1);
       expect(pushAndExecute.mock.calls[0][0]).toBeInstanceOf(UnionRotateCommand);
       expect((pushAndExecute.mock.calls[0][0] as UnionRotateCommand).description).toBe('Rotate 90°');
 
-      rotateSelectionByDegrees(-90, ['s1'], svc);
+      actions.rotateSelectionByDegrees(-90);
       expect((pushAndExecute.mock.calls[1][0] as UnionRotateCommand).description).toBe('Rotate -90°');
     });
   });

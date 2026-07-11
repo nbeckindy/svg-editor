@@ -3,7 +3,8 @@ import { Element as SVGElement } from '@svgdotjs/svg.js';
 import {
   RemoveShapesCommand,
   PasteCommand,
-  DuplicateCommand
+  DuplicateCommand,
+  UnionRotateCommand
 } from '../../models/editor-commands';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
@@ -182,5 +183,30 @@ export class CanvasDocumentActionsService {
     if (groupIds.length === 0) return;
     this.chromeEditorApply.ungroupSelectedFromLayersPanel(groupIds);
     host.clearDrilledIntoGroupId();
+  }
+
+  deleteSelectedShapes(): void {
+    const ids = this.getExpandedSelectedShapeIds();
+    if (ids.length === 0) return;
+    if (ids.some((id) => this.svgManipulation.isElementOrAncestorLocked(id))) return;
+    const cmd = new RemoveShapesCommand(this.svgManipulation, ids, this.shapeSelection);
+    this.editorHistory.pushAndExecute(cmd);
+    this.svgManipulation.clearHighlight();
+  }
+
+  rotateSelectionByDegrees(deltaDeg: number): void {
+    const ids = this.getExpandedSelectedShapeIds();
+    if (ids.length === 0) return;
+    if (ids.some((id) => this.svgManipulation.isElementOrAncestorLocked(id))) return;
+    const union = this.svgManipulation.getUnionBBox(ids);
+    if (!union) return;
+    const pivot = this.svgManipulation.getSelectionRotationPivot(ids) ?? {
+      x: union.x + union.width / 2,
+      y: union.y + union.height / 2
+    };
+    const snap = this.svgManipulation.snapshotSelectionTransforms(ids);
+    const cmd = new UnionRotateCommand(this.svgManipulation, ids, pivot, deltaDeg, snap);
+    this.editorHistory.pushAndExecute(cmd);
+    this.svgManipulation.clearHighlight();
   }
 }

@@ -1,4 +1,6 @@
-import { Component, input, viewChild, AfterViewInit, ElementRef, OnDestroy, ChangeDetectorRef, effect, signal, inject } from '@angular/core';
+import { Component, input, viewChild, AfterViewInit, ElementRef, OnDestroy, ChangeDetectorRef, effect, signal, inject, Injector } from '@angular/core';
+import { MatDivider } from '@angular/material/divider';
+import { MatMenu, MatMenuModule, MatMenuTrigger } from '@angular/material/menu';
 import { SelectionReconcileService } from '../../services/selection-reconcile.service';
 import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
@@ -105,6 +107,17 @@ import { BooleanPreviewOverlayComponent } from './overlays/boolean-preview-overl
 import { SnapCandidateShape } from '../../services/snap.service';
 import { CanvasViewportChromePresenter, type CanvasViewportChromePresenterHost } from './canvas-viewport-chrome.presenter';
 import type { PenToolSessionSvgPort } from './pen-tool-session/pen-tool-session-svg.port';
+import { ClipboardService } from '../../services/clipboard.service';
+import { openEditorContextMenuAtPointer } from '../editor-context-menu/open-editor-context-menu';
+import {
+  prepareCanvasContextMenuSelection,
+  type CanvasContextMenuSelectionDeps
+} from './canvas-context-menu-selection';
+import {
+  computeCanvasContextMenuState,
+  shouldSuppressCanvasContextMenu,
+  type CanvasContextMenuState
+} from './canvas-context-menu-state';
 
 /**
  * **Canvas adapter** seams (Editor runtime): keyboard policy → `svg-canvas-keyboard.controller.ts`;
@@ -199,7 +212,9 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
     SmartGuideOverlayComponent,
     PenPreviewOverlayComponent,
     BooleanPreviewOverlayComponent,
-    InlineTextEditorOverlayComponent
+    InlineTextEditorOverlayComponent,
+    MatMenuModule,
+    MatDivider
   ],
   templateUrl: './svg-canvas.component.html',
   styleUrl: './svg-canvas.component.css',
@@ -219,6 +234,24 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   readonly zoomWrapper = viewChild<ElementRef<HTMLElement>>('zoomWrapper');
   readonly highlightOverlayContainer = viewChild<ElementRef<HTMLElement>>('highlightOverlayContainer');
   readonly canvasViewport = viewChild<ElementRef<HTMLElement>>('canvasViewport');
+  readonly canvasContextMenuTrigger = viewChild.required('canvasContextMenuTrigger', {
+    read: MatMenuTrigger
+  });
+  readonly canvasContextMenuTriggerEl = viewChild.required('canvasContextMenuTrigger', {
+    read: ElementRef<HTMLElement>
+  });
+  readonly canvasContextMenu = viewChild.required('canvasContextMenu', { read: MatMenu });
+  readonly contextMenuState = signal<CanvasContextMenuState>({
+    canCut: false,
+    canCopy: false,
+    canPaste: false,
+    canDelete: false,
+    canGroup: false,
+    canUngroup: false,
+    canRotate: false
+  });
+  private readonly clipboard = inject(ClipboardService);
+  private readonly injector = inject(Injector);
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
   private readonly groupStructureChange = inject(GroupStructureChangeService);
   private readonly canvasDocumentActions = inject(CanvasDocumentActionsService);
@@ -1779,21 +1812,112 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   onCanvasMouseDown(event: MouseEvent): void {
-    if (event.button === 0) {
-      this.pointerGestureRouter.onCanvasMouseDownPrimary(this, event);
+    if (event.button === 2) {
+      const tool = this.toolRegistry.get(this.editorTool.getCurrentTool());
+      if (tool?.toolId === 'pen' && tool.onPointerDown) {
+        const svgPoint =
+          this.clientToEditorSvgPoint(event.clientX, event.clientY) ?? {
+            x: event.clientX,
+            y: event.clientY
+          };
+        if (tool.onPointerDown(event, svgPoint)) {
+          event.preventDefault();
+        }
+      }
       return;
     }
-    if (event.button !== 2) return;
-    const tool = this.toolRegistry.get(this.editorTool.getCurrentTool());
-    if (!tool?.onPointerDown) return;
-    const svgPoint =
-      this.clientToEditorSvgPoint(event.clientX, event.clientY) ?? {
-        x: event.clientX,
-        y: event.clientY
-      };
-    if (tool.onPointerDown(event, svgPoint)) {
-      event.preventDefault();
-    }
+    if (event.button !== 0) return;
+    this.pointerGestureRouter.onCanvasMouseDownPrimary(this, event);
+  }
+
+  private getCanvasContextMenuSelectionDeps(): CanvasContextMenuSelectionDeps {
+    return {
+      getSvgInstance: () => this.svgManipulation.getSVGInstance(),
+      getNearestGroupAncestorId: (id) => this.getNearestGroupAncestorId(id),
+      isGroupAClipMaskCarrier: (groupId) => this.isGroupAClipMaskCarrier(groupId),
+      getShapeProperties: (el) => this.svgManipulation.getShapeProperties(el),
+      getShapePropertiesInSameClipGroup: (el) => this.svgManipulation.getShapePropertiesInSameClipGroup(el),
+      selectShapes: (shapes) => this.shapeSelection.selectShapes(shapes),
+      getDrilledIntoGroupId: () => this.drilledIntoGroupId,
+      setDrilledIntoGroupId: (id) => {
+        this.drilledIntoGroupId = id;
+      },
+      getSelectedShapeIds: () => this.shapeSelection.getSelectedShapes().map((s) => s.id)
+    };
+  }
+
+  private shouldSuppressCanvasContextMenu(): boolean {
+    return shouldSuppressCanvasContextMenu({
+      hasSvgContent: !!this.svgContent(),
+      penSessionActive: this.isPenToolWithActiveSession(),
+      penInsertDragActive: this.isPenInsertOnPathDragActive(),
+      gestureActive:
+        this.isDraggingShape ||
+        this.isResizingSelection ||
+        this.isRotatingSelection ||
+        this.isSkewingSelection ||
+        this.isSelectionMarquee ||
+        this.isZoomMarquee
+    });
+  }
+
+  onCanvasContextMenu(event: MouseEvent): void {
+    if (this.shouldSuppressCanvasContextMenu()) return;
+    event.preventDefault();
+    event.stopPropagation();
+
+    const selectionResult = prepareCanvasContextMenuSelection(
+      event,
+      this.getCanvasContextMenuSelectionDeps()
+    );
+    this.contextMenuState.set(
+      computeCanvasContextMenuState({
+        hitShape: selectionResult.hitShape,
+        selectedShapes: this.shapeSelection.getSelectedShapes(),
+        hasClipboardContent: this.clipboard.hasContent(),
+        isElementOrAncestorLocked: (id) => this.svgManipulation.isElementOrAncestorLocked(id)
+      })
+    );
+
+    openEditorContextMenuAtPointer({
+      trigger: this.canvasContextMenuTrigger(),
+      triggerEl: this.canvasContextMenuTriggerEl().nativeElement,
+      menu: this.canvasContextMenu(),
+      event,
+      injector: this.injector
+    });
+  }
+
+  onContextMenuCut(): void {
+    this.canvasDocumentActions.cutSelectionToClipboard();
+  }
+
+  onContextMenuCopy(): void {
+    this.canvasDocumentActions.copySelectionToClipboard();
+  }
+
+  onContextMenuPaste(): void {
+    this.canvasDocumentActions.pasteFromClipboard();
+  }
+
+  onContextMenuDelete(): void {
+    this.canvasDocumentActions.deleteSelectedShapes();
+  }
+
+  onContextMenuGroup(): void {
+    this.canvasDocumentActions.groupSelectedShapes(this.documentActionsHost);
+  }
+
+  onContextMenuUngroup(): void {
+    this.canvasDocumentActions.ungroupSelectedShape(this.documentActionsHost);
+  }
+
+  onContextMenuRotateCw(): void {
+    this.canvasDocumentActions.rotateSelectionByDegrees(90);
+  }
+
+  onContextMenuRotateCcw(): void {
+    this.canvasDocumentActions.rotateSelectionByDegrees(-90);
   }
 
   onCanvasClick(event: MouseEvent): void {
