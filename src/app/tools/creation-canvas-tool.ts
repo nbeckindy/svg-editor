@@ -28,6 +28,12 @@ export function createCreationCanvasTool(
     },
     onPointerUp(event) {
       creation.end(getRuntime(), event.clientX, event.clientY, event.shiftKey);
+    },
+    onClick() {
+      return true;
+    },
+    getCursorHint() {
+      return 'Expected cursor: crosshair (.canvas-container.creation-mode)';
     }
   };
 }

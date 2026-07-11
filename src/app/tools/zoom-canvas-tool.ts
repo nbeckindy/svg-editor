@@ -50,6 +50,11 @@ export function createZoomCanvasTool(getDeps: () => ZoomCanvasToolDeps): CanvasT
       }
       deps.refreshViewAfterZoomClick();
       return true;
+    },
+    getCursorHint(ctx) {
+      return ctx.altKeyPressed
+        ? 'Expected cursor: zoom-out (.canvas-container.zoom-mode-out)'
+        : 'Expected cursor: zoom-in (.canvas-container.zoom-mode)';
     }
   };
 }

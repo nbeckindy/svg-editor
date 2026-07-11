@@ -25,6 +25,9 @@ export function createTextCanvasTool(getDeps: () => TextCanvasToolDeps): CanvasT
       const newId = getDeps().createTextAtPoint(event.clientX, event.clientY);
       if (newId) getDeps().tryEnterTextEditAfterCreate(newId);
       return true;
+    },
+    getCursorHint() {
+      return 'Expected cursor: text (.canvas-container.text-mode)';
     }
   };
 }

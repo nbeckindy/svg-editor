@@ -4,6 +4,8 @@ import type { ToolRegistryService } from './tool-registry.service';
 export interface EyedropperCanvasToolDeps {
   isCanvasReady: () => boolean;
   sampleAt: (event: MouseEvent) => void;
+  setTool: (tool: 'selector') => void;
+  markForCheck: () => void;
 }
 
 export function createEyedropperCanvasTool(getDeps: () => EyedropperCanvasToolDeps): CanvasTool {
@@ -15,6 +17,18 @@ export function createEyedropperCanvasTool(getDeps: () => EyedropperCanvasToolDe
       if (!getDeps().isCanvasReady()) return false;
       getDeps().sampleAt(event);
       return true;
+    },
+    onKeyDown(event) {
+      if (event.key === 'Escape') {
+        const deps = getDeps();
+        deps.setTool('selector');
+        deps.markForCheck();
+        return true;
+      }
+      return false;
+    },
+    getCursorHint() {
+      return 'Expected cursor: crosshair (.canvas-container.eyedropper-mode .svg-canvas)';
     }
   };
 }

@@ -18,7 +18,7 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 ## P0 — Active routing and mapping debt
 
-### DEBT-001 · Dual input routing (registry + canvas fallbacks)
+### DEBT-001 · Dual input routing (registry + canvas fallbacks) ✓
 
 **Problem:** The tool registry owns pointer down/move/up, but click selection, cursor policy, keyboard guards, and path-node drag bypass the registry. New tools must know which events are “registry-pure” vs still canvas-owned.
 

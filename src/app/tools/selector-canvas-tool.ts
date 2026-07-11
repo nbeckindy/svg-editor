@@ -16,6 +16,8 @@ import {
   tryHandleSelectorKeyDown,
   type SelectorKeyboardActionsPort
 } from '../components/svg-canvas/selector-canvas-tool-keyboard';
+import { selectorCursorHintFromHitTarget } from './canvas-cursor-hint';
+import { handleSelectorCanvasClick, type SelectorCanvasClickDeps } from './selector-canvas-click';
 
 export type { SelectorInteractionToolId };
 
@@ -27,12 +29,13 @@ export interface SelectorCanvasToolGestures {
   drag: DragGesture;
 }
 
-export interface SelectorCanvasToolDeps {
+export interface SelectorCanvasToolDeps extends SelectorCanvasClickDeps {
   getGestures: () => SelectorCanvasToolGestures;
   getRuntime: () => GestureRuntimeContext;
   isCanvasReady: () => boolean;
   hasPathNodeEditState: () => boolean;
   tryStartPathNodeDrag: (target: Element, event: MouseEvent) => boolean;
+  tryDeleteSelectedPathNode: () => boolean;
   isEditorContentShapeTarget: (target: Element) => boolean;
   clientToEditorSvgPoint: (clientX: number, clientY: number) => { x: number; y: number } | null;
   isShapeSelected: (id: string) => boolean;
@@ -43,6 +46,9 @@ export interface SelectorCanvasToolDeps {
   isSkewingSelection: () => boolean;
   isRotatingSelection: () => boolean;
   isDraggingShape: () => boolean;
+  getPathNodeDragSession: () => unknown | null;
+  updatePathNodeDrag: (clientX: number, clientY: number) => void;
+  finishPathNodeDrag: () => void;
   getKeyboardActions: () => SelectorKeyboardActionsPort;
   getSvgInstance: () => import('@svgdotjs/svg.js').Svg | null;
   enterInlineTextEditMode: (textId: string) => void;
@@ -141,6 +147,10 @@ export function createSelectorCanvasTool(
     },
     onPointerMove(event) {
       const deps = getDeps();
+      if (deps.getPathNodeDragSession()) {
+        deps.updatePathNodeDrag(event.clientX, event.clientY);
+        return true;
+      }
       const gestures = deps.getGestures();
       const runtime = deps.getRuntime();
       if (deps.isSelectionMarquee()) {
@@ -167,6 +177,10 @@ export function createSelectorCanvasTool(
     },
     onPointerUp(event) {
       const deps = getDeps();
+      if (deps.getPathNodeDragSession()) {
+        deps.finishPathNodeDrag();
+        return true;
+      }
       const gestures = deps.getGestures();
       const runtime = deps.getRuntime();
       if (deps.isSelectionMarquee()) {
@@ -191,6 +205,9 @@ export function createSelectorCanvasTool(
       }
       return false;
     },
+    onClick(event) {
+      return handleSelectorCanvasClick(getDeps(), event);
+    },
     onDoubleClick() {
       const deps = getDeps();
       if (!deps.isCanvasReady()) return false;
@@ -212,7 +229,26 @@ export function createSelectorCanvasTool(
       return true;
     },
     onKeyDown(event) {
-      return tryHandleSelectorKeyDown(getDeps().getKeyboardActions(), event);
+      const deps = getDeps();
+      if (
+        toolId === 'node-edit-selector' &&
+        deps.hasPathNodeEditState() &&
+        (event.key === 'Delete' || event.key === 'Backspace') &&
+        deps.tryDeleteSelectedPathNode()
+      ) {
+        return true;
+      }
+      return tryHandleSelectorKeyDown(deps.getKeyboardActions(), event);
+    },
+    getCursorHint(ctx) {
+      if (ctx.overCanvas && ctx.hitTarget) {
+        const handleHint = selectorCursorHintFromHitTarget(ctx.hitTarget);
+        if (handleHint) return handleHint;
+      }
+      if (!ctx.overCanvas) {
+        return null;
+      }
+      return 'Expected cursor: default (selector / node-edit — no handle under pointer)';
     }
   };
 }

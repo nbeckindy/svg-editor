@@ -16,6 +16,7 @@ export function createPanCanvasTool(getDeps: () => PanCanvasToolDeps): CanvasToo
       getDeps().clearPanningFlag();
     },
     onPointerDown(event) {
+      if (event.button !== 0) return false;
       getDeps().beginPanSession(event);
       return true;
     },
@@ -31,6 +32,11 @@ export function createPanCanvasTool(getDeps: () => PanCanvasToolDeps): CanvasToo
     },
     onClick() {
       return true;
+    },
+    getCursorHint(ctx) {
+      return ctx.isPanning
+        ? 'Expected cursor: grabbing (.canvas-container.pan-dragging)'
+        : 'Expected cursor: grab (.canvas-container.pan-mode)';
     }
   };
 }

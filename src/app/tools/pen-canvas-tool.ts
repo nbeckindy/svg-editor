@@ -13,6 +13,7 @@ export interface PenCanvasToolDeps {
   tryStartPathNodeDrag: (target: Element, event: MouseEvent) => boolean;
   isCanvasReady: () => boolean;
   scheduleInsertHoverCursorHitTest: (clientX: number, clientY: number) => void;
+  markForCheck: () => void;
 }
 
 export function createPenCanvasTool(getDeps: () => PenCanvasToolDeps): CanvasTool {
@@ -55,8 +56,23 @@ export function createPenCanvasTool(getDeps: () => PenCanvasToolDeps): CanvasToo
       penTool.onDocumentMouseUpPen(event);
       return true;
     },
+    onClick() {
+      return true;
+    },
     onKeyDown(event) {
-      const penTool = getDeps().getPenTool();
+      const deps = getDeps();
+      const penTool = deps.getPenTool();
+      if (event.key === 'Escape') {
+        if (penTool.isPenInsertOnPathDragActive) {
+          penTool.cancelPenInsertOnPathDrag();
+          deps.markForCheck();
+          return true;
+        }
+        if (penTool.isPenSessionActive) {
+          penTool.clearDrawingState();
+          return true;
+        }
+      }
       if (event.key === 'Backspace' && penTool.tryPenBackspaceShortcut()) {
         return true;
       }
@@ -65,6 +81,15 @@ export function createPenCanvasTool(getDeps: () => PenCanvasToolDeps): CanvasToo
         return true;
       }
       return false;
+    },
+    getCursorHint(ctx) {
+      if (ctx.overCanvas && ctx.hitTarget?.closest?.('[data-pen-outgoing-handle]')) {
+        return 'Expected cursor: grab (pen outgoing handle; .pen-outgoing-handle)';
+      }
+      if (ctx.penInsertCopyCursorWouldApply) {
+        return 'Expected cursor: copy (pen idle valid insert hit; #canvasViewport inline — may apply next rAF)';
+      }
+      return 'Expected cursor: crosshair (.canvas-container.pen-mode; user SVG uses cursor:inherit)';
     }
   };
 }

@@ -100,13 +100,6 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
   }
   if (ctx.shouldIgnoreKeyboardShortcuts(event)) return;
 
-  if (ctx.getPathNodeEditState() && (event.key === 'Delete' || event.key === 'Backspace')) {
-    if (ctx.tryDeleteSelectedPathNode()) {
-      event.preventDefault();
-      return;
-    }
-  }
-
   if (dispatchRegisteredKeyDown(ctx, event)) {
     event.preventDefault();
     return;
@@ -139,23 +132,6 @@ export function handleSvgCanvasKeyDown(ctx: SvgCanvasKeyboardContext, event: Key
       return;
     }
     if (ctx.exitPathNodeEditMode()) {
-      event.preventDefault();
-      return;
-    }
-    if (ctx.getCurrentTool() === 'eyedropper') {
-      editorTool.setTool('selector');
-      event.preventDefault();
-      ctx.markForCheck();
-      return;
-    }
-    if (ctx.getCurrentTool() === 'pen' && ctx.penTool.isPenInsertOnPathDragActive) {
-      ctx.penTool.cancelPenInsertOnPathDrag();
-      event.preventDefault();
-      ctx.markForCheck();
-      return;
-    }
-    if (ctx.getCurrentTool() === 'pen' && ctx.isPenSessionActive()) {
-      ctx.penTool.clearDrawingState();
       event.preventDefault();
       return;
     }

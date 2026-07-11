@@ -1,6 +1,7 @@
 import type { Type } from '@angular/core';
 import type { EditorTool } from '../services/editor-tool.service';
 import type { CanvasSvgPoint } from './canvas-adapter-context';
+import type { CanvasCursorHintContext } from './canvas-cursor-hint';
 
 /**
  * Contract for a canvas tool registered in the tool registry.
@@ -20,6 +21,7 @@ export interface CanvasTool {
   onClick?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean;
   onDoubleClick?(event: MouseEvent, svgPoint: CanvasSvgPoint): boolean | void;
   onKeyDown?(event: KeyboardEvent): boolean;
+  getCursorHint?(ctx: CanvasCursorHintContext): string | null;
 
   /** Optional component for tool-specific context bar chrome. */
   readonly contextBarComponent?: Type<unknown>;
