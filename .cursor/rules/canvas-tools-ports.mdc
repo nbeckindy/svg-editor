@@ -10,11 +10,13 @@ New **Tool** behavior must plug into `ToolRegistryService`, not add `if (tool ==
 
 Ports are **interface segregation on singletons** (modular monolith), not swappable hexagonal adapters — inject narrow `*Port` types or tokens at boundaries anyway to document intent.
 
+**Internal refactor seam only — not an external plugin API.** Every new tool requires core edits: `EditorTool` closed union, `ToolBundle` in `tool-bundles.ts`, and an imperative hook on `CanvasBoundToolRegistrar`. There is no DI extension token or dynamic manifest.
+
 ## Checklist
 
-1. **`ToolDescriptor`** — add entry in [`register-default-tool-descriptors.ts`](src/app/tools/register-default-tool-descriptors.ts) (label, icon, `stripGroup`, `interactionKind`).
+1. **`EditorTool` + `ToolBundle`** — add the id literal to the closed union in [`editor-tool.service.ts`](src/app/services/editor-tool.service.ts); add a bundle in [`tool-bundles.ts`](src/app/tools/tool-bundles.ts) (descriptor, `canvasRegistrationGroup`, optional shortcut). Descriptors register at startup via `registerDefaultTools` → `registerDefaultToolDescriptors`.
 2. **`CanvasTool` adapter** — factory in `src/app/tools/<name>-canvas-tool.ts` with a `*CanvasToolDeps` getter passed from the canvas adapter. Handlers return `true` when the event is consumed.
-3. **Register** — call `register<Name>CanvasTool` from [`CanvasBoundToolRegistrar`](src/app/tools/canvas-bound-tool-registrar.service.ts) when the canvas pointer stack is ready (same pattern as pen/selector).
+3. **Register** — add or extend a hook on [`CanvasBoundToolRegistrar`](src/app/tools/canvas-bound-tool-registrar.service.ts) for the bundle's `canvasRegistrationGroup` (`registerPenTool`, `registerSelectorTools`, `registerCreationTools`, or `registerViewUtilityTools`); call from the pointer stack factory when the canvas is ready.
 4. **Orchestrator + ports (when needed)** — non-trivial session state belongs in a dedicated class (see [`PenToolSession`](src/app/components/svg-canvas/pen-tool-session/pen-tool-session.ts)). Define narrow interfaces in `*-ports.ts` / `*-svg.port.ts`; the canvas adapter implements them. Orchestrators must not import `SvgCanvasComponent`.
 5. **Mutations** — committed edits use `EditorCommand` + [`EditorHistoryService`](src/app/services/editor-history.service.ts). Add or reuse ports under `history/` or `services/shape-content/` — see [editor-commands.mdc](editor-commands.mdc).
 6. **Dock relevance** — if the tool needs a right-dock panel, set `relevantTools` on the [`DockPanelDescriptor`](src/app/panels/dock-panel-descriptor.ts).
@@ -40,7 +42,9 @@ Use typed `*CanvasToolDeps` interfaces — each adapter receives only the narrow
 | Orchestrator + ports | `pen-tool-session-ports.ts`, `pen-tool-session-svg.port.ts` |
 | Thin gesture delegate | `selector-canvas-tool.ts`, `creation-canvas-tool.ts` |
 | View utility | `zoom-canvas-tool.ts`, `pan-canvas-tool.ts` |
-| UI metadata | `tool-descriptor.ts`, `register-default-tool-descriptors.ts` |
+| UI metadata | `tool-bundles.ts`, `tool-descriptor.ts`, `register-default-tool-descriptors.ts` |
+| Closed tool ids | `editor-tool.service.ts` (`EditorTool` union) |
+| Deferred adapter binding | `canvas-bound-tool-registrar.service.ts` |
 
 ## Anti-patterns
 

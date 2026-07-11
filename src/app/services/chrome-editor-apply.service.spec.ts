@@ -37,6 +37,7 @@ describe('ChromeEditorApplyService', () => {
     const svgMock = {
       getSVGInstance: vi.fn(),
       getShapeProperties: vi.fn(),
+      getUnionBBox: vi.fn().mockReturnValue(null),
       findOne: vi.fn(),
       addStroke: vi.fn(),
       removeStroke: vi.fn(),

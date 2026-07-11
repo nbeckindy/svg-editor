@@ -18,20 +18,28 @@ The editor is a **modular monolith with typed seams**: narrow **ports**, **comma
 
 Large **integration surfaces** remain: `SvgCanvasComponent` (~2.7k lines) orchestrates tools, keyboard, pen/path-node/inline-text sessions, and pen preview chrome in its template.
 
-### Tool plugin seam
+### Tool seam (internal refactor)
+
+> **Not an external plugin API.** The tool registry is an **internal refactor seam** for organizing canvas behavior — same modular-monolith posture as ports (DEBT-004). Adding a tool requires **core edits** across closed types and imperative registrar hooks; there is no DI extension token, dynamic manifest, or third-party boundary.
 
 | Piece | Path |
 |-------|------|
+| Closed tool id union | `EditorTool` — 11 string literals in `editor-tool.service.ts` (`selector`, `node-edit-selector`, `eyedropper`, `zoom`, `pan`, `rect`, `ellipse`, `line`, `text`, `pen`) |
 | Tool contract | `src/app/tools/canvas-tool.interface.ts` |
-| UI metadata | `src/app/tools/tool-bundles.ts` (descriptor + shortcut + registration group; re-exported by `register-default-tool-descriptors.ts`) |
+| UI metadata | `src/app/tools/tool-bundles.ts` — `ToolBundle` (descriptor + shortcut + `canvasRegistrationGroup`); re-exported by `register-default-tool-descriptors.ts` |
 | Registry | `src/app/tools/tool-registry.service.ts` |
-| Bootstrap | `register-default-tools.ts` → `registerDefaultToolDescriptors` at startup; `CanvasBoundToolRegistrar` binds adapters when the pointer stack is ready |
+| Startup bootstrap | `register-default-tools.ts` → `registerDefaultToolDescriptors` registers strip/shortcut metadata at app init |
+| Deferred adapter binding | `CanvasBoundToolRegistrar` — hard-coded `registerCreationTools` / `registerPenTool` / `registerSelectorTools` / `registerViewUtilityTools` hooks; called from `svg-canvas-pointer-stack.factory.ts` when the pointer stack exists |
 | Adapters | `*-canvas-tool.ts` factories (creation, selector + node-edit-selector, pen, zoom, pan, text, eyedropper, …) |
 | Orchestrator ports | e.g. `PenToolSessionPorts` + `PenToolSessionSvgPort`, `PathNodeEditSessionPorts`, `InlineTextEditSessionPorts` (narrow slices of the canvas adapter) |
 | Adapter context slices | `canvas-adapter-context.ts` + `create-canvas-adapter-context.ts` — shared coordinate, tool-state, document-surface, and readiness types consumed by pen ports and pointer/keyboard seams |
 | Coordinate mapping | `CanvasCoordinateMappingService` — bound from canvas lifecycle; `SvgCanvasComponent` delegates `clientToEditorSvgPoint` / `svgBboxToOverlayPixels` (wired `svg-editor-my0.2`) |
 
+Descriptors land at **startup**; `CanvasTool` adapters bind **later** when the canvas pointer stack initializes — two-phase registration, not a single plug-in moment.
+
 `CanvasAdapterContext` composes the coordinate, tool-state, and document-surface slices reused across host interfaces; extend it (or individual slices) rather than re-declaring `clientToEditorSvgPoint` / `getCurrentTool` on each seam.
+
+**Future external tools (not implemented):** if third-party or pack-based tools are ever in scope, see the `TOOL_EXTENSION` sketch under [DEBT-005](./ARCHITECTURE-DEBT.md#debt-005--closed-type-plugin-seam-internal-only-) in ARCHITECTURE-DEBT.md.
 
 `PointerGestureRouter` dispatches pointer events to the active `CanvasTool` from the registry. The keyboard controller (`svg-canvas-keyboard.controller.ts`) dispatches `onKeyDown` to the active tool after a few canvas-wide guards (inline-text Escape, path-node delete); tool-letter shortcuts use `tool-bundles.ts`. The tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)). Dock panels can declare `relevantTools` so the right dock auto-shows for the active tool.
 
@@ -39,10 +47,10 @@ Large **integration surfaces** remain: `SvgCanvasComponent` (~2.7k lines) orches
 
 Prefer this stack for every new **Tool** — do not grow `SvgCanvasComponent` with tool-specific branches.
 
-1. **Bundle** — add a `ToolBundle` entry in `tool-bundles.ts` (descriptor, `canvasRegistrationGroup`, optional shortcut key).
+1. **Closed union + bundle** — add the tool id literal to `EditorTool` in `editor-tool.service.ts`; add a `ToolBundle` entry in `tool-bundles.ts` (descriptor, `canvasRegistrationGroup`, optional shortcut key). Startup descriptors register via `registerDefaultTools` → `registerDefaultToolDescriptors`.
 2. **Orchestrator (optional)** — if the tool has non-trivial session state (like pen), put policy in a dedicated class and inject **narrow ports** (`*HistoryPort`, `*SvgPort`, `*SelectionPort`) defined next to the orchestrator — not the full `SvgManipulationService`.
 3. **CanvasTool adapter** — factory in `src/app/tools/<name>-canvas-tool.ts` with a `*CanvasToolDeps` getter; map pointer/keyboard events to the orchestrator; return `true` when the event is consumed.
-4. **Canvas adapter wiring** — register via `CanvasBoundToolRegistrar` from `svg-canvas-pointer-stack.factory.ts` (called by `SvgCanvasComponent`); pass only the deps the adapter needs (coordinate mapping, readiness checks, gesture handles).
+4. **Canvas adapter wiring** — add or extend a hook on `CanvasBoundToolRegistrar` for the bundle's `canvasRegistrationGroup` (e.g. `registerPenTool`, `registerSelectorTools`, `registerCreationTools`, or `registerViewUtilityTools`); call it from `svg-canvas-pointer-stack.factory.ts` when the pointer stack is ready. Pass only the deps the adapter needs (coordinate mapping, readiness checks, gesture handles).
 5. **Mutations** — committed edits go through `EditorCommand` + `EditorHistoryService` (see [`.cursor/rules/editor-commands.mdc`](../.cursor/rules/editor-commands.mdc)); use existing command ports or add a new `*.port.ts` under `history/` or `services/shape-content/`.
 6. **Chrome writes** — inspector / dock actions go through `ChromeEditorApplyService` → `chrome-apply/*`, not direct DOM from the tool.
 

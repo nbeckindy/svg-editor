@@ -1,10 +1,10 @@
 import { Injectable, inject } from '@angular/core';
-import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import { EditorCommand, CompositeCommand } from '../../models/editor-commands';
 import { ShapeSelectionService } from '../shape-selection.service';
 import { DrawingStyleDefaultsService } from '../drawing-style-defaults.service';
 import { EditorHistoryService } from '../editor-history.service';
+import { SelectionReconcileService } from '../selection-reconcile.service';
 import {
   CHROME_EDITOR_APPLY_SVG_PORT,
   LAYER_REORDER_GROUP_SVG_PORT,
@@ -20,6 +20,7 @@ export class ChromeEditorApplySupport {
   readonly layerSvg = inject(LAYER_REORDER_GROUP_SVG_PORT);
   readonly drawingDefaults = inject(DrawingStyleDefaultsService);
   readonly editorHistory = inject(EditorHistoryService);
+  private readonly selectionReconcile = inject(SelectionReconcileService);
 
   selectedShapesList(): ShapeProperties[] {
     return this.shapeSelection.getSelectedShapes();
@@ -35,13 +36,7 @@ export class ChromeEditorApplySupport {
   }
 
   syncSelectedShapesFromDom(): void {
-    const svg = this.paintSvg.getSVGInstance();
-    if (!svg) return;
-    const next = this.selectedShapesList().map((s) => {
-      const el = svg.findOne(`#${s.id}`) as SvgJsElement | undefined;
-      return el ? this.paintSvg.getShapeProperties(el) : s;
-    });
-    this.shapeSelection.selectShapes(next);
+    this.selectionReconcile.reconcileFromLiveTree();
   }
 
   pushCommandsAndSyncSelection(commands: EditorCommand[], fallbackDescription?: string): void {

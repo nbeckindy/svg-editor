@@ -115,7 +115,7 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 ---
 
-### DEBT-005 · Closed-type “plugin” seam (internal only)
+### DEBT-005 · Closed-type “plugin” seam (internal only) ✓
 
 **Problem:** Tool registration reads like a plugin system but requires core edits across closed unions and imperative registrar hooks.
 
@@ -128,13 +128,35 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 **Risk:** Roadmap items (symbols, new tool packs) will be scoped as “register a tool” when they actually need type-system and registrar changes.
 
-**Remediation**
+**Remediation (done)**
 
-1. Document explicitly: **internal refactor seam, not external plugin API**.
-2. If external tools are ever in scope: introduce `TOOL_EXTENSION` multi-provider or registry `register(descriptor, factory)` without editing `EditorTool` union (string id + capability flags).
-3. Until then: keep checklist in ARCHITECTURE.md but add “closed union edit required” step.
+1. ✓ ARCHITECTURE.md + `.cursor/rules/canvas-tools-ports.mdc`: **internal refactor seam, not external plugin API**.
+2. ✓ ARCHITECTURE.md checklist: **closed union edit** step (`EditorTool`, `ToolBundle`, `CanvasBoundToolRegistrar` hook).
+3. ✓ `TOOL_EXTENSION` future sketch below (not implemented).
 
 **Depends on:** DEBT-004 (honest naming).
+
+#### TOOL_EXTENSION sketch (not implemented)
+
+If external or pack-based tools are ever in scope, replace the closed union with an extension boundary:
+
+```typescript
+// Hypothetical — not in codebase
+export const TOOL_EXTENSION = new InjectionToken<ToolExtension[]>('TOOL_EXTENSION');
+
+export interface ToolExtension {
+  readonly id: string; // replaces EditorTool literal
+  readonly descriptor: ToolDescriptor;
+  readonly capabilityFlags: ReadonlySet<ToolCapability>; // e.g. 'pointer', 'keyboard', 'selector-interaction'
+  readonly registerCanvasTool: (registry: ToolRegistryService, deps: ToolExtensionDeps) => void;
+}
+```
+
+- **Multi-provider** `TOOL_EXTENSION` in `app.config.ts` — third-party modules contribute descriptors + adapter factories without editing `EditorTool`.
+- **String tool id** everywhere `EditorTool` is used today; capability flags replace scattered `getCurrentTool() === '…'` branches.
+- **Single-phase or two-phase** registration unified under `ToolRegistryService.register(descriptor, factory?)` instead of split startup descriptors vs deferred `CanvasBoundToolRegistrar` hooks.
+
+Until then, treat every new tool as a core change following the ARCHITECTURE.md checklist.
 
 ---
 
@@ -162,14 +184,14 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 ---
 
-### DEBT-007 · DOM-as-model selection drift
+### DEBT-007 · DOM-as-model selection drift ✓
 
 **Problem:** No document kernel separate from the live SVG DOM. Selection and shape properties are re-derived from DOM after history events.
 
 **Evidence**
 
-- `syncSelectionFromDom()` (`svg-canvas.component.ts` ~1940) — re-reads shape props from live tree, re-selects
-- Triggered after undo/redo via `setTimeout` (~1534)
+- `SelectionReconcileService.reconcileFromLiveTree()` — single reconcile path; canvas `onHistoryRevision` + chrome apply delegate here
+- History undo/redo triggers reconcile via `editorHistory.revision()` effect → `SelectionReconcileService.onHistoryRevision()`
 - `documentRevision` signal exists but correctness relies on scattered invalidation
 
 **Risk:** Stale selection, wrong inspector values, drill-in state after undo; scales poorly with complexity.
@@ -337,9 +359,9 @@ Wave 4 (only if product demands)
 | DEBT-002 | `svg-editor-my0.2` ✓ | P0 |
 | DEBT-003 | `svg-editor-my0.3` | P0 |
 | DEBT-004 | `svg-editor-my0.4` ✓ | P1 |
-| DEBT-005 | `svg-editor-my0.5` | P1 |
+| DEBT-005 | `svg-editor-my0.5` ✓ | P1 |
 | DEBT-006 | `svg-editor-my0.6` ✓ | P1 |
-| DEBT-007 | `svg-editor-my0.7` | P1 |
+| DEBT-007 | `svg-editor-my0.7` ✓ | P1 |
 | DEBT-008 | `svg-editor-my0.8` ✓ | P2 |
 | DEBT-009 | `svg-editor-my0.9` ✓ | P2 |
 | DEBT-010 | `svg-editor-my0.10` ✓ | P2 |
