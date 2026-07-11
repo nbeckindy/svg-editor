@@ -124,4 +124,84 @@ describe('SelectionReconcileService', () => {
     expect(onUnionBboxUpdated).toHaveBeenCalledWith(null);
     expect(afterReconcile).toHaveBeenCalled();
   });
+
+  it('onHistoryRevision with path-node edit active re-enters edit and refreshes path d from live DOM', async () => {
+    const stalePath: ShapeProperties = {
+      id: 'path-a',
+      type: 'path',
+      fill: '#000',
+      strokeWidth: 1
+    };
+    const restoredPath: ShapeProperties = {
+      id: 'path-a',
+      type: 'path',
+      fill: '#f00',
+      strokeWidth: 2
+    };
+    selectedShapesSignal.set([stalePath]);
+
+    const pathNodeEditState = { activePathId: 'path-a' };
+    let reenteredPathIds: string[] | null = null;
+    let exitedPathNodeEdit = false;
+    const isPathElementId = (id: string) => id.startsWith('path-');
+
+    svgMock.getSVGInstance.mockReturnValue({ findOne: vi.fn(() => ({ node: {} })) });
+    svgMock.getShapeProperties.mockReturnValue(restoredPath);
+    svgMock.getUnionBBox.mockReturnValue({ x: 0, y: 0, width: 30, height: 1 });
+
+    service.onHistoryRevision({
+      beforeReconcile: () => {
+        const selectedPathIds = selectedShapesSignal()
+          .map((shape) => shape.id)
+          .filter(isPathElementId);
+        if (selectedPathIds.length === 0) {
+          exitedPathNodeEdit = true;
+        } else {
+          reenteredPathIds = selectedPathIds;
+          pathNodeEditState.activePathId =
+            pathNodeEditState.activePathId ?? selectedPathIds[0];
+        }
+      }
+    });
+
+    expect(reenteredPathIds).toEqual(['path-a']);
+    expect(exitedPathNodeEdit).toBe(false);
+    expect(shapeSelectionMock.selectShapes).not.toHaveBeenCalled();
+
+    await Promise.resolve();
+    expect(shapeSelectionMock.selectShapes).toHaveBeenCalledWith([restoredPath]);
+    expect(service.reconciledAt()).toBe(1);
+    expect(pathNodeEditState.activePathId).toBe('path-a');
+  });
+
+  it('onHistoryRevision with path-node edit active exits when undo clears path selection', async () => {
+    selectedShapesSignal.set([]);
+    const pathNodeEditState = { activePathId: 'path-gone' };
+    let exitedPathNodeEdit = false;
+    let reenteredPathIds: string[] | null = null;
+    const isPathElementId = (id: string) => id.startsWith('path-');
+
+    svgMock.getSVGInstance.mockReturnValue({ findOne: vi.fn(() => undefined) });
+
+    service.onHistoryRevision({
+      beforeReconcile: () => {
+        const selectedPathIds = selectedShapesSignal()
+          .map((shape) => shape.id)
+          .filter(isPathElementId);
+        if (selectedPathIds.length === 0) {
+          exitedPathNodeEdit = true;
+          pathNodeEditState.activePathId = '';
+        } else {
+          reenteredPathIds = selectedPathIds;
+        }
+      }
+    });
+
+    expect(exitedPathNodeEdit).toBe(true);
+    expect(reenteredPathIds).toBeNull();
+
+    await Promise.resolve();
+    expect(shapeSelectionMock.selectShapes).not.toHaveBeenCalled();
+    expect(pathNodeEditState.activePathId).toBe('');
+  });
 });

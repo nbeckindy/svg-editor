@@ -14,7 +14,7 @@ Phases 1–3 closed the planned epic work, but **runtime gaps remain** — line 
 
 **Track ongoing debt:** [ARCHITECTURE-DEBT.md](../ARCHITECTURE-DEBT.md) (adversarial review) · beads epic [`svg-editor-my0`](../../) — architecture debt register (DEBT-001–013).
 
-High-signal items not finished by phase close: dual input routing (registry + canvas fallbacks) and canvas adapter size (~2,623 lines TS after DEBT-002). Coordinate mapping wired in `svg-editor-my0.2`. See the debt register for evidence and remediation — do not reopen j61 / hnv / ywh epics for these.
+High-signal items not finished by phase close: dual input routing residuals (DEBT-001b cursor/double-click guards) and canvas adapter size (~2,240 lines TS after DEBT-003). Coordinate mapping wired in `svg-editor-my0.2`; selector `onClick` in registry. See the debt register for evidence and remediation — do not reopen j61 / hnv / ywh epics for these.
 
 ## Goal
 
@@ -30,15 +30,15 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 - **`SvgManipulationService`** — façade implementing many ports over sub-services (`shape-content/*`, layer structure, gradient defs, …).
 - **`EditorCommand` / `EditorHistoryService`** — intent vs execution; undoable mutations; implementations split under `history/commands/{paint,transform,layers,document,path}/`.
 - **`PenToolSession` + ports** — testable without the full canvas.
-- **`ToolRegistryService` + `CanvasTool`** — `ToolDescriptor` metadata registers at app startup; `CanvasTool` adapters bind later via `CanvasBoundToolRegistrar` when the canvas pointer stack exists. Pointer down/move/up and many keyboard paths consult the registry first; click, cursor, and some keyboard guards remain canvas-owned (DEBT-001).
+- **`ToolRegistryService` + `CanvasTool`** — `ToolDescriptor` metadata registers at app startup; `CanvasTool` adapters bind later via `CanvasBoundToolRegistrar` when the canvas pointer stack exists. Pointer down/move/up, selector click, and registry-first keyboard consult adapters; cursor RAF and a few canvas-wide click guards remain (DEBT-001b).
 - **Thin chrome apply façade** — `ChromeEditorApplyService` delegates to `chrome-apply/*` domain slices; group-structure notifications use `GroupStructureChangeService` (no canvas callback on chrome apply).
 
 ### Remaining gaps (post–phase 3)
 
 | Problem | Where | Notes |
 |---|---|---|
-| **Large canvas adapter** | `SvgCanvasComponent` (~2,679 lines TS + 341 HTML) | Overlays extracted; pen previews / inline text / cursor RAF / keyboard glue remain inline (DEBT-003). |
-| **Dual input routing** | `onCanvasClick`, `svg-canvas-keyboard.controller.ts`, `computeExpectedCursorHint` | `PointerGestureRouter` is clean (~77 lines) after ywh.5; residuals are selector click, path-node keyboard guards, cursor policy, and pen right-click dedup in the canvas (DEBT-001). |
+| **Large canvas adapter** | `SvgCanvasComponent` (~2,240 lines TS + 341 HTML) | Overlays extracted; pen preview in overlay (DEBT-011 ✓); path-boolean preview / cursor RAF / keyboard glue remain inline (DEBT-003, DEBT-012). |
+| **Dual input routing** | Pen insert hover cursor RAF | `PointerGestureRouter` clean; selector click/dblclick + path-node drag/delete in adapter; gesture cursor hints in `canvas-cursor-hint.ts` (DEBT-001 mostly closed). |
 | **Coordinate mapping** | `CanvasCoordinateMappingService` | Wired from canvas lifecycle (closed `svg-editor-my0.2`); was duplicate logic on canvas. |
 | **Deferred canvas tool binding** | `CanvasBoundToolRegistrar` | Descriptors at startup; creation/pen/selector/view-utility adapters register when canvas initializes — not a single `registerDefaultTools()` moment (DEBT-005). |
 | **Angular in domain** | Most services | `@Injectable({ providedIn: 'root' })` — acceptable for this app; not pure hexagonal isolation. |

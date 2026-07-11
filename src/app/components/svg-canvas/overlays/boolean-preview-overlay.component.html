@@ -1,0 +1,10 @@
+@if (pathBooleanPreviewOverlayD(); as booleanPreviewD) {
+  <svg:path
+    class="path-boolean-preview"
+    data-testid="canvas-path-boolean-preview"
+    [attr.d]="booleanPreviewD"
+    [attr.fill]="'rgba(33, 150, 243, 0.25)'"
+    [attr.stroke]="'#2196F3'"
+    [attr.stroke-width]="1.5"
+    [attr.vector-effect]="'non-scaling-stroke'"/>
+}

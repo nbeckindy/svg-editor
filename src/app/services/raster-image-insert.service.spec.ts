@@ -1,10 +1,12 @@
 import { TestBed } from '@angular/core/testing';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { RasterImageInsertService } from './raster-image-insert.service';
-import { SvgManipulationService } from './svg-manipulation.service';
-import { ShapeSelectionService } from './shape-selection.service';
-import { EditorHistoryService } from './editor-history.service';
-import { EditorToolService } from './editor-tool.service';
+import {
+  RASTER_IMAGE_INSERT_HISTORY_PORT,
+  RASTER_IMAGE_INSERT_SELECTION_PORT,
+  RASTER_IMAGE_INSERT_SVG_PORT,
+  RASTER_IMAGE_INSERT_TOOL_PORT
+} from './raster-image-insert.tokens';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { AddImageCommand } from '../models/editor-commands';
 import { stubRasterFileIo } from '../testing/raster-file-io-testing';
@@ -22,7 +24,7 @@ describe('RasterImageInsertService', () => {
   let service: RasterImageInsertService;
   const shapeEl = { node: document.createElementNS('http://www.w3.org/2000/svg', 'image') } as unknown as SvgJsElement;
 
-  const svgManipulationMock = {
+  const svgMock = {
     getSVGInstance: vi.fn(),
     getDocumentViewBox: vi.fn(() => '0 0 100 100'),
     insertRasterImageIntoContentGroup: vi.fn(() => 'img-1'),
@@ -34,23 +36,27 @@ describe('RasterImageInsertService', () => {
     documentRevision: vi.fn(() => 1)
   };
 
+  const selectionMock = { selectShape: vi.fn(), clearSelection: vi.fn(), selectShapes: vi.fn() };
+  const historyMock = { pushAndExecute: vi.fn() };
+  const toolMock = { setTool: vi.fn() };
+
   beforeEach(async () => {
     const svgInstance = {
       findOne: vi.fn((sel: string) => (sel === '#img-1' ? shapeEl : null))
     };
-    svgManipulationMock.getSVGInstance.mockReturnValue(svgInstance as unknown);
+    svgMock.getSVGInstance.mockReturnValue(svgInstance as unknown);
     documentMock.getSVGInstance.mockReturnValue(svgInstance as unknown);
-    svgManipulationMock.insertRasterImageIntoContentGroup.mockReturnValue('img-1');
-    svgManipulationMock.insertRasterImageIntoContentGroup.mockClear();
+    svgMock.insertRasterImageIntoContentGroup.mockReturnValue('img-1');
+    svgMock.insertRasterImageIntoContentGroup.mockClear();
 
     await TestBed.configureTestingModule({
       providers: [
         RasterImageInsertService,
-        { provide: SvgManipulationService, useValue: svgManipulationMock },
+        { provide: RASTER_IMAGE_INSERT_SVG_PORT, useValue: svgMock },
         { provide: SvgEditorDocumentService, useValue: documentMock },
-        { provide: ShapeSelectionService, useValue: { selectShape: vi.fn() } },
-        { provide: EditorHistoryService, useValue: { pushAndExecute: vi.fn() } },
-        EditorToolService
+        { provide: RASTER_IMAGE_INSERT_SELECTION_PORT, useValue: selectionMock },
+        { provide: RASTER_IMAGE_INSERT_HISTORY_PORT, useValue: historyMock },
+        { provide: RASTER_IMAGE_INSERT_TOOL_PORT, useValue: toolMock }
       ]
     }).compileComponents();
 
@@ -58,28 +64,23 @@ describe('RasterImageInsertService', () => {
   });
 
   it('returns failed when no SVG instance', async () => {
-    svgManipulationMock.getSVGInstance.mockReturnValue(null);
     documentMock.getSVGInstance.mockReturnValue(null);
     const r = await service.insertRasterFileAtAnchor(smallPngFile(), { x: 10, y: 20 });
     expect(r.kind).toBe('failed');
-    expect(svgManipulationMock.insertRasterImageIntoContentGroup).not.toHaveBeenCalled();
+    expect(svgMock.insertRasterImageIntoContentGroup).not.toHaveBeenCalled();
   });
 
   it('inserts, selects, pushes AddImageCommand, and switches to selector', async () => {
     const restoreIo = stubRasterFileIo({ width: 4, height: 2 });
     try {
-      const selection = TestBed.inject(ShapeSelectionService) as unknown as { selectShape: ReturnType<typeof vi.fn> };
-      const history = TestBed.inject(EditorHistoryService) as unknown as { pushAndExecute: ReturnType<typeof vi.fn> };
-      const editorTool = TestBed.inject(EditorToolService);
-
       const r = await service.insertRasterFileAtAnchor(smallPngFile(), { x: 50, y: 50 });
       expect(r.kind).toBe('inserted');
-      expect(svgManipulationMock.insertRasterImageIntoContentGroup).toHaveBeenCalled();
-      expect(selection.selectShape).toHaveBeenCalled();
-      expect(history.pushAndExecute).toHaveBeenCalled();
-      const cmd = history.pushAndExecute.mock.calls[0][0];
+      expect(svgMock.insertRasterImageIntoContentGroup).toHaveBeenCalled();
+      expect(selectionMock.selectShape).toHaveBeenCalled();
+      expect(historyMock.pushAndExecute).toHaveBeenCalled();
+      const cmd = historyMock.pushAndExecute.mock.calls[0][0];
       expect(cmd).toBeInstanceOf(AddImageCommand);
-      expect(editorTool.getCurrentTool()).toBe('selector');
+      expect(toolMock.setTool).toHaveBeenCalledWith('selector');
     } finally {
       restoreIo();
     }
@@ -89,6 +90,6 @@ describe('RasterImageInsertService', () => {
     const file = new File(['x'], 'x.tif', { type: 'image/tiff' });
     const r = await service.insertRasterFileAtAnchor(file, { x: 0, y: 0 }, { silentDisallowedMime: true });
     expect(r.kind).toBe('skipped');
-    expect(svgManipulationMock.insertRasterImageIntoContentGroup).not.toHaveBeenCalled();
+    expect(svgMock.insertRasterImageIntoContentGroup).not.toHaveBeenCalled();
   });
 });

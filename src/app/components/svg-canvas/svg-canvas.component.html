@@ -172,16 +172,9 @@
             [penContinuationGhostPathD]="editorChrome.penContinuationGhostPathD"
             [penCloseTargetHoverOverlay]="editorChrome.penCloseTargetHoverOverlay"
             [penOpenPathContinueHoverOverlay]="editorChrome.penOpenPathContinueHoverOverlay"/>
-          @if (editorChrome.pathBooleanPreviewOverlayD; as booleanPreviewD) {
-            <path
-              class="path-boolean-preview"
-              data-testid="canvas-path-boolean-preview"
-              [attr.d]="booleanPreviewD"
-              fill="rgba(33, 150, 243, 0.25)"
-              stroke="#2196F3"
-              stroke-width="1.5"
-              vector-effect="non-scaling-stroke"/>
-          }
+          <g
+            app-boolean-preview-overlay
+            [pathBooleanPreviewOverlayD]="editorChrome.pathBooleanPreviewOverlayD"/>
           <g
             app-path-node-overlay
             [insertAffordance]="editorChrome.penInsertOnPathPreviewPathD ? editorChrome.penInsertOnPathNodeAffordanceOverlay : null"

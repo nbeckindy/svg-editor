@@ -2,10 +2,12 @@ import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { DocumentReadinessPort } from '../history/document-readiness.port';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
-import { SvgManipulationService } from './svg-manipulation.service';
-import { ShapeSelectionService } from './shape-selection.service';
-import { EditorHistoryService } from './editor-history.service';
-import { EditorToolService } from './editor-tool.service';
+import {
+  RASTER_IMAGE_INSERT_HISTORY_PORT,
+  RASTER_IMAGE_INSERT_SELECTION_PORT,
+  RASTER_IMAGE_INSERT_SVG_PORT,
+  RASTER_IMAGE_INSERT_TOOL_PORT
+} from './raster-image-insert.tokens';
 import { AddImageCommand } from '../models/editor-commands';
 import { computeRasterInsertLayout } from '../utils/raster-insert-layout';
 import {
@@ -37,10 +39,10 @@ export interface InsertRasterFileOptions {
 @Injectable({ providedIn: 'root' })
 export class RasterImageInsertService {
   private readonly documentReadiness: DocumentReadinessPort = inject(SvgEditorDocumentService);
-  private readonly svgManipulation = inject(SvgManipulationService);
-  private readonly shapeSelection = inject(ShapeSelectionService);
-  private readonly editorHistory = inject(EditorHistoryService);
-  private readonly editorTool = inject(EditorToolService);
+  private readonly svg = inject(RASTER_IMAGE_INSERT_SVG_PORT);
+  private readonly shapeSelection = inject(RASTER_IMAGE_INSERT_SELECTION_PORT);
+  private readonly editorHistory = inject(RASTER_IMAGE_INSERT_HISTORY_PORT);
+  private readonly editorTool = inject(RASTER_IMAGE_INSERT_TOOL_PORT);
 
   async insertRasterFileAtAnchor(
     file: File,
@@ -77,7 +79,7 @@ export class RasterImageInsertService {
       return { kind: 'failed', message: 'Could not read image file.' };
     }
 
-    const viewBoxStr = this.svgManipulation.getDocumentViewBox();
+    const viewBoxStr = this.svg.getDocumentViewBox();
     const layout = computeRasterInsertLayout({
       viewBox: viewBoxStr,
       intrinsicWidthPx: dims.width,
@@ -86,7 +88,7 @@ export class RasterImageInsertService {
       anchorY: anchor.y
     });
 
-    const id = this.svgManipulation.insertRasterImageIntoContentGroup({
+    const id = this.svg.insertRasterImageIntoContentGroup({
       href: dataUrl,
       x: layout.x,
       y: layout.y,
@@ -97,14 +99,14 @@ export class RasterImageInsertService {
       return { kind: 'failed', message: 'Could not insert image.' };
     }
 
-    const svg = this.svgManipulation.getSVGInstance();
+    const svg = this.svg.getSVGInstance();
     const el = svg?.findOne(`#${id}`) as SvgJsElement | undefined;
     if (!el) {
       return { kind: 'failed', message: 'Could not insert image.' };
     }
 
-    this.shapeSelection.selectShape(this.svgManipulation.getShapeProperties(el));
-    const cmd = new AddImageCommand(this.svgManipulation, id, this.shapeSelection);
+    this.shapeSelection.selectShape(this.svg.getShapeProperties(el));
+    const cmd = new AddImageCommand(this.svg, id, this.shapeSelection);
     this.editorHistory.pushAndExecute(cmd);
     this.editorTool.setTool('selector');
     return { kind: 'inserted' };

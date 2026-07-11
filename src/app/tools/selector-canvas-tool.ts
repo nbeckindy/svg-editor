@@ -208,7 +208,7 @@ export function createSelectorCanvasTool(
     onClick(event) {
       return handleSelectorCanvasClick(getDeps(), event);
     },
-    onDoubleClick() {
+    onDoubleClick(event) {
       const deps = getDeps();
       if (!deps.isCanvasReady()) return false;
       const svgInstance = deps.getSvgInstance();
@@ -219,14 +219,30 @@ export function createSelectorCanvasTool(
       const selectedEl = svgInstance.findOne(`#${selectedId}`)?.node as Element | null;
       if (!selectedEl) return false;
       const tag = selectedEl.tagName?.toLowerCase();
-      if (tag !== 'text' && tag !== 'tspan') return false;
-      const resolvedTextId =
-        tag === 'text'
-          ? selectedId
-          : (selectedEl.closest('text') as Element | null)?.id ?? null;
-      if (!resolvedTextId) return false;
-      deps.enterInlineTextEditMode(resolvedTextId);
-      return true;
+
+      if (tag === 'text' || tag === 'tspan') {
+        const resolvedTextId =
+          tag === 'text'
+            ? selectedId
+            : (selectedEl.closest('text') as Element | null)?.id ?? null;
+        if (!resolvedTextId) return false;
+        deps.enterInlineTextEditMode(resolvedTextId);
+        return true;
+      }
+
+      if (toolId === 'selector' && tag === 'g') {
+        deps.setDrilledIntoGroupId(selectedId);
+        const clickTarget = event.target as Element;
+        if (clickTarget.id) {
+          const childShape = svgInstance.findOne(`#${clickTarget.id}`);
+          if (childShape) {
+            deps.selectShapes(deps.getShapePropertiesInSameClipGroup(childShape as never));
+          }
+        }
+        return true;
+      }
+
+      return false;
     },
     onKeyDown(event) {
       const deps = getDeps();

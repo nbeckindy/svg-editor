@@ -57,4 +57,36 @@ describe('GhostSession', () => {
     ghost.removeFragments(frags);
     expect(contentEl!.querySelector(`[${EDITOR_GHOST_ATTR}="true"]`)).toBeNull();
   });
+
+  it('cancelled ghost preview removes fragments without deleting live selection nodes', () => {
+    const draw = SVG().addTo(container) as Svg;
+    const cg = draw.group().attr('data-editor-content-group', 'true');
+    const svgNs = 'http://www.w3.org/2000/svg';
+    const liveRect = document.createElementNS(svgNs, 'rect');
+    liveRect.setAttribute('id', 'shape-live');
+    liveRect.setAttribute('width', '20');
+    liveRect.setAttribute('height', '12');
+    (cg.node as SVGGElement).appendChild(liveRect);
+
+    const ghost = new GhostSession();
+    const frags = ghost.buildFragmentsForUnion(
+      {
+        getSVGInstance: () => draw,
+        getShapeIdsInDomOrder: (ids: string[]) => ids,
+      },
+      { x: 0, y: 0, width: 20, height: 12 },
+      ['shape-live']
+    );
+    expect(frags.length).toBe(1);
+
+    const contentEl = ghost.getContentGroupEl(draw);
+    expect(contentEl!.querySelector(`[${EDITOR_GHOST_ATTR}="true"]`)).toBeTruthy();
+    expect(contentEl!.querySelector('#shape-live')).toBe(liveRect);
+
+    ghost.removeFragments(frags);
+
+    expect(contentEl!.querySelector(`[${EDITOR_GHOST_ATTR}="true"]`)).toBeNull();
+    expect(contentEl!.querySelector('#shape-live')).toBe(liveRect);
+    expect(contentEl!.children.length).toBe(1);
+  });
 });

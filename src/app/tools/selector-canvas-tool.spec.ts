@@ -300,5 +300,55 @@ describe('createSelectorCanvasTool', () => {
       expect(consumed).toBe(true);
       expect(enterInlineTextEditMode).toHaveBeenCalledWith('txt1');
     });
+
+    it('drills into group on double-click and selects clicked child', () => {
+      const setDrilledIntoGroupId = vi.fn();
+      const selectShapes = vi.fn();
+      const childRect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
+      childRect.id = 'child1';
+      const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      group.id = 'group1';
+      const deps = makeSelectorDeps({
+        getSelectedShapeIds: () => ['group1'],
+        getSvgInstance: () =>
+          ({
+            findOne: (sel: string) => {
+              if (sel === '#group1') return { node: group };
+              if (sel === '#child1') return childRect;
+              return null;
+            }
+          }) as never,
+        setDrilledIntoGroupId,
+        getShapePropertiesInSameClipGroup: () => [{ id: 'child1' }] as never,
+        selectShapes
+      });
+      const tool = createSelectorCanvasTool('selector', deps);
+
+      const consumed = tool.onDoubleClick?.(
+        { target: childRect } as unknown as MouseEvent,
+        { x: 0, y: 0 }
+      );
+
+      expect(consumed).toBe(true);
+      expect(setDrilledIntoGroupId).toHaveBeenCalledWith('group1');
+      expect(selectShapes).toHaveBeenCalledWith([{ id: 'child1' }]);
+    });
+
+    it('does not drill into group for node-edit-selector', () => {
+      const setDrilledIntoGroupId = vi.fn();
+      const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
+      group.id = 'group1';
+      const deps = makeSelectorDeps({
+        getSelectedShapeIds: () => ['group1'],
+        getSvgInstance: () => makeSvgInstanceFor('group1', group),
+        setDrilledIntoGroupId
+      });
+      const tool = createSelectorCanvasTool('node-edit-selector', deps);
+
+      const consumed = tool.onDoubleClick?.({ target: group } as unknown as MouseEvent, { x: 0, y: 0 });
+
+      expect(consumed).toBe(false);
+      expect(setDrilledIntoGroupId).not.toHaveBeenCalled();
+    });
   });
 });

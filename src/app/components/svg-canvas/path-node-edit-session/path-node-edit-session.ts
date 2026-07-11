@@ -155,6 +155,30 @@ export class PathNodeEditSession {
     return !!target.closest('[data-path-node-edit-target]');
   }
 
+  /**
+   * Exit path-node edit when the user clicks outside edit targets (canvas-wide guard).
+   * Skips exit while pen tool is active or during the trailing empty-click window after pen close.
+   */
+  maybeExitOnOutsideClick(options: {
+    clickTarget: Element;
+    penClosePostNodeEditEmptyClickClearUntilMs: number;
+    hasResolvedContentShape: boolean;
+  }): boolean {
+    if (!this.pathNodeEditState) return false;
+    if (this.isPathNodeEditTarget(options.clickTarget)) return false;
+    if (this.ports.getCurrentTool() === 'pen') return false;
+
+    const emptyHitNoResolvedShape = !options.hasResolvedContentShape;
+    const now =
+      typeof performance !== 'undefined' && typeof performance.now === 'function'
+        ? performance.now()
+        : Date.now();
+    const skipExitForTrailingPenCloseClick =
+      now < options.penClosePostNodeEditEmptyClickClearUntilMs && emptyHitNoResolvedShape;
+    if (skipExitForTrailingPenCloseClick) return false;
+    return this.exitPathNodeEditMode();
+  }
+
   tryStartPathNodeDrag(target: Element, event: MouseEvent): boolean {
     if (!this.pathNodeEditState) return false;
     if (typeof target.closest !== 'function') return false;

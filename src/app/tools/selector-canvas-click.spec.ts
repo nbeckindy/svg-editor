@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import { PathNodeEditSession } from '../components/svg-canvas/path-node-edit-session/path-node-edit-session';
 import { handleSelectorCanvasClick, type SelectorCanvasClickDeps } from './selector-canvas-click';
 import { registerSelectorCanvasTools } from './selector-canvas-tool';
 import { ToolRegistryService } from './tool-registry.service';
@@ -163,5 +164,88 @@ describe('registry-routed selector onClick', () => {
 
     expect(consumed).toBe(true);
     expect(selectShapes).toHaveBeenCalledWith([{ id: 'rect1' }]);
+  });
+});
+
+describe('PathNodeEditSession.maybeExitOnOutsideClick', () => {
+  function makePathNodeSession(
+    getCurrentTool: () => import('../../services/editor-tool.service').EditorTool = () => 'node-edit-selector'
+  ): PathNodeEditSession {
+    const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
+    path.id = 'path1';
+    path.setAttribute('d', 'M 10 10 L 20 20');
+    const ports = {
+      markForCheck: vi.fn(),
+      setDrilledIntoGroupId: vi.fn(),
+      getCurrentTool,
+      syncPathNodeEditBridgeChrome: vi.fn(),
+      clientToEditorSvgPoint: () => ({ x: 0, y: 0 }),
+      svgBboxToOverlayPixels: (bbox: { x: number; y: number; width: number; height: number }) => bbox,
+      svgManipulation: {
+        getSVGInstance: () =>
+          ({
+            findOne: (sel: string) => (sel === '#path1' ? { node: path } : null)
+          }) as never,
+        isElementOrAncestorLocked: () => false,
+        getPathNodeHandleLinkRaw: () => null,
+        setPathNodeHandleLinkRaw: vi.fn(),
+        mapPathLocalToRootUser: () => ({ x: 0, y: 0 }),
+        mapRootUserToPathLocal: () => ({ x: 0, y: 0 }),
+        updatePathData: vi.fn(),
+        getShapeBBox: () => null,
+        getShapeProperties: () => ({ id: 'path1' }) as never
+      },
+      shapeSelection: { selectShape: vi.fn() },
+      editorHistory: { pushAndExecute: vi.fn() },
+      pathNodeEditBridge: {
+        setChrome: vi.fn()
+      }
+    };
+    const session = new PathNodeEditSession(ports as never);
+    session.enterPathNodeEditMode(['path1']);
+    return session;
+  }
+
+  it('exits path-node edit when clicking outside edit targets', () => {
+    const session = makePathNodeSession();
+    const other = document.createElement('rect');
+    other.id = 'other';
+
+    const exited = session.maybeExitOnOutsideClick({
+      clickTarget: other,
+      penClosePostNodeEditEmptyClickClearUntilMs: 0,
+      hasResolvedContentShape: true
+    });
+
+    expect(exited).toBe(true);
+    expect(session.hasPathNodeEditState()).toBe(false);
+  });
+
+  it('does not exit while pen tool is active', () => {
+    const session = makePathNodeSession(() => 'pen');
+    const other = document.createElement('rect');
+
+    const exited = session.maybeExitOnOutsideClick({
+      clickTarget: other,
+      penClosePostNodeEditEmptyClickClearUntilMs: 0,
+      hasResolvedContentShape: false
+    });
+
+    expect(exited).toBe(false);
+    expect(session.hasPathNodeEditState()).toBe(true);
+  });
+
+  it('skips exit for trailing pen-close empty click', () => {
+    const session = makePathNodeSession();
+    const futureMs = Date.now() + 5000;
+
+    const exited = session.maybeExitOnOutsideClick({
+      clickTarget: document.createElement('div'),
+      penClosePostNodeEditEmptyClickClearUntilMs: futureMs,
+      hasResolvedContentShape: false
+    });
+
+    expect(exited).toBe(false);
+    expect(session.hasPathNodeEditState()).toBe(true);
   });
 });

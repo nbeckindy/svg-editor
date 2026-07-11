@@ -6,6 +6,15 @@ import {
   PROPERTIES_PANEL_SVG_PORT,
   SELECTION_TRANSFORM_APPLY_SVG_PORT
 } from './app/services/chrome-apply/chrome-apply.tokens';
+import {
+  RASTER_IMAGE_INSERT_HISTORY_PORT,
+  RASTER_IMAGE_INSERT_SELECTION_PORT,
+  RASTER_IMAGE_INSERT_SVG_PORT,
+  RASTER_IMAGE_INSERT_TOOL_PORT
+} from './app/services/raster-image-insert.tokens';
+import { EditorHistoryService } from './app/services/editor-history.service';
+import { EditorToolService } from './app/services/editor-tool.service';
+import { ShapeSelectionService } from './app/services/shape-selection.service';
 import { SvgManipulationService } from './app/services/svg-manipulation.service';
 
 setupTestBed({
@@ -15,6 +24,10 @@ setupTestBed({
     { provide: PROPERTIES_PANEL_SVG_PORT, useExisting: SvgManipulationService },
     { provide: LAYER_REORDER_GROUP_SVG_PORT, useExisting: SvgManipulationService },
     { provide: SELECTION_TRANSFORM_APPLY_SVG_PORT, useExisting: SvgManipulationService },
-    { provide: EDITOR_SHAPE_LIFECYCLE_SVG_PORT, useExisting: SvgManipulationService }
+    { provide: EDITOR_SHAPE_LIFECYCLE_SVG_PORT, useExisting: SvgManipulationService },
+    { provide: RASTER_IMAGE_INSERT_SVG_PORT, useExisting: SvgManipulationService },
+    { provide: RASTER_IMAGE_INSERT_HISTORY_PORT, useExisting: EditorHistoryService },
+    { provide: RASTER_IMAGE_INSERT_SELECTION_PORT, useExisting: ShapeSelectionService },
+    { provide: RASTER_IMAGE_INSERT_TOOL_PORT, useExisting: EditorToolService }
   ]
 });

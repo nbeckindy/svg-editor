@@ -219,6 +219,7 @@ describe('EditorHistoryService integration', () => {
 
     it('pen provisional segment → undo → tool switch purges provisional history', () => {
       const historySvc = new EditorHistoryService();
+      const discardSpy = vi.spyOn(historySvc, 'discardWhere');
       const ports = minimalPenPorts(historySvc);
       const session = new PenToolSession(ports);
 
@@ -239,6 +240,7 @@ describe('EditorHistoryService integration', () => {
 
       expect(session.confirmDiscardPenSessionIfNeeded('tool switch')).toBe(true);
       expect(session.isPenSessionActive).toBe(false);
+      expect(discardSpy).toHaveBeenCalled();
       expect(historySvc.canUndo()).toBe(false);
     });
   });
