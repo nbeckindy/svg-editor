@@ -154,16 +154,19 @@ describe('createSelectorCanvasTool', () => {
       const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
       rect.id = 'rect1';
       const deps = makeSelectorDeps({
-        resolveClickedContentShape: () => rect,
+        resolveClickedContentShape: () => rect as never,
         getShapePropertiesInSameClipGroup: () => [{ id: 'rect1' }] as never,
         selectShapes
       });
       const tool = createSelectorCanvasTool('selector', deps);
 
-      tool.onClick?.({ target: rect, shiftKey: false, ctrlKey: false, metaKey: false } as MouseEvent, {
-        x: 0,
-        y: 0
-      });
+      tool.onClick?.(
+        { target: rect, shiftKey: false, ctrlKey: false, metaKey: false } as unknown as MouseEvent,
+        {
+          x: 0,
+          y: 0
+        }
+      );
 
       expect(selectShapes).toHaveBeenCalledWith([{ id: 'rect1' }]);
     });
@@ -176,7 +179,7 @@ describe('createSelectorCanvasTool', () => {
       const group = document.createElementNS('http://www.w3.org/2000/svg', 'g');
       group.id = 'group1';
       const deps = makeSelectorDeps({
-        resolveClickedContentShape: () => rect,
+        resolveClickedContentShape: () => rect as never,
         getNearestGroupAncestorId: () => 'group1',
         getDrilledIntoGroupId: () => null,
         setDrilledIntoGroupId,
@@ -186,10 +189,13 @@ describe('createSelectorCanvasTool', () => {
       });
       const tool = createSelectorCanvasTool('selector', deps);
 
-      tool.onClick?.({ target: rect, shiftKey: false, ctrlKey: false, metaKey: false } as MouseEvent, {
-        x: 0,
-        y: 0
-      });
+      tool.onClick?.(
+        { target: rect, shiftKey: false, ctrlKey: false, metaKey: false } as unknown as MouseEvent,
+        {
+          x: 0,
+          y: 0
+        }
+      );
 
       expect(selectShapes).toHaveBeenCalledWith([{ id: 'group1' }]);
       expect(setDrilledIntoGroupId).toHaveBeenCalledWith(null);

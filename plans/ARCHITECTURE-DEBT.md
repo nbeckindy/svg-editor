@@ -12,37 +12,39 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 | **P0** | Active correctness or dual-path risk — fix before major feature work |
 | **P1** | Structural debt that blocks seam completion or misleads contributors |
 | **P2** | Testability, documentation drift, or enforcement gaps |
-| **P3** | Product-class ceilings — accept or plan a deliberate model change |
+
+Product-class ceilings and deferred optimizations (large-document performance, curve-aware booleans) live in [ROADMAP.md](./ROADMAP.md#deferred-optimizations) — not architecture debt.
 
 ---
 
 ## P0 — Active routing and mapping debt
 
-### DEBT-001 · Dual input routing (registry + canvas fallbacks) ✓
+### DEBT-001 · Dual input routing (registry + canvas fallbacks)
 
-**Problem:** The tool registry owns pointer down/move/up, but click selection, cursor policy, keyboard guards, and path-node drag bypass the registry. New tools must know which events are “registry-pure” vs still canvas-owned.
+**Problem:** The tool registry owns pointer down/move/up and most click/keyboard paths, but cursor policy and a few canvas-wide click guards remain outside adapters. New tools must know which events are “registry-pure” vs still canvas-owned.
 
-**Evidence**
+**Evidence (2026-07-11)**
 
 | Surface | Registry? | Still in canvas / elsewhere |
 |---------|-----------|------------------------------|
-| Pointer down/move/up | `pointer-gesture-router.ts` (77 lines) | Path-node drag bypass in router host (`getPathNodeDragSession`, lines 52–66) |
-| Click | `tryDispatchRegisteredCanvasClick` | Selector click, drill-in, additive select in `onCanvasClick` (~2108–2187); **selector has no `onClick`** in `selector-canvas-tool.ts` |
-| Keyboard | `dispatchRegisteredKeyDown` | Path-node delete before registry (`svg-canvas-keyboard.controller.ts` 103–108); Escape / eyedropper / pen after registry (115–161) |
-| Cursor | — | `computeExpectedCursorHint` (~2403–2505), 33+ `getCurrentTool()` / tool-literal branches in `svg-canvas.component.ts` |
-| Pen right-click | `pen-canvas-tool.ts` | Duplicate handler in `onCanvasMouseDown` (2099–2102) before router |
+| Pointer down/move/up | `pointer-gesture-router.ts` (~77 lines) | Path-node drag routed through `node-edit-selector` adapter (`selector-canvas-tool.ts` `onPointerDown`/`Move`/`Up`) |
+| Click | `selector-canvas-tool.ts` `onClick` → `handleSelectorCanvasClick` | Canvas-wide gesture `consumeJustEnded` guards + inline-text commit in `onCanvasClick` |
+| Double-click | `selector-canvas-tool.ts` `onDoubleClick` (text inline edit + group drill-in) | Pen-tool guard in `onCanvasDoubleClick` only |
+| Keyboard | `dispatchRegisteredKeyDown` first (`svg-canvas-keyboard.controller.ts` 103–106) | Canvas-wide Escape gesture cancel + undo/redo + view shortcuts after registry |
+| Cursor | Per-tool `getCursorHint` + `cursorHintForGestureInProgress` helper | Pen insert hover cursor RAF in canvas (~7 tool-literal branches, baseline-enforced) |
+| Pen right-click | `pen-canvas-tool.ts` sole owner | ✓ duplicate removed from canvas |
 
-**Risk:** Contributors follow ARCHITECTURE.md “register a `CanvasTool`” and still must edit the 2,679-line canvas for click/cursor/keyboard behavior.
+**Risk:** Contributors follow ARCHITECTURE.md “register a `CanvasTool`” and still must edit the ~2,240-line canvas for cursor RAF, path-node exit guards, and boolean preview template chrome.
 
 **Remediation**
 
-1. Add `onClick` to selector/node-edit `CanvasTool` adapters; move `onCanvasClick` body into adapter + shared selection-click helper.
-2. Route path-node document drag through node-edit adapter or a dedicated session port — remove router host bypass.
-3. Collapse keyboard policy: registry first for tool keys; canvas-wide guards only for session types (inline text, path-node edit).
-4. Extract cursor policy to per-tool `getCursorHint` on `CanvasTool` or a `CursorPolicyRegistry`.
-5. Delete duplicate pen right-click from canvas once adapter is sole owner.
+1. ✓ `onClick` on selector/node-edit adapters + `selector-canvas-click.ts` helper.
+2. ✓ Path-node pointer drag through node-edit adapter.
+3. ✓ Keyboard registry-first; path-node delete in selector adapter.
+4. ✓ **DEBT-001b** (`svg-editor-my0.15`): group drill-in double-click + path-node exit-on-click in selector/session; gesture cursor branches extracted to `canvas-cursor-hint.ts`.
+5. ✓ Pen right-click deduped — adapter sole owner.
 
-**Depends on:** DEBT-002 (coordinate mapping), DEBT-003 (canvas shrink).
+**Depends on:** DEBT-002 (coordinate mapping) ✓, DEBT-003 (canvas shrink) partial.
 
 ---
 
@@ -69,22 +71,22 @@ Tracked gaps between **documented seams** and **runtime behavior**. Priority ref
 
 ---
 
-### DEBT-003 · `SvgCanvasComponent` remains integration hub ✓
+### DEBT-003 · `SvgCanvasComponent` remains integration hub
 
-**Problem:** Extraction moved orchestrators and overlays out, but the canvas still wired every session, gesture, cursor RAF loop, debug HUD, and direct history mutation.
+**Problem:** Extraction moved orchestrators and overlays out, but the canvas still wires sessions, gesture cursor RAF, debug HUD, path-boolean preview template chrome, and keyboard context assembly.
 
-**Evidence (pre-refactor baseline)**
+**Evidence (2026-07-11)**
 
-- `svg-canvas.component.ts` — **2,531** lines TS + **341** lines HTML
-- **9** direct `pushAndExecute` call sites in canvas
-- **~35** direct `getSVGInstance()` calls
-- Pen preview getters proxied through component for template chrome
+- `svg-canvas.component.ts` — **~2,240** lines TS + **341** lines HTML (down from 2,531 pre-refactor)
+- Direct `pushAndExecute` / `getSVGInstance()` call sites reduced via session bundle + document actions service
+- Pen preview moved to `PenPreviewOverlayComponent` (DEBT-011 ✓); path-boolean preview still inline in canvas template (DEBT-012 / `svg-editor-my0.16`)
 
-**Remediation (landed)**
+**Remediation (partial — landed + residual)**
 
-1. `createCanvasSessionBundle` (`canvas-session-coordinator.ts`) owns pen, path-node edit, inline-text session lifecycle + pointer-stack assembly.
-2. `CanvasDocumentActionsService` routes keyboard align/distribute/group/ungroup through chrome-apply; clipboard cut/paste/duplicate centralized.
-3. `PenToolChromeReadout` + `SvgCanvasEditorChromeFacade` deps — pen preview getters no longer on component.
+1. ✓ `createCanvasSessionBundle` (`canvas-session-coordinator.ts`) owns pen, path-node edit, inline-text session lifecycle + pointer-stack assembly.
+2. ✓ `CanvasDocumentActionsService` routes keyboard align/distribute/group/ungroup through chrome-apply; clipboard cut/paste/duplicate centralized.
+3. ✓ `PenToolChromeReadout` + pen preview overlay — pen preview getters no longer on component.
+4. **Residual:** path-boolean preview template block; `computeExpectedCursorHint` + pen insert hover cursor RAF.
 
 **Depends on:** DEBT-001, DEBT-002.
 
@@ -222,7 +224,7 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 
 1. ESLint `no-restricted-imports`: `src/app/tools/**` cannot import `svg-canvas.component` (`npm run lint`).
 2. ESLint `no-restricted-imports`: `pen-tool-session/**` cannot import `SvgManipulationService` (use `*SvgPort`).
-3. Architecture guard script: fail on new `getCurrentTool() === '` / `tool === '` branches in `svg-canvas.component.ts` — baseline **8** (`npm run lint:arch`).
+3. Architecture guard script: fail on new `getCurrentTool() === '` / `tool === '` branches in `svg-canvas.component.ts` — baseline **7** (`npm run lint:arch`).
 
 **Depends on:** DEBT-001 progress (avoid fighting active migration).
 
@@ -258,9 +260,9 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 
 | Claim | Stale? | Actual |
 |-------|--------|--------|
-| Canvas ~4.3k lines TS | Yes | **2,679** (improvement, not updated) |
-| Residual routing in `PointerGestureRouter` | Yes | Router is clean; residuals in click/keyboard/cursor |
-| Phase 1–3 “closed” | Partial | Coordinate service unwired; selector click not in registry |
+| Canvas ~4.3k / ~2.7k lines TS | Yes | **~2,240** (post DEBT-003 shrink) |
+| Residual routing in `PointerGestureRouter` | Yes | Router is clean; residuals in cursor RAF, path-node exit click guard, boolean preview template |
+| Phase 1–3 “closed” | Partial | Coordinate service wired (`svg-editor-my0.2`); selector `onClick` in registry; DEBT-001b policy gaps remain |
 | “All tools registered” | Partial | Descriptors at startup; canvas adapters deferred via `CanvasBoundToolRegistrar` |
 
 **Remediation**
@@ -293,26 +295,6 @@ Until then, treat every new tool as a core change following the ARCHITECTURE.md 
 
 ---
 
-## P3 — Product-class ceilings (accept or redesign)
-
-### DEBT-012 · Unbounded hot-path cost (DOM hit-testing)
-
-**Problem:** No spatial index, render throttling, or worker offload. `document:mousemove` always traverses canvas → router → tool chain; pen insert cursor uses rAF polling.
-
-**Risk:** Acceptable for small/medium SVGs; degrades with large imports or many overlays.
-
-**Remediation:** Only if product requires large documents — viewport culling, indexed hit-test, throttled overlay refresh. Not a seam issue; a model/render strategy change.
-
----
-
-### DEBT-013 · Boolean geometry flattens curves
-
-**Problem:** Path booleans operate on polygon-flattened fill geometry; results are `M`/`L`/`Z`. Documented in CONTEXT.md but architectural for “pro vector” expectations.
-
-**Remediation:** Product decision — keep as-is for SVG-editor class, or introduce curve-aware kernel (significant scope).
-
----
-
 ## Suggested execution order
 
 ```text
@@ -324,9 +306,6 @@ Wave 2 (shrink hub)
 
 Wave 3 (honesty + safety net)
   DEBT-004 → DEBT-005 → DEBT-008 → DEBT-009 → DEBT-006 → DEBT-007
-
-Wave 4 (only if product demands)
-  DEBT-012 → DEBT-013
 ```
 
 ---
@@ -346,8 +325,6 @@ Wave 4 (only if product demands)
 | Monolithic command tests | DEBT-009 |
 | Doc vs reality | DEBT-010 |
 | Pen preview in template | DEBT-011 |
-| Performance ceiling | DEBT-012 |
-| Boolean fidelity ceiling | DEBT-013 |
 
 ---
 
@@ -355,7 +332,7 @@ Wave 4 (only if product demands)
 
 | Debt ID | Beads | Priority |
 |---------|-------|----------|
-| DEBT-001 | `svg-editor-my0.1` | P0 |
+| DEBT-001 | `svg-editor-my0.1` partial · `svg-editor-my0.15` (001b) | P0 |
 | DEBT-002 | `svg-editor-my0.2` ✓ | P0 |
 | DEBT-003 | `svg-editor-my0.3` | P0 |
 | DEBT-004 | `svg-editor-my0.4` ✓ | P1 |
@@ -366,8 +343,6 @@ Wave 4 (only if product demands)
 | DEBT-009 | `svg-editor-my0.9` ✓ | P2 |
 | DEBT-010 | `svg-editor-my0.10` ✓ | P2 |
 | DEBT-011 | `svg-editor-my0.11` ✓ | P2 |
-| DEBT-012 | `svg-editor-my0.12` | P3 |
-| DEBT-013 | `svg-editor-my0.13` | P3 |
 
 **Epic:** `svg-editor-my0` — [epic] Architecture debt register (adversarial review 2026-07-10)
 

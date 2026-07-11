@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import { ShapeSelectionService } from './shape-selection.service';
 import { ShapeProperties } from '../models/shape-properties.interface';
 
@@ -6,7 +7,7 @@ describe('ShapeSelectionService', () => {
   let service: ShapeSelectionService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     service = TestBed.inject(ShapeSelectionService);
   });
 

@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgShapeContentService } from './svg-shape-content.service';
 
@@ -8,7 +9,7 @@ describe('SvgShapeContentService', () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     doc = TestBed.inject(SvgEditorDocumentService);
     shapes = TestBed.inject(SvgShapeContentService);
     container = document.createElement('div');

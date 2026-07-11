@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import { localBBoxToRootUserAabb } from '../utils/svg-screen-user';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
@@ -40,7 +41,7 @@ describe('SvgSelectionGeometryService', () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     container = document.createElement('div');
     container.id = 'test-svg-selection-geometry';
     document.body.appendChild(container);

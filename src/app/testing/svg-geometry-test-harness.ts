@@ -68,11 +68,11 @@ export function createStubbedSvgElement(
   id: string,
   geometry: SvgGeometryMock,
   ctm?: SvgCtmMock
-): SVGElement {
+): SVGGraphicsElement {
   const el = document.createElementNS('http://www.w3.org/2000/svg', tagName);
   el.id = id;
   stubSvgElementGeometry(el, geometry, ctm);
-  return el;
+  return el as SVGGraphicsElement;
 }
 
 /** Sum axis-aligned boxes (useful for asserting union bounds in tests). */

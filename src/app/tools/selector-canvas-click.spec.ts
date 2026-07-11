@@ -1,4 +1,5 @@
 import { describe, it, expect, vi } from 'vitest';
+import type { EditorTool } from '../services/editor-tool.service';
 import { PathNodeEditSession } from '../components/svg-canvas/path-node-edit-session/path-node-edit-session';
 import { handleSelectorCanvasClick, type SelectorCanvasClickDeps } from './selector-canvas-click';
 import { registerSelectorCanvasTools } from './selector-canvas-tool';
@@ -30,7 +31,7 @@ describe('handleSelectorCanvasClick', () => {
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.id = 'rect1';
     const deps = makeClickDeps({
-      resolveClickedContentShape: () => rect,
+      resolveClickedContentShape: () => rect as never,
       getShapePropertiesInSameClipGroup: () => [{ id: 'rect1' }] as never,
       selectShapes
     });
@@ -40,7 +41,7 @@ describe('handleSelectorCanvasClick', () => {
       shiftKey: false,
       ctrlKey: false,
       metaKey: false
-    } as MouseEvent);
+    } as unknown as MouseEvent);
 
     expect(selectShapes).toHaveBeenCalledWith([{ id: 'rect1' }]);
   });
@@ -50,7 +51,7 @@ describe('handleSelectorCanvasClick', () => {
     const rect = document.createElementNS('http://www.w3.org/2000/svg', 'rect');
     rect.id = 'rect1';
     const deps = makeClickDeps({
-      resolveClickedContentShape: () => rect,
+      resolveClickedContentShape: () => rect as never,
       getShapePropertiesInSameClipGroup: () => [{ id: 'rect1' }] as never,
       toggleShapeGroupInSelection
     });
@@ -60,7 +61,7 @@ describe('handleSelectorCanvasClick', () => {
       shiftKey: true,
       ctrlKey: false,
       metaKey: false
-    } as MouseEvent);
+    } as unknown as MouseEvent);
 
     expect(toggleShapeGroupInSelection).toHaveBeenCalledWith([{ id: 'rect1' }]);
   });
@@ -128,8 +129,8 @@ describe('registry-routed selector onClick', () => {
         setDrilledIntoGroupId: vi.fn(),
         isGroupAClipMaskCarrier: () => false,
         getPenClosePostNodeEditEmptyClickClearUntilMs: () => 0,
-        resolveClickedContentShape: () => rect,
-        getShapeProperties: (el: SVGElement) => ({ id: el.id }) as never,
+        resolveClickedContentShape: () => rect as never,
+        getShapeProperties: (el: Element) => ({ id: el.id }) as never,
         getShapePropertiesInSameClipGroup: () => [{ id: 'rect1' }] as never,
         toggleShapeGroupInSelection: vi.fn(),
         selectShapes,
@@ -158,7 +159,7 @@ describe('registry-routed selector onClick', () => {
     expect(tool).toBeTruthy();
 
     const consumed = tool!.onClick?.(
-      { target: rect, shiftKey: false, ctrlKey: false, metaKey: false } as MouseEvent,
+      { target: rect, shiftKey: false, ctrlKey: false, metaKey: false } as unknown as MouseEvent,
       { x: 0, y: 0 }
     );
 
@@ -168,9 +169,7 @@ describe('registry-routed selector onClick', () => {
 });
 
 describe('PathNodeEditSession.maybeExitOnOutsideClick', () => {
-  function makePathNodeSession(
-    getCurrentTool: () => import('../../services/editor-tool.service').EditorTool = () => 'node-edit-selector'
-  ): PathNodeEditSession {
+  function makePathNodeSession(getCurrentTool: () => EditorTool = () => 'node-edit-selector'): PathNodeEditSession {
     const path = document.createElementNS('http://www.w3.org/2000/svg', 'path');
     path.id = 'path1';
     path.setAttribute('d', 'M 10 10 L 20 20');

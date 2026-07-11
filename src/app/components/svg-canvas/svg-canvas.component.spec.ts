@@ -17,6 +17,7 @@ import { RasterImageInsertService } from '../../services/raster-image-insert.ser
 import { CompositeCommand, TranslateCommand } from '../../models/editor-commands';
 import { MARQUEE_MIN_DRAG_PX } from '../../utils/marquee-selection';
 import { parsePathDForNodeEditing } from '../../models/path-d';
+import { editorPortTestProviders } from '../../testing/editor-port-test-providers';
 
 /** Mock SVG.js shape with clone() for drag-ghost tests. clone() returns a real DOM node so SVG.js add() can adopt it. */
 function mockSvgJsShape(
@@ -90,6 +91,7 @@ describe('SvgCanvasComponent', () => {
     await TestBed.configureTestingModule({
       imports: [SvgCanvasComponent],
       providers: [
+        ...editorPortTestProviders,
         SvgManipulationService,
         ShapeSelectionService,
         EditorToolService,

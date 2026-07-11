@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
+import type { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import { CanvasBoundToolRegistrar } from './canvas-bound-tool-registrar.service';
 import { CreationGesture } from '../components/svg-canvas/gestures/creation-gesture';
 import { DragGesture } from '../components/svg-canvas/gestures/drag-gesture';
@@ -41,6 +42,24 @@ function makeSelectorDeps() {
     isSkewingSelection: () => false,
     isRotatingSelection: () => false,
     isDraggingShape: () => false,
+    getSvgInstance: () => null,
+    enterInlineTextEditMode: vi.fn(),
+    tryDeleteSelectedPathNode: () => false,
+    getPathNodeDragSession: () => null,
+    updatePathNodeDrag: vi.fn(),
+    finishPathNodeDrag: vi.fn(),
+    getDrilledIntoGroupId: () => null,
+    setDrilledIntoGroupId: vi.fn(),
+    isGroupAClipMaskCarrier: () => false,
+    getPenClosePostNodeEditEmptyClickClearUntilMs: () => 0,
+    resolveClickedContentShape: () => null,
+    getShapeProperties: (el: SvgJsElement) => ({ id: el.id }) as never,
+    getShapePropertiesInSameClipGroup: (el: SvgJsElement) => [{ id: el.id }] as never,
+    toggleShapeGroupInSelection: vi.fn(),
+    selectShapes: vi.fn(),
+    clearSelection: vi.fn(),
+    clearHighlight: vi.fn(),
+    consumeSelectionMarqueeJustEnded: () => false,
     getKeyboardActions: () =>
       ({
         getSvgContent: () => 'svg',
@@ -103,7 +122,8 @@ describe('CanvasBoundToolRegistrar', () => {
       hasPathNodeEditState: () => false,
       tryStartPathNodeDrag: () => false,
       isCanvasReady: () => true,
-      scheduleInsertHoverCursorHitTest: vi.fn()
+      scheduleInsertHoverCursorHitTest: vi.fn(),
+      markForCheck: vi.fn()
     }));
     expect(registry.has('pen')).toBe(true);
 
@@ -113,7 +133,8 @@ describe('CanvasBoundToolRegistrar', () => {
       hasPathNodeEditState: () => false,
       tryStartPathNodeDrag: () => false,
       isCanvasReady: () => true,
-      scheduleInsertHoverCursorHitTest: vi.fn()
+      scheduleInsertHoverCursorHitTest: vi.fn(),
+      markForCheck: vi.fn()
     }));
     expect(registry.get('pen')).toBeDefined();
   });
@@ -151,11 +172,14 @@ describe('CanvasBoundToolRegistrar', () => {
         isCanvasReady: () => true,
         updateTextToolPreviewFromClient: vi.fn(),
         createTextAtPoint: vi.fn(),
-        destroyTextToolPreview: vi.fn()
+        destroyTextToolPreview: vi.fn(),
+        tryEnterTextEditAfterCreate: vi.fn()
       }),
       getEyedropperDeps: () => ({
         isCanvasReady: () => true,
-        sampleAt: vi.fn()
+        sampleAt: vi.fn(),
+        setTool: vi.fn(),
+        markForCheck: vi.fn()
       })
     });
     expect(registry.has('zoom')).toBe(true);

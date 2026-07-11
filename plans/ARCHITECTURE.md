@@ -16,7 +16,7 @@ The editor is a **modular monolith with typed seams**: narrow **ports**, **comma
 | **Façades** | `SvgManipulationService`, `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` (each implements many port interfaces; chrome apply injects port **tokens** backed by `useExisting`) |
 | **Registries** | `ToolRegistryService` + `registerDefaultTools()`, `DockPanelRegistryService` + `registerDefaultDockPanels()` |
 
-Large **integration surfaces** remain: `SvgCanvasComponent` (~2.7k lines) orchestrates tools, keyboard, pen/path-node/inline-text sessions, and pen preview chrome in its template.
+Large **integration surfaces** remain: `SvgCanvasComponent` (~2,240 lines) orchestrates tools, keyboard, pen/path-node/inline-text sessions, and path-boolean preview chrome in its template (pen preview lives in `PenPreviewOverlayComponent` — DEBT-011 closed).
 
 ### Tool seam (internal refactor)
 
@@ -87,6 +87,8 @@ PointerGestureRouter    optional orchestrator (e.g. PenToolSession)
 
 Inspector and layers panel actions go through **`ChromeEditorApplyService`** (thin façade) → **`chrome-apply/{paint,transform,layers,path-ops}`** → `EditorCommand`s. Domain slices inject narrow port **tokens** from `chrome-apply.tokens.ts` (backed by `useExisting: SvgManipulationService` in `app.config.ts`).
 
+**Raster insert** (`RasterImageInsertService`) uses the same token pattern via `raster-image-insert.tokens.ts` — `RasterImageInsertSvgPort` (reuses `EditorShapeLifecycleSvgPort` reads + raster insert), history, selection, and tool ports; canvas drag-drop delegates coords + file only.
+
 Group membership changes notify **`GroupStructureChangeService`** (signal port); canvas drill-in listens via `effect()` — no imperative callback on chrome apply.
 
 ### Domain slices (gravity wells — split)
@@ -115,7 +117,7 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 
 ### Still centralized (extension touchpoints)
 
-- **`SvgCanvasComponent`** — pen preview SVG in its template (`editorChrome.*` readouts), inline-text and path-node session wiring, coordinate mapping, keyboard context assembly, document init. Orchestrators (`PenToolSession`, `PathNodeEditSession`, `InlineTextEditSession`) already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
+- **`SvgCanvasComponent`** — path-boolean preview SVG in its template (`editorChrome.pathBooleanPreviewOverlayD`), inline-text and path-node session wiring, coordinate mapping, keyboard context assembly, document init. Orchestrators (`PenToolSession`, `PathNodeEditSession`, `InlineTextEditSession`) already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
 - **`SvgManipulationService`** — wide façade; at new panel/tool boundaries inject a **narrow port** (pattern: `PenToolSessionSvgPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`).
 
 ### Architecture debt
@@ -124,8 +126,7 @@ Prioritized gaps between documented seams and runtime behavior: **[ARCHITECTURE-
 
 ### Next seams (future work)
 
-- Move selector click / drill-in into `CanvasTool.onClick` adapters — **DEBT-001** (unblocked).
-- Extract remaining pen preview DOM from the canvas template into a dedicated overlay component (policy already lives in `PenToolSession`) — **DEBT-011**.
+- Extract path-boolean preview DOM from the canvas template into a dedicated overlay component — **DEBT-012** / `svg-editor-my0.16` (pen preview overlay pattern; policy already in chrome readout).
 
 ---
 

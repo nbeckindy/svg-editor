@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import { RasterImageInsertService } from './raster-image-insert.service';
 import { SvgManipulationService } from './svg-manipulation.service';
 import { EditorHistoryService } from './editor-history.service';
@@ -24,7 +25,7 @@ describe('RasterImageInsertService pipeline (e4s.8 integration)', () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     container = document.createElement('div');
     container.id = 'test-raster-pipeline';
     document.body.appendChild(container);

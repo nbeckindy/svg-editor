@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import {
   CanvasCoordinateMappingService,
   type CanvasCoordinateMappingBindings
@@ -53,7 +54,7 @@ describe('CanvasCoordinateMappingService', () => {
   let service: CanvasCoordinateMappingService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     service = TestBed.inject(CanvasCoordinateMappingService);
   });
 

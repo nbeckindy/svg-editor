@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import { EDITOR_DOCUMENT_DEFS_ATTR } from './svg-editor-stage.constants';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgGradientDefsService } from './svg-gradient-defs.service';
@@ -9,7 +10,7 @@ describe('SvgGradientDefsService', () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     doc = TestBed.inject(SvgEditorDocumentService);
     gradients = TestBed.inject(SvgGradientDefsService);
     container = document.createElement('div');

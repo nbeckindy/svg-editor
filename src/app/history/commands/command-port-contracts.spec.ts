@@ -1,10 +1,11 @@
+import { describe, it, expect, vi } from 'vitest';
 import { Matrix } from '@svgdotjs/svg.js';
 import { FillColorCommand, TranslateCommand, RemoveShapesCommand } from '../../models/editor-commands';
-import type { HistoryPaintPort } from '../../history-paint.port';
-import type { TransformGestureSvgPort } from '../../transform-gesture-svg.port';
-import type { EditorShapeLifecycleSvgPort } from '../../editor-shape-lifecycle-svg.port';
+import type { HistoryPaintPort } from '../history-paint.port';
+import type { TransformGestureSvgPort } from '../transform-gesture-svg.port';
+import type { EditorShapeLifecycleSvgPort } from '../editor-shape-lifecycle-svg.port';
 
-function mockPaintPort(): HistoryPaintPort & { updateFillColor: ReturnType<typeof vi.fn> } {
+function mockPaintPort(): HistoryPaintPort {
   return {
     updateFillColor: vi.fn(),
     updateStrokeColor: vi.fn(),
@@ -12,10 +13,7 @@ function mockPaintPort(): HistoryPaintPort & { updateFillColor: ReturnType<typeo
   };
 }
 
-function mockTransformPort(): TransformGestureSvgPort & {
-  translateShape: ReturnType<typeof vi.fn>;
-  restoreSelectionTransformsFromSnapshot: ReturnType<typeof vi.fn>;
-} {
+function mockTransformPort(): TransformGestureSvgPort {
   return {
     getSVGInstance: vi.fn().mockReturnValue(null),
     translateShape: vi.fn(),
@@ -28,7 +26,7 @@ function mockTransformPort(): TransformGestureSvgPort & {
   };
 }
 
-function mockLifecyclePort(): EditorShapeLifecycleSvgPort & { removeShapes: ReturnType<typeof vi.fn> } {
+function mockLifecyclePort(): EditorShapeLifecycleSvgPort {
   return {
     getSVGInstance: vi.fn().mockReturnValue(null),
     getShapeProperties: vi.fn(),
@@ -46,33 +44,39 @@ describe('command port contracts', () => {
   describe('HistoryPaintPort', () => {
     it('FillColorCommand calls updateFillColor on execute and undo', () => {
       const paint = mockPaintPort();
+      const updateFillColor = vi.mocked(paint.updateFillColor);
       const cmd = new FillColorCommand(paint, 'shape-1', '#000000', '#ffffff');
 
       cmd.execute();
-      expect(paint.updateFillColor).toHaveBeenCalledWith('shape-1', '#ffffff');
+      expect(updateFillColor).toHaveBeenCalledWith('shape-1', '#ffffff');
 
       cmd.undo();
-      expect(paint.updateFillColor).toHaveBeenCalledWith('shape-1', '#000000');
+      expect(updateFillColor).toHaveBeenCalledWith('shape-1', '#000000');
     });
   });
 
   describe('TransformGestureSvgPort', () => {
     it('TranslateCommand calls translateShape on execute and restoreSelectionTransformsFromSnapshot on undo', () => {
       const transform = mockTransformPort();
+      const translateShape = vi.mocked(transform.translateShape);
+      const restoreSelectionTransformsFromSnapshot = vi.mocked(
+        transform.restoreSelectionTransformsFromSnapshot
+      );
       const snapshot = new Map<string, Matrix>([['shape-1', new Matrix()]]);
       const cmd = new TranslateCommand(transform, 'shape-1', 12, -4, snapshot);
 
       cmd.execute();
-      expect(transform.translateShape).toHaveBeenCalledWith('shape-1', 12, -4);
+      expect(translateShape).toHaveBeenCalledWith('shape-1', 12, -4);
 
       cmd.undo();
-      expect(transform.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledWith(['shape-1'], snapshot);
+      expect(restoreSelectionTransformsFromSnapshot).toHaveBeenCalledWith(['shape-1'], snapshot);
     });
   });
 
   describe('EditorShapeLifecycleSvgPort', () => {
     it('RemoveShapesCommand calls removeShapes on execute', () => {
       const lifecycle = mockLifecyclePort();
+      const removeShapes = vi.mocked(lifecycle.removeShapes);
       const contentGroup = document.createElement('div');
       contentGroup.setAttribute('data-editor-content-group', '');
       const shape = document.createElement('div');
@@ -89,7 +93,7 @@ describe('command port contracts', () => {
 
       const cmd = new RemoveShapesCommand(lifecycle, ['shape-1']);
       cmd.execute();
-      expect(lifecycle.removeShapes).toHaveBeenCalledWith(['shape-1']);
+      expect(removeShapes).toHaveBeenCalledWith(['shape-1']);
     });
   });
 });

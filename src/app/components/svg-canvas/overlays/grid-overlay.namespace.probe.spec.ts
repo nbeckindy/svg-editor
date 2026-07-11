@@ -5,6 +5,7 @@ import { ShapeSelectionService } from '../../../services/shape-selection.service
 import { EditorToolService } from '../../../services/editor-tool.service';
 import { SvgManipulationService } from '../../../services/svg-manipulation.service';
 import { CanvasViewService } from '../../../services/canvas-view.service';
+import { editorPortTestProviders } from '../../../testing/editor-port-test-providers';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -15,7 +16,7 @@ describe('grid overlay SVG namespace', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [SvgCanvasComponent],
-      providers: [SvgManipulationService, ShapeSelectionService, EditorToolService, CanvasViewService]
+      providers: [...editorPortTestProviders, SvgManipulationService, ShapeSelectionService, EditorToolService, CanvasViewService]
     }).compileComponents();
     fixture = TestBed.createComponent(SvgCanvasComponent);
     editorToolService = TestBed.inject(EditorToolService);

@@ -63,7 +63,8 @@ describe('view and utility canvas tools', () => {
       isCanvasReady: () => true,
       updateTextToolPreviewFromClient: vi.fn(),
       createTextAtPoint,
-      destroyTextToolPreview: vi.fn()
+      destroyTextToolPreview: vi.fn(),
+      tryEnterTextEditAfterCreate: vi.fn()
     }));
     tool.onClick?.({ clientX: 10, clientY: 20 } as MouseEvent, { x: 0, y: 0 });
     expect(createTextAtPoint).toHaveBeenCalledWith(10, 20);
@@ -73,7 +74,9 @@ describe('view and utility canvas tools', () => {
     const sampleAt = vi.fn();
     const tool = createEyedropperCanvasTool(() => ({
       isCanvasReady: () => true,
-      sampleAt
+      sampleAt,
+      setTool: vi.fn(),
+      markForCheck: vi.fn()
     }));
     const ev = { clientX: 3, clientY: 4 } as MouseEvent;
     tool.onClick?.(ev, { x: 0, y: 0 });
@@ -104,11 +107,14 @@ describe('view and utility canvas tools', () => {
       isCanvasReady: () => true,
       updateTextToolPreviewFromClient: vi.fn(),
       createTextAtPoint: vi.fn(),
-      destroyTextToolPreview: vi.fn()
+      destroyTextToolPreview: vi.fn(),
+      tryEnterTextEditAfterCreate: vi.fn()
     }));
     registerEyedropperCanvasTool(registry, () => ({
       isCanvasReady: () => true,
-      sampleAt: vi.fn()
+      sampleAt: vi.fn(),
+      setTool: vi.fn(),
+      markForCheck: vi.fn()
     }));
     for (const toolId of ['zoom', 'pan', 'text', 'eyedropper'] as const) {
       expect(registry.has(toolId)).toBe(true);

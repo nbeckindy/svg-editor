@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import { SvgManipulationService, CreatableShapeType } from './svg-manipulation.service';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { AddPathCommand, AddImageCommand, ArtboardSizeCommand, ArtboardBackgroundCommand } from '../models/editor-commands';
@@ -13,7 +14,7 @@ describe('SvgManipulationService', () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     service = TestBed.inject(SvgManipulationService);
     drawingDefaults = TestBed.inject(DrawingStyleDefaultsService);
     

@@ -11,6 +11,7 @@ import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaul
 import { ShapeProperties } from '../../models/shape-properties.interface';
 import { DEFAULT_ARTBOARD, ArtboardResizeAnchor } from '../../models/artboard.model';
 import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
+import { editorPortTestProviders } from '../../testing/editor-port-test-providers';
 import { vi } from 'vitest';
 
 describe('PropertiesPanelComponent', () => {
@@ -160,6 +161,7 @@ describe('PropertiesPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [PropertiesPanelComponent],
       providers: [
+        ...editorPortTestProviders,
         ...mdiIconHttpTestProviders,
         { provide: ShapeSelectionService, useValue: shapeSelectionServiceMock },
         { provide: SvgManipulationService, useValue: svgManipulationServiceMock },

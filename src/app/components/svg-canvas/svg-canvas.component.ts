@@ -1,4 +1,5 @@
 import { Component, input, viewChild, AfterViewInit, ElementRef, OnDestroy, ChangeDetectorRef, effect, signal, inject } from '@angular/core';
+import { SelectionReconcileService } from '../../services/selection-reconcile.service';
 import { SVG, Svg, Element as SVGElement, Matrix } from '@svgdotjs/svg.js';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
@@ -61,6 +62,10 @@ import type { SelectorKeyboardActionsPort } from './selector-canvas-tool-keyboar
 import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext } from './svg-canvas-keyboard.controller';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
+import {
+  cursorHintForGestureInProgress,
+  cursorHintForPathNodeEditHover
+} from '../../tools/canvas-cursor-hint';
 import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createCanvasSessionBundle } from './canvas-session-coordinator';
 import { PenToolChromeReadout } from './pen-tool-chrome-readout';
@@ -96,6 +101,7 @@ import { RulerOverlayComponent } from './overlays/ruler-overlay.component';
 import { GridOverlayComponent } from './overlays/grid-overlay.component';
 import { SmartGuideOverlayComponent } from './overlays/smart-guide-overlay.component';
 import { PenPreviewOverlayComponent } from './overlays/pen-preview-overlay.component';
+import { BooleanPreviewOverlayComponent } from './overlays/boolean-preview-overlay.component';
 import { SnapCandidateShape } from '../../services/snap.service';
 import { CanvasViewportChromePresenter, type CanvasViewportChromePresenterHost } from './canvas-viewport-chrome.presenter';
 import type { PenToolSessionSvgPort } from './pen-tool-session/pen-tool-session-svg.port';
@@ -192,6 +198,7 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
     GridOverlayComponent,
     SmartGuideOverlayComponent,
     PenPreviewOverlayComponent,
+    BooleanPreviewOverlayComponent,
     InlineTextEditorOverlayComponent
   ],
   templateUrl: './svg-canvas.component.html',
@@ -215,6 +222,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   private readonly pointerIntentDebug = inject(EditorPointerIntentDebugService);
   private readonly groupStructureChange = inject(GroupStructureChangeService);
   private readonly canvasDocumentActions = inject(CanvasDocumentActionsService);
+  private readonly selectionReconcile = inject(SelectionReconcileService);
   readonly rulerOverlay = viewChild(RulerOverlayComponent);
   readonly inlineTextEditorOverlay = viewChild(InlineTextEditorOverlayComponent);
   altKeyPressed = false;
@@ -1124,8 +1132,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       isGroupAClipMaskCarrier: (groupId) => this.isGroupAClipMaskCarrier(groupId),
       getPenClosePostNodeEditEmptyClickClearUntilMs: () => this.penClosePostNodeEditEmptyClickClearUntilMs,
       resolveClickedContentShape: (clickTarget) => {
+        if (!clickTarget.id) return null;
         const svgInstance = this.svgManipulation.getSVGInstance();
-        return (clickTarget.id && (svgInstance?.findOne(`#${clickTarget.id}`) as SVGElement)) || null;
+        return (svgInstance?.findOne(`#${clickTarget.id}`) as SVGElement | undefined) ?? null;
       },
       getShapeProperties: (el) => this.svgManipulation.getShapeProperties(el),
       getShapePropertiesInSameClipGroup: (el) => this.svgManipulation.getShapePropertiesInSameClipGroup(el),
@@ -1267,22 +1276,34 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     });
     effect(() => {
       this.editorHistory.revision();
-      this.drilledIntoGroupId = null;
-      if (this.pathNodeEditSession.getPathNodeEditState()) {
-        const selectedPathIds = this.shapeSelection
-          .selectedShapes()
-          .map((shape) => shape.id)
-          .filter((id) => this.isPathElementId(id));
-        if (selectedPathIds.length === 0) {
-          this.exitPathNodeEditMode();
-        } else {
-          this.enterPathNodeEditMode(
-            selectedPathIds,
-            this.pathNodeEditSession.getPathNodeEditState()?.activePathId ?? selectedPathIds[0]
-          );
+      this.selectionReconcile.onHistoryRevision({
+        beforeReconcile: () => {
+          this.drilledIntoGroupId = null;
+          if (this.pathNodeEditSession.getPathNodeEditState()) {
+            const selectedPathIds = this.shapeSelection
+              .selectedShapes()
+              .map((shape) => shape.id)
+              .filter((id) => this.isPathElementId(id));
+            if (selectedPathIds.length === 0) {
+              this.exitPathNodeEditMode();
+            } else {
+              this.enterPathNodeEditMode(
+                selectedPathIds,
+                this.pathNodeEditSession.getPathNodeEditState()?.activePathId ?? selectedPathIds[0]
+              );
+            }
+          }
+        },
+        onUnionBboxUpdated: (unionBbox) => {
+          if (unionBbox) {
+            this.lastBbox = unionBbox;
+            this._highlightRectCacheKey = '';
+          }
+        },
+        afterReconcile: () => {
+          this.cdr.detectChanges();
         }
-      }
-      setTimeout(() => this.syncSelectionFromDom(), 0);
+      });
     });
     effect(() => {
       this.snap.setGridEnabled(this.editorTool.isGridSnapEnabled());
@@ -1618,25 +1639,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     return this.coordinateMapping.clientToEditorSvgPoint(clientX, clientY);
   }
 
-  private syncSelectionFromDom(): void {
-    const svg = this.svgManipulation.getSVGInstance();
-    if (!svg) return;
-    const selected = this.shapeSelection.getSelectedShapes();
-    if (selected.length === 0) return;
-    const refreshed = selected.map((s) => {
-      const el = svg.findOne(`#${s.id}`) as SVGElement | undefined;
-      return el ? this.svgManipulation.getShapeProperties(el) : s;
-    });
-    this.shapeSelection.selectShapes(refreshed);
-    const ids = refreshed.map((s) => s.id);
-    const unionBbox = this.svgManipulation.getUnionBBox(ids);
-    if (unionBbox) {
-      this.lastBbox = unionBbox;
-      this._highlightRectCacheKey = '';
-    }
-    this.cdr.detectChanges();
-  }
-
   private initializeSVG(svgContent: string): void {
     this.destroyTextToolPreview();
     this.editorHistory.clear();
@@ -1810,21 +1812,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     const svgInstanceForClick = this.svgManipulation.getSVGInstance();
     const clickedContentShapeEl =
       clickTarget.id && (svgInstanceForClick?.findOne(`#${clickTarget.id}`) as SVGElement);
-    const emptyHitNoResolvedShape = !clickedContentShapeEl;
-    if (this.pathNodeEditSession.getPathNodeEditState() && !this.isPathNodeEditTarget(clickTarget)) {
-      if (this.editorTool.getCurrentTool() !== 'pen') {
-        const nowForPenCloseGuard =
-          typeof performance !== 'undefined' && typeof performance.now === 'function'
-            ? performance.now()
-            : Date.now();
-        const skipExitForTrailingPenCloseClick =
-          nowForPenCloseGuard < this.penClosePostNodeEditEmptyClickClearUntilMs &&
-          emptyHitNoResolvedShape;
-        if (!skipExitForTrailingPenCloseClick) {
-          this.exitPathNodeEditMode();
-        }
-      }
-    }
+    this.pathNodeEditSession.maybeExitOnOutsideClick({
+      clickTarget,
+      penClosePostNodeEditEmptyClickClearUntilMs: this.penClosePostNodeEditEmptyClickClearUntilMs,
+      hasResolvedContentShape: !!clickedContentShapeEl
+    });
     if (this.tryDispatchRegisteredCanvasClick(event)) {
       return;
     }
@@ -1860,29 +1852,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   onCanvasDoubleClick(event: MouseEvent): void {
     if (this.editorTool.getCurrentTool() === 'pen') return;
-    if (this.tryDispatchRegisteredCanvasDoubleClick(event)) return;
-    if (this.editorTool.getCurrentTool() !== 'selector') return;
-    const selected = this.shapeSelection.getSelectedShapes();
-    if (selected.length !== 1) return;
-    const selectedId = selected[0].id;
-    const svgInstance = this.svgManipulation.getSVGInstance();
-    if (!svgInstance) return;
-    const selectedEl = svgInstance.findOne(`#${selectedId}`)?.node as Element | null;
-    if (!selectedEl) return;
-
-    const selectedTag = selectedEl.tagName?.toLowerCase();
-    if (selectedTag !== 'g') return;
-
-    this.drilledIntoGroupId = selectedId;
-
-    const clickTarget = event.target as Element;
-    if (clickTarget.id) {
-      const childEl = svgInstance.findOne(`#${clickTarget.id}`) as SVGElement | undefined;
-      if (childEl) {
-        const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(childEl);
-        this.shapeSelection.selectShapes(expanded);
-      }
-    }
+    this.tryDispatchRegisteredCanvasDoubleClick(event);
   }
 
   onInlineTextEditInput(value: string): void {
@@ -2011,40 +1981,25 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     const vp = this.canvasViewport()?.nativeElement;
     const vpCur = vp?.style?.cursor?.trim();
 
-    if (this.pathNodeEditSession.getPathNodeDragSession()) {
-      return 'Expected cursor: move (path node drag in progress)';
-    }
-    if (this.creation.isActive) {
-      return 'Expected cursor: crosshair (creation in progress)';
-    }
-    if (this.isDraggingShape) {
-      return 'Expected cursor: move (shape drag in progress)';
-    }
-    if (this.isResizingSelection) {
-      return 'Expected cursor: (resize — axis from active handle; .selection-resize-*)';
-    }
-    if (this.isSkewingSelection) {
-      return 'Expected cursor: (skew — .selection-skew-*)';
-    }
-    if (this.isPanning && tool === 'pan') {
-      return 'Expected cursor: grabbing (.canvas-container.pan-dragging)';
-    }
+    const gestureHint = cursorHintForGestureInProgress({
+      pathNodeDragActive: !!this.pathNodeEditSession.getPathNodeDragSession(),
+      creationActive: this.creation.isActive,
+      isDraggingShape: this.isDraggingShape,
+      isResizingSelection: this.isResizingSelection,
+      isSkewingSelection: this.isSkewingSelection,
+      isRotatingSelection: this.isRotatingSelection,
+      isPanning: this.isPanning,
+      currentTool: tool,
+      isPenInsertOnPathDragActive: this.isPenInsertOnPathDragActive()
+    });
+    if (gestureHint) return gestureHint;
 
-    if (this.isRotatingSelection && typeof document !== 'undefined') {
-      const b = document.body.style.cursor?.trim();
-      if (b) return `Expected cursor: ${b} (rotate gesture on document.body)`;
-    }
-    if (this.isPenInsertOnPathDragActive()) {
-      return 'Expected cursor: copy (pen insert-on-path drag; #canvasViewport inline)';
-    }
-    if (overCanvas && hitTarget && this.hasPathNodeEditState()) {
-      if (hitTarget.closest?.('[data-path-node-anchor-index]')) {
-        return 'Expected cursor: move (path node anchor; .path-node-anchor)';
-      }
-      if (hitTarget.closest?.('[data-path-node-handle-index]')) {
-        return 'Expected cursor: move (path control handle; .path-node-control-handle)';
-      }
-    }
+    const pathNodeHoverHint = cursorHintForPathNodeEditHover(
+      hitTarget,
+      overCanvas,
+      this.hasPathNodeEditState()
+    );
+    if (pathNodeHoverHint) return pathNodeHoverHint;
 
     const toolHint = this.toolRegistry.get(tool)?.getCursorHint?.({
       clientX,

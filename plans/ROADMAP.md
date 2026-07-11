@@ -117,6 +117,15 @@ Epic **`CLOSED` in `bd`** — children were:
 | Properties panel UI | `svg-editor-9i5` |
 | Creation + coverage | `svg-editor-6g0.3`, `svg-editor-6g0.4` |
 
+## Deferred optimizations
+
+Items surfaced during the [architecture debt review](./ARCHITECTURE-DEBT.md) (2026-07-10) but **not seam debt** — deliberate product/model ceilings. Revisit only if product scope expands (large documents, pro-vector boolean fidelity).
+
+| bd ID | Title | Trigger | Notes |
+|-------|-------|---------|-------|
+| `svg-editor-my0.12` | Large-document performance (spatial index, render throttling) | Many shapes / heavy imports degrade interaction | Viewport culling, indexed hit-test, throttled overlay refresh, optional worker offload — render strategy change, not a registry/seam fix |
+| `svg-editor-my0.13` | Curve-aware path booleans | “Pro vector” boolean expectations beyond SVG-editor class | Current booleans flatten curves to `M`/`L`/`Z` polygons (see CONTEXT.md); curve-preserving kernel is significant scope — orthogonal to [boolean-path-operations](./epics/boolean-path-operations.md) epic (MVP booleans) |
+
 ## Post-MVP
 
 | bd ID | Title | Priority | Notes |

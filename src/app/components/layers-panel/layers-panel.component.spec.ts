@@ -3,6 +3,7 @@ import { HttpTestingController } from '@angular/common/http/testing';
 import { signal, WritableSignal } from '@angular/core';
 import { vi } from 'vitest';
 import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
+import { editorPortTestProviders } from '../../testing/editor-port-test-providers';
 import { LayersPanelComponent } from './layers-panel.component';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { LayerTreeNode, SvgManipulationService } from '../../services/svg-manipulation.service';
@@ -47,6 +48,7 @@ describe('LayersPanelComponent', () => {
     await TestBed.configureTestingModule({
       imports: [LayersPanelComponent],
       providers: [
+        ...editorPortTestProviders,
         ...mdiIconHttpTestProviders,
         {
           provide: SvgManipulationService,

@@ -1,11 +1,12 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import { ClipboardService, type ClipboardPayload } from './clipboard.service';
 
 describe('ClipboardService', () => {
   let service: ClipboardService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     service = TestBed.inject(ClipboardService);
   });
 

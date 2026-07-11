@@ -2,6 +2,7 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { HttpTestingController } from '@angular/common/http/testing';
 import { EditorLeftRailComponent } from './editor-left-rail.component';
 import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from '../../testing/mdi-icon-testing';
+import { editorPortTestProviders } from '../../testing/editor-port-test-providers';
 
 describe('EditorLeftRailComponent', () => {
   let fixture: ComponentFixture<EditorLeftRailComponent>;
@@ -9,7 +10,7 @@ describe('EditorLeftRailComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [EditorLeftRailComponent],
-      providers: [...mdiIconHttpTestProviders]
+      providers: [...editorPortTestProviders, ...mdiIconHttpTestProviders]
     }).compileComponents();
 
     registerMdiSvgIconSetForTests();

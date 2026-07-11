@@ -22,6 +22,7 @@ function makePenDeps(over: Partial<PenCanvasToolDeps> = {}): () => PenCanvasTool
     tryStartPathNodeDrag: () => false,
     isCanvasReady: () => true,
     scheduleInsertHoverCursorHitTest: vi.fn(),
+    markForCheck: vi.fn(),
     ...over,
     getPenTool: over.getPenTool ?? (() => penTool)
   });

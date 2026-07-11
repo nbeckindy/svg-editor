@@ -11,12 +11,13 @@ import { DockPanelRegistryService } from './panels/dock-panel-registry.service';
 import { registerDefaultDockPanels } from './panels/register-default-dock-panels';
 import { routes } from './app.routes';
 import { flushMdiSvgIfPending, mdiIconHttpTestProviders, registerMdiSvgIconSetForTests } from './testing/mdi-icon-testing';
+import { editorPortTestProviders } from './testing/editor-port-test-providers';
 
 describe('AppComponent', () => {
   beforeEach(async () => {
     await TestBed.configureTestingModule({
       imports: [AppComponent],
-      providers: [provideRouter(routes), ...mdiIconHttpTestProviders]
+      providers: [provideRouter(routes), ...mdiIconHttpTestProviders, ...editorPortTestProviders]
     }).compileComponents();
 
     registerDefaultDockPanels(TestBed.inject(DockPanelRegistryService));

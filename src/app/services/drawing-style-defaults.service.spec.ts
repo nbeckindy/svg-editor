@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import {
   BASE_DRAWING_STYLE_DEFAULTS,
   DrawingStyleDefaultsService
@@ -8,7 +9,7 @@ describe('DrawingStyleDefaultsService', () => {
   let service: DrawingStyleDefaultsService;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     service = TestBed.inject(DrawingStyleDefaultsService);
   });
 

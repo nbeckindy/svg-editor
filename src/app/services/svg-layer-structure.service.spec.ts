@@ -1,4 +1,5 @@
 import { TestBed } from '@angular/core/testing';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import { SvgLayerStructureService } from './svg-layer-structure.service';
 
@@ -8,7 +9,7 @@ describe('SvgLayerStructureService', () => {
   let container: HTMLElement;
 
   beforeEach(() => {
-    TestBed.configureTestingModule({});
+    TestBed.configureTestingModule({ providers: editorPortTestProviders });
     doc = TestBed.inject(SvgEditorDocumentService);
     layers = TestBed.inject(SvgLayerStructureService);
     container = document.createElement('div');

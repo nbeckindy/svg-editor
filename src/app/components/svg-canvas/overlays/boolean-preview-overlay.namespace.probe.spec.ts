@@ -7,6 +7,7 @@ import { SvgManipulationService } from '../../../services/svg-manipulation.servi
 import { CanvasViewService } from '../../../services/canvas-view.service';
 import { PathBooleanPreviewService } from '../../../services/path-boolean-preview.service';
 import { PathBooleanGeometryService } from '../../../services/path-boolean-geometry.service';
+import { editorPortTestProviders } from '../../../testing/editor-port-test-providers';
 
 const SVG_NS = 'http://www.w3.org/2000/svg';
 
@@ -18,6 +19,7 @@ describe('boolean preview overlay SVG namespace', () => {
     await TestBed.configureTestingModule({
       imports: [SvgCanvasComponent],
       providers: [
+        ...editorPortTestProviders,
         SvgManipulationService,
         ShapeSelectionService,
         EditorToolService,
