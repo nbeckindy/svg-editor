@@ -10,11 +10,7 @@ import type { ToolRegistryService } from '../../../tools/tool-registry.service';
  * routing). Keeps {@link PointerGestureRouter} independent of the full component graph.
  */
 export interface SvgCanvasPointerGestureHost
-  extends Pick<CanvasAdapterToolState, 'getCurrentTool'>, CanvasAdapterCoordinates {
-  getPathNodeDragSession(): unknown | null;
-  updatePathNodeDrag(clientX: number, clientY: number): void;
-  finishPathNodeDrag(): void;
-}
+  extends Pick<CanvasAdapterToolState, 'getCurrentTool'>, CanvasAdapterCoordinates {}
 
 export class PointerGestureRouter {
   constructor(private readonly toolRegistry: ToolRegistryService) {}
@@ -50,19 +46,11 @@ export class PointerGestureRouter {
   }
 
   onDocumentMouseMove(host: SvgCanvasPointerGestureHost, event: MouseEvent): void {
-    if (host.getPathNodeDragSession()) {
-      host.updatePathNodeDrag(event.clientX, event.clientY);
-      return;
-    }
     this.dispatchRegisteredPointerMove(host, event);
   }
 
   onDocumentMouseUp(host: SvgCanvasPointerGestureHost, event: MouseEvent): void {
     if (event.button !== 0) return;
-    if (host.getPathNodeDragSession()) {
-      host.finishPathNodeDrag();
-      return;
-    }
     this.dispatchRegisteredPointerUp(host, event);
   }
 

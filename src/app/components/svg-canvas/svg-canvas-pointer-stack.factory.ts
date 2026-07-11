@@ -78,6 +78,24 @@ export interface CreateSvgCanvasPointerStackArgs {
   getSelectorKeyboardActions: SelectorCanvasToolDeps['getKeyboardActions'];
   getSvgInstance: SelectorCanvasToolDeps['getSvgInstance'];
   enterInlineTextEditMode: SelectorCanvasToolDeps['enterInlineTextEditMode'];
+  getDrilledIntoGroupId: SelectorCanvasToolDeps['getDrilledIntoGroupId'];
+  setDrilledIntoGroupId: SelectorCanvasToolDeps['setDrilledIntoGroupId'];
+  isGroupAClipMaskCarrier: SelectorCanvasToolDeps['isGroupAClipMaskCarrier'];
+  getPenClosePostNodeEditEmptyClickClearUntilMs: SelectorCanvasToolDeps['getPenClosePostNodeEditEmptyClickClearUntilMs'];
+  resolveClickedContentShape: SelectorCanvasToolDeps['resolveClickedContentShape'];
+  getShapeProperties: SelectorCanvasToolDeps['getShapeProperties'];
+  getShapePropertiesInSameClipGroup: SelectorCanvasToolDeps['getShapePropertiesInSameClipGroup'];
+  toggleShapeGroupInSelection: SelectorCanvasToolDeps['toggleShapeGroupInSelection'];
+  selectShapes: SelectorCanvasToolDeps['selectShapes'];
+  clearSelection: SelectorCanvasToolDeps['clearSelection'];
+  clearHighlight: SelectorCanvasToolDeps['clearHighlight'];
+  consumeSelectionMarqueeJustEnded: SelectorCanvasToolDeps['consumeSelectionMarqueeJustEnded'];
+  getPathNodeDragSession: SelectorCanvasToolDeps['getPathNodeDragSession'];
+  updatePathNodeDrag: SelectorCanvasToolDeps['updatePathNodeDrag'];
+  finishPathNodeDrag: SelectorCanvasToolDeps['finishPathNodeDrag'];
+  tryDeleteSelectedPathNode: SelectorCanvasToolDeps['tryDeleteSelectedPathNode'];
+  markForCheck: () => void;
+  setTool: (tool: import('../../services/editor-tool.service').EditorTool) => void;
   getZoomMarquee: ZoomCanvasToolDeps['getZoomMarquee'];
   isZoomMarquee: ZoomCanvasToolDeps['isZoomMarquee'];
   commitZoomMarquee: ZoomCanvasToolDeps['commitZoomMarquee'];
@@ -152,7 +170,8 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     hasPathNodeEditState: args.hasPathNodeEditState,
     tryStartPathNodeDrag: args.tryStartPathNodeDrag,
     isCanvasReady: args.isCanvasReady,
-    scheduleInsertHoverCursorHitTest: args.scheduleInsertHoverCursorHitTest
+    scheduleInsertHoverCursorHitTest: args.scheduleInsertHoverCursorHitTest,
+    markForCheck: args.markForCheck
   }));
 
   args.canvasBoundToolRegistrar.registerSelectorTools(() => ({
@@ -161,6 +180,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     isCanvasReady: args.isCanvasReady,
     hasPathNodeEditState: args.hasPathNodeEditState,
     tryStartPathNodeDrag: args.tryStartPathNodeDrag,
+    tryDeleteSelectedPathNode: args.tryDeleteSelectedPathNode,
     isEditorContentShapeTarget: args.isEditorContentShapeTarget,
     clientToEditorSvgPoint: args.clientToEditorSvgPoint,
     isShapeSelected: args.isShapeSelected,
@@ -171,9 +191,24 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     isSkewingSelection: args.isSkewingSelection,
     isRotatingSelection: args.isRotatingSelection,
     isDraggingShape: args.isDraggingShape,
+    getPathNodeDragSession: args.getPathNodeDragSession,
+    updatePathNodeDrag: args.updatePathNodeDrag,
+    finishPathNodeDrag: args.finishPathNodeDrag,
     getKeyboardActions: args.getSelectorKeyboardActions,
     getSvgInstance: args.getSvgInstance,
-    enterInlineTextEditMode: args.enterInlineTextEditMode
+    enterInlineTextEditMode: args.enterInlineTextEditMode,
+    getDrilledIntoGroupId: args.getDrilledIntoGroupId,
+    setDrilledIntoGroupId: args.setDrilledIntoGroupId,
+    isGroupAClipMaskCarrier: args.isGroupAClipMaskCarrier,
+    getPenClosePostNodeEditEmptyClickClearUntilMs: args.getPenClosePostNodeEditEmptyClickClearUntilMs,
+    resolveClickedContentShape: args.resolveClickedContentShape,
+    getShapeProperties: args.getShapeProperties,
+    getShapePropertiesInSameClipGroup: args.getShapePropertiesInSameClipGroup,
+    toggleShapeGroupInSelection: args.toggleShapeGroupInSelection,
+    selectShapes: args.selectShapes,
+    clearSelection: args.clearSelection,
+    clearHighlight: args.clearHighlight,
+    consumeSelectionMarqueeJustEnded: args.consumeSelectionMarqueeJustEnded
   }));
 
   args.canvasBoundToolRegistrar.registerViewUtilityTools({
@@ -204,7 +239,9 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     }),
     getEyedropperDeps: () => ({
       isCanvasReady: args.isCanvasReady,
-      sampleAt: args.sampleEyedropperAt
+      sampleAt: args.sampleEyedropperAt,
+      setTool: (tool) => args.setTool(tool),
+      markForCheck: args.markForCheck
     })
   });
 

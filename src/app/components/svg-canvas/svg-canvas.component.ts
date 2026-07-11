@@ -1399,6 +1399,29 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       isRotatingSelection: () => this.isRotatingSelection,
       isDraggingShape: () => this.isDraggingShape,
       getSelectorKeyboardActions: () => this.getSelectorKeyboardActions(),
+      getDrilledIntoGroupId: () => this.drilledIntoGroupId,
+      setDrilledIntoGroupId: (id) => {
+        this.drilledIntoGroupId = id;
+      },
+      isGroupAClipMaskCarrier: (groupId) => this.isGroupAClipMaskCarrier(groupId),
+      getPenClosePostNodeEditEmptyClickClearUntilMs: () => this.penClosePostNodeEditEmptyClickClearUntilMs,
+      resolveClickedContentShape: (clickTarget) => {
+        const svgInstance = this.svgManipulation.getSVGInstance();
+        return (clickTarget.id && (svgInstance?.findOne(`#${clickTarget.id}`) as SVGElement)) || null;
+      },
+      getShapeProperties: (el) => this.svgManipulation.getShapeProperties(el),
+      getShapePropertiesInSameClipGroup: (el) => this.svgManipulation.getShapePropertiesInSameClipGroup(el),
+      toggleShapeGroupInSelection: (shapes) => this.shapeSelection.toggleShapeGroupInSelection(shapes),
+      selectShapes: (shapes) => this.shapeSelection.selectShapes(shapes),
+      clearSelection: () => this.shapeSelection.clearSelection(),
+      clearHighlight: () => this.svgManipulation.clearHighlight(),
+      consumeSelectionMarqueeJustEnded: () => this.selectionMarquee.consumeJustEnded(),
+      getPathNodeDragSession: () => this.getPathNodeDragSession(),
+      updatePathNodeDrag: (clientX, clientY) => this.updatePathNodeDrag(clientX, clientY),
+      finishPathNodeDrag: () => this.finishPathNodeDrag(),
+      tryDeleteSelectedPathNode: () => this.tryDeleteSelectedPathNode(),
+      markForCheck: () => this.cdr.markForCheck(),
+      setTool: (tool) => this.editorTool.setTool(tool),
       getZoomMarquee: () => this.zoomMarquee,
       isZoomMarquee: () => this.isZoomMarquee,
       commitZoomMarquee: () => this.commitZoomMarquee(),
@@ -2040,13 +2063,21 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   onCanvasMouseDown(event: MouseEvent): void {
-    if (this.editorTool.getCurrentTool() === 'pen' && event.button === 2) {
-      this.penTool.onPenRightMouseDown();
-      event.preventDefault();
+    if (event.button === 0) {
+      this.pointerGestureRouter.onCanvasMouseDownPrimary(this, event);
       return;
     }
-    if (event.button !== 0) return;
-    this.pointerGestureRouter.onCanvasMouseDownPrimary(this, event);
+    if (event.button !== 2) return;
+    const tool = this.toolRegistry.get(this.editorTool.getCurrentTool());
+    if (!tool?.onPointerDown) return;
+    const svgPoint =
+      this.clientToEditorSvgPoint(event.clientX, event.clientY) ?? {
+        x: event.clientX,
+        y: event.clientY
+      };
+    if (tool.onPointerDown(event, svgPoint)) {
+      event.preventDefault();
+    }
   }
 
   onCanvasClick(event: MouseEvent): void {
@@ -2082,67 +2113,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     }
     if (this.tryDispatchRegisteredCanvasClick(event)) {
       return;
-    }
-    if (this.editorTool.getCurrentTool() === 'pen') {
-      return;
-    }
-    if (this.editorTool.isCreationTool()) {
-      return;
-    }
-
-    if (this.selectionMarquee.consumeJustEnded()) {
-      return;
-    }
-
-    const svgInstance = svgInstanceForClick;
-    const svgElement = clickedContentShapeEl;
-    if (svgElement) {
-      const additive = event.shiftKey || event.ctrlKey || event.metaKey;
-      const nearestGroupId = this.svgManipulation.getNearestGroupAncestorId(clickTarget.id);
-      const groupIsClipCarrier = nearestGroupId ? this.isGroupAClipMaskCarrier(nearestGroupId) : false;
-
-      if (nearestGroupId && !groupIsClipCarrier) {
-        if (this.drilledIntoGroupId === nearestGroupId) {
-          const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(svgElement);
-          if (additive) {
-            this.shapeSelection.toggleShapeGroupInSelection(expanded);
-          } else {
-            this.shapeSelection.selectShapes(expanded);
-          }
-        } else {
-          const groupEl = svgInstance?.findOne(`#${nearestGroupId}`) as SVGElement | undefined;
-          if (groupEl) {
-            const groupProps = this.svgManipulation.getShapeProperties(groupEl);
-            if (additive) {
-              this.shapeSelection.toggleShapeGroupInSelection([groupProps]);
-            } else {
-              this.shapeSelection.selectShapes([groupProps]);
-            }
-            this.drilledIntoGroupId = null;
-          }
-        }
-      } else {
-        const expanded = this.svgManipulation.getShapePropertiesInSameClipGroup(svgElement);
-        if (additive) {
-          this.shapeSelection.toggleShapeGroupInSelection(expanded);
-        } else {
-          this.shapeSelection.selectShapes(expanded);
-        }
-      }
-    } else {
-      // Pen may finish on mousedown/mouseup; the following primary `click` can target the root SVG
-      // (no `id`) and would clear selection — see `pen-tool-session-finish.ts` + guard below.
-      const now =
-        typeof performance !== 'undefined' && typeof performance.now === 'function'
-          ? performance.now()
-          : Date.now();
-      if (now < this.penClosePostNodeEditEmptyClickClearUntilMs) {
-        // Skip clearSelection only; still drop drill/highlight parity with empty hit.
-      } else {
-        this.shapeSelection.clearSelection();
-      }
-      this.svgManipulation.clearHighlight();
-      this.drilledIntoGroupId = null;
     }
   }
 
@@ -2314,33 +2284,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     return findPenPathInsertHit(parsed, pt.x, pt.y, tol * tol) !== null;
   }
 
-  private static expectedCursorForResizeHandle(h: string): string {
-    switch (h) {
-      case 'nw':
-        return 'nw-resize';
-      case 'ne':
-        return 'ne-resize';
-      case 'sw':
-        return 'sw-resize';
-      case 'se':
-        return 'se-resize';
-      case 'n':
-      case 's':
-        return 'ns-resize';
-      case 'e':
-      case 'w':
-        return 'ew-resize';
-      default:
-        return 'default';
-    }
-  }
-
-  private static expectedCursorForSkewEdge(e: string): string {
-    if (e === 'n' || e === 's') return 'ew-resize';
-    if (e === 'e' || e === 'w') return 'ns-resize';
-    return 'default';
-  }
-
   /**
    * Best-effort description of the cursor the editor intends (svg-canvas.component.css + viewport inline).
    */
@@ -2380,38 +2323,28 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     if (this.isPenInsertOnPathDragActive()) {
       return 'Expected cursor: copy (pen insert-on-path drag; #canvasViewport inline)';
     }
-    if (overCanvas && hitTarget) {
-      if (tool === 'pen' && hitTarget.closest?.('[data-pen-outgoing-handle]')) {
-        return 'Expected cursor: grab (pen outgoing handle; .pen-outgoing-handle)';
+    if (overCanvas && hitTarget && this.hasPathNodeEditState()) {
+      if (hitTarget.closest?.('[data-path-node-anchor-index]')) {
+        return 'Expected cursor: move (path node anchor; .path-node-anchor)';
       }
-      if (this.hasPathNodeEditState()) {
-        if (hitTarget.closest?.('[data-path-node-anchor-index]')) {
-          return 'Expected cursor: move (path node anchor; .path-node-anchor)';
-        }
-        if (hitTarget.closest?.('[data-path-node-handle-index]')) {
-          return 'Expected cursor: move (path control handle; .path-node-control-handle)';
-        }
-      }
-      if (this.isSelectorInteractionTool(tool)) {
-        const rh = hitTarget.closest?.('[data-resize-handle]')?.getAttribute('data-resize-handle');
-        if (rh) {
-          const c = SvgCanvasComponent.expectedCursorForResizeHandle(rh);
-          return `Expected cursor: ${c} (selection resize .selection-resize-${rh})`;
-        }
-        const sk = hitTarget.closest?.('[data-skew-handle]')?.getAttribute('data-skew-handle');
-        if (sk === 'n' || sk === 's' || sk === 'e' || sk === 'w') {
-          const c = SvgCanvasComponent.expectedCursorForSkewEdge(sk);
-          return `Expected cursor: ${c} (selection skew .selection-skew-${sk})`;
-        }
-        if (hitTarget.closest?.('[data-rotate-handle]')) {
-          return 'Expected cursor: grab (selection rotate; .selection-rotate-handle)';
-        }
+      if (hitTarget.closest?.('[data-path-node-handle-index]')) {
+        return 'Expected cursor: move (path control handle; .path-node-control-handle)';
       }
     }
 
-    if (tool === 'pen' && this.penInsertCopyCursorWouldApplySync(clientX, clientY)) {
-      return 'Expected cursor: copy (pen idle valid insert hit; #canvasViewport inline — may apply next rAF)';
-    }
+    const toolHint = this.toolRegistry.get(tool)?.getCursorHint?.({
+      clientX,
+      clientY,
+      hitTarget,
+      overCanvas,
+      viewportInlineCursor: vpCur || undefined,
+      altKeyPressed: this.altKeyPressed,
+      isPanning: this.isPanning,
+      isCreationToolActive: this.isCreationToolActive(),
+      penInsertCopyCursorWouldApply: this.penInsertCopyCursorWouldApplySync(clientX, clientY)
+    });
+    if (toolHint) return toolHint;
+
     if (vpCur) {
       return `Expected cursor: ${vpCur} (#canvasViewport inline)`;
     }
@@ -2420,31 +2353,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       return 'Expected cursor: default (pointer outside #canvasViewport)';
     }
 
-    if (tool === 'zoom') {
-      return this.altKeyPressed
-        ? 'Expected cursor: zoom-out (.canvas-container.zoom-mode-out)'
-        : 'Expected cursor: zoom-in (.canvas-container.zoom-mode)';
-    }
-    if (tool === 'pan') {
-      return this.isPanning
-        ? 'Expected cursor: grabbing (.canvas-container.pan-dragging)'
-        : 'Expected cursor: grab (.canvas-container.pan-mode)';
-    }
-    if (this.isCreationToolActive()) {
-      return 'Expected cursor: crosshair (.canvas-container.creation-mode)';
-    }
-    if (tool === 'text') {
-      return 'Expected cursor: text (.canvas-container.text-mode)';
-    }
-    if (tool === 'eyedropper') {
-      return 'Expected cursor: crosshair (.canvas-container.eyedropper-mode .svg-canvas)';
-    }
-    if (tool === 'pen') {
-      return 'Expected cursor: crosshair (.canvas-container.pen-mode; user SVG uses cursor:inherit)';
-    }
-    if (this.isSelectorInteractionTool(tool)) {
-      return 'Expected cursor: default (selector / node-edit — no handle under pointer)';
-    }
     return `Expected cursor: default (${tool})`;
   }
 

@@ -69,18 +69,11 @@ function applyHostStateOverrides(
 }
 
 function makeHost(
-  over: Partial<SvgCanvasPointerGestureHost> & {
-    getPathNodeDragSession?: () => unknown | null;
-    updatePathNodeDrag?: (clientX: number, clientY: number) => void;
-    finishPathNodeDrag?: () => void;
-  } = {},
+  over: Partial<SvgCanvasPointerGestureHost> = {},
   hostState?: CanvasToolsTestHostState
 ): SvgCanvasPointerGestureHost {
   if (hostState) applyHostStateOverrides(hostState, over as Parameters<typeof applyHostStateOverrides>[1]);
   const base: SvgCanvasPointerGestureHost = {
-    getPathNodeDragSession: () => null,
-    updatePathNodeDrag: vi.fn(),
-    finishPathNodeDrag: vi.fn(),
     getCurrentTool: () => 'selector',
     clientToEditorSvgPoint: () => ({ x: 0, y: 0 })
   };
@@ -157,12 +150,11 @@ describe('PointerGestureRouter', () => {
     expect(selectionMarquee.move).toHaveBeenCalledWith(5, 6, emptyRt);
   });
 
-  it('onDocumentMouseUp prefers path node drag over creation', () => {
+  it('onDocumentMouseUp prefers registered selector path node drag over creation', () => {
     const finishPathNodeDrag = vi.fn();
-    const host = makeHost({
-      getPathNodeDragSession: () => ({}),
-      finishPathNodeDrag
-    });
+    const host = makeHost({}, hostState);
+    hostState.getPathNodeDragSession = () => ({});
+    hostState.finishPathNodeDrag = finishPathNodeDrag;
     router.onDocumentMouseUp(host, { button: 0 } as MouseEvent);
     expect(finishPathNodeDrag).toHaveBeenCalled();
     expect(creation.end).not.toHaveBeenCalled();
@@ -177,12 +169,11 @@ describe('PointerGestureRouter', () => {
     expect(ev.preventDefault).toHaveBeenCalled();
   });
 
-  it('onDocumentMouseMove prefers path node drag session over selector marquee', () => {
+  it('onDocumentMouseMove prefers registered selector path node drag over marquee', () => {
     const updatePathNodeDrag = vi.fn();
-    const host = makeHost({
-      getPathNodeDragSession: () => ({}),
-      updatePathNodeDrag
-    });
+    const host = makeHost({}, hostState);
+    hostState.getPathNodeDragSession = () => ({});
+    hostState.updatePathNodeDrag = updatePathNodeDrag;
     hostState.isSelectionMarquee = true;
     router.onDocumentMouseMove(host, { clientX: 3, clientY: 4, shiftKey: false } as MouseEvent);
     expect(updatePathNodeDrag).toHaveBeenCalledWith(3, 4);
@@ -279,7 +270,7 @@ describe('PointerGestureRouter', () => {
 
   it('onDocumentMouseUp ignores non-primary button', () => {
     vi.spyOn(drag, 'end');
-    const host = makeHost({ getPathNodeDragSession: () => null }, hostState);
+    const host = makeHost({}, hostState);
     hostState.isDraggingShape = true;
     router.onDocumentMouseUp(host, { button: 1 } as MouseEvent);
     expect(drag.end).not.toHaveBeenCalled();
