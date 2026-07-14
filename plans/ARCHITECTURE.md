@@ -20,7 +20,7 @@ Large **integration surfaces** remain: `SvgCanvasComponent` remains a large inte
 
 ### Tool seam (internal refactor)
 
-> **Not an external plugin API.** The tool registry is an **internal refactor seam** for organizing canvas behavior — same modular-monolith posture as ports (DEBT-004). Adding a tool requires **core edits** across closed types and imperative registrar hooks; there is no DI extension token, dynamic manifest, or third-party boundary.
+> **Not an external plugin API.** The tool registry is an **internal refactor seam** for organizing canvas behavior — same modular-monolith posture as ports. Adding a tool requires **core edits** across closed types and imperative registrar hooks; there is no DI extension token, dynamic manifest, or third-party boundary.
 
 | Piece | Path |
 |-------|------|
@@ -39,7 +39,25 @@ Descriptors land at **startup**; `CanvasTool` adapters bind **later** when the c
 
 `CanvasAdapterContext` composes the coordinate, tool-state, and document-surface slices reused across host interfaces; extend it (or individual slices) rather than re-declaring `clientToEditorSvgPoint` / `getCurrentTool` on each seam.
 
-**Future external tools (not implemented):** if third-party or pack-based tools are ever in scope, see the `TOOL_EXTENSION` sketch under [DEBT-005](./ARCHITECTURE-DEBT.md#debt-005--closed-type-plugin-seam-internal-only-) in ARCHITECTURE-DEBT.md.
+**Future external tools (not implemented):** if third-party or pack-based tools are ever in scope, replace the closed `EditorTool` union with an extension boundary:
+
+```typescript
+// Hypothetical — not in codebase
+export const TOOL_EXTENSION = new InjectionToken<ToolExtension[]>('TOOL_EXTENSION');
+
+export interface ToolExtension {
+  readonly id: string; // replaces EditorTool literal
+  readonly descriptor: ToolDescriptor;
+  readonly capabilityFlags: ReadonlySet<ToolCapability>; // e.g. 'pointer', 'keyboard', 'selector-interaction'
+  readonly registerCanvasTool: (registry: ToolRegistryService, deps: ToolExtensionDeps) => void;
+}
+```
+
+- **Multi-provider** `TOOL_EXTENSION` in `app.config.ts` — third-party modules contribute descriptors + adapter factories without editing `EditorTool`.
+- **String tool id** everywhere `EditorTool` is used today; capability flags replace scattered `getCurrentTool() === '…'` branches.
+- **Single-phase or two-phase** registration unified under `ToolRegistryService.register(descriptor, factory?)` instead of split startup descriptors vs deferred `CanvasBoundToolRegistrar` hooks.
+
+Until then, treat every new tool as a core change following the checklist below.
 
 `PointerGestureRouter` dispatches pointer events to the active `CanvasTool` from the registry. The keyboard controller (`svg-canvas-keyboard.controller.ts`) dispatches `onKeyDown` to the active tool first; pre-registry inline-text Escape, then post-registry canvas-wide policy in `svg-canvas-keyboard-policy.ts` (Escape gesture stack, undo/redo, view shortcuts). Tool-letter shortcuts use `tool-bundles.ts`. Clipboard / align / group / clip-path / outline keyboard and context-menu mutations go through `CanvasDocumentActionsService` → chrome-apply / history. The tool strip renders from `ToolRegistryService.stripGroups()` ([hnv.4](./epics/hexagonal-architecture-extensibility.md)). Dock panels can declare `relevantTools` so the right dock auto-shows for the active tool.
 
@@ -120,13 +138,13 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 - **`SvgCanvasComponent`** — inline-text and path-node session wiring, coordinate mapping delegation, click context assembly, debug HUD adapter wiring (`buildSvgCanvasPointerIntentDebugContext()`), document init. Keyboard context is assembled via `buildSvgCanvasKeyboardContext` / `buildSelectorKeyboardActions` (`build-svg-canvas-keyboard-context.ts`); pointer-intent hit-test + snapshot publish orchestration is in `svg-canvas-pointer-intent-debug.controller.ts`; pure snapshot builder in `gestures/pointer-intent-debug.ts`. Preview overlays bind via `editorChrome` readouts (`PenToolChromeReadout`, `PathBooleanChromeReadout`). Context-menu and selector keyboard mutations route through `CanvasDocumentActionsService` (clipboard/group/rotate/clip-path/outline → chrome-apply / history). Orchestrators already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
 - **`SvgManipulationService`** — wide façade; at new panel/tool boundaries inject a **narrow port** (pattern: `PenToolSessionSvgPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`).
 
-### Architecture debt
+### Architecture debt (retired)
 
-Prioritized gaps between documented seams and runtime behavior: **[ARCHITECTURE-DEBT.md](./ARCHITECTURE-DEBT.md)** (adversarial review 2026-07-10). P0 routing debt closed (`svg-editor-my0.1`, `svg-editor-1sb`); hub shrink closed for named DEBT-003 residuals (`svg-editor-jk6` — context-menu command unification + keyboard context factory; pointer-intent debug follow-ups `svg-editor-j7i` / `6xh` / `wkr` / `ait`). Closed: coordinate mapping, preview overlays, boolean chrome readout.
+Adversarial review register (2026-07-10) closed under beads epic `svg-editor-my0` (DEBT-001–012). Product ceilings live in [ROADMAP.md](./ROADMAP.md#deferred-optimizations).
 
 ### Next seams (future work)
 
-- Optional bulk hub shrink (selection-highlight presenter, TUX-5 chrome-scale helpers) — not seam debt. Clip-path, outline-to-path, and gradient paint features are wired through chrome-apply and canvas context menu.
+- Optional bulk hub shrink (selection-highlight presenter, TUX-5 chrome-scale helpers). Clip-path, outline-to-path, and gradient paint features are wired through chrome-apply and canvas context menu.
 
 ---
 

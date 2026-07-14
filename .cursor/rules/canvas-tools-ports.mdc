@@ -53,7 +53,7 @@ Use typed `*CanvasToolDeps` interfaces — each adapter receives only the narrow
 - Mutating the **Live tree** outside `EditorCommand` (except ephemeral preview geometry in overlay SVG)
 - Hardcoding tool strip buttons instead of registry-driven descriptors
 
-## Enforcement (DEBT-008)
+## Enforcement
 
 | Guard | Command |
 |-------|---------|
@@ -61,4 +61,4 @@ Use typed `*CanvasToolDeps` interfaces — each adapter receives only the narrow
 | Pen orchestrator must not import `SvgManipulationService` | `npm run lint` (ESLint on `pen-tool-session/**`) |
 | No new `getCurrentTool() === '` / `tool === '` branches in canvas | `npm run lint:arch` (baseline **6** in `tools/check-architecture-guards.mjs`) |
 
-When shrinking the canvas hub (DEBT-001/003), lower the baseline in `check-architecture-guards.mjs` after removing branches — never raise it to allow new debt.
+When removing tool-literal branches from the canvas hub, lower the baseline in `check-architecture-guards.mjs` — never raise it to allow new debt.

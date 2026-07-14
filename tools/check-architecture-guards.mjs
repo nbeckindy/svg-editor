@@ -3,8 +3,8 @@
  * Architecture guard checks for canvas tool anti-patterns.
  * Run: npm run lint:arch
  *
- * @see plans/ARCHITECTURE-DEBT.md (DEBT-008)
- * @see .cursor/rules/canvas-tools-ports.mdc
+ * @see .cursor/rules/canvas-tools-ports.mdc (Enforcement)
+ * @see plans/ARCHITECTURE.md
  */
 import { readFileSync, readdirSync, statSync } from 'node:fs';
 import { join, relative } from 'node:path';

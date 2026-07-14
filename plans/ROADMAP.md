@@ -119,7 +119,7 @@ Epic **`CLOSED` in `bd`** — children were:
 
 ## Deferred optimizations
 
-Items surfaced during the [architecture debt review](./ARCHITECTURE-DEBT.md) (2026-07-10) but **not seam debt** — deliberate product/model ceilings. Revisit only if product scope expands (large documents, pro-vector boolean fidelity).
+Items surfaced during the architecture debt review (2026-07-10, epic `svg-editor-my0`) but **not seam debt** — deliberate product/model ceilings. Revisit only if product scope expands (large documents, pro-vector boolean fidelity).
 
 | bd ID | Title | Trigger | Notes |
 |-------|-------|---------|-------|
