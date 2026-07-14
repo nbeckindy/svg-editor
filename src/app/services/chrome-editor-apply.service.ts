@@ -130,6 +130,12 @@ export class ChromeEditorApplyService {
   reparentLayerDrag(elementIds: string[], mode: ReparentElementsMode) {
     return this.layers.reparentLayerDrag(elementIds, mode);
   }
+  makeClipPathFromSelection(contentIds: string[], clipShapeId: string) {
+    return this.layers.makeClipPathFromSelection(contentIds, clipShapeId);
+  }
+  releaseClipPathFromSelection(shapeIds: string[]) {
+    return this.layers.releaseClipPathFromSelection(shapeIds);
+  }
   releaseClipPathFromLayersPanel(carrierGroupId: string) {
     return this.layers.releaseClipPathFromLayersPanel(carrierGroupId);
   }

@@ -29,8 +29,8 @@ export interface CanvasDocumentActionsHost {
 }
 
 /**
- * Keyboard / shortcut document mutations for the canvas adapter — routes align, distribute,
- * group, and ungroup through chrome-apply; clipboard ops use history commands centrally.
+ * Keyboard / context-menu document mutations for the canvas adapter — routes align, distribute,
+ * group, ungroup, and clip-path through chrome-apply; clipboard ops use history commands centrally.
  */
 @Injectable({ providedIn: 'root' })
 export class CanvasDocumentActionsService {
@@ -207,5 +207,42 @@ export class CanvasDocumentActionsService {
       new UnionRotateCommand(this.svgManipulation, ids, pivot, deltaDeg, snap)
     );
     this.svgManipulation.clearHighlight();
+  }
+
+  /** Context menu / canvas: topmost selected shape becomes the clip mask. */
+  makeClipPathFromSelection(host: CanvasDocumentActionsHost): void {
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length < 2) return;
+    const ids = selected.map((s) => s.id);
+    if (ids.some((id) => this.svgManipulation.isElementOrAncestorLocked(id))) return;
+    const clipShapeId = this.resolveTopmostShapeId(ids);
+    if (!clipShapeId) return;
+    const contentIds = ids.filter((id) => id !== clipShapeId);
+    this.chromeEditorApply.makeClipPathFromSelection(contentIds, clipShapeId);
+    host.clearDrilledIntoGroupId();
+  }
+
+  releaseClipPathFromSelection(host: CanvasDocumentActionsHost): void {
+    const selected = this.shapeSelection.getSelectedShapes();
+    if (selected.length === 0) return;
+    const ids = selected.map((s) => s.id);
+    if (ids.some((id) => this.svgManipulation.isElementOrAncestorLocked(id))) return;
+    this.chromeEditorApply.releaseClipPathFromSelection(ids);
+    host.clearDrilledIntoGroupId();
+  }
+
+  outlineSelectionToPath(): void {
+    const shapeId = this.shapeSelection.getSelectedShapes()[0]?.id;
+    if (!shapeId) return;
+    this.chromeEditorApply.applyOutlineToPath(shapeId);
+  }
+
+  private resolveTopmostShapeId(ids: string[]): string | null {
+    const idSet = new Set(ids);
+    let topmost: string | null = null;
+    for (const item of this.svgManipulation.getLayerStackItems()) {
+      if (idSet.has(item.id)) topmost = item.id;
+    }
+    return topmost;
   }
 }

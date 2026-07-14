@@ -127,8 +127,8 @@ describe('ChromeEditorApplyService', () => {
           useValue: {
             canMakeClipPath: vi.fn().mockReturnValue(false),
             canReleaseClipPath: vi.fn().mockReturnValue(false),
-            makeClipPath: vi.fn(),
-            releaseClipPath: vi.fn()
+            makeClipPathFromSelection: vi.fn().mockReturnValue(null),
+            releaseClipPathForSelection: vi.fn().mockReturnValue(null)
           }
         },
         { provide: DrawingStyleDefaultsService, useValue: drawingDefaultsMock },

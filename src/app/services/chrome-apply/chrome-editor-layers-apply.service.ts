@@ -12,6 +12,7 @@ import {
   UngroupCommand,
   UngroupElementsCommand,
   ReparentElementsCommand,
+  MakeClipPathCommand,
   ReleaseClipPathCommand,
   type ReparentElementsMode
 } from '../../models/editor-commands';
@@ -215,11 +216,36 @@ export class ChromeEditorLayersApplyService {
     this.reparentLayersFromPanel(elementIds, mode);
   }
 
-  releaseClipPathFromLayersPanel(carrierGroupId: string): void {
-    if (this.shapeIdsTouchLocked([carrierGroupId])) return;
-    if (!this.clipPathSvg.canReleaseClipPath([carrierGroupId])) return;
+  /**
+   * Undoable make-clip from content + clip-shape ids (clip shape is the mask geometry).
+   * Caller resolves which selected id is the topmost clip shape.
+   */
+  makeClipPathFromSelection(contentIds: string[], clipShapeId: string): void {
+    const allIds = [...contentIds, clipShapeId];
+    if (contentIds.length === 0 || !clipShapeId) return;
+    if (this.shapeIdsTouchLocked(allIds)) return;
+    if (!this.clipPathSvg.canMakeClipPath(allIds)) return;
 
-    const cmd = new ReleaseClipPathCommand(this.clipPathSvg, [carrierGroupId]);
+    const cmd = new MakeClipPathCommand(this.clipPathSvg, contentIds, clipShapeId);
+    this.editorHistory.pushAndExecute(cmd);
+
+    const svg = this.paintSvg.getSVGInstance();
+    const clipGeomId = cmd.createdClipGeometryId;
+    if (clipGeomId && svg) {
+      const geomEl = svg.findOne(`#${clipGeomId}`) as SvgJsElement | undefined;
+      if (geomEl) {
+        this.shapeSelection.selectShapes([this.propertiesSvg.getShapeProperties(geomEl)]);
+      }
+    }
+  }
+
+  /** Undoable release for selected carriers / clipped content (canvas context menu + layers). */
+  releaseClipPathFromSelection(shapeIds: string[]): void {
+    if (shapeIds.length === 0) return;
+    if (this.shapeIdsTouchLocked(shapeIds)) return;
+    if (!this.clipPathSvg.canReleaseClipPath(shapeIds)) return;
+
+    const cmd = new ReleaseClipPathCommand(this.clipPathSvg, shapeIds);
     this.editorHistory.pushAndExecute(cmd);
 
     const svg = this.paintSvg.getSVGInstance();
@@ -237,6 +263,10 @@ export class ChromeEditorLayersApplyService {
     } else {
       this.shapeSelection.clearSelection();
     }
+  }
+
+  releaseClipPathFromLayersPanel(carrierGroupId: string): void {
+    this.releaseClipPathFromSelection([carrierGroupId]);
   }
 
   private selectReparentedElements(elementIds: string[]): void {

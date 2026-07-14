@@ -14,7 +14,7 @@ Phases 1–3 closed the planned epic work, but **runtime gaps remain** — line 
 
 **Track ongoing debt:** [ARCHITECTURE-DEBT.md](../ARCHITECTURE-DEBT.md) (adversarial review) · beads epic [`svg-editor-my0`](../../) — architecture debt register (DEBT-001–012).
 
-High-signal items not finished by phase close: keyboard context assembly + context-menu command split on the canvas adapter (~2,093 lines TS + 232 HTML after DEBT-003/011/012; pointer-intent debug orchestration extracted to `svg-canvas-pointer-intent-debug.controller.ts`, net hub LOC ~unchanged). Coordinate mapping wired (`svg-editor-my0.2` ✓); input policy in named modules (`svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts`); preview overlays extracted (`svg-editor-my0.11`, `svg-editor-bd1` ✓). See the debt register — do not reopen j61 / hnv / ywh epics for these.
+High-signal items not finished by phase close: canvas adapter remains a large intentional hub (~2.4k TS lines; overlays + policy modules + keyboard/context-menu command unification extracted — DEBT-003 ✓ via `svg-editor-jk6`). Coordinate mapping wired (`svg-editor-my0.2` ✓); input policy in named modules (`svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts`); preview overlays extracted (`svg-editor-my0.11`, `svg-editor-bd1` ✓). See the debt register — do not reopen j61 / hnv / ywh epics for these.
 
 ## Goal
 
@@ -37,7 +37,7 @@ Improve editor extensibility toward hexagonal architecture: (1) a **tool plugin 
 
 | Problem | Where | Notes |
 |---|---|---|
-| **Large canvas adapter** | `SvgCanvasComponent` (~2,093 lines TS + 232 HTML) | Overlays + policy modules extracted; pointer-intent debug orchestration in `svg-canvas-pointer-intent-debug.controller.ts`; keyboard context assembly + context-menu split remain (DEBT-003 partial). |
+| **Large canvas adapter** | `SvgCanvasComponent` (~2.4k lines TS) | Overlays + policy modules + keyboard/context-menu unification extracted; hub remains intentional session/lifecycle glue (DEBT-003 ✓). |
 | **Dual input routing** | Canvas click / keyboard / cursor | `PointerGestureRouter` clean (**65** lines); policy in `svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts` (DEBT-001 ✓). |
 | **Coordinate mapping** | `CanvasCoordinateMappingService` | Wired from canvas lifecycle (closed `svg-editor-my0.2` ✓); canvas delegates `clientToEditorSvgPoint`. |
 | **Deferred canvas tool binding** | `CanvasBoundToolRegistrar` | Descriptors at startup; creation/pen/selector/view-utility adapters register when canvas initializes — not a single `registerDefaultTools()` moment (DEBT-005). |
@@ -201,7 +201,7 @@ Phase 3 (`svg-editor-ywh`) is closed. Follow [ARCHITECTURE-DEBT.md](../ARCHITECT
 1. ✓ `CanvasCoordinateMappingService` wired (`svg-editor-my0.2` / DEBT-002).
 2. ✓ Shrink canvas hub — session coordinator, pen preview overlay (DEBT-003, DEBT-011), boolean preview overlay (DEBT-012).
 3. ✓ Input policy modules — click, keyboard, pen-insert cursor (`svg-editor-1sb` / DEBT-001).
-4. **Open (optional):** keyboard context assembly + context-menu split shrink (DEBT-003 partial). Debug HUD follow-ups closed (`svg-editor-6xh`, `svg-editor-wkr`, `svg-editor-ait`).
+4. **Closed:** keyboard context factory + context-menu command unification (`svg-editor-jk6` / DEBT-003 ✓). Debug HUD follow-ups closed (`svg-editor-6xh`, `svg-editor-wkr`, `svg-editor-ait`).
 5. Optional: `InjectionToken` per port; drive tool context bar from `ToolDescriptor.contextBarComponent`.
 
 ---
@@ -210,7 +210,7 @@ Phase 3 (`svg-editor-ywh`) is closed. Follow [ARCHITECTURE-DEBT.md](../ARCHITECT
 
 **Epic:** `svg-editor-ywh` · **Plan source:** post–Phase 2 architecture review (2026-06-23)
 
-Phase 2 introduced `CanvasTool` adapters but kept parallel **legacy** paths in `PointerGestureRouter` for tests, scattered tool metadata across 4+ files, and duplicate keyboard/HUD routing. Phase 3 removed router legacy paths (ywh.5) and unified tool bundles — **post-close**, input policy modules and preview overlays are closed; pointer-intent debug orchestration extracted to a named controller; optional keyboard/context-menu shrink remains — see [ARCHITECTURE-DEBT.md](../ARCHITECTURE-DEBT.md).
+Phase 2 introduced `CanvasTool` adapters but kept parallel **legacy** paths in `PointerGestureRouter` for tests, scattered tool metadata across 4+ files, and duplicate keyboard/HUD routing. Phase 3 removed router legacy paths (ywh.5) and unified tool bundles — **post-close**, input policy modules, preview overlays, pointer-intent debug controller, keyboard context factory, and context-menu document-actions unification are closed — see [ARCHITECTURE-DEBT.md](../ARCHITECTURE-DEBT.md).
 
 ### Children (bead status)
 

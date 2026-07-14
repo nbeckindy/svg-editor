@@ -57,7 +57,11 @@ import {
 } from './path-node-edit-geometry';
 import { createCanvasAdapterContext } from '../../tools/create-canvas-adapter-context';
 import type { SelectorKeyboardActionsPort } from './selector-canvas-tool-keyboard';
-import { handleSvgCanvasKeyDown, type SvgCanvasKeyboardContext, CanvasEditorCommandController } from './svg-canvas-keyboard.controller';
+import { handleSvgCanvasKeyDown } from './svg-canvas-keyboard.controller';
+import {
+  buildSvgCanvasKeyboardContext,
+  buildSelectorKeyboardActions
+} from './build-svg-canvas-keyboard-context';
 import { handleSvgCanvasClick } from './svg-canvas-click.controller';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
@@ -729,7 +733,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       this.drilledIntoGroupId = null;
     }
   };
-  private readonly commandController: CanvasEditorCommandController;
 
   private penInsertHoverCursorScheduler!: PenInsertHoverCursorScheduler;
   /**
@@ -904,11 +907,10 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   // --- Keyboard shortcuts (policy in `svg-canvas-keyboard.controller.ts`) ---
   onKeyDown(event: KeyboardEvent): void {
     this.altKeyPressed = event.altKey;
-    handleSvgCanvasKeyDown(this.buildSvgCanvasKeyboardContext(), event, this.editorTool);
+    handleSvgCanvasKeyDown(buildSvgCanvasKeyboardContext(this.asKeyboardHost()), event, this.editorTool);
   }
 
-  /** Builds the keyboard **seam** for {@link handleSvgCanvasKeyDown} — keeps the **Canvas adapter** thin. */
-  private buildSvgCanvasKeyboardContext(): SvgCanvasKeyboardContext {
+  private asKeyboardHost() {
     return {
       gestureRuntime: this.gestureRuntime,
       svgManipulation: this.svgManipulation,
@@ -925,6 +927,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       toolRegistry: this.toolRegistry,
       getSvgContent: () => this.svgContent(),
       getCurrentTool: () => this.editorTool.getCurrentTool(),
+      setTool: (tool: EditorTool) => this.editorTool.setTool(tool),
+      markForCheck: () => this.cdr.markForCheck(),
       commitInlineTextEditIfActive: () => this.inlineTextEditSession.commitIfActive(),
       shouldIgnoreKeyboardShortcuts: (e: KeyboardEvent) => this.shouldIgnoreKeyboardShortcuts(e),
       isDraggingShape: () => this.isDraggingShape,
@@ -943,8 +947,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       setDrilledIntoGroupId: (id: string | null) => {
         this.drilledIntoGroupId = id;
       },
-      setTool: (tool: EditorTool) => this.editorTool.setTool(tool),
-      markForCheck: () => this.cdr.markForCheck(),
       getViewKeyboardActions: () => ({
         zoomInAtViewportCenter: () => this.zoomInAtViewportCenter(),
         zoomOutAtViewportCenter: () => this.zoomOutAtViewportCenter(),
@@ -962,22 +964,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   private getSelectorKeyboardActions(): SelectorKeyboardActionsPort {
-    const actions = this.canvasDocumentActions;
-    const host = this.documentActionsHost;
-    return {
-      getSvgContent: () => this.svgContent(),
-      svgManipulation: this.svgManipulation,
-      shapeSelection: this.shapeSelection,
-      editorHistory: this.editorHistory,
-      selectAllShapesFromDocument: () => actions.selectAllShapesFromDocument(),
-      copySelectionToClipboard: () => actions.copySelectionToClipboard(),
-      cutSelectionToClipboard: () => actions.cutSelectionToClipboard(),
-      pasteFromClipboard: () => actions.pasteFromClipboard(),
-      duplicateSelection: () => actions.duplicateSelection(),
-      groupSelectedShapes: () => actions.groupSelectedShapes(host),
-      ungroupSelectedShape: () => actions.ungroupSelectedShape(host),
-      handleAlignmentShortcut: (key: string) => actions.handleAlignmentShortcut(key)
-    };
+    return buildSelectorKeyboardActions(
+      this.asKeyboardHost(),
+      this.canvasDocumentActions,
+      this.documentActionsHost
+    );
   }
 
   onKeyUp(event: KeyboardEvent): void {
@@ -1248,17 +1239,16 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   onContextMenuMakeClipPath(): void {
-    this.commandController.makeClipPathFromSelection();
+    this.canvasDocumentActions.makeClipPathFromSelection(this.documentActionsHost);
   }
 
   onContextMenuReleaseClipPath(): void {
-    this.commandController.releaseClipPathFromSelection();
+    this.canvasDocumentActions.releaseClipPathFromSelection(this.documentActionsHost);
   }
 
   onContextMenuOutlineToPath(): void {
-    const shapeId = this.shapeSelection.getSelectedShapes()[0]?.id;
-    if (!shapeId || !this.contextMenuState().canOutlineToPath) return;
-    this.chromeEditorApply.applyOutlineToPath(shapeId);
+    if (!this.contextMenuState().canOutlineToPath) return;
+    this.canvasDocumentActions.outlineSelectionToPath();
   }
 
   onContextMenuRotateCw(): void {
@@ -1332,13 +1322,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     private toolRegistry: ToolRegistryService,
     private canvasBoundToolRegistrar: CanvasBoundToolRegistrar
   ) {
-    this.commandController = new CanvasEditorCommandController({
-      svgManipulation: this.svgManipulation,
-      shapeSelection: this.shapeSelection,
-      editorHistory: this.editorHistory,
-      clipboard: this.clipboard,
-      setDrilledIntoGroupId: (id) => { this.drilledIntoGroupId = id; },
-    });
     const sessions = createCanvasSessionBundle({
       createPathNodeEditSessionPorts: () => this.createPathNodeEditSessionPorts(),
       createInlineTextEditSessionPorts: () => this.createInlineTextEditSessionPorts(),
