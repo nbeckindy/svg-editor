@@ -16,7 +16,7 @@ The editor is a **modular monolith with typed seams**: narrow **ports**, **comma
 | **Façades** | `SvgManipulationService`, `SvgShapeContentService` → `shape-content/*`, `ChromeEditorApplyService` → `chrome-apply/*` (each implements many port interfaces; chrome apply injects port **tokens** backed by `useExisting`) |
 | **Registries** | `ToolRegistryService` + `registerDefaultTools()`, `DockPanelRegistryService` + `registerDefaultDockPanels()` |
 
-Large **integration surfaces** remain: `SvgCanvasComponent` remains a large integration hub (tools, session wiring, debug HUD context assembly). Input policy lives in `svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, and `pen-insert-hover-cursor.ts`; preview overlays (`PenPreviewOverlayComponent`, `BooleanPreviewOverlayComponent`) bind via `editorChrome` readouts. Branch features include clip-path commands, outline-to-path, gradient/paint popover, rect corner radius, and SVG ingest sanitization.
+Large **integration surfaces** remain: `SvgCanvasComponent` remains a large integration hub (tools, session wiring, debug HUD adapter context wiring). Pointer-intent debug policy/orchestration lives in `svg-canvas-pointer-intent-debug.controller.ts`; input policy in `svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, and `pen-insert-hover-cursor.ts`; preview overlays (`PenPreviewOverlayComponent`, `BooleanPreviewOverlayComponent`) bind via `editorChrome` readouts. Branch features include clip-path commands, outline-to-path, gradient/paint popover, rect corner radius, and SVG ingest sanitization.
 
 ### Tool seam (internal refactor)
 
@@ -117,16 +117,16 @@ State: **signals** (`EditorToolService`, `ShapeSelectionService`, `EditorHistory
 
 ### Still centralized (extension touchpoints)
 
-- **`SvgCanvasComponent`** — inline-text and path-node session wiring, coordinate mapping delegation, keyboard/click context assembly, debug HUD, document init. Preview overlays bind via `editorChrome` readouts (`PenToolChromeReadout`, `PathBooleanChromeReadout`). `CanvasEditorCommandController` centralizes keyboard command dispatch; context menu still splits between `CanvasDocumentActionsService` (clipboard/group/rotate) and command controller (clip-path) plus `ChromeEditorApplyService` (outline-to-path). Orchestrators already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
+- **`SvgCanvasComponent`** — inline-text and path-node session wiring, coordinate mapping delegation, keyboard/click context assembly, debug HUD adapter wiring (`buildSvgCanvasPointerIntentDebugContext()`), document init. Pointer-intent hit-test + snapshot publish orchestration is in `svg-canvas-pointer-intent-debug.controller.ts`; pure snapshot builder in `gestures/pointer-intent-debug.ts`. Preview overlays bind via `editorChrome` readouts (`PenToolChromeReadout`, `PathBooleanChromeReadout`). `CanvasEditorCommandController` centralizes keyboard command dispatch; context menu still splits between `CanvasDocumentActionsService` (clipboard/group/rotate) and command controller (clip-path) plus `ChromeEditorApplyService` (outline-to-path). Orchestrators already exist; new tools should **not** add logic here — extract orchestrators + ports and register a `CanvasTool` adapter instead.
 - **`SvgManipulationService`** — wide façade; at new panel/tool boundaries inject a **narrow port** (pattern: `PenToolSessionSvgPort`, `PathBooleanSelectionReadPort`, `SvgShapePaintPort`).
 
 ### Architecture debt
 
-Prioritized gaps between documented seams and runtime behavior: **[ARCHITECTURE-DEBT.md](./ARCHITECTURE-DEBT.md)** (adversarial review 2026-07-10). P0 routing debt closed (`svg-editor-my0.1`, `svg-editor-1sb`); hub shrink largely closed (`svg-editor-my0.3` partial — debug HUD + context wiring). Closed: coordinate mapping, preview overlays, boolean chrome readout.
+Prioritized gaps between documented seams and runtime behavior: **[ARCHITECTURE-DEBT.md](./ARCHITECTURE-DEBT.md)** (adversarial review 2026-07-10). P0 routing debt closed (`svg-editor-my0.1`, `svg-editor-1sb`); hub shrink largely closed (`svg-editor-my0.3` partial — pointer-intent debug orchestration extracted; keyboard context assembly + context-menu split remain). Closed: coordinate mapping, preview overlays, boolean chrome readout.
 
 ### Next seams (future work)
 
-- Optional: further shrink debug HUD / keyboard context assembly on the canvas adapter (DEBT-003 residual). Clip-path, outline-to-path, and gradient paint features are wired through chrome-apply and canvas context menu.
+- Optional: further shrink keyboard context assembly and unify context-menu command routing on the canvas adapter (DEBT-003 residual). Debug HUD sampling gate, cursor-hint deps helper, and `elementFromPoint` dedupe are closed (`svg-editor-6xh`, `svg-editor-wkr`, `svg-editor-ait`). Clip-path, outline-to-path, and gradient paint features are wired through chrome-apply and canvas context menu.
 
 ---
 

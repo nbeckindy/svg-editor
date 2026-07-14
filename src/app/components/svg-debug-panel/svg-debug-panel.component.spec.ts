@@ -2,12 +2,14 @@ import { ComponentFixture, TestBed } from '@angular/core/testing';
 import { signal, WritableSignal } from '@angular/core';
 import { SvgDebugPanelComponent } from './svg-debug-panel.component';
 import { SvgManipulationService } from '../../services/svg-manipulation.service';
+import { EditorPointerIntentDebugService } from '../../services/editor-pointer-intent-debug.service';
 import { vi } from 'vitest';
 
 describe('SvgDebugPanelComponent', () => {
   let fixture: ComponentFixture<SvgDebugPanelComponent>;
   let documentRevision: WritableSignal<number>;
   let exportSVG: ReturnType<typeof vi.fn>;
+  let pointerIntentDebug: EditorPointerIntentDebugService;
 
   beforeEach(async () => {
     documentRevision = signal(0);
@@ -21,6 +23,7 @@ describe('SvgDebugPanelComponent', () => {
     }).compileComponents();
 
     fixture = TestBed.createComponent(SvgDebugPanelComponent);
+    pointerIntentDebug = TestBed.inject(EditorPointerIntentDebugService);
   });
 
   function expandPanel(): void {
@@ -31,6 +34,23 @@ describe('SvgDebugPanelComponent', () => {
 
   it('should create', () => {
     expect(fixture.componentInstance).toBeTruthy();
+  });
+
+  it('keeps pointer-intent sampling disabled while collapsed', () => {
+    fixture.detectChanges();
+    expect(fixture.componentInstance.isCollapsed()).toBe(true);
+    expect(pointerIntentDebug.samplingEnabled()).toBe(false);
+  });
+
+  it('enables pointer-intent sampling when expanded and disables when collapsed', () => {
+    fixture.detectChanges();
+    expandPanel();
+    expect(pointerIntentDebug.samplingEnabled()).toBe(true);
+
+    const button = fixture.nativeElement.querySelector('.debug-toggle') as HTMLButtonElement;
+    button.click();
+    fixture.detectChanges();
+    expect(pointerIntentDebug.samplingEnabled()).toBe(false);
   });
 
   it('should show empty state when exportSVG is empty', () => {

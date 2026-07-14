@@ -77,11 +77,12 @@ Product-class ceilings and deferred optimizations (large-document performance, c
 
 ### DEBT-003 · `SvgCanvasComponent` remains integration hub (partial)
 
-**Problem:** Extraction moved orchestrators and overlays out, but the canvas still wires sessions, debug HUD, and keyboard/click context assembly.
+**Problem:** Extraction moved orchestrators and overlays out, but the canvas still wires sessions, keyboard/click context assembly, and context-menu command routing.
 
-**Evidence (2026-07-11, post `svg-editor-bd1`)**
+**Evidence (2026-07-13, post `svg-editor-j7i` + follow-ups `6xh` / `wkr` / `ait`)**
 
-- `svg-canvas.component.ts` — still a large integration hub (grew after `2026-06-25-ao8i` merge: context menu, clip-path, outline-to-path)
+- `svg-canvas.component.ts` — still a large integration hub (grew after `2026-06-25-ao8i` merge: context menu, clip-path, outline-to-path); net LOC ~unchanged after pointer-intent controller extract (structural win, not size win)
+- `svg-canvas-pointer-intent-debug.controller.ts` — owns DOM hit-test via `sampleCanvasPointerTarget`, `buildPointerIntentSnapshot` orchestration, and publish; gated by `EditorPointerIntentDebugService.samplingEnabled` (synced from debug panel collapse); canvas adapter keeps `buildSvgCanvasPointerIntentDebugContext()` (~wiring only) using `buildComputeExpectedCursorHintDepsFromCanvas`; pure snapshot builder in `gestures/pointer-intent-debug.ts`
 - Direct `pushAndExecute` / `getSVGInstance()` call sites reduced via session bundle + document actions service
 - Pen preview in `PenPreviewOverlayComponent` (DEBT-011 ✓); path-boolean preview in `BooleanPreviewOverlayComponent` via `PathBooleanChromeReadout` (DEBT-012 ✓)
 
@@ -91,7 +92,7 @@ Product-class ceilings and deferred optimizations (large-document performance, c
 2. ✓ `CanvasDocumentActionsService` routes keyboard align/distribute/group/ungroup through chrome-apply; clipboard cut/paste/duplicate centralized. `CanvasEditorCommandController` (`svg-canvas-keyboard.controller.ts`) owns clip-path make/release and keyboard delete; context menu still delegates clip-path to command controller and clipboard/group/rotate to document actions.
 3. ✓ `PenToolChromeReadout` + pen preview overlay — pen preview SVG no longer inline in canvas template.
 4. ✓ `PathBooleanChromeReadout` + `BooleanPreviewOverlayComponent` — boolean preview getter removed from component (DEBT-012 / `svg-editor-bd1`).
-5. ✓ Click/keyboard policy modules (`svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts`); **residual:** debug HUD pointer-intent assembly only.
+5. ✓ Click/keyboard policy modules (`svg-canvas-click.controller.ts`, `svg-canvas-keyboard-policy.ts`, `pen-insert-hover-cursor.ts`); ✓ pointer-intent debug policy/orchestration in `svg-canvas-pointer-intent-debug.controller.ts` (hit-test, snapshot publish); ✓ sampling gate (`svg-editor-6xh`); ✓ cursor-hint deps helper (`svg-editor-wkr`); ✓ `sampleCanvasPointerTarget` dedupe (`svg-editor-ait`). Canvas adapter retains `buildSvgCanvasPointerIntentDebugContext()` wiring only. **Residual:** keyboard context assembly; context-menu command split (document actions vs command controller).
 
 **Depends on:** DEBT-001 ✓, DEBT-002 ✓.
 
@@ -363,7 +364,7 @@ Wave 3 (honesty + safety net)
 |---------|-------|----------|--------|
 | DEBT-001 | `svg-editor-my0.1` · `svg-editor-my0.15` · `svg-editor-1sb` | P0 | ✓ Closed |
 | DEBT-002 | `svg-editor-my0.2` | P0 | ✓ Closed |
-| DEBT-003 | `svg-editor-my0.3` | P0 | **Partial** — hub shrunk; debug HUD + context wiring remain; context-menu command split (document actions vs command controller) |
+| DEBT-003 | `svg-editor-my0.3` · `svg-editor-j7i` · `svg-editor-6xh` · `svg-editor-wkr` · `svg-editor-ait` | P0 | **Partial** — hub shrunk; pointer-intent debug follow-ups closed; keyboard context assembly + context-menu split remain |
 | DEBT-004 | `svg-editor-my0.4` | P1 | ✓ Closed |
 | DEBT-005 | `svg-editor-my0.5` | P1 | ✓ Closed |
 | DEBT-006 | `svg-editor-my0.6` | P1 | ✓ Closed |

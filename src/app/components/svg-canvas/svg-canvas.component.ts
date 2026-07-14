@@ -62,6 +62,10 @@ import { handleSvgCanvasClick } from './svg-canvas-click.controller';
 import { ToolRegistryService } from '../../tools/tool-registry.service';
 import { CanvasBoundToolRegistrar } from '../../tools/canvas-bound-tool-registrar.service';
 import { computeExpectedCursorHint } from '../../tools/canvas-cursor-hint';
+import {
+  buildComputeExpectedCursorHintDepsFromCanvas,
+  type CanvasCursorHintDepsHost
+} from './build-canvas-cursor-hint-deps';
 import { PenInsertHoverCursorScheduler } from '../../tools/pen-insert-hover-cursor';
 import { SvgCanvasEditorChromeFacade } from './svg-canvas-editor-chrome.facade';
 import { createCanvasSessionBundle } from './canvas-session-coordinator';
@@ -100,7 +104,10 @@ import { PathNodeEditCommandBridgeService } from '../../services/path-node-edit-
 import { EditorDocumentBridgeService } from '../../services/editor-document-bridge.service';
 import { CanvasCoordinateMappingService } from '../../services/canvas-coordinate-mapping.service';
 import { EditorPointerIntentDebugService } from '../../services/editor-pointer-intent-debug.service';
-import { buildPointerIntentSnapshot } from './gestures/pointer-intent-debug';
+import {
+  refreshSvgCanvasPointerIntentDebug,
+  type SvgCanvasPointerIntentDebugContext
+} from './svg-canvas-pointer-intent-debug.controller';
 import { sampleSolidComputedPaint } from '../../utils/svg-computed-color-sample';
 import {
   InlineTextEditSession,
@@ -120,7 +127,8 @@ import type { PenToolSessionSvgPort } from './pen-tool-session/pen-tool-session-
 
 /**
  * **Canvas adapter** seams (Editor runtime): keyboard policy → `svg-canvas-keyboard.controller.ts`;
- * click policy → `svg-canvas-click.controller.ts`; pointer assembly →
+ * click policy → `svg-canvas-click.controller.ts`; pointer-intent debug →
+ * `svg-canvas-pointer-intent-debug.controller.ts`; pointer assembly →
  * `svg-canvas-pointer-stack.factory.ts`; template **Editor chrome** bindings →
  * {@link SvgCanvasEditorChromeFacade}.
  */
@@ -1265,7 +1273,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   onDocumentMouseMove(event: MouseEvent): void {
     this.pointerGestureRouter.onDocumentMouseMove(this, event);
     this.recordInsertAnchorFromClient(event.clientX, event.clientY);
-    this.refreshPointerIntentDebug(event.clientX, event.clientY);
+    refreshSvgCanvasPointerIntentDebug(
+      this.buildSvgCanvasPointerIntentDebugContext(),
+      event.clientX,
+      event.clientY
+    );
   }
 
   onDocumentMouseUp(event: MouseEvent): void {
@@ -2208,68 +2220,78 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     };
   }
 
-  /** Debug HUD: high-level pointer sample for the dev strip (see {@link buildPointerIntentSnapshot}). */
-  private refreshPointerIntentDebug(clientX: number, clientY: number): void {
-    const tool = this.editorTool.getCurrentTool();
-    const vpEl = this.canvasViewport()?.nativeElement;
-    const hitTarget =
-      typeof document !== 'undefined' && typeof document.elementFromPoint === 'function'
-        ? (document.elementFromPoint(clientX, clientY) as Element | null)
-        : null;
-    const overCanvas = !!(hitTarget && vpEl && typeof vpEl.contains === 'function' && vpEl.contains(hitTarget));
+  /** Debug HUD seam for {@link refreshSvgCanvasPointerIntentDebug}. */
+  private buildCanvasCursorHintDepsHost(): CanvasCursorHintDepsHost {
+    const self = this;
+    return {
+      getCurrentTool: () => self.editorTool.getCurrentTool(),
+      getCanvasViewportElement: () => self.canvasViewport()?.nativeElement,
+      getPathNodeDragSession: () => self.pathNodeEditSession.getPathNodeDragSession(),
+      get creationIsActive() {
+        return self.creation.isActive;
+      },
+      get isDraggingShape() {
+        return self.isDraggingShape;
+      },
+      get isResizingSelection() {
+        return self.isResizingSelection;
+      },
+      get isSkewingSelection() {
+        return self.isSkewingSelection;
+      },
+      get isRotatingSelection() {
+        return self.isRotatingSelection;
+      },
+      get isPanning() {
+        return self.isPanning;
+      },
+      isPenInsertOnPathDragActive: () => self.isPenInsertOnPathDragActive(),
+      hasPathNodeEditState: () => self.hasPathNodeEditState(),
+      getToolCursorHint: (ctx) =>
+        self.toolRegistry.get(self.editorTool.getCurrentTool())?.getCursorHint?.(ctx),
+      penInsertCopyCursorWouldApply: (x, y) =>
+        self.penInsertHoverCursorScheduler.wouldApplyCopyCursorSync(x, y),
+      get altKeyPressed() {
+        return self.altKeyPressed;
+      },
+      isCreationToolActive: () => self.isCreationToolActive()
+    };
+  }
 
-    this.pointerIntentDebug.publish(
-      buildPointerIntentSnapshot({
-        tool,
-        clientX,
-        clientY,
-        hitTarget,
-        overCanvas,
-        expectedCursorLine: computeExpectedCursorHint(
-          {
-            getCurrentTool: () => this.editorTool.getCurrentTool(),
-            getViewportInlineCursor: () => this.canvasViewport()?.nativeElement?.style?.cursor?.trim(),
-            getGestureState: () => ({
-              pathNodeDragActive: !!this.pathNodeEditSession.getPathNodeDragSession(),
-              creationActive: this.creation.isActive,
-              isDraggingShape: this.isDraggingShape,
-              isResizingSelection: this.isResizingSelection,
-              isSkewingSelection: this.isSkewingSelection,
-              isRotatingSelection: this.isRotatingSelection,
-              isPanning: this.isPanning,
-              currentTool: this.editorTool.getCurrentTool(),
-              isPenInsertOnPathDragActive: this.isPenInsertOnPathDragActive()
-            }),
-            hasPathNodeEditState: () => this.hasPathNodeEditState(),
-            getToolCursorHint: (ctx) => this.toolRegistry.get(this.editorTool.getCurrentTool())?.getCursorHint?.(ctx),
-            penInsertCopyCursorWouldApply: (x, y) =>
-              this.penInsertHoverCursorScheduler.wouldApplyCopyCursorSync(x, y),
-            altKeyPressed: this.altKeyPressed,
-            isPanning: this.isPanning,
-            isCreationToolActive: () => this.isCreationToolActive()
-          },
+  private buildSvgCanvasPointerIntentDebugContext(): SvgCanvasPointerIntentDebugContext {
+    return {
+      isSamplingEnabled: () => this.pointerIntentDebug.samplingEnabled(),
+      getCanvasViewportElement: () => this.canvasViewport()?.nativeElement,
+      publish: (snapshot) => this.pointerIntentDebug.publish(snapshot),
+      computeExpectedCursorLine: (clientX, clientY, hitTarget, overCanvas) =>
+        computeExpectedCursorHint(
+          buildComputeExpectedCursorHintDepsFromCanvas(this.buildCanvasCursorHintDepsHost()),
           clientX,
           clientY,
           hitTarget,
           overCanvas
         ),
-        sampledAtMs: typeof performance !== 'undefined' ? performance.now() : Date.now(),
-        isCreationInProgress: this.creation.isActive,
-        pathNodeDragPathId: this.pathNodeEditSession.getPathNodeDragSession()?.pathId ?? null,
-        isPenInsertOnPathDragActive: this.isPenInsertOnPathDragActive(),
-        isPenSessionActive: tool === 'pen' && this.isPenToolWithActiveSession(),
-        isSelectionMarquee: this.isSelectionMarquee,
-        isZoomMarquee: this.isZoomMarquee,
-        isResizingSelection: this.isResizingSelection,
-        isSkewingSelection: this.isSkewingSelection,
-        isRotatingSelection: this.isRotatingSelection,
-        isPanning: this.isPanning,
-        isDraggingShape: this.isDraggingShape,
-        isCanvasReady: !!(this.svgContent() && this.canvasView.isInitialized()),
-        getDescriptor: (id) => this.toolRegistry.getDescriptor(id),
-        hasRegisteredTool: (id) => this.toolRegistry.has(id)
-      })
-    );
+      getPointerIntentDebugFields: (_clientX, _clientY) => {
+        const tool = this.editorTool.getCurrentTool();
+        return {
+          tool,
+          isCreationInProgress: this.creation.isActive,
+          pathNodeDragPathId: this.pathNodeEditSession.getPathNodeDragSession()?.pathId ?? null,
+          isPenInsertOnPathDragActive: this.isPenInsertOnPathDragActive(),
+          isPenSessionActive: tool === 'pen' && this.isPenToolWithActiveSession(),
+          isSelectionMarquee: this.isSelectionMarquee,
+          isZoomMarquee: this.isZoomMarquee,
+          isResizingSelection: this.isResizingSelection,
+          isSkewingSelection: this.isSkewingSelection,
+          isRotatingSelection: this.isRotatingSelection,
+          isPanning: this.isPanning,
+          isDraggingShape: this.isDraggingShape,
+          isCanvasReady: !!(this.svgContent() && this.canvasView.isInitialized()),
+          getDescriptor: (id) => this.toolRegistry.getDescriptor(id),
+          hasRegisteredTool: (id) => this.toolRegistry.has(id)
+        };
+      }
+    };
   }
 
   private isGroupAClipMaskCarrier(groupId: string): boolean {

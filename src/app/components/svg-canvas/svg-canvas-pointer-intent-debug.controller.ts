@@ -5,6 +5,7 @@
  * each document mousemove (see {@link refreshSvgCanvasPointerIntentDebug}).
  */
 import type { EditorPointerIntentSnapshot } from '../../services/editor-pointer-intent-debug.service';
+import { sampleCanvasPointerTarget } from '../../utils/sample-canvas-pointer-target';
 import {
   buildPointerIntentSnapshot,
   type PointerIntentDebugInput
@@ -38,10 +39,7 @@ export function refreshSvgCanvasPointerIntentDebug(
   if (!ctx.isSamplingEnabled()) return;
 
   const vpEl = ctx.getCanvasViewportElement();
-  const hitTarget =
-    typeof document !== 'undefined' && typeof document.elementFromPoint === 'function'
-      ? (document.elementFromPoint(clientX, clientY) as Element | null)
-      : null;
+  const hitTarget = sampleCanvasPointerTarget(clientX, clientY);
   const overCanvas = !!(hitTarget && vpEl && typeof vpEl.contains === 'function' && vpEl.contains(hitTarget));
 
   ctx.publish(

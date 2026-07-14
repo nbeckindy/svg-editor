@@ -33,6 +33,10 @@ export class SvgDebugPanelComponent {
 
   constructor() {
     effect(() => {
+      this.pointerIntentDebug.samplingEnabled.set(!this.isCollapsed());
+    });
+
+    effect(() => {
       if (this.isDirty()) {
         return;
       }

@@ -1,5 +1,6 @@
 import { parsePathDForNodeEditing } from '../models/path-d';
 import { findPenPathInsertHit } from '../models/path-pen-insert';
+import { sampleCanvasPointerTarget } from '../utils/sample-canvas-pointer-target';
 
 export interface PenInsertHoverCursorDeps {
   getViewportElement: () => HTMLElement | null | undefined;
@@ -39,8 +40,7 @@ export function applyPenInsertHoverCursorFromClient(
     clearHostCursor(el);
     return;
   }
-  const under =
-    typeof document !== 'undefined' ? (document.elementFromPoint(clientX, clientY) as Element | null) : null;
+  const under = sampleCanvasPointerTarget(clientX, clientY);
   const pathHit = under?.closest?.('path') as SVGPathElement | null;
   if (!pathHit?.id || !deps.isEditorContentShapeTarget(pathHit)) {
     clearHostCursor(el);
@@ -79,8 +79,7 @@ export function penInsertCopyCursorWouldApplySync(
   if (!deps.isPenToolActive()) return false;
   if (deps.isPenInsertOnPathDragActive()) return true;
   if (!deps.canTryPenInsertNodeOnPath()) return false;
-  const under =
-    typeof document !== 'undefined' ? (document.elementFromPoint(clientX, clientY) as Element | null) : null;
+  const under = sampleCanvasPointerTarget(clientX, clientY);
   const pathHit = under?.closest?.('path') as SVGPathElement | null;
   if (!pathHit?.id || !deps.isEditorContentShapeTarget(pathHit)) return false;
   const pt = deps.clientToEditorSvgPoint(clientX, clientY);

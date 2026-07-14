@@ -16,6 +16,8 @@ export type EditorPointerIntentSnapshot = {
 @Injectable({ providedIn: 'root' })
 export class EditorPointerIntentDebugService {
   readonly snapshot = signal<EditorPointerIntentSnapshot | null>(null);
+  /** When false, the canvas skips pointer-intent sampling (debug panel collapsed). */
+  readonly samplingEnabled = signal(false);
 
   publish(snapshot: EditorPointerIntentSnapshot): void {
     this.snapshot.set(snapshot);
