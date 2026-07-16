@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { getSelectedLayerIds } from './canvas-helpers';
+import { ensureDockSectionExpanded, getSelectedLayerIds } from './canvas-helpers';
 
 const TWO_CLOSED_PATHS_SVG = `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 800 600" width="800" height="600">
 <path id="bool-path-a" d="M 100 100 L 200 100 L 200 200 L 100 200 Z" fill="#000"/>
@@ -59,14 +59,14 @@ async function selectTwoOperandsViaLayers(page: Page, getIds: () => Promise<stri
   expect(ids.length).toBeGreaterThanOrEqual(2);
 
   await page.getByTestId('tool-selector').click();
-  await page.getByTestId('dock-tab-layers').click();
+  await ensureDockSectionExpanded(page, 'layers');
   await page.getByTestId(`layer-row-${ids[0]}`).click();
   await page.keyboard.down('Shift');
   await page.getByTestId(`layer-row-${ids[1]}`).click();
   await page.keyboard.up('Shift');
 
   await expect.poll(async () => (await getSelectedLayerIds(page)).length).toBe(2);
-  await page.getByTestId('dock-tab-path-ops').click();
+  await ensureDockSectionExpanded(page, 'path-ops');
 }
 
 async function selectTwoPathsViaLayers(page: Page): Promise<void> {
@@ -77,13 +77,13 @@ async function selectTwoPathsViaLayers(page: Page): Promise<void> {
 test.describe('Path boolean operations', () => {
   test('path ops buttons disabled until two paths are selected', async ({ page }) => {
     await loadTwoClosedPaths(page);
-    await page.getByTestId('dock-tab-path-ops').click();
+    await ensureDockSectionExpanded(page, 'path-ops');
 
     const [firstPathId] = await getContentPathIds(page);
     await page.getByTestId('tool-selector').click();
-    await page.getByTestId('dock-tab-layers').click();
+    await ensureDockSectionExpanded(page, 'layers');
     await page.getByTestId(`layer-row-${firstPathId}`).click();
-    await page.getByTestId('dock-tab-path-ops').click();
+    await ensureDockSectionExpanded(page, 'path-ops');
 
     await expect(page.getByTestId('path-ops-union')).toBeDisabled();
     await expect(page.getByTestId('path-ops-subtract')).toBeDisabled();

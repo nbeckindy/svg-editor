@@ -43,19 +43,26 @@ describe('AppComponent', () => {
     expect(compiled.querySelector('header h1')?.textContent).toContain('Angular SVG Editor');
   });
 
-  it('should have left rail, canvas, dock with layers/properties, and svg debug panel', () => {
+  it('should have left rail, canvas, dock stack with seven sections, and svg debug panel', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('app-editor-left-rail')).toBeTruthy();
     expect(compiled.querySelector('app-svg-canvas')).toBeTruthy();
     expect(compiled.querySelector('app-editor-right-dock')).toBeTruthy();
-    expect(compiled.querySelector('[data-testid="editor-layers-area"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="dock-panel-stack"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="dock-tab-properties"]')).toBeNull();
+    expect(compiled.querySelector('[data-testid="editor-document-area"]')).toBeTruthy();
     expect(compiled.querySelector('[data-testid="editor-properties-area"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="editor-colors-area"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="editor-stroke-area"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="editor-align-distribute-area"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="editor-layers-area"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="editor-path-ops-area"]')).toBeTruthy();
     expect(compiled.querySelector('app-svg-debug-panel')).toBeTruthy();
   });
 
-  it('auto-shows path ops when two paths are selected in selector mode', () => {
+  it('auto-expands path ops when two paths are selected in selector mode', () => {
     const fixture = TestBed.createComponent(AppComponent);
     const layout = TestBed.inject(EditorLayoutService);
     const shapeSelection = TestBed.inject(ShapeSelectionService);
@@ -69,10 +76,10 @@ describe('AppComponent', () => {
     ]);
     fixture.detectChanges();
 
-    expect(layout.activeDockPanel()).toBe('pathOps');
+    expect(layout.isSectionExpanded('pathOps')).toBe(true);
   });
 
-  it('preserves manual dock tab choice until selection changes', () => {
+  it('preserves manual path ops collapse until selection changes', () => {
     const fixture = TestBed.createComponent(AppComponent);
     const layout = TestBed.inject(EditorLayoutService);
     const shapeSelection = TestBed.inject(ShapeSelectionService);
@@ -85,15 +92,17 @@ describe('AppComponent', () => {
       { id: 'p2', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
     ]);
     fixture.detectChanges();
-    expect(layout.activeDockPanel()).toBe('pathOps');
+    expect(layout.isSectionExpanded('pathOps')).toBe(true);
 
-    const layersTab = fixture.nativeElement.querySelector('[data-testid="dock-tab-layers"]') as HTMLButtonElement;
-    layersTab.click();
+    const pathOpsHeader = fixture.nativeElement.querySelector(
+      '[data-testid="dock-section-path-ops"]'
+    ) as HTMLButtonElement;
+    pathOpsHeader.click();
     fixture.detectChanges();
-    expect(layout.activeDockPanel()).toBe('layers');
+    expect(layout.isSectionExpanded('pathOps')).toBe(false);
 
     fixture.detectChanges();
-    expect(layout.activeDockPanel()).toBe('layers');
+    expect(layout.isSectionExpanded('pathOps')).toBe(false);
   });
 
   it('should update svgContent when onSVGLoaded is called', () => {

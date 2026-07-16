@@ -1,12 +1,12 @@
 import { expect, test } from '@playwright/test';
 
 test.describe('Editor shell: Properties vs document context', () => {
-  test('default document: Properties tab active; document settings visible; no shape transform readouts in DOM', async ({
+  test('default document: Properties section expanded; document settings visible; no shape transform readouts in DOM', async ({
     page,
   }) => {
     await page.goto('/');
 
-    await expect(page.getByTestId('dock-tab-properties')).toHaveAttribute('aria-selected', 'true');
+    await expect(page.getByTestId('dock-section-properties')).toHaveAttribute('aria-expanded', 'true');
     await expect(page.getByTestId('editor-properties-area')).toBeVisible();
 
     await expect(page.getByTestId('document-settings-panel')).toBeVisible();

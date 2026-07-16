@@ -1,5 +1,5 @@
 import { expect, test, type Page } from '@playwright/test';
-import { getSelectedLayerIds } from './canvas-helpers';
+import { ensureDockSectionExpanded, getSelectedLayerIds } from './canvas-helpers';
 
 /** Cmd on macOS, Ctrl elsewhere — matches editor shortcut handling. */
 const mod = process.platform === 'darwin' ? 'Meta' : 'Control';
@@ -68,9 +68,9 @@ async function insertImageAndDrawRect(page: Page): Promise<{ imageId: string; re
 }
 
 async function selectShapeViaLayers(page: Page, shapeId: string): Promise<void> {
-  await page.getByTestId('dock-tab-layers').click();
+  await ensureDockSectionExpanded(page, 'layers');
   await page.getByTestId(`layer-row-${shapeId}`).click();
-  await page.getByTestId('dock-tab-properties').click();
+  await ensureDockSectionExpanded(page, 'properties');
 }
 
 async function selectAllShapes(page: Page): Promise<void> {

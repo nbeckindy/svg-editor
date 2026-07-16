@@ -12,14 +12,17 @@ class StubPanelComponent {}
 
 function makeDescriptor(
   id: string,
+  order: number,
   relevantTools?: DockPanelDescriptor['relevantTools'],
   isRelevantWhen?: DockPanelDescriptor['isRelevantWhen']
 ): DockPanelDescriptor {
   return {
     id,
     label: id,
+    order,
+    availability: 'selection-aware',
     component: StubPanelComponent as Type<unknown>,
-    tabTestId: `dock-tab-${id}`,
+    headerTestId: `dock-section-${id}`,
     areaTestId: `editor-${id}-area`,
     ariaLabel: id,
     relevantTools,
@@ -42,9 +45,9 @@ describe('DockPanelAutoShowService', () => {
     editorTool = TestBed.inject(EditorToolService);
     shapeSelection = TestBed.inject(ShapeSelectionService);
 
-    registry.register(makeDescriptor('properties'));
-    registry.register(makeDescriptor('layers'));
-    registry.register(makeDescriptor('pathOps', ['selector'], pathOpsMultiPathRelevance));
+    registry.register(makeDescriptor('properties', 1));
+    registry.register(makeDescriptor('layers', 2));
+    registry.register(makeDescriptor('pathOps', 3, ['selector'], pathOpsMultiPathRelevance));
   });
 
   it('suggests path ops when selector has two paths selected', () => {
@@ -55,7 +58,7 @@ describe('DockPanelAutoShowService', () => {
     ]);
 
     expect(service.suggestedPanelId()).toBe('pathOps');
-    expect(service.shouldAutoSwitch('properties', 'pathOps')).toBe(true);
+    expect(service.shouldAutoExpand('pathOps', false)).toBe(true);
   });
 
   it('does not suggest path ops for a single path', () => {
@@ -70,7 +73,7 @@ describe('DockPanelAutoShowService', () => {
     });
 
     expect(service.suggestedPanelId()).toBeNull();
-    expect(service.shouldAutoSwitch('properties', null)).toBe(false);
+    expect(service.shouldAutoExpand(null, false)).toBe(false);
   });
 
   it('does not suggest path ops outside selector tool', () => {
@@ -83,15 +86,15 @@ describe('DockPanelAutoShowService', () => {
     expect(service.suggestedPanelId()).toBeNull();
   });
 
-  it('preserves manual tab choice until tool or selection changes', () => {
+  it('preserves manual section collapse until tool or selection changes', () => {
     editorTool.setTool('selector');
     shapeSelection.selectShapes([
       { id: 'p1', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
       { id: 'p2', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
     ]);
 
-    service.recordManualSelection('layers');
-    expect(service.shouldAutoSwitch('layers', 'pathOps')).toBe(false);
+    service.recordManualCollapse('pathOps');
+    expect(service.shouldAutoExpand('pathOps', false)).toBe(false);
 
     shapeSelection.selectShapes([
       { id: 'p1', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 },
@@ -99,6 +102,10 @@ describe('DockPanelAutoShowService', () => {
       { id: 'p3', type: 'path', fill: '#000', stroke: undefined, strokeWidth: 0, opacity: 1 }
     ]);
 
-    expect(service.shouldAutoSwitch('layers', 'pathOps')).toBe(true);
+    expect(service.shouldAutoExpand('pathOps', false)).toBe(true);
+  });
+
+  it('does not auto-expand when the section is already expanded', () => {
+    expect(service.shouldAutoExpand('pathOps', true)).toBe(false);
   });
 });

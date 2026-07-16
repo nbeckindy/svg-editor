@@ -1,2 +1,2 @@
-/** Tab identifier for the active right-dock inspector panel. */
+/** Identifier for a right-dock stack section (matches {@link DockPanelId}). */
 export type EditorDockPanel = string;

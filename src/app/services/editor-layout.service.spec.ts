@@ -24,8 +24,11 @@ describe('EditorLayoutService', () => {
     layout = TestBed.inject(EditorLayoutService);
   });
 
-  it('defaults to expanded properties dock with token-aligned widths', () => {
-    expect(layout.activeDockPanel()).toBe('properties');
+  it('defaults to expanded properties and layers with token-aligned widths', () => {
+    expect(layout.isSectionExpanded('properties')).toBe(true);
+    expect(layout.isSectionExpanded('layers')).toBe(true);
+    expect(layout.isSectionExpanded('pathOps')).toBe(false);
+    expect(layout.isSectionExpanded('document')).toBe(false);
     expect(layout.dockCollapsed()).toBe(false);
     expect(layout.leftRailCollapsed()).toBe(false);
     expect(layout.effectiveRightDockWidthPx()).toBe(320);
@@ -43,10 +46,20 @@ describe('EditorLayoutService', () => {
     expect(layout.effectiveLeftRailWidthPx()).toBe(0);
   });
 
-  it('preserves active tab when collapsing and expanding the dock', () => {
-    layout.selectDockPanel('layers');
+  it('preserves section expand state when collapsing and expanding the dock', () => {
+    layout.expandSection('pathOps');
+    layout.collapseSection('properties');
     layout.collapseDock();
     layout.expandDock();
-    expect(layout.activeDockPanel()).toBe('layers');
+    expect(layout.isSectionExpanded('pathOps')).toBe(true);
+    expect(layout.isSectionExpanded('properties')).toBe(false);
+  });
+
+  it('toggles individual stack sections', () => {
+    expect(layout.isSectionExpanded('document')).toBe(false);
+    layout.toggleSection('document');
+    expect(layout.isSectionExpanded('document')).toBe(true);
+    layout.toggleSection('document');
+    expect(layout.isSectionExpanded('document')).toBe(false);
   });
 });

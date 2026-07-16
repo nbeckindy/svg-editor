@@ -1,6 +1,5 @@
-import { Component, computed, inject } from '@angular/core';
+import { Component, effect, ElementRef, inject, viewChildren } from '@angular/core';
 import { NgComponentOutlet } from '@angular/common';
-import { EditorDockPanel } from '../editor-dock-panel';
 import { DockPanelRegistryService } from '../../panels/dock-panel-registry.service';
 import { EditorLayoutService } from '../../services/editor-layout.service';
 
@@ -16,12 +15,28 @@ export class EditorRightDockComponent {
 
   readonly dockPanels = this.dockPanelRegistry.panels;
 
-  readonly tabGridColumns = computed(() => {
-    const count = this.dockPanels().length;
-    return count > 0 ? `repeat(${count}, minmax(0, 1fr))` : '1fr';
-  });
+  private readonly sectionEls = viewChildren<ElementRef<HTMLElement>>('dockSection');
 
-  isPanelInactive(panelId: EditorDockPanel): boolean {
-    return this.layout.activeDockPanel() !== panelId;
+  constructor() {
+    effect(() => {
+      const sectionId = this.layout.pendingScrollSectionId();
+      const sections = this.sectionEls();
+      if (!sectionId || sections.length === 0) {
+        return;
+      }
+      const host = sections.find(
+        (ref) => ref.nativeElement.dataset['dockSectionId'] === sectionId
+      );
+      if (!host) {
+        return;
+      }
+      requestAnimationFrame(() => {
+        const el = host.nativeElement;
+        if (typeof el.scrollIntoView === 'function') {
+          el.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
+        }
+        this.layout.clearScrollRequest();
+      });
+    });
   }
 }

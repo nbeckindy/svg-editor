@@ -10,12 +10,12 @@ export class DockPanelRegistryService {
 
   register(panel: DockPanelDescriptor): void {
     this.panelMap.set(panel.id, panel);
-    this.panels.set(Array.from(this.panelMap.values()));
+    this.panels.set(this.sortedPanels());
   }
 
   unregister(panelId: DockPanelId): void {
     this.panelMap.delete(panelId);
-    this.panels.set(Array.from(this.panelMap.values()));
+    this.panels.set(this.sortedPanels());
   }
 
   get(panelId: DockPanelId): DockPanelDescriptor | undefined {
@@ -28,5 +28,9 @@ export class DockPanelRegistryService {
 
   getDefaultPanelId(): DockPanelId {
     return this.panels()[0]?.id ?? 'properties';
+  }
+
+  private sortedPanels(): DockPanelDescriptor[] {
+    return Array.from(this.panelMap.values()).sort((a, b) => a.order - b.order);
   }
 }

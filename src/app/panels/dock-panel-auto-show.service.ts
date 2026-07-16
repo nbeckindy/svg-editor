@@ -10,6 +10,11 @@ import {
   type DockPanelRelevanceContext
 } from './dock-panel-relevance';
 
+/**
+ * Relevance-driven auto-expand for dock stack sections.
+ * Suggests a section (e.g. Path Ops) so the layout can expand it and scroll it into view
+ * instead of switching exclusive tabs.
+ */
 @Injectable({
   providedIn: 'root'
 })
@@ -18,7 +23,8 @@ export class DockPanelAutoShowService {
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly registry = inject(DockPanelRegistryService);
 
-  private manualPanelId: EditorDockPanel | null = null;
+  /** Section the user manually collapsed; suppress auto-expand until context changes. */
+  private manuallyCollapsedId: EditorDockPanel | null = null;
   private manualContextKey: string | null = null;
 
   readonly relevanceContext = computed((): DockPanelRelevanceContext => {
@@ -40,7 +46,7 @@ export class DockPanelAutoShowService {
       const contextKey = this.currentContextKey();
       if (contextKey !== lastContextKey) {
         if (this.manualContextKey !== null && this.manualContextKey !== contextKey) {
-          this.manualPanelId = null;
+          this.manuallyCollapsedId = null;
           this.manualContextKey = null;
         }
         lastContextKey = contextKey;
@@ -48,19 +54,31 @@ export class DockPanelAutoShowService {
     });
   }
 
-  shouldAutoSwitch(currentPanel: EditorDockPanel, suggested: DockPanelId | null): boolean {
-    if (!suggested || suggested === currentPanel) {
+  /**
+   * Whether layout should expand {@link suggested} (and typically scroll it into view).
+   * Returns false when already expanded, or when the user collapsed that section
+   * in the current tool/selection context.
+   */
+  shouldAutoExpand(suggested: DockPanelId | null, isCurrentlyExpanded: boolean): boolean {
+    if (!suggested || isCurrentlyExpanded) {
       return false;
     }
-    if (this.manualPanelId === currentPanel && this.manualContextKey === this.currentContextKey()) {
+    if (this.manuallyCollapsedId === suggested && this.manualContextKey === this.currentContextKey()) {
       return false;
     }
     return true;
   }
 
-  recordManualSelection(panelId: EditorDockPanel): void {
-    this.manualPanelId = panelId;
+  recordManualCollapse(panelId: EditorDockPanel): void {
+    this.manuallyCollapsedId = panelId;
     this.manualContextKey = this.currentContextKey();
+  }
+
+  recordManualExpand(panelId: EditorDockPanel): void {
+    if (this.manuallyCollapsedId === panelId) {
+      this.manuallyCollapsedId = null;
+      this.manualContextKey = null;
+    }
   }
 
   private currentContextKey(): string {

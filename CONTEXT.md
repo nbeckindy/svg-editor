@@ -12,6 +12,14 @@ _Avoid_: CI, Playwright, beads, issue workflow, and generic framework vocabulary
 The logical SVG being edited—root `<svg>`, `viewBox`, and drawable content in document coordinates—treated as the user’s artwork.
 _Avoid_: Browser DOM `document`; using **Canvas** or “the stage” to mean the **Document** itself; “file” unless you mean on-disk persistence.
 
+**Artboard**:
+The **Document**’s intended drawing frame—width, height (and origin via `viewBox`), plus an editor-facing background used while editing. For MVP the background may be **Chrome**-visual only and not part of **Serialized** content.
+_Avoid_: Calling the whole **Canvas** viewport the **Artboard**; equating artboard chrome rects with shapes in the **Live tree**; assuming background always exports as a `<rect>` unless product says so.
+
+**Document settings panel**:
+An **Always-available dock panel** for **Artboard** attributes (size and editor background)—**Document**-level, not **Selection** paint and not viewport fit/zoom commands.
+_Avoid_: Dumping snap, grid, file name, or fit-to-view into this panel by default; placing artboard size only behind **empty selection** in properties.
+
 **Serialized**:
 The **Document** as the SVG string produced for save or export.
 _Avoid_: Calling clipboard payloads, undo/history snapshots, or ad hoc string copies of markup **Serialized** unless they are exactly that save/export string.
@@ -223,15 +231,52 @@ _Avoid_: Hardcoding tool buttons in templates when a descriptor + registry entry
 UI metadata for a **Tool** (`ToolDescriptor`: label, icon, strip group, `interactionKind`, selector flags) registered alongside its **CanvasTool**. Mirrors the dock-panel descriptor pattern.
 _Avoid_: Duplicating strip labels in HTML; using descriptor fields for runtime tool behavior (behavior belongs in the **CanvasTool** adapter or orchestrator).
 
+**Tool strip**:
+Left-dock **Chrome** that activates a **Tool** (and may hold compact **Creation paint defaults**)—not **Selection** property editing, not per-**Tool** option chrome, and not the lasting home for file open/import.
+_Avoid_: Putting full properties or layer trees on the **tool strip**; calling tool buttons a **Tool** (the mode is the **Tool**; the control is a tool button); treating SVG open/import as permanently strip-owned once a **menu bar** exists.
+
+**Tool context bar**:
+Top **Chrome** *directly above the workspace* that shows options of the *active* **Tool** only (e.g. pen alternate-curve, **Node-edit tool** path-node anchor tools)—constraints and variants of the current interaction mode, independent of **Selection**. Distinct from the **editor top bar**.
+_Avoid_: Hosting **Selection** or **Document** attributes here; duplicating **Dock panel** property editors; treating empty slots for tools with no options as a missing panel; stuffing session snap / file actions into this bar; burying path-node tools in Path Ops or the right dock.
+
+**Editor top bar**:
+App-level **Chrome** above the **tool context bar**: brand, document actions (new/download today), and session constraints currently parked here (snap popover). Interim home until a fuller **menu bar** exists—not the per-**Tool** options strip.
+_Avoid_: Calling the **editor top bar** the **tool context bar**; treating snap toggles as a **Tool**; relocating snap to the **tool strip** as the lasting plan.
+
+**Menu bar** (planned):
+Future Windows-style dropdown menus along the top (File / View / …) for session and document commands—intended long-term home for snap, New/Download, open/import, fit-to-view, and similar globals. Not implemented yet; until then leave those controls in the **editor top bar** (and any interim left-rail load affordances). The **tool context bar** stays a separate row forever (active-**Tool** options)—menus do not absorb it. After menus ship, the left rail stays **Tool** + **Creation paint defaults** (plus creation-tool actions like raster insert if product treats them that way)—not File open.
+_Avoid_: Designing as if **menu bar** already exists; merging **menu bar** with **tool context bar** in prose; treating New/Download/open as permanently “top-bar or strip buttons only” once menus ship.
+
+**Creation paint defaults**:
+Compact fill/stroke (and related) defaults on the **tool strip** used when creating new shapes—session draw defaults only. Changing a default does not rewrite paint on the current **Selection**; selected-shape paint is edited only in a **Selection-aware dock panel**, which need not expose or own those defaults.
+_Avoid_: Equating defaults with selected-shape paint; dual-writing strip changes into **Selection**; putting the full paint editor in the **tool context bar**; assuming the properties **Dock panel** must keep a “defaults when empty” paint UI.
+
+**Dock panel**:
+A registered tab hosted in the right-dock **Chrome**—e.g. properties, layers, **Path ops panel**, or **Document settings panel**—not **Editor chrome** on the **Canvas**.
+_Avoid_: Calling a **Dock panel** a **Tool**; using “inspector” until that headword is defined here; equating the dock shell with any one panel’s content.
+
+**Always-available dock panel**:
+A **Dock panel** whose primary subject is independent of **Selection**—e.g. layers (**Live tree** paint order) or the **Document settings panel**—so it remains meaningful when the **Selection** is empty.
+_Avoid_: Saying “always available” for panels that only make sense with a non-empty **Selection**; conflating with auto-show relevance (a panel can be always available and still never auto-suggest).
+
+**Selection-aware dock panel**:
+A **Dock panel** whose primary subject is the current **Selection** (or a Selection-derived gate)—e.g. shape properties or **Path ops panel**—so empty or ineligible **Selection** yields an empty/disabled body rather than document-wide state. Its dock tab stays listed even when irrelevant; relevance may still drive auto-show, not tab visibility.
+_Avoid_: Treating selection-awareness as “hidden from the dock until relevant”; using for tools or the **tool context bar**.
+
 ## Relationships
 
 - Every term in **Language** is in scope for **Editor runtime** only (see blurb above).
 - The **Document** supplies document-space geometry via its root `viewBox`.
+- The **Artboard** frames that geometry for editing (and, when exported rules say so, for **Serialized** width/height); the **Document settings panel** edits **Artboard** attributes without requiring **Selection**.
 - At most one authoritative **Document** is being edited in a given **Editor runtime** session.
 - **Serialized** is the persistence-oriented string form of a **Document**, not a generic name for every string interchange of its markup.
 - In session, the editor mutates the **Live tree**; save/export emits **Serialized** SVG.
 - The **Canvas** hosts the **Live tree** and maps the **Document**’s `viewBox` into screen space; **Editor chrome** sits outside **Canvas** in this vocabulary.
 - **Editor chrome** is a subset of **Chrome**; not all **Chrome** is **Editor chrome** (e.g. toolbars and docks are **Chrome** but not **Editor chrome**).
+- The right dock hosts one or more **Dock panel**s; each panel declares for itself whether it is an **Always-available dock panel** or a **Selection-aware dock panel** (descriptor / panel policy—not a global dock mode). Registered **Dock panel** tabs are always listed; selection-awareness and auto-show affect body/switch policy, not whether the tab appears.
+- **Tool strip** chooses the **Tool** (plus optional **Creation paint defaults**); **tool context bar** hosts active-**Tool** options only (permanent row); **editor top bar** holds app/document actions and interim session options (snap); planned **menu bar** absorbs those session/document menus (New, Download, open/import, snap, fit-to-view, …) later—without moving them onto the **tool strip** or folding the **tool context bar** into menus.
+- **Dock panel**s host **Document** / **Selection** / **Layer** data—not mode options.
+- **Creation paint defaults** affect subsequent creation only; they do not apply to **Selection**. A **Selection-aware dock panel**’s paint UI can be Selection-gated (hidden/empty when **empty selection**) without owning defaults.
 - **Selection** names shapes in the **Live tree**; **Editor chrome** visualizes and manipulates **Selection** but is not **Selection** itself.
 - **Tool** describes how pointers and keys are interpreted on the **Canvas**; **Selection** describes which shapes are targeted—app code may couple changes, but the concepts differ.
 - **Editor chrome** (handles, marquee, guides) reacts to both **Tool** and **Selection**.
@@ -258,7 +303,7 @@ _Avoid_: Duplicating strip labels in HTML; using descriptor fields for runtime t
 
 ## Shell UI (thin **Chrome**)
 
-The workspace **Chrome** around the **Canvas** includes intentionally shallow components: the tool strip, the tool context bar (per-**Tool** options above the workspace), the right inspector dock (properties vs layers tabs), and the shared `EditorDockPanel` tab type. They are not **Editor chrome** (handles, guides, marquee on the drawing surface) but they are **Chrome** in this glossary.
+The workspace **Chrome** around the **Canvas** includes intentionally shallow components: the **editor top bar**, the **tool strip**, the **tool context bar**, the right dock of registered **Dock panel**s (mix of **Always-available dock panel**s and **Selection-aware dock panel**s), and the shared dock-panel id / descriptor type. They are not **Editor chrome** (handles, guides, marquee on the drawing surface) but they are **Chrome** in this glossary. A **menu bar** is planned but not shipped—don’t invent interim homes that fight that destination (especially don’t park snap permanently on the **tool strip**). Ownership map: [ADR 0003](docs/adr/0003-editor-chrome-ownership.md).
 
 **Single-layout wiring today**
 
@@ -328,6 +373,27 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 > **Dev:** "I'm adding a gradient tool — do I put logic in `SvgCanvasComponent`?"
 > **Contributor:** "No — add a **Tool descriptor**, a **CanvasTool** adapter, and if it has session state, an orchestrator with **Ports** the **Canvas adapter** implements. See ARCHITECTURE.md § Adding a canvas tool."
 
+> **Dev:** "Is layers selection-aware like properties?"
+> **Contributor:** "No — layers is an **Always-available dock panel** (paint order of the **Live tree**); properties is a **Selection-aware dock panel**. Each **Dock panel** declares that itself— the dock is not one global mode."
+
+> **Dev:** "Where do pen alt-curve and shape fill live?"
+> **Contributor:** "Alt-curve is **tool context bar** (active **Tool** option). Selected-shape fill is a **Selection-aware dock panel**. New-shape fill/stroke defaults are **Creation paint defaults** on the **tool strip**—three homes, don't merge them."
+
+> **Dev:** "I changed the strip fill while a rect is selected—did the rect repaint?"
+> **Contributor:** "No — strip only updates **Creation paint defaults**. Edit the rect’s fill in the properties **Dock panel**."
+
+> **Dev:** "Where do artboard width and fit-to-artboard live?"
+> **Contributor:** "Width/height/background → **Document settings panel**. Fit-to-artboard is a **Canvas** view command—don’t stuff it into document settings as if it were an **Artboard** attribute."
+
+> **Dev:** "Move snap onto the tool strip?"
+> **Contributor:** "No — leave it in the **editor top bar** for now; long-term it belongs in a **menu bar**, not the **tool strip** or **tool context bar**."
+
+> **Dev:** "When menus ship, does the tool context bar go away?"
+> **Contributor:** "No — **menu bar** takes File/View/session commands; **tool context bar** remains the active-**Tool** options row."
+
+> **Dev:** "Does open SVG stay on the left forever?"
+> **Contributor:** "No — File open/import moves into the **menu bar**; left stays **tool strip** + **Creation paint defaults**."
+
 > **Dev:** "Can my tool call `SvgManipulationService` directly?"
 > **Contributor:** "Only through a declared **Port** type if one exists; otherwise define a narrow `*SvgPort` and implement it on the canvas adapter or an existing service — don't widen the façade from tool code."
 
@@ -338,10 +404,12 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 - “Live SVG tree” in casual chat maps to **Live tree** here; don’t use **Live tree** for unrelated DOM subtrees outside the editor SVG.
 - “Canvas” often names the whole `svg-canvas` surface — here **Canvas** is **viewport-only**; use **Editor chrome** when you mean handles, guides, or marquee; use **Canvas adapter** when you mean the component’s routing of DOM input into **Tool** / session code.
 - “Chrome” in web platform speech usually means the browser shell — here **Chrome** means in-app UI that is not **Live tree** artwork; say **browser chrome** when you mean the browser’s own UI.
-- Sidebars and panels that read or write selection properties are **Chrome** for now; we may introduce a narrower term (e.g. **Inspector**) later—don’t use that name until it is defined here.
+- Sidebars and panels that read or write selection properties are **Chrome** / **Dock panel** for now; we may introduce a narrower term (e.g. **Inspector**) later—don’t use that name until it is defined here.
+- “Selection-aware” on a **Dock panel** means the panel’s *subject* is **Selection**-gated and its body may be empty/disabled; registered tabs stay listed—say **auto-show** when you mean relevance-driven tab switching.
 - Union bbox and matrix-derived skew/rotation **readouts** for properties-style **Chrome** live in `SelectionTransformReadoutService`; **Canvas** skew gesture math (`selection-skew.ts` and gestures) is a different seam—don’t merge the two without an explicit shared primitive.
 - “Primary” is implied by **Selection** list order; a dedicated **Primary selection** (or **Primary shape**) headword is **deferred**—don’t introduce competing meanings for “primary” in prose until then.
 - “Tool” labels toolbar buttons (**Chrome**) as well as modes—here **Tool** is the interaction mode; say **tool strip** or **tool button** when you mean the control, not the mode.
+- “Top bar” / “top rail” in casual speech may mean the **editor top bar** (app actions, snap) or the **tool context bar** (active **Tool** options)—name which; planned **menu bar** is a third top-of-app concept.
 - A **Layer** row can be a `<g>` that acts as a clip/mask carrier in selection rules—still a **Layer** in the stack list, but behavior may differ from a user-authored group; see code and product rules before assuming “folder” semantics.
 - The codebase exposes multiple “revision” style counters (e.g. logical **Document** bumps vs undo/redo navigation); they are not interchangeable—name which seam you mean in reviews.
 - **PenSession**, **Pen authoring session**, and **PenToolSession** are three layers (model value, policy scope, class)—don’t swap names in reviews without saying which layer you mean.

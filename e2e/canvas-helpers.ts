@@ -1,5 +1,16 @@
 import type { Page } from '@playwright/test';
 
+/** Ensure a dock stack section header is expanded (`dock-section-*`). */
+export async function ensureDockSectionExpanded(
+  page: Page,
+  section: 'document' | 'properties' | 'colors' | 'stroke' | 'align-distribute' | 'layers' | 'path-ops'
+): Promise<void> {
+  const header = page.getByTestId(`dock-section-${section}`);
+  if ((await header.getAttribute('aria-expanded')) !== 'true') {
+    await header.click();
+  }
+}
+
 /** Screen-space union of `getBoundingClientRect()` for elements with the given ids. */
 export async function screenUnionForIds(
   page: Page,

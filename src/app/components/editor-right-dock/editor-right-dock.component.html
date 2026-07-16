@@ -3,53 +3,65 @@
     class="dock-expanded"
     data-testid="dock-expanded-region"
     [hidden]="layout.dockCollapsed()">
-    <div class="dock-tab-row">
-      <div
-        class="dock-tabs"
-        role="tablist"
-        aria-label="Inspector panels"
-        [style.grid-template-columns]="tabGridColumns()">
-        @for (panel of dockPanels(); track panel.id) {
-          <button
-            type="button"
-            role="tab"
-            class="dock-tab"
-            [attr.data-testid]="panel.tabTestId"
-            [class.active]="layout.activeDockPanel() === panel.id"
-            [attr.aria-selected]="layout.activeDockPanel() === panel.id"
-            (click)="layout.selectDockPanel(panel.id)">
-            {{ panel.label }}
-          </button>
-        }
-      </div>
+    <div class="dock-chrome-row">
       <button
         type="button"
         class="dock-collapse-btn"
         data-testid="dock-collapse"
-        aria-label="Collapse inspector"
+        aria-label="Collapse dock"
         (click)="layout.collapseDock()">
         <span class="dock-collapse-glyph" aria-hidden="true">⟩</span>
       </button>
     </div>
 
-    @for (panel of dockPanels(); track panel.id) {
-      <section
-        [class]="panel.panelClass ? 'dock-panel ' + panel.panelClass : 'dock-panel'"
-        [attr.data-testid]="panel.areaTestId"
-        [hidden]="isPanelInactive(panel.id)"
-        [attr.inert]="isPanelInactive(panel.id) ? '' : null"
-        role="tabpanel"
-        [attr.aria-label]="panel.ariaLabel">
-        <ng-container *ngComponentOutlet="panel.component" />
-      </section>
-    }
+    <div class="dock-stack" data-testid="dock-panel-stack" role="region" aria-label="Dock panels">
+      @for (panel of dockPanels(); track panel.id) {
+        <section
+          #dockSection
+          class="dock-section"
+          [attr.data-dock-section-id]="panel.id"
+          [attr.data-testid]="panel.areaTestId"
+          [attr.aria-label]="panel.ariaLabel">
+          <h2 class="dock-section-heading">
+            <button
+              type="button"
+              class="dock-section-header"
+              [attr.data-testid]="panel.headerTestId"
+              [attr.aria-expanded]="layout.isSectionExpanded(panel.id)"
+              (click)="layout.toggleSection(panel.id)">
+              <span class="dock-section-label">{{ panel.label }}</span>
+              <span
+                class="dock-section-chevron"
+                [class.dock-section-chevron--expanded]="layout.isSectionExpanded(panel.id)"
+                aria-hidden="true">
+                ▾
+              </span>
+            </button>
+          </h2>
+          <div
+            [class]="panel.panelClass ? 'dock-section-body ' + panel.panelClass : 'dock-section-body'"
+            [hidden]="!layout.isSectionExpanded(panel.id)">
+            @if (panel.component; as component) {
+              <ng-container *ngComponentOutlet="component" />
+            } @else {
+              <p
+                class="dock-section-placeholder"
+                [attr.data-testid]="'dock-placeholder-' + panel.id"
+                [attr.data-availability]="panel.availability">
+                {{ panel.placeholderMessage }}
+              </p>
+            }
+          </div>
+        </section>
+      }
+    </div>
   </div>
 
   <button
     type="button"
     class="dock-expand-handle"
     data-testid="dock-expand-handle"
-    aria-label="Expand inspector"
+    aria-label="Expand dock"
     [hidden]="!layout.dockCollapsed()"
     (click)="layout.expandDock()">
     <span class="dock-expand-glyph" aria-hidden="true">⟨</span>

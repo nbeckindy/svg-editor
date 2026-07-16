@@ -16,12 +16,14 @@ function ctx(overrides: Partial<DockPanelRelevanceContext> = {}): DockPanelRelev
   };
 }
 
-function panel(id: string, relevantTools?: DockPanelDescriptor['relevantTools']): DockPanelDescriptor {
+function panel(id: string, order: number, relevantTools?: DockPanelDescriptor['relevantTools']): DockPanelDescriptor {
   return {
     id,
     label: id,
+    order,
+    availability: 'selection-aware',
     component: class {},
-    tabTestId: `dock-tab-${id}`,
+    headerTestId: `dock-section-${id}`,
     areaTestId: `editor-${id}-area`,
     ariaLabel: id,
     relevantTools,
@@ -31,13 +33,13 @@ function panel(id: string, relevantTools?: DockPanelDescriptor['relevantTools'])
 
 describe('dock panel relevance', () => {
   it('suggests the last matching panel in registration order', () => {
-    const panels = [panel('properties'), panel('layers'), panel('pathOps', ['selector'])];
+    const panels = [panel('properties', 1), panel('layers', 2), panel('pathOps', 3, ['selector'])];
     expect(suggestDockPanelId(panels, ctx({ selectedPathCount: 2 }))).toBe('pathOps');
     expect(suggestDockPanelId(panels, ctx({ selectedPathCount: 1 }))).toBeNull();
   });
 
   it('requires relevantTools and isRelevantWhen together', () => {
-    const pathOps = panel('pathOps', ['selector']);
+    const pathOps = panel('pathOps', 7, ['selector']);
     expect(isDockPanelRelevant(pathOps, ctx({ selectedPathCount: 2 }))).toBe(true);
     expect(isDockPanelRelevant(pathOps, ctx({ currentTool: 'pen', selectedPathCount: 2 }))).toBe(false);
     expect(isDockPanelRelevant(pathOps, ctx({ selectedPathCount: 1 }))).toBe(false);

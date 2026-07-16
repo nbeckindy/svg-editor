@@ -21,41 +21,19 @@
   display: none !important;
 }
 
-.dock-tab-row {
-  display: grid;
-  grid-template-columns: minmax(0, 1fr) auto;
+.dock-chrome-row {
+  display: flex;
+  justify-content: flex-end;
   align-items: stretch;
-  gap: var(--editor-spacing-xs);
+  flex-shrink: 0;
   padding: var(--editor-spacing-sm);
   border-bottom: 1px solid var(--editor-border-subtle);
-}
-
-.dock-tabs {
-  display: grid;
-  gap: var(--editor-spacing-sm);
-  min-width: 0;
-}
-
-.dock-tab {
-  border: 1px solid var(--editor-border-control);
-  background: var(--editor-surface-subtle);
-  color: var(--editor-text-secondary);
-  border-radius: var(--editor-radius-md);
-  font-size: var(--editor-font-size-sm);
-  font-weight: 600;
-  padding: var(--editor-spacing-sm) var(--editor-spacing-md);
-  cursor: pointer;
-}
-
-.dock-tab.active {
-  color: var(--editor-accent-text);
-  border-color: var(--editor-accent-border);
-  background: var(--editor-accent-surface);
 }
 
 .dock-collapse-btn {
   flex-shrink: 0;
   width: 32px;
+  height: 32px;
   border: 1px solid var(--editor-border-control);
   border-radius: var(--editor-radius-md);
   background: var(--editor-surface-subtle);
@@ -78,17 +56,86 @@
   transform: translateX(1px);
 }
 
-.dock-panel {
+.dock-stack {
   flex: 1;
   min-height: 0;
-  overflow: hidden;
+  overflow-y: auto;
+  overflow-x: hidden;
+  display: flex;
+  flex-direction: column;
 }
 
-.dock-panel app-properties-panel,
-.dock-panel app-layers-panel,
-.dock-panel app-boolean-path-panel {
+.dock-section {
+  flex-shrink: 0;
+  border-bottom: 1px solid var(--editor-border-subtle);
+  display: flex;
+  flex-direction: column;
+}
+
+.dock-section-heading {
+  margin: 0;
+  font-size: inherit;
+  font-weight: inherit;
+}
+
+.dock-section-header {
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--editor-spacing-sm);
+  border: none;
+  background: var(--editor-surface-subtle);
+  color: var(--editor-text-secondary);
+  font-size: var(--editor-font-size-sm);
+  font-weight: 600;
+  padding: var(--editor-spacing-sm) var(--editor-spacing-md);
+  cursor: pointer;
+  text-align: left;
+}
+
+.dock-section-header:hover {
+  background: var(--editor-surface-accent-hover);
+  color: var(--editor-text-primary, var(--editor-text-secondary));
+}
+
+.dock-section-label {
+  min-width: 0;
+}
+
+.dock-section-chevron {
+  flex-shrink: 0;
+  display: inline-block;
+  transition: transform 120ms ease;
+  transform: rotate(-90deg);
+  color: var(--editor-text-muted);
+}
+
+.dock-section-chevron--expanded {
+  transform: rotate(0deg);
+}
+
+.dock-section-body {
+  min-height: 0;
+  padding: 0;
+}
+
+.dock-section-body[hidden] {
+  display: none !important;
+}
+
+.dock-section-placeholder {
+  margin: 0;
+  padding: var(--editor-spacing-md);
+  font-size: var(--editor-font-size-sm);
+  color: var(--editor-text-muted);
+  line-height: 1.4;
+}
+
+.dock-section-body app-properties-panel,
+.dock-section-body app-layers-panel,
+.dock-section-body app-boolean-path-panel {
   display: block;
-  height: 100%;
 }
 
 .dock-expand-handle {
@@ -125,26 +172,4 @@
 
 .dock-expand-glyph {
   display: block;
-}
-
-@media (max-width: 1040px) {
-  .dock-tabs {
-    grid-template-columns: 1fr;
-  }
-
-  .dock-tab {
-    writing-mode: vertical-rl;
-    text-orientation: mixed;
-    min-height: 88px;
-  }
-
-  .dock-tab-row {
-    grid-template-columns: 1fr;
-  }
-
-  .dock-collapse-btn {
-    width: 100%;
-    min-height: 36px;
-    writing-mode: horizontal-tb;
-  }
 }
