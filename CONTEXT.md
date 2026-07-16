@@ -78,7 +78,7 @@ A knot in a `<path>`’s segment model that **Node-edit tool** exposes as dragga
 _Avoid_: Equating every parsed `d` token with a user-facing **Path node**—helpers and degenerate segments may not get handles; using for uncommitted pen preview points before path commit.
 
 **Path ops panel**:
-The right-dock **Chrome** tab (`pathOps`) for **Path boolean operation**s and **Make compound path**: operand summary, union/subtract/intersect (with **Boolean preview** Apply/Cancel), and compound. Not the generic properties inspector or **Editor chrome** on the **Canvas**.
+The right-dock **Chrome** stack section (`pathOps`) for **Path boolean operation**s and **Make compound path**: operand summary, union/subtract/intersect (with **Boolean preview** Apply/Cancel), and compound. Not the generic properties section or **Editor chrome** on the **Canvas**.
 _Avoid_: “Boolean panel” when compound is in scope; placing path booleans in the properties strip as the primary home (legacy union affordance may exist elsewhere but **Path ops panel** is the dedicated surface).
 
 **Make compound path**:
@@ -252,15 +252,15 @@ Compact fill/stroke (and related) defaults on the **tool strip** used when creat
 _Avoid_: Equating defaults with selected-shape paint; dual-writing strip changes into **Selection**; putting the full paint editor in the **tool context bar**; assuming the properties **Dock panel** must keep a “defaults when empty” paint UI.
 
 **Dock panel**:
-A registered tab hosted in the right-dock **Chrome**—e.g. properties, layers, **Path ops panel**, or **Document settings panel**—not **Editor chrome** on the **Canvas**.
-_Avoid_: Calling a **Dock panel** a **Tool**; using “inspector” until that headword is defined here; equating the dock shell with any one panel’s content.
+A registered collapsible section in the right-dock **Chrome** stack—e.g. Document, Properties, Colors, Stroke, Align & distribute, layers, **Path ops panel**—not **Editor chrome** on the **Canvas**. Sections share one scrollable column (no exclusive tab switcher); each has a header that collapses/expands its body. Do not repeat the section title as an inner `h3`.
+_Avoid_: Calling a **Dock panel** a **Tool**; using “inspector” until that headword is defined here; equating the dock shell with any one panel’s content; describing the right dock as tabbed UI.
 
 **Always-available dock panel**:
 A **Dock panel** whose primary subject is independent of **Selection**—e.g. layers (**Live tree** paint order) or the **Document settings panel**—so it remains meaningful when the **Selection** is empty.
 _Avoid_: Saying “always available” for panels that only make sense with a non-empty **Selection**; conflating with auto-show relevance (a panel can be always available and still never auto-suggest).
 
 **Selection-aware dock panel**:
-A **Dock panel** whose primary subject is the current **Selection** (or a Selection-derived gate)—e.g. shape properties or **Path ops panel**—so empty or ineligible **Selection** yields an empty/disabled body rather than document-wide state. Its dock tab stays listed even when irrelevant; relevance may still drive auto-show, not tab visibility.
+A **Dock panel** whose primary subject is the current **Selection** (or a Selection-derived gate)—e.g. Properties, Colors, Stroke, Align & distribute, or **Path ops panel**—so empty or ineligible **Selection** yields an empty/disabled body rather than document-wide state. Its section stays listed in the stack even when irrelevant; relevance may still auto-expand and scroll the section into view, not hide it.
 _Avoid_: Treating selection-awareness as “hidden from the dock until relevant”; using for tools or the **tool context bar**.
 
 ## Relationships
@@ -273,9 +273,10 @@ _Avoid_: Treating selection-awareness as “hidden from the dock until relevant�
 - In session, the editor mutates the **Live tree**; save/export emits **Serialized** SVG.
 - The **Canvas** hosts the **Live tree** and maps the **Document**’s `viewBox` into screen space; **Editor chrome** sits outside **Canvas** in this vocabulary.
 - **Editor chrome** is a subset of **Chrome**; not all **Chrome** is **Editor chrome** (e.g. toolbars and docks are **Chrome** but not **Editor chrome**).
-- The right dock hosts one or more **Dock panel**s; each panel declares for itself whether it is an **Always-available dock panel** or a **Selection-aware dock panel** (descriptor / panel policy—not a global dock mode). Registered **Dock panel** tabs are always listed; selection-awareness and auto-show affect body/switch policy, not whether the tab appears.
+- The right dock hosts a scrollable stack of **Dock panel**s; each panel declares for itself whether it is an **Always-available dock panel** or a **Selection-aware dock panel** (descriptor / panel policy—not a global dock mode). Sections are always listed; selection-awareness and auto-show affect body emptiness and expand/scroll, not whether the section appears.
 - **Tool strip** chooses the **Tool** (plus optional **Creation paint defaults**); **tool context bar** hosts active-**Tool** options only (permanent row); **editor top bar** holds app/document actions and interim session options (snap); planned **menu bar** absorbs those session/document menus (New, Download, open/import, snap, fit-to-view, …) later—without moving them onto the **tool strip** or folding the **tool context bar** into menus.
-- **Dock panel**s host **Document** / **Selection** / **Layer** data—not mode options.
+- **Dock panel**s host **Document** / **Selection** / **Layer** data—not mode options. Locked stack order: Document → Properties → Colors → Stroke → Align & distribute → Layers → Path Ops.
+- Fill paint and opacity live under Colors; stroke paint/styling under Stroke; geometry/typography under Properties; artboard under **Document settings panel**.
 - **Creation paint defaults** affect subsequent creation only; they do not apply to **Selection**. A **Selection-aware dock panel**’s paint UI can be Selection-gated (hidden/empty when **empty selection**) without owning defaults.
 - **Selection** names shapes in the **Live tree**; **Editor chrome** visualizes and manipulates **Selection** but is not **Selection** itself.
 - **Tool** describes how pointers and keys are interpreted on the **Canvas**; **Selection** describes which shapes are targeted—app code may couple changes, but the concepts differ.
@@ -307,11 +308,11 @@ The workspace **Chrome** around the **Canvas** includes intentionally shallow co
 
 **Single-layout wiring today**
 
-- **`EditorRightDockComponent`** follows a parent-owned seam: `activeDockPanel` and `dockCollapsed` are passed in with `input()` / `output()` from the app shell; the dock only forwards tab clicks and collapse/expand. That pattern is the reference if a second layout (alternate shell, embedded editor) needs the same inspector contract without duplicating state.
+- **`EditorRightDockComponent`** renders the registered stack: section headers toggle expand/collapse via **`EditorLayoutService`**; Path Ops auto-expand/scroll uses **`DockPanelAutoShowService`**. Whole-dock collapse remains.
 - **`ToolStripComponent`** and **`EditorToolContextBarComponent`** call **`EditorToolService`** directly (constructor injection or `inject()`). That is appropriate while there is only one shell: there is no duplicated forwarding to deduplicate, and extracting `input()` / `output()` boundaries would add noise without a second consumer.
-- **`editor-dock-panel.ts`** holds the `'properties' | 'layers' | 'pathOps'` union; **`pathOps`** hosts **Path ops panel**. Extend when new dock tabs are real product requirements, not preemptively.
-- **`ChromeEditorApplyService`** is the thin **Chrome** → **History** façade for the inspector dock and eyedropper; domain logic lives in **`chrome-apply/*`** slices. Panels call the façade; it batches `EditorCommand`s and reconciles **Selection** with the **Live tree**.
-- **`EditorLayoutService`** owns dock tab, collapse, and rail/dock width signals for the shell ([hnv.8](plans/epics/hexagonal-architecture-extensibility.md)).
+- **`DockPanelRegistryService`** + **`registerDefaultDockPanels()`** register the seven stack sections; ids are free-form strings (`document`, `properties`, `colors`, `stroke`, `alignDistribute`, `layers`, `pathOps`).
+- **`ChromeEditorApplyService`** is the thin **Chrome** → **History** façade for dock panels and eyedropper; domain logic lives in **`chrome-apply/*`** slices. Panels call the façade; it batches `EditorCommand`s and reconciles **Selection** with the **Live tree**.
+- **`EditorLayoutService`** owns per-section expand map, dock collapse, scroll-into-view requests, and rail/dock width signals for the shell ([hnv.8](plans/epics/hexagonal-architecture-extensibility.md)).
 
 **When to deepen**
 
@@ -380,7 +381,7 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 > **Contributor:** "Alt-curve is **tool context bar** (active **Tool** option). Selected-shape fill is a **Selection-aware dock panel**. New-shape fill/stroke defaults are **Creation paint defaults** on the **tool strip**—three homes, don't merge them."
 
 > **Dev:** "I changed the strip fill while a rect is selected—did the rect repaint?"
-> **Contributor:** "No — strip only updates **Creation paint defaults**. Edit the rect’s fill in the properties **Dock panel**."
+> **Contributor:** "No — strip only updates **Creation paint defaults**. Edit the rect’s fill in the Colors **Dock panel**."
 
 > **Dev:** "Where do artboard width and fit-to-artboard live?"
 > **Contributor:** "Width/height/background → **Document settings panel**. Fit-to-artboard is a **Canvas** view command—don’t stuff it into document settings as if it were an **Artboard** attribute."
@@ -405,7 +406,9 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 - “Canvas” often names the whole `svg-canvas` surface — here **Canvas** is **viewport-only**; use **Editor chrome** when you mean handles, guides, or marquee; use **Canvas adapter** when you mean the component’s routing of DOM input into **Tool** / session code.
 - “Chrome” in web platform speech usually means the browser shell — here **Chrome** means in-app UI that is not **Live tree** artwork; say **browser chrome** when you mean the browser’s own UI.
 - Sidebars and panels that read or write selection properties are **Chrome** / **Dock panel** for now; we may introduce a narrower term (e.g. **Inspector**) later—don’t use that name until it is defined here.
-- “Selection-aware” on a **Dock panel** means the panel’s *subject* is **Selection**-gated and its body may be empty/disabled; registered tabs stay listed—say **auto-show** when you mean relevance-driven tab switching.
+- “Selection-aware” on a **Dock panel** means the panel’s *subject* is **Selection**-gated and its body may be empty/disabled; stack sections stay listed—say **auto-show** when you mean relevance-driven expand/scroll.
+- “Top bar” / “top rail” in casual speech may mean the **editor top bar** (app actions, snap) or the **tool context bar** (active **Tool** options)—name which; planned **menu bar** is a third top-of-app concept.
+- Do not call the right dock “tabbed”; it is a collapsible **Dock panel** stack.
 - Union bbox and matrix-derived skew/rotation **readouts** for properties-style **Chrome** live in `SelectionTransformReadoutService`; **Canvas** skew gesture math (`selection-skew.ts` and gestures) is a different seam—don’t merge the two without an explicit shared primitive.
 - “Primary” is implied by **Selection** list order; a dedicated **Primary selection** (or **Primary shape**) headword is **deferred**—don’t introduce competing meanings for “primary” in prose until then.
 - “Tool” labels toolbar buttons (**Chrome**) as well as modes—here **Tool** is the interaction mode; say **tool strip** or **tool button** when you mean the control, not the mode.
