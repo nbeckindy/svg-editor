@@ -412,7 +412,6 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 - Union bbox and matrix-derived skew/rotation **readouts** for properties-style **Chrome** live in `SelectionTransformReadoutService`; **Canvas** skew gesture math (`selection-skew.ts` and gestures) is a different seam—don’t merge the two without an explicit shared primitive.
 - “Primary” is implied by **Selection** list order; a dedicated **Primary selection** (or **Primary shape**) headword is **deferred**—don’t introduce competing meanings for “primary” in prose until then.
 - “Tool” labels toolbar buttons (**Chrome**) as well as modes—here **Tool** is the interaction mode; say **tool strip** or **tool button** when you mean the control, not the mode.
-- “Top bar” / “top rail” in casual speech may mean the **editor top bar** (app actions, snap) or the **tool context bar** (active **Tool** options)—name which; planned **menu bar** is a third top-of-app concept.
 - A **Layer** row can be a `<g>` that acts as a clip/mask carrier in selection rules—still a **Layer** in the stack list, but behavior may differ from a user-authored group; see code and product rules before assuming “folder” semantics.
 - The codebase exposes multiple “revision” style counters (e.g. logical **Document** bumps vs undo/redo navigation); they are not interchangeable—name which seam you mean in reviews.
 - **PenSession**, **Pen authoring session**, and **PenToolSession** are three layers (model value, policy scope, class)—don’t swap names in reviews without saying which layer you mean.
