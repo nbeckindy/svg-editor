@@ -1,0 +1,159 @@
+<div class="stroke-panel" data-testid="stroke-panel">
+  @if (!paint.hasSelection()) {
+    <div class="empty-state">
+      <p class="hint">Select a shape to edit stroke</p>
+    </div>
+  } @else if (paint.selectedShape(); as shape) {
+    <div class="stroke-content">
+      @if (paint.textOutlineLabels()) {
+        <p class="paint-ref-hint" data-testid="stroke-text-outline-paint-hint">
+          On <code>&lt;text&gt;</code>, stroke is the <strong>outline</strong>. Outline / fill order
+          and zoom-stable outline width live under Properties.
+        </p>
+      }
+
+      <div class="property-group">
+        <label class="property-label">{{ paint.textOutlineLabels() ? 'Outline color' : 'Stroke color' }}</label>
+        <div class="color-input-group">
+          @if (paint.isPatternStroke(shape)) {
+            <app-paint-swatch-popover
+              target="stroke"
+              mode="solid"
+              [color]="paint.strokePickerColor(shape)"
+              [disabled]="true"
+              [gradientModesDisabled]="true"
+              data-testid="stroke-paint-swatch" />
+            <p class="paint-ref-hint" id="stroke-pattern-hint">
+              Pattern stroke; the editor does not edit patterns here yet.
+            </p>
+          } @else {
+            <app-paint-swatch-popover
+              target="stroke"
+              [mode]="paint.strokeSwatchMode(shape)"
+              [color]="paint.strokePickerColor(shape)"
+              [gradientModel]="paint.gradientModelForShape(shape, 'stroke')"
+              [empty]="paint.allSelectedLackStroke(shape)"
+              [indeterminate]="paint.strokePaintMixed()"
+              [gradientModesDisabled]="paint.strokeGradientModesDisabled()"
+              [disabled]="paint.anySelectedShapeLocked()"
+              (paintModeChange)="paint.onStrokePaintModeChange($event)"
+              (colorChange)="paint.onStrokeColorChange($event)"
+              data-testid="stroke-paint-swatch" />
+          }
+        </div>
+      </div>
+
+      @if (paint.selectionCount() === 1 && paint.canShowGradientEditor(shape, 'stroke')) {
+        <details class="gradient-fill-details" open data-testid="stroke-gradient-details">
+          <summary class="gradient-fill-summary" data-testid="stroke-gradient-summary">
+            {{ paint.gradientEditorSummaryLabel('stroke') }}
+          </summary>
+          <app-gradient-fill-editor
+            [shapeId]="shape.id"
+            paintProperty="stroke"
+            [disabled]="paint.anySelectedShapeLocked()"
+            data-testid="stroke-gradient-editor" />
+        </details>
+      }
+
+      <div class="property-group">
+        <label class="property-label" for="stroke-width">{{ paint.textOutlineLabels() ? 'Outline width' : 'Stroke width' }}</label>
+        @if (paint.strokeWidthsMixed()) {
+          <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+        }
+        <div class="range-input-group">
+          <input
+            type="range"
+            id="stroke-width"
+            class="range-slider"
+            [class.mixed-control]="paint.strokeWidthsMixed()"
+            min="0"
+            max="20"
+            step="0.5"
+            [disabled]="paint.anySelectedShapeLocked()"
+            [value]="paint.strokeWidthsMixed() ? 0 : (shape.strokeWidth || 0)"
+            (input)="paint.onStrokeWidthChange($event)"
+            [attr.aria-label]="paint.textOutlineLabels() ? 'Outline width' : 'Stroke width'" />
+          <input
+            type="number"
+            class="range-number"
+            [class.mixed-control]="paint.strokeWidthsMixed()"
+            min="0"
+            max="100"
+            step="0.5"
+            [disabled]="paint.anySelectedShapeLocked()"
+            [value]="paint.strokeWidthsMixed() ? '' : (shape.strokeWidth || 0)"
+            [attr.placeholder]="paint.strokeWidthsMixed() ? '—' : ''"
+            (change)="paint.onStrokeWidthChange($event)"
+            [attr.aria-label]="paint.textOutlineLabels() ? 'Outline width value' : 'Stroke width value'" />
+        </div>
+      </div>
+
+      @if (paint.hasAnyStroke()) {
+        <div class="property-group">
+          <label class="property-label" for="dash-pattern">Dash pattern</label>
+          @if (paint.dashArraysMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <select
+            id="dash-pattern"
+            class="dash-select"
+            [class.mixed-control]="paint.dashArraysMixed()"
+            [disabled]="paint.anySelectedShapeLocked()"
+            [value]="paint.currentDashPreset(shape)"
+            (change)="paint.onDashPresetChange($event)"
+            aria-label="Dash pattern">
+            @for (preset of paint.dashPresets; track preset.value) {
+              <option [value]="preset.value">{{ preset.label }}</option>
+            }
+          </select>
+          @if (paint.showCustomDashInput(shape)) {
+            <input
+              type="text"
+              class="dash-custom-input"
+              placeholder="e.g. 5,3,2,3"
+              [disabled]="paint.anySelectedShapeLocked()"
+              [value]="shape.strokeDasharray ?? ''"
+              (change)="paint.onCustomDashArrayChange($event)"
+              aria-label="Custom dash pattern" />
+          }
+        </div>
+
+        @if (shape.strokeDasharray) {
+          <div class="property-group">
+            <label class="property-label" for="dash-offset">Dash offset</label>
+            @if (paint.dashOffsetsMixed()) {
+              <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+            }
+            <div class="range-input-group">
+              <input
+                type="range"
+                id="dash-offset"
+                class="range-slider"
+                [class.mixed-control]="paint.dashOffsetsMixed()"
+                min="0"
+                max="50"
+                step="0.5"
+                [disabled]="paint.anySelectedShapeLocked()"
+                [value]="paint.dashOffsetsMixed() ? 0 : (shape.strokeDashoffset ?? 0)"
+                (input)="paint.onDashOffsetChange($event)"
+                aria-label="Dash offset" />
+              <input
+                type="number"
+                class="range-number"
+                [class.mixed-control]="paint.dashOffsetsMixed()"
+                min="0"
+                max="100"
+                step="0.5"
+                [disabled]="paint.anySelectedShapeLocked()"
+                [value]="paint.dashOffsetsMixed() ? '' : (shape.strokeDashoffset ?? 0)"
+                [attr.placeholder]="paint.dashOffsetsMixed() ? '—' : ''"
+                (change)="paint.onDashOffsetChange($event)"
+                aria-label="Dash offset value" />
+            </div>
+          </div>
+        }
+      }
+    </div>
+  }
+</div>

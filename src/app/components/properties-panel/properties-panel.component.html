@@ -1,153 +1,16 @@
 <div class="properties-panel">
   <app-path-node-anchor-tools />
 
-  <div class="paint-segment">
-    <p class="paint-target-indicator">{{ paintTargetLabel() }}</p>
-
-    <div class="paint-swatches-row">
-      <div class="property-group paint-segment-group">
-        <label class="property-label" for="fill-color">Fill Color</label>
-        @if (selectedShape(); as shape) {
-          @if (supportsFill(shape)) {
-            <div class="color-input-group">
-              @if (isPatternFill(shape)) {
-                <app-paint-swatch-popover
-                  target="fill"
-                  mode="solid"
-                  [color]="fillPickerColor(shape)"
-                  [disabled]="true"
-                  [gradientModesDisabled]="true"
-                  data-testid="properties-fill-paint-swatch" />
-                <p class="paint-ref-hint" id="properties-fill-pattern-hint">
-                  Pattern fill; the editor does not edit patterns here yet.
-                </p>
-              } @else {
-                <app-paint-swatch-popover
-                  target="fill"
-                  [mode]="fillSwatchMode(shape)"
-                  [color]="fillPickerColor(shape)"
-                  [gradientModel]="gradientModelForShape(shape, 'fill')"
-                  [empty]="allSelectedLackFill(shape)"
-                  [indeterminate]="fillPaintMixed()"
-                  [gradientModesDisabled]="fillGradientModesDisabled()"
-                  [disabled]="anySelectedShapeLocked()"
-                  (paintModeChange)="onFillPaintModeChange($event)"
-                  (colorChange)="onFillColorChange($event)"
-                  data-testid="properties-fill-paint-swatch" />
-              }
-            </div>
-          } @else {
-            <div class="no-paint-value">
-              <span class="no-paint-label">Not applicable for {{ shapeTypeLabel(shape) }}</span>
-            </div>
-          }
-        } @else {
-          <div class="color-input-group">
-            <app-paint-swatch-popover
-              target="fill"
-              [mode]="defaultFillSwatchMode()"
-              [color]="defaultFillPickerColor()"
-              [empty]="!hasDefaultSolidFill()"
-              [indeterminate]="false"
-              [gradientModesDisabled]="true"
-              (paintModeChange)="onFillPaintModeChange($event)"
-              (colorChange)="onFillColorChange($event)"
-              data-testid="properties-fill-paint-swatch" />
-          </div>
-        }
-      </div>
-
-      <div class="property-group paint-segment-group">
-        <label class="property-label" for="stroke-color">{{ textOutlineLabels() ? 'Outline color' : 'Stroke Color' }}</label>
-        @if (selectedShape(); as shape) {
-          <div class="color-input-group">
-            @if (isPatternStroke(shape)) {
-              <app-paint-swatch-popover
-                target="stroke"
-                mode="solid"
-                [color]="strokePickerColor(shape)"
-                [disabled]="true"
-                [gradientModesDisabled]="true"
-                data-testid="properties-stroke-paint-swatch" />
-              <p class="paint-ref-hint" id="properties-stroke-pattern-hint">
-                Pattern stroke; the editor does not edit patterns here yet.
-              </p>
-            } @else {
-              <app-paint-swatch-popover
-                target="stroke"
-                [mode]="strokeSwatchMode(shape)"
-                [color]="strokePickerColor(shape)"
-                [gradientModel]="gradientModelForShape(shape, 'stroke')"
-                [empty]="allSelectedLackStroke(shape)"
-                [indeterminate]="strokePaintMixed()"
-                [gradientModesDisabled]="strokeGradientModesDisabled()"
-                [disabled]="anySelectedShapeLocked()"
-                panelAlign="end"
-                (paintModeChange)="onStrokePaintModeChange($event)"
-                (colorChange)="onStrokeColorChange($event)"
-                data-testid="properties-stroke-paint-swatch" />
-            }
-          </div>
-        } @else {
-          <div class="color-input-group">
-            <app-paint-swatch-popover
-              target="stroke"
-              [mode]="defaultStrokeSwatchMode()"
-              [color]="defaultStrokePickerColor()"
-              [empty]="!hasDefaultSolidStroke()"
-              [indeterminate]="false"
-              [gradientModesDisabled]="true"
-              panelAlign="end"
-              (paintModeChange)="onStrokePaintModeChange($event)"
-              (colorChange)="onStrokeColorChange($event)"
-              data-testid="properties-stroke-paint-swatch" />
-          </div>
-        }
-      </div>
-    </div>
-
-    @if (selectedShape(); as ps) {
-      <div class="paint-segment-extras">
-        @if (selectionCount() === 1 && supportsFill(ps) && canShowGradientEditor(ps, 'fill')) {
-          <details class="gradient-fill-details" open data-testid="properties-gradient-fill-details">
-            <summary class="gradient-fill-summary" data-testid="properties-gradient-fill-summary">
-              {{ gradientEditorSummaryLabel('fill') }}
-            </summary>
-            <app-gradient-fill-editor
-              [shapeId]="ps.id"
-              paintProperty="fill"
-              [disabled]="anySelectedShapeLocked()"
-              data-testid="properties-gradient-fill-editor" />
-          </details>
-        }
-        @if (selectionCount() === 1 && canShowGradientEditor(ps, 'stroke')) {
-          <details class="gradient-fill-details" open data-testid="properties-gradient-stroke-details">
-            <summary class="gradient-fill-summary" data-testid="properties-gradient-stroke-summary">
-              {{ gradientEditorSummaryLabel('stroke') }}
-            </summary>
-            <app-gradient-fill-editor
-              [shapeId]="ps.id"
-              paintProperty="stroke"
-              [disabled]="anySelectedShapeLocked()"
-              data-testid="properties-gradient-stroke-editor" />
-          </details>
-        }
-      </div>
-    }
-  </div>
-
   <div class="panel-scroll">
     @if (selectedShape(); as shape) {
       <div class="properties-content">
-        <p class="paint-effective-hint">
-          Colors match what you see on the canvas (computed from attributes, CSS, and inheritance).
-        </p>
-        @if (textOutlineLabels()) {
+        @if (hasTextSelection()) {
           <p class="paint-ref-hint" data-testid="properties-text-outline-paint-hint">
             On <code>&lt;text&gt;</code>, stroke is the <strong>outline</strong>. Default SVG order paints the
             <strong>fill first</strong>, then the stroke on top. Use <strong>Outline / fill order</strong> below for
             <code>paint-order: stroke fill</code> (stroke underneath) where the browser supports it. Changing
             <code>paint-order</code> does nothing in very old engines — verify in your target browsers.
+            Fill and stroke paint live under Colors and Stroke.
           </p>
         }
 
@@ -267,37 +130,6 @@
           </div>
         </div>
         }
-
-      <div class="property-group">
-        <label class="property-label" for="stroke-width">{{ textOutlineLabels() ? 'Outline width' : 'Stroke Width' }}</label>
-        @if (strokeWidthsMixed()) {
-          <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
-        }
-        <div class="range-input-group">
-          <input
-            type="range"
-            id="stroke-width"
-            class="range-slider"
-            [class.mixed-control]="strokeWidthsMixed()"
-            min="0"
-            max="20"
-            step="0.5"
-            [disabled]="anySelectedShapeLocked()"
-            [value]="strokeWidthsMixed() ? 0 : (shape.strokeWidth || 0)"
-            (input)="onStrokeWidthChange($event)">
-          <input
-            type="number"
-            class="range-number"
-            [class.mixed-control]="strokeWidthsMixed()"
-            min="0"
-            max="100"
-            step="0.5"
-            [disabled]="anySelectedShapeLocked()"
-            [value]="strokeWidthsMixed() ? '' : (shape.strokeWidth || 0)"
-            [attr.placeholder]="strokeWidthsMixed() ? '—' : ''"
-            (change)="onStrokeWidthChange($event)">
-        </div>
-      </div>
 
         @if (selectionCount() > 1) {
           <p class="multi-select-hint">
@@ -486,68 +318,6 @@
         </div>
         }
 
-        @if (hasAnyStroke()) {
-          <div class="property-group">
-            <label class="property-label" for="dash-pattern">Dash Pattern</label>
-            @if (dashArraysMixed()) {
-              <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
-            }
-            <select
-              id="dash-pattern"
-              class="dash-select"
-              [class.mixed-control]="dashArraysMixed()"
-              [disabled]="anySelectedShapeLocked()"
-              [value]="currentDashPreset(shape)"
-              (change)="onDashPresetChange($event)">
-              @for (preset of dashPresets; track preset.value) {
-                <option [value]="preset.value">{{ preset.label }}</option>
-              }
-            </select>
-            @if (showCustomDashInput(shape)) {
-              <input
-                type="text"
-                class="dash-custom-input"
-                placeholder="e.g. 5,3,2,3"
-                [disabled]="anySelectedShapeLocked()"
-                [value]="shape.strokeDasharray ?? ''"
-                (change)="onCustomDashArrayChange($event)">
-            }
-          </div>
-
-          @if (shape.strokeDasharray) {
-            <div class="property-group">
-              <label class="property-label" for="dash-offset">Dash Offset</label>
-              @if (dashOffsetsMixed()) {
-                <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
-              }
-              <div class="range-input-group">
-                <input
-                  type="range"
-                  id="dash-offset"
-                  class="range-slider"
-                  [class.mixed-control]="dashOffsetsMixed()"
-                  min="0"
-                  max="50"
-                  step="0.5"
-                  [disabled]="anySelectedShapeLocked()"
-                  [value]="dashOffsetsMixed() ? 0 : (shape.strokeDashoffset ?? 0)"
-                  (input)="onDashOffsetChange($event)">
-                <input
-                  type="number"
-                  class="range-number"
-                  [class.mixed-control]="dashOffsetsMixed()"
-                  min="0"
-                  max="100"
-                  step="0.5"
-                  [disabled]="anySelectedShapeLocked()"
-                  [value]="dashOffsetsMixed() ? '' : (shape.strokeDashoffset ?? 0)"
-                  [attr.placeholder]="dashOffsetsMixed() ? '—' : ''"
-                  (change)="onDashOffsetChange($event)">
-              </div>
-            </div>
-          }
-        }
-
         @if (shouldOfferSelectParentGroup(shape)) {
           <div class="paint-parent-row">
             <button type="button" class="btn-paint-action secondary" (click)="onSelectParentGroupClick()">
@@ -559,37 +329,6 @@
           </div>
         }
 
-        <div class="property-group">
-          <label class="property-label" for="opacity">Opacity</label>
-          @if (opacitiesMixed()) {
-            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
-          }
-          <div class="range-input-group">
-            <input
-              type="range"
-              id="opacity"
-              class="range-slider"
-              [class.mixed-control]="opacitiesMixed()"
-              min="0"
-              max="1"
-              step="0.01"
-              [disabled]="anySelectedShapeLocked()"
-              [value]="opacitiesMixed() ? 1 : (shape.opacity || 1)"
-              (input)="onOpacityChange($event)">
-            <input
-              type="number"
-              class="range-number"
-              [class.mixed-control]="opacitiesMixed()"
-              min="0"
-              max="1"
-              step="0.01"
-              [disabled]="anySelectedShapeLocked()"
-              [value]="opacitiesMixed() ? '' : (shape.opacity || 1)"
-              [attr.placeholder]="opacitiesMixed() ? '—' : ''"
-              (change)="onOpacityChange($event)">
-          </div>
-        </div>
-
         <div class="panel-actions">
           <button class="btn-secondary" (click)="onClearSelection()">
             Clear Selection
@@ -599,7 +338,7 @@
     } @else if (textToolPlacementMode()) {
       <div class="properties-content">
         <p class="paint-effective-hint" data-testid="text-tool-placement-hint">
-          Adjust typography for the next text you place. Fill and stroke use the swatches above (new shape defaults).
+          Adjust typography for the next text you place. Creation fill and stroke defaults live on the tool strip.
         </p>
         <div class="property-group">
           <label class="property-label" for="font-family-text-tool">Font</label>

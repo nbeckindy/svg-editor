@@ -1,14 +1,15 @@
 import { AlignDistributePanelComponent } from '../components/align-distribute-panel/align-distribute-panel.component';
 import { BooleanPathPanelComponent } from '../components/boolean-path-panel/boolean-path-panel.component';
+import { ColorsPanelComponent } from '../components/colors-panel/colors-panel.component';
 import { DocumentSettingsComponent } from '../components/document-settings/document-settings.component';
 import { LayersPanelComponent } from '../components/layers-panel/layers-panel.component';
 import { PropertiesPanelComponent } from '../components/properties-panel/properties-panel.component';
+import { StrokePanelComponent } from '../components/stroke-panel/stroke-panel.component';
 import type { DockPanelRegistryService } from './dock-panel-registry.service';
 import { pathOpsMultiPathRelevance } from './dock-panel-relevance';
 
 /**
  * Registers the seven dock stack sections in locked product order.
- * Colors / Stroke use placeholders until later uos beads.
  */
 export function registerDefaultDockPanels(registry: DockPanelRegistryService): void {
   registry.register({
@@ -42,11 +43,12 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
     label: 'Colors',
     order: 3,
     availability: 'selection-aware',
+    component: ColorsPanelComponent,
     headerTestId: 'dock-section-colors',
     areaTestId: 'editor-colors-area',
     ariaLabel: 'Colors',
-    defaultExpanded: false,
-    placeholderMessage: 'Fill and opacity controls will appear here.'
+    panelClass: 'colors-panel-host',
+    defaultExpanded: false
   });
 
   registry.register({
@@ -54,11 +56,12 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
     label: 'Stroke',
     order: 4,
     availability: 'selection-aware',
+    component: StrokePanelComponent,
     headerTestId: 'dock-section-stroke',
     areaTestId: 'editor-stroke-area',
     ariaLabel: 'Stroke',
-    defaultExpanded: false,
-    placeholderMessage: 'Stroke paint and styling will appear here.'
+    panelClass: 'stroke-panel-host',
+    defaultExpanded: false
   });
 
   registry.register({

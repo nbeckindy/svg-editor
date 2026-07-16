@@ -1,0 +1,96 @@
+<div class="colors-panel" data-testid="colors-panel">
+  @if (!paint.hasSelection()) {
+    <div class="empty-state">
+      <p class="hint">Select a shape to edit fill and opacity</p>
+    </div>
+  } @else if (paint.selectedShape(); as shape) {
+    <div class="colors-content">
+      <p class="paint-effective-hint">
+        Colors match what you see on the canvas (computed from attributes, CSS, and inheritance).
+      </p>
+
+      <div class="property-group">
+        <label class="property-label">Fill</label>
+        @if (paint.supportsFill(shape)) {
+          <div class="color-input-group">
+            @if (paint.isPatternFill(shape)) {
+              <app-paint-swatch-popover
+                target="fill"
+                mode="solid"
+                [color]="paint.fillPickerColor(shape)"
+                [disabled]="true"
+                [gradientModesDisabled]="true"
+                data-testid="colors-fill-paint-swatch" />
+              <p class="paint-ref-hint" id="colors-fill-pattern-hint">
+                Pattern fill; the editor does not edit patterns here yet.
+              </p>
+            } @else {
+              <app-paint-swatch-popover
+                target="fill"
+                [mode]="paint.fillSwatchMode(shape)"
+                [color]="paint.fillPickerColor(shape)"
+                [gradientModel]="paint.gradientModelForShape(shape, 'fill')"
+                [empty]="paint.allSelectedLackFill(shape)"
+                [indeterminate]="paint.fillPaintMixed()"
+                [gradientModesDisabled]="paint.fillGradientModesDisabled()"
+                [disabled]="paint.anySelectedShapeLocked()"
+                (paintModeChange)="paint.onFillPaintModeChange($event)"
+                (colorChange)="paint.onFillColorChange($event)"
+                data-testid="colors-fill-paint-swatch" />
+            }
+          </div>
+        } @else {
+          <div class="no-paint-value">
+            <span class="no-paint-label">Not applicable for {{ paint.shapeTypeLabel(shape) }}</span>
+          </div>
+        }
+      </div>
+
+      @if (paint.selectionCount() === 1 && paint.supportsFill(shape) && paint.canShowGradientEditor(shape, 'fill')) {
+        <details class="gradient-fill-details" open data-testid="colors-gradient-fill-details">
+          <summary class="gradient-fill-summary" data-testid="colors-gradient-fill-summary">
+            {{ paint.gradientEditorSummaryLabel('fill') }}
+          </summary>
+          <app-gradient-fill-editor
+            [shapeId]="shape.id"
+            paintProperty="fill"
+            [disabled]="paint.anySelectedShapeLocked()"
+            data-testid="colors-gradient-fill-editor" />
+        </details>
+      }
+
+      <div class="property-group">
+        <label class="property-label" for="colors-opacity">Opacity</label>
+        @if (paint.opacitiesMixed()) {
+          <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+        }
+        <div class="range-input-group">
+          <input
+            type="range"
+            id="colors-opacity"
+            class="range-slider"
+            [class.mixed-control]="paint.opacitiesMixed()"
+            min="0"
+            max="1"
+            step="0.01"
+            [disabled]="paint.anySelectedShapeLocked()"
+            [value]="paint.opacitiesMixed() ? 1 : (shape.opacity || 1)"
+            (input)="paint.onOpacityChange($event)"
+            aria-label="Opacity" />
+          <input
+            type="number"
+            class="range-number"
+            [class.mixed-control]="paint.opacitiesMixed()"
+            min="0"
+            max="1"
+            step="0.01"
+            [disabled]="paint.anySelectedShapeLocked()"
+            [value]="paint.opacitiesMixed() ? '' : (shape.opacity || 1)"
+            [attr.placeholder]="paint.opacitiesMixed() ? '—' : ''"
+            (change)="paint.onOpacityChange($event)"
+            aria-label="Opacity value" />
+        </div>
+      </div>
+    </div>
+  }
+</div>

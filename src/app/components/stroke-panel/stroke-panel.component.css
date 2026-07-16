@@ -1,0 +1,148 @@
+:host {
+  display: block;
+  min-height: 0;
+}
+
+.stroke-panel {
+  padding: var(--editor-spacing-lg) var(--editor-spacing-xl);
+}
+
+.empty-state {
+  padding: 8px 0;
+}
+
+.hint {
+  margin: 0;
+  font-size: 13px;
+  color: #888;
+  line-height: 1.4;
+}
+
+.property-group {
+  margin-bottom: 20px;
+}
+
+.property-label {
+  display: block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  color: #555;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+}
+
+.color-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  flex-wrap: wrap;
+}
+
+.paint-ref-hint {
+  margin: 0 0 16px 0;
+  font-size: 11px;
+  line-height: 1.35;
+  color: #777;
+  max-width: 100%;
+}
+
+.gradient-fill-details {
+  margin-bottom: 20px;
+  border: 1px solid var(--editor-border-strong);
+  border-radius: 4px;
+  padding: 4px 8px 8px;
+  background: #fafafa;
+}
+
+.gradient-fill-summary {
+  cursor: pointer;
+  font-size: 13px;
+  font-weight: 600;
+  color: var(--editor-text-heading);
+  padding: 4px 0;
+}
+
+.mixed-value-hint {
+  display: inline-block;
+  margin-bottom: 6px;
+  font-size: 12px;
+  font-weight: 600;
+  font-style: italic;
+  color: #888;
+}
+
+.dash-select {
+  width: 100%;
+  padding: 8px 12px;
+  border: 1px solid var(--editor-border-strong);
+  border-radius: 4px;
+  font-size: 14px;
+  color: var(--editor-text-heading);
+  background: #fff;
+  cursor: pointer;
+}
+
+.dash-select.mixed-control {
+  opacity: 0.75;
+}
+
+.dash-custom-input {
+  width: 100%;
+  margin-top: 8px;
+  padding: 8px 12px;
+  border: 1px solid var(--editor-border-strong);
+  border-radius: 4px;
+  font-size: 14px;
+  font-family: 'Courier New', monospace;
+  color: var(--editor-text-heading);
+  box-sizing: border-box;
+}
+
+.range-input-group {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+}
+
+.range-slider {
+  flex: 1;
+  height: 6px;
+  border-radius: 3px;
+  background: var(--editor-border-strong);
+  outline: none;
+  -webkit-appearance: none;
+}
+
+.range-slider.mixed-control,
+.range-number.mixed-control {
+  opacity: 0.75;
+}
+
+.range-slider::-webkit-slider-thumb {
+  -webkit-appearance: none;
+  appearance: none;
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2196f3;
+  cursor: pointer;
+}
+
+.range-slider::-moz-range-thumb {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #2196f3;
+  cursor: pointer;
+  border: none;
+}
+
+.range-number {
+  width: 70px;
+  padding: 8px;
+  border: 1px solid var(--editor-border-strong);
+  border-radius: 4px;
+  font-size: 14px;
+  text-align: center;
+}

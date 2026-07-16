@@ -1,27 +1,16 @@
 import { Component, computed, inject } from '@angular/core';
-import { CommonModule } from '@angular/common';
-import { FormsModule } from '@angular/forms';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
-import { PaintSourceInfo, ShapeProperties } from '../../models/shape-properties.interface';
-import { PaintSwatchPopoverComponent, PaintSwatchMode } from '../paint-swatch-popover/paint-swatch-popover.component';
-import { GradientFillEditorComponent } from '../gradient-fill-editor/gradient-fill-editor.component';
-import { EditableGradientModel, parsePaintReferenceId } from '../../models/svg-gradient';
+import { ShapeProperties } from '../../models/shape-properties.interface';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
-import { GRADIENT_FILL_EDITOR_SVG_PORT, LAYER_LOCK_READ_PORT } from '../../services/manipulation-port-tokens';
+import { LAYER_LOCK_READ_PORT } from '../../services/manipulation-port-tokens';
 import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-node-anchor-tools.component';
 
 @Component({
   selector: 'app-properties-panel',
-  imports: [
-    CommonModule,
-    FormsModule,
-    PaintSwatchPopoverComponent,
-    GradientFillEditorComponent,
-    PathNodeAnchorToolsComponent
-  ],
+  imports: [PathNodeAnchorToolsComponent],
   templateUrl: './properties-panel.component.html',
   styleUrl: './properties-panel.component.css'
 })
@@ -41,7 +30,6 @@ export class PropertiesPanelComponent {
   private drawingDefaults = inject(DrawingStyleDefaultsService);
   private editorTool = inject(EditorToolService);
   private chromeApply = inject(ChromeEditorApplyService);
-  private readonly gradientSvgPort = inject(GRADIENT_FILL_EDITOR_SVG_PORT);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
   private readonly layerLock = inject(LAYER_LOCK_READ_PORT);
   readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
@@ -52,7 +40,7 @@ export class PropertiesPanelComponent {
   readonly hasSelection = computed(() => this.selectionCount() > 0);
   /**
    * True when the current selection includes any shape under a locked layer row
-   * (paint, stroke, opacity, dash, bbox, align, etc. are blocked in chrome apply).
+   * (bbox and related chrome apply paths are blocked).
    */
   readonly anySelectedShapeLocked = computed(() => {
     const shapes = this.shapeSelectionService.getSelectedShapes();
@@ -68,77 +56,13 @@ export class PropertiesPanelComponent {
   });
   /** Text tool active: typography controls edit placement defaults when nothing is selected. */
   readonly textToolPlacementMode = computed(() => this.editorTool.currentTool() === 'text');
-  readonly paintTargetLabel = computed(() => {
-    if (this.editorTool.currentTool() === 'eyedropper') {
-      return 'Eyedropper: click = fill, Shift+click = stroke';
-    }
-    return this.hasSelection() ? 'Target: Selection + defaults' : 'Target: New shapes';
-  });
 
   onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event): void {
     this.chromeApply.onSelectionBBoxFieldCommit(field, event);
   }
 
-  /** Neutral value for native `<input type="color">` when the selection is mixed (not shown as the real fill). */
-  readonly mixedColorPickerFallback = '#888888';
-
-  private static readonly PAINT_NONE = '__none__';
-
   private selectedShapesList(): ShapeProperties[] {
     return this.shapeSelectionService.getSelectedShapes();
-  }
-
-  private normalizeColorKey(c: string | undefined): string {
-    if (!c || !c.trim()) return PropertiesPanelComponent.PAINT_NONE;
-    const t = c.trim().toLowerCase();
-    if (t === 'none') return PropertiesPanelComponent.PAINT_NONE;
-    if (/^#[0-9a-f]{3}$/.test(t)) {
-      const r = t[1];
-      const g = t[2];
-      const b = t[3];
-      return `#${r}${r}${g}${g}${b}${b}`;
-    }
-    return t;
-  }
-
-  private fillKey(shape: ShapeProperties): string {
-    if (!this.hasFillColor(shape)) return PropertiesPanelComponent.PAINT_NONE;
-    return this.normalizeColorKey(shape.fill);
-  }
-
-  private strokeKey(shape: ShapeProperties): string {
-    if (!this.hasStrokeColor(shape)) return PropertiesPanelComponent.PAINT_NONE;
-    return this.normalizeColorKey(shape.stroke);
-  }
-
-  /** True when two or more selected shapes disagree on resolved fill (including some with vs without fill). */
-  fillMixed(): boolean {
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return false;
-    const keys = new Set(shapes.map((s) => this.fillKey(s)));
-    return keys.size > 1;
-  }
-
-  /** True when two or more selected shapes disagree on resolved stroke color. */
-  strokeMixed(): boolean {
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return false;
-    const keys = new Set(shapes.map((s) => this.strokeKey(s)));
-    return keys.size > 1;
-  }
-
-  strokeWidthsMixed(): boolean {
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return false;
-    const keys = new Set(shapes.map((s) => String(s.strokeWidth ?? 0)));
-    return keys.size > 1;
-  }
-
-  opacitiesMixed(): boolean {
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return false;
-    const keys = new Set(shapes.map((s) => String(s.opacity ?? 1)));
-    return keys.size > 1;
   }
 
   private textSelection(): ShapeProperties[] {
@@ -337,12 +261,6 @@ export class PropertiesPanelComponent {
     );
   }
 
-  /** True when every selected shape is `<text>` — use outline-oriented labels and text-only extras. */
-  textOutlineLabels(): boolean {
-    const shapes = this.selectedShapesList();
-    return shapes.length > 0 && shapes.every((s) => s.type === 'text');
-  }
-
   private normalizeTextPaintOrderKey(raw: string | undefined): string {
     const t = (raw ?? '').trim().toLowerCase();
     if (!t || t === 'normal') return 'normal';
@@ -386,53 +304,6 @@ export class PropertiesPanelComponent {
     this.chromeApply.applyTextVectorEffectFromChrome(this.textSelection(), next);
   }
 
-  /** All selected shapes have no visible fill — show “No fill” only in this case (not when mixed). */
-  allSelectedLackFill(shape: ShapeProperties): boolean {
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return !this.hasFillColor(shape);
-    return shapes.every((s) => !this.hasFillColor(s));
-  }
-
-  allSelectedLackStroke(shape: ShapeProperties): boolean {
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return !this.hasStrokeColor(shape);
-    return shapes.every((s) => !this.hasStrokeColor(s));
-  }
-
-  fillPickerColor(shape: ShapeProperties): string {
-    if (this.fillMixed()) return this.mixedColorPickerFallback;
-    return shape.fill ?? this.mixedColorPickerFallback;
-  }
-
-  defaultFillPickerColor(): string {
-    return this.drawingDefaults.fill();
-  }
-
-  strokePickerColor(shape: ShapeProperties): string {
-    if (this.strokeMixed()) return this.mixedColorPickerFallback;
-    return shape.stroke ?? this.mixedColorPickerFallback;
-  }
-
-  defaultStrokePickerColor(): string {
-    return this.drawingDefaults.stroke();
-  }
-
-  defaultStrokeWidthValue(): number {
-    return this.drawingDefaults.strokeWidth();
-  }
-
-  /** Default fill for new shapes is a solid color (not cleared / `none`). */
-  hasDefaultSolidFill(): boolean {
-    const f = this.drawingDefaults.fill();
-    return f != null && f.trim() !== '' && f.toLowerCase() !== 'none';
-  }
-
-  /** Default stroke for new shapes is a visible stroke paint. */
-  hasDefaultSolidStroke(): boolean {
-    const s = this.drawingDefaults.stroke();
-    return s != null && s.trim() !== '' && s.toLowerCase() !== 'none';
-  }
-
   shapeTypeLabel(shape: ShapeProperties): string {
     const shapes = this.selectedShapesList();
     if (shapes.length <= 1) return shape.type;
@@ -444,55 +315,6 @@ export class PropertiesPanelComponent {
     const n = this.selectionCount();
     if (n <= 1) return shape.id;
     return `${n} shapes selected`;
-  }
-
-  /**
-   * Short label for where the effective (computed) paint comes from — tuned for a direct-editing UX.
-   */
-  paintSourceText(info: PaintSourceInfo | undefined): string {
-    switch (info?.kind) {
-      case 'inline-style':
-        return 'Inline style';
-      case 'presentation-attr':
-        return 'On this shape';
-      case 'class-or-stylesheet':
-        return 'From CSS class or stylesheet';
-      case 'inherited':
-        return 'From parent';
-      case 'default':
-        return 'Default';
-      case 'unknown':
-      default:
-        return 'Unknown';
-    }
-  }
-
-  isClassControlled(info: PaintSourceInfo | undefined): boolean {
-    return info?.kind === 'class-or-stylesheet';
-  }
-
-  shouldOfferBakeFill(shape: ShapeProperties): boolean {
-    return (
-      this.hasFillColor(shape) &&
-      !!shape.fillSource &&
-      shape.fillSource.kind !== 'presentation-attr'
-    );
-  }
-
-  shouldOfferBakeStroke(shape: ShapeProperties): boolean {
-    return (
-      this.hasStrokeColor(shape) &&
-      !!shape.strokeSource &&
-      shape.strokeSource.kind !== 'presentation-attr'
-    );
-  }
-
-  shouldOfferBakeFillOnAny(): boolean {
-    return this.selectedShapesList().some((s) => this.shouldOfferBakeFill(s));
-  }
-
-  shouldOfferBakeStrokeOnAny(): boolean {
-    return this.selectedShapesList().some((s) => this.shouldOfferBakeStroke(s));
   }
 
   shouldOfferSelectParentGroup(shape: ShapeProperties): boolean {
@@ -507,290 +329,8 @@ export class PropertiesPanelComponent {
     return this.chromeApply.getNearestGroupAncestorId(shape.id);
   }
 
-  onBakeFillClick(): void {
-    this.chromeApply.applyBakeFillFromChrome(
-      this.selectedShapesList().filter((s) => this.shouldOfferBakeFill(s))
-    );
-  }
-
-  onBakeStrokeClick(): void {
-    this.chromeApply.applyBakeStrokeFromChrome(
-      this.selectedShapesList().filter((s) => this.shouldOfferBakeStroke(s))
-    );
-  }
-
   onSelectParentGroupClick(): void {
     this.chromeApply.selectParentGroupForSingleSelection();
-  }
-
-  gradientEditorSummaryLabel(paintProperty: 'fill' | 'stroke'): string {
-    return paintProperty === 'fill' ? 'Edit gradient fill' : 'Edit gradient stroke';
-  }
-
-  canShowGradientEditor(shape: ShapeProperties, paintProperty: 'fill' | 'stroke'): boolean {
-    if (this.selectionCount() !== 1) return false;
-    const paintType = paintProperty === 'fill' ? shape.fillPaintType : shape.strokePaintType;
-    return paintType === 'gradient';
-  }
-
-  /** Def id extracted from a raw `url(#id)` paint reference (for inspector labels). */
-  paintDefIdFromUrl(url: string | undefined | null): string | null {
-    return parsePaintReferenceId(url?.trim() ?? null);
-  }
-
-  private static readonly NO_FILL_TYPES = new Set(['line', 'polyline']);
-
-  /** True when the shape type supports fill editing (line and polyline do not). */
-  supportsFill(shape: ShapeProperties): boolean {
-    if (this.selectionCount() > 1) {
-      return this.selectedShapesList().some(
-        (s) => !PropertiesPanelComponent.NO_FILL_TYPES.has(s.type)
-      );
-    }
-    return !PropertiesPanelComponent.NO_FILL_TYPES.has(shape.type);
-  }
-
-  /** True when the shape has a visible fill we can edit as a hex color (not `none` / missing). */
-  hasFillColor(shape: ShapeProperties): boolean {
-    const f = shape.fill;
-    return f != null && f.trim() !== '' && f.toLowerCase() !== 'none';
-  }
-
-  /** True when the shape has a visible stroke color (stroke width may still be set separately). */
-  hasStrokeColor(shape: ShapeProperties): boolean {
-    const s = shape.stroke;
-    return s != null && s.trim() !== '' && s.toLowerCase() !== 'none';
-  }
-
-  /** Mixed fill paint across selection (solid hex, paint type, or gradient def). */
-  fillPaintMixed(): boolean {
-    if (this.fillMixed()) return true;
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return false;
-    const types = new Set(
-      shapes.map((s) => s.fillPaintType ?? (this.hasFillColor(s) ? 'solid' : 'none'))
-    );
-    if (types.size > 1) return true;
-    if (types.has('gradient') || types.has('pattern')) {
-      return new Set(shapes.map((s) => s.fillUrl ?? '')).size > 1;
-    }
-    return false;
-  }
-
-  /** Mixed stroke paint across selection. */
-  strokePaintMixed(): boolean {
-    if (this.strokeMixed()) return true;
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return false;
-    const types = new Set(
-      shapes.map((s) => s.strokePaintType ?? (this.hasStrokeColor(s) ? 'solid' : 'none'))
-    );
-    if (types.size > 1) return true;
-    if (types.has('gradient') || types.has('pattern')) {
-      return new Set(shapes.map((s) => s.strokeUrl ?? '')).size > 1;
-    }
-    return false;
-  }
-
-  fillGradientModesDisabled(): boolean {
-    return this.selectionCount() > 1;
-  }
-
-  strokeGradientModesDisabled(): boolean {
-    return this.selectionCount() > 1;
-  }
-
-  gradientModelForShape(
-    shape: ShapeProperties,
-    paintProperty: 'fill' | 'stroke'
-  ): EditableGradientModel | null {
-    const url = paintProperty === 'fill' ? shape.fillUrl : shape.strokeUrl;
-    const id = parsePaintReferenceId(url ?? undefined);
-    if (!id) return null;
-    return this.gradientSvgPort.readEditableGradientModelById(id);
-  }
-
-  fillSwatchMode(shape: ShapeProperties): PaintSwatchMode {
-    if (shape.fillPaintType === 'none' || (!this.hasFillColor(shape) && shape.fillPaintType !== 'gradient')) {
-      return 'none';
-    }
-    if (shape.fillPaintType === 'gradient') {
-      const model = this.gradientModelForShape(shape, 'fill');
-      return model?.kind === 'radial' ? 'radial' : 'linear';
-    }
-    return 'solid';
-  }
-
-  strokeSwatchMode(shape: ShapeProperties): PaintSwatchMode {
-    const hasStroke =
-      this.hasStrokeColor(shape) ||
-      shape.strokePaintType === 'gradient' ||
-      (shape.strokeWidth ?? 0) > 0;
-    if (!hasStroke && shape.strokePaintType !== 'gradient') {
-      return 'none';
-    }
-    if (shape.strokePaintType === 'gradient') {
-      const model = this.gradientModelForShape(shape, 'stroke');
-      return model?.kind === 'radial' ? 'radial' : 'linear';
-    }
-    return 'solid';
-  }
-
-  defaultFillSwatchMode(): PaintSwatchMode {
-    return this.hasDefaultSolidFill() ? 'solid' : 'none';
-  }
-
-  defaultStrokeSwatchMode(): PaintSwatchMode {
-    return this.hasDefaultSolidStroke() ? 'solid' : 'none';
-  }
-
-  isPatternFill(shape: ShapeProperties): boolean {
-    return shape.fillPaintType === 'pattern';
-  }
-
-  isPatternStroke(shape: ShapeProperties): boolean {
-    return shape.strokePaintType === 'pattern';
-  }
-
-  onFillPaintModeChange(mode: PaintSwatchMode): void {
-    const shape = this.selectedShape();
-    if (shape && this.selectionCount() === 1 && this.supportsFill(shape)) {
-      this.chromeApply.applyPaintModeFromChrome(shape, 'fill', mode);
-      return;
-    }
-    if (mode === 'none') {
-      this.chromeApply.applyFillColor('none');
-      return;
-    }
-    if (mode === 'solid') {
-      this.chromeApply.applyFillColor(this.resolveSolidFillColorForApply(shape));
-    }
-  }
-
-  onStrokePaintModeChange(mode: PaintSwatchMode): void {
-    const shape = this.selectedShape();
-    if (shape && this.selectionCount() === 1) {
-      this.chromeApply.applyPaintModeFromChrome(shape, 'stroke', mode);
-      return;
-    }
-    if (mode === 'none') {
-      this.chromeApply.applyStrokeColor('none');
-      return;
-    }
-    if (mode === 'solid') {
-      this.chromeApply.applyStrokeColor(this.resolveSolidStrokeColorForApply(shape));
-    }
-  }
-
-  private resolveSolidFillColorForApply(shape: ShapeProperties | null): string {
-    if (!shape) {
-      const d = this.defaultFillPickerColor();
-      return d && d.toLowerCase() !== 'none' ? d : '#000000';
-    }
-    const c = this.fillPickerColor(shape);
-    return c && c.toLowerCase() !== 'none' ? c : '#000000';
-  }
-
-  private resolveSolidStrokeColorForApply(shape: ShapeProperties | null): string {
-    if (!shape) {
-      const d = this.defaultStrokePickerColor();
-      return d && d.toLowerCase() !== 'none' ? d : '#000000';
-    }
-    const c = this.strokePickerColor(shape);
-    return c && c.toLowerCase() !== 'none' ? c : '#000000';
-  }
-
-  onFillColorChange(color: string): void {
-    this.chromeApply.applyFillColor(color);
-  }
-
-  onStrokeColorChange(color: string): void {
-    this.chromeApply.applyStrokeColor(color);
-  }
-
-  onStrokeWidthChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    const width = parseFloat(target.value);
-    this.chromeApply.applyStrokeWidth(width);
-  }
-
-  onOpacityChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    const opacity = parseFloat(target.value);
-    this.chromeApply.applyOpacity(opacity);
-  }
-
-  readonly dashPresets: { label: string; value: string }[] = [
-    { label: 'Solid', value: '' },
-    { label: 'Dashed', value: '8,4' },
-    { label: 'Dotted', value: '2,4' },
-    { label: 'Dash-dot', value: '8,4,2,4' },
-    { label: 'Long dash', value: '16,6' },
-    { label: 'Custom', value: '__custom__' }
-  ];
-
-  /** True when selected shapes have different dash patterns. */
-  dashArraysMixed(): boolean {
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return false;
-    const keys = new Set(shapes.map((s) => s.strokeDasharray ?? ''));
-    return keys.size > 1;
-  }
-
-  dashOffsetsMixed(): boolean {
-    const shapes = this.selectedShapesList();
-    if (shapes.length <= 1) return false;
-    const keys = new Set(shapes.map((s) => String(s.strokeDashoffset ?? 0)));
-    return keys.size > 1;
-  }
-
-  /** Returns the preset value matching the current dasharray, or `'__custom__'` if none match. */
-  currentDashPreset(shape: ShapeProperties): string {
-    if (this.dashArraysMixed()) return '';
-    const current = shape.strokeDasharray ?? '';
-    if (!current) return '';
-    const normalized = current.replace(/\s+/g, '').replace(/,+/g, ',');
-    const match = this.dashPresets.find((p) => p.value === normalized);
-    return match ? match.value : '__custom__';
-  }
-
-  /** Whether the custom dasharray text input should be shown. */
-  showCustomDashInput(shape: ShapeProperties): boolean {
-    return this.currentDashPreset(shape) === '__custom__';
-  }
-
-  /** True when any selected shape has a visible stroke (dash controls are only relevant with stroke). */
-  hasAnyStroke(): boolean {
-    return this.selectedShapesList().some((s) => this.hasStrokeColor(s));
-  }
-
-  onDashPresetChange(event: Event): void {
-    const value = (event.target as HTMLSelectElement).value;
-    if (value === '__custom__') return;
-    this.applyDashArray(value);
-  }
-
-  onCustomDashArrayChange(event: Event): void {
-    const raw = (event.target as HTMLInputElement).value.trim();
-    if (!this.isValidDashArray(raw)) return;
-    this.applyDashArray(raw);
-  }
-
-  onDashOffsetChange(event: Event): void {
-    const target = event.target as HTMLInputElement;
-    const offset = parseFloat(target.value);
-    if (!Number.isFinite(offset)) return;
-    this.chromeApply.applyStrokeDashoffset(offset);
-  }
-
-  /** Validate a custom dasharray string: comma/space-separated positive numbers. */
-  isValidDashArray(value: string): boolean {
-    if (!value.trim()) return true;
-    return /^(\d+(\.\d+)?)([\s,]+\d+(\.\d+)?)*$/.test(value.trim());
-  }
-
-  private applyDashArray(dasharray: string): void {
-    this.chromeApply.applyStrokeDasharray(dasharray);
   }
 
   onClearSelection(): void {
