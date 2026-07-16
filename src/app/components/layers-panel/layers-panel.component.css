@@ -13,20 +13,13 @@
   overflow: hidden;
 }
 
-.panel-header {
-  padding: var(--editor-spacing-lg) var(--editor-spacing-xl);
+.panel-toolbar {
+  padding: var(--editor-spacing-sm) var(--editor-spacing-xl);
   background: var(--editor-surface);
   border-bottom: 1px solid var(--editor-border-strong);
   display: flex;
   align-items: center;
-  justify-content: space-between;
-}
-
-.panel-header h3 {
-  margin: 0;
-  font-size: var(--editor-font-size-xl);
-  font-weight: 600;
-  color: var(--editor-text-heading);
+  justify-content: flex-end;
 }
 
 .panel-actions {

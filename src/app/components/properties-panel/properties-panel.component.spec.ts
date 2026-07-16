@@ -1107,31 +1107,18 @@ describe('PropertiesPanelComponent', () => {
     expect(component.fillMixed()).toBe(true);
   });
 
-  it('shows align/distribute controls only in selector mode', () => {
+  it('shows transform readouts only in selector mode', () => {
     selectedShapesSignal.set([{ id: 'shape-1', type: 'rect' }]);
     fixture.detectChanges();
-    let el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Align');
-    expect(el.textContent).toContain('Distribute');
     expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')).toBeTruthy();
 
     editorToolService.currentTool.set('zoom');
     fixture.detectChanges();
-    el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).not.toContain('Distribute');
     expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')).toBeNull();
+    expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Align');
   });
 
-  it('disables align buttons for fewer than 2 selected shapes', () => {
-    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect' }]);
-    fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    const leftBtn = el.querySelector('button[title*="Align left"]') as HTMLButtonElement | null;
-    expect(leftBtn).toBeTruthy();
-    expect(leftBtn?.disabled).toBe(true);
-  });
-
-  it('enables align and distribute based on selection count thresholds', () => {
+  it('does not host align/distribute controls (moved to Align & distribute section)', () => {
     selectedShapesSignal.set([
       { id: 'shape-1', type: 'rect' },
       { id: 'shape-2', type: 'rect' },
@@ -1139,10 +1126,8 @@ describe('PropertiesPanelComponent', () => {
     ]);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    const leftBtn = el.querySelector('button[title*="Align left"]') as HTMLButtonElement | null;
-    const distHBtn = el.querySelector('button[title*="Distribute horizontally"]') as HTMLButtonElement | null;
-    expect(leftBtn?.disabled).toBe(false);
-    expect(distHBtn?.disabled).toBe(false);
+    expect(el.querySelector('button[title*="Align left"]')).toBeNull();
+    expect(el.querySelector('button[title*="Distribute horizontally"]')).toBeNull();
   });
 
   it('shows text controls when selection includes text shapes', () => {

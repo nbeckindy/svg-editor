@@ -1,3 +1,4 @@
+import { AlignDistributePanelComponent } from '../components/align-distribute-panel/align-distribute-panel.component';
 import { BooleanPathPanelComponent } from '../components/boolean-path-panel/boolean-path-panel.component';
 import { DocumentSettingsComponent } from '../components/document-settings/document-settings.component';
 import { LayersPanelComponent } from '../components/layers-panel/layers-panel.component';
@@ -7,7 +8,7 @@ import { pathOpsMultiPathRelevance } from './dock-panel-relevance';
 
 /**
  * Registers the seven dock stack sections in locked product order.
- * Colors / Stroke / Align use placeholders until later uos beads.
+ * Colors / Stroke use placeholders until later uos beads.
  */
 export function registerDefaultDockPanels(registry: DockPanelRegistryService): void {
   registry.register({
@@ -65,11 +66,12 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
     label: 'Align & distribute',
     order: 5,
     availability: 'selection-aware',
+    component: AlignDistributePanelComponent,
     headerTestId: 'dock-section-align-distribute',
     areaTestId: 'editor-align-distribute-area',
     ariaLabel: 'Align and distribute',
-    defaultExpanded: false,
-    placeholderMessage: 'Align and distribute controls will appear here.'
+    panelClass: 'align-distribute-panel-host',
+    defaultExpanded: false
   });
 
   registry.register({

@@ -79,17 +79,6 @@ export class PropertiesPanelComponent {
     this.chromeApply.onSelectionBBoxFieldCommit(field, event);
   }
 
-  readonly alignShortcutLabels = {
-    left: 'Ctrl/Cmd+Shift+Left',
-    center: 'Ctrl/Cmd+Shift+Down',
-    right: 'Ctrl/Cmd+Shift+Right',
-    top: 'Ctrl/Cmd+Shift+Up',
-    middle: 'Ctrl/Cmd+Shift+M',
-    bottom: 'Ctrl/Cmd+Shift+B',
-    distributeHorizontal: 'Ctrl/Cmd+Shift+H',
-    distributeVertical: 'Ctrl/Cmd+Shift+V'
-  } as const;
-
   /** Neutral value for native `<input type="color">` when the selection is mixed (not shown as the real fill). */
   readonly mixedColorPickerFallback = '#888888';
 
@@ -806,23 +795,5 @@ export class PropertiesPanelComponent {
 
   onClearSelection(): void {
     this.chromeApply.clearInspectorSelection();
-  }
-
-  canAlignSelection(): boolean {
-    return this.selectionCount() >= 2;
-  }
-
-  canDistributeSelection(): boolean {
-    return this.selectionCount() >= 3;
-  }
-
-  onAlign(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom'): void {
-    const ids = this.selectedShapesList().map((shape) => shape.id);
-    this.chromeApply.applyAlignFromChrome(direction, ids);
-  }
-
-  onDistribute(direction: 'horizontal' | 'vertical'): void {
-    const ids = this.selectedShapesList().map((shape) => shape.id);
-    this.chromeApply.applyDistributeFromChrome(direction, ids);
   }
 }

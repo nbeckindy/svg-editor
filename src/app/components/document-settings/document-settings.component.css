@@ -10,20 +10,6 @@
   flex-direction: column;
 }
 
-.panel-header {
-  flex-shrink: 0;
-  padding: 16px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
-}
-
-.panel-header h3 {
-  margin: 0;
-  font-size: 18px;
-  font-weight: 600;
-  color: #333;
-}
-
 .settings-content {
   padding: 16px;
 }

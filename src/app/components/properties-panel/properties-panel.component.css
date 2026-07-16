@@ -14,20 +14,6 @@
   overflow: hidden;
 }
 
-.panel-header {
-  flex-shrink: 0;
-  padding: var(--editor-spacing-xl);
-  background: var(--editor-surface);
-  border-bottom: 1px solid var(--editor-border-strong);
-}
-
-.panel-header h3 {
-  margin: 0;
-  font-size: var(--editor-font-size-xl);
-  font-weight: 600;
-  color: var(--editor-text-heading);
-}
-
 .panel-scroll {
   flex: 1;
   min-height: 0;
