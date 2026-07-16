@@ -1,4 +1,5 @@
 import { BooleanPathPanelComponent } from '../components/boolean-path-panel/boolean-path-panel.component';
+import { DocumentSettingsComponent } from '../components/document-settings/document-settings.component';
 import { LayersPanelComponent } from '../components/layers-panel/layers-panel.component';
 import { PropertiesPanelComponent } from '../components/properties-panel/properties-panel.component';
 import type { DockPanelRegistryService } from './dock-panel-registry.service';
@@ -6,7 +7,7 @@ import { pathOpsMultiPathRelevance } from './dock-panel-relevance';
 
 /**
  * Registers the seven dock stack sections in locked product order.
- * Document / Colors / Stroke / Align use placeholders until later uos beads.
+ * Colors / Stroke / Align use placeholders until later uos beads.
  */
 export function registerDefaultDockPanels(registry: DockPanelRegistryService): void {
   registry.register({
@@ -14,11 +15,12 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
     label: 'Document',
     order: 1,
     availability: 'always-available',
+    component: DocumentSettingsComponent,
     headerTestId: 'dock-section-document',
     areaTestId: 'editor-document-area',
     ariaLabel: 'Document',
-    defaultExpanded: false,
-    placeholderMessage: 'Document settings will appear here.'
+    panelClass: 'document-settings-panel',
+    defaultExpanded: true
   });
 
   registry.register({

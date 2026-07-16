@@ -5,7 +5,6 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { PaintSourceInfo, ShapeProperties } from '../../models/shape-properties.interface';
 import { PaintSwatchPopoverComponent, PaintSwatchMode } from '../paint-swatch-popover/paint-swatch-popover.component';
-import { DocumentSettingsComponent } from '../document-settings/document-settings.component';
 import { GradientFillEditorComponent } from '../gradient-fill-editor/gradient-fill-editor.component';
 import { EditableGradientModel, parsePaintReferenceId } from '../../models/svg-gradient';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
@@ -20,7 +19,6 @@ import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-nod
     CommonModule,
     FormsModule,
     PaintSwatchPopoverComponent,
-    DocumentSettingsComponent,
     GradientFillEditorComponent,
     PathNodeAnchorToolsComponent
   ],

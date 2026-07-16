@@ -184,16 +184,15 @@ describe('PropertiesPanelComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should display document settings and hint when no shape is selected', () => {
+  it('should display empty-state hint when no shape is selected', () => {
     const compiled = fixture.nativeElement;
-    const docSettings = compiled.querySelector('[data-testid="document-settings-panel"]');
-    expect(docSettings).toBeTruthy();
 
     const allEmptyStates = compiled.querySelectorAll('.empty-state');
     const hintState = Array.from(allEmptyStates).find(
       (el: any) => el.textContent.includes('Click on a shape')
     );
     expect(hintState).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="document-settings-panel"]')).toBeNull();
   });
 
   it('keeps fill/stroke controls visible with no selection', () => {
@@ -240,7 +239,7 @@ describe('PropertiesPanelComponent', () => {
     expect(compiled.querySelector('.properties-content')).toBeTruthy();
     expect(compiled.textContent).toContain('circle');
     expect(compiled.textContent).toContain('shape-1');
-    expect(compiled.querySelector('[data-testid="document-settings-panel"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="document-settings-panel"]')).toBeNull();
   });
 
   it('should show Skew X/Y from shape transform matrix', () => {

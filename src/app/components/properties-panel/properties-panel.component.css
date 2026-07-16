@@ -68,10 +68,6 @@
   padding: 16px;
 }
 
-.panel-scroll app-document-settings {
-  display: block;
-}
-
 .paint-effective-hint {
   margin: 0 0 16px 0;
   font-size: 12px;
@@ -478,13 +474,6 @@
   margin-top: 24px;
   padding-top: 16px;
   border-top: 1px solid var(--editor-border-strong);
-}
-
-.document-settings-inline {
-  display: block;
-  margin-top: 24px;
-  border-top: 1px solid var(--editor-border-strong);
-  padding-top: 8px;
 }
 
 .btn-secondary {

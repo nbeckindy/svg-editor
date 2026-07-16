@@ -1,21 +1,24 @@
 import { expect, test } from '@playwright/test';
+import { ensureDockSectionExpanded } from './canvas-helpers';
 
 test.describe('Editor shell: Properties vs document context', () => {
-  test('default document: Properties section expanded; document settings visible; no shape transform readouts in DOM', async ({
+  test('default document: Document + Properties sections expanded; artboard settings in Document; no shape transform readouts', async ({
     page,
   }) => {
     await page.goto('/');
 
-    await expect(page.getByTestId('dock-section-properties')).toHaveAttribute('aria-expanded', 'true');
-    await expect(page.getByTestId('editor-properties-area')).toBeVisible();
-
+    await expect(page.getByTestId('dock-section-document')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('editor-document-area')).toBeVisible();
     await expect(page.getByTestId('document-settings-panel')).toBeVisible();
     await expect(page.getByTestId('document-settings')).toBeVisible();
+
+    await expect(page.getByTestId('dock-section-properties')).toHaveAttribute('aria-expanded', 'true');
+    await expect(page.getByTestId('editor-properties-area')).toBeVisible();
 
     await expect(page.getByTestId('properties-transform-x')).toHaveCount(0);
   });
 
-  test('bundled icon + path selection: transform readouts populated; document settings panel not rendered', async ({
+  test('bundled icon + path selection: transform readouts in Properties; Document settings still available', async ({
     page,
   }) => {
     await page.goto('/');
@@ -30,7 +33,8 @@ test.describe('Editor shell: Properties vs document context', () => {
     const xText = (await xReadout.textContent())?.trim() ?? '';
     expect(xText.length).toBeGreaterThan(0);
 
-    await expect(page.getByTestId('document-settings-panel')).toHaveCount(0);
-    await expect(page.getByTestId('document-settings')).toHaveCount(0);
+    await ensureDockSectionExpanded(page, 'document');
+    await expect(page.getByTestId('document-settings-panel')).toBeVisible();
+    await expect(page.getByTestId('document-settings')).toBeVisible();
   });
 });

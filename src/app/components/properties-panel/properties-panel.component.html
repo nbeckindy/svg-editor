@@ -673,10 +673,6 @@
             Clear Selection
           </button>
         </div>
-
-        <app-document-settings
-          class="document-settings-inline"
-          data-testid="document-settings-panel"></app-document-settings>
       </div>
     } @else if (textToolPlacementMode()) {
       <div class="properties-content">
@@ -751,12 +747,8 @@
             </button>
           </div>
         </div>
-        <app-document-settings
-          class="document-settings-inline"
-          data-testid="document-settings-panel"></app-document-settings>
       </div>
     } @else {
-      <app-document-settings data-testid="document-settings-panel"></app-document-settings>
       <div class="empty-state">
         <p class="hint">Click on a shape in the canvas to edit its properties</p>
       </div>

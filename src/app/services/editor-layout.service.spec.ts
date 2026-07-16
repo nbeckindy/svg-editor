@@ -24,11 +24,11 @@ describe('EditorLayoutService', () => {
     layout = TestBed.inject(EditorLayoutService);
   });
 
-  it('defaults to expanded properties and layers with token-aligned widths', () => {
+  it('defaults to expanded document, properties, and layers with token-aligned widths', () => {
+    expect(layout.isSectionExpanded('document')).toBe(true);
     expect(layout.isSectionExpanded('properties')).toBe(true);
     expect(layout.isSectionExpanded('layers')).toBe(true);
     expect(layout.isSectionExpanded('pathOps')).toBe(false);
-    expect(layout.isSectionExpanded('document')).toBe(false);
     expect(layout.dockCollapsed()).toBe(false);
     expect(layout.leftRailCollapsed()).toBe(false);
     expect(layout.effectiveRightDockWidthPx()).toBe(320);
@@ -56,10 +56,10 @@ describe('EditorLayoutService', () => {
   });
 
   it('toggles individual stack sections', () => {
-    expect(layout.isSectionExpanded('document')).toBe(false);
-    layout.toggleSection('document');
     expect(layout.isSectionExpanded('document')).toBe(true);
     layout.toggleSection('document');
     expect(layout.isSectionExpanded('document')).toBe(false);
+    layout.toggleSection('document');
+    expect(layout.isSectionExpanded('document')).toBe(true);
   });
 });

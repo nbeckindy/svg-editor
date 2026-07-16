@@ -11,7 +11,11 @@ import { ArtboardSizeCommand, ArtboardBackgroundCommand } from '../../models/edi
   selector: 'app-document-settings',
   imports: [CommonModule, FormsModule, ColorPickerComponent],
   templateUrl: './document-settings.component.html',
-  styleUrl: './document-settings.component.css'
+  styleUrl: './document-settings.component.css',
+  host: {
+    'data-testid': 'document-settings-panel',
+    class: 'document-settings-panel-host'
+  }
 })
 export class DocumentSettingsComponent {
   private readonly svg = inject(DOCUMENT_SETTINGS_SVG_PORT);
