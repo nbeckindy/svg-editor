@@ -1,7 +1,7 @@
 <div class="colors-panel" data-testid="colors-panel">
   @if (!paint.hasSelection()) {
     <div class="empty-state">
-      <p class="hint">Select a shape to edit fill and opacity</p>
+      <p class="hint">Select a shape to edit fill and stroke color</p>
     </div>
   } @else if (paint.selectedShape(); as shape) {
     <div class="colors-content">
@@ -96,40 +96,56 @@
         </div>
       }
 
+      @if (paint.textOutlineLabels()) {
+        <p class="paint-ref-hint" data-testid="colors-text-outline-paint-hint">
+          On <code>&lt;text&gt;</code>, stroke is the <strong>outline</strong>. Outline / fill order
+          and zoom-stable outline width live under Properties.
+        </p>
+      }
+
       <div class="property-group">
-        <label class="property-label" for="colors-stroke-opacity">Stroke opacity</label>
-        @if (paint.strokeOpacitiesMixed()) {
-          <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
-        }
-        <div class="range-input-group">
-          <input
-            type="range"
-            id="colors-stroke-opacity"
-            class="range-slider"
-            [class.mixed-control]="paint.strokeOpacitiesMixed()"
-            min="0"
-            max="1"
-            step="0.01"
-            [disabled]="paint.anySelectedShapeLocked()"
-            [value]="paint.strokeOpacitiesMixed() ? 1 : (shape.strokeOpacity ?? 1)"
-            (input)="paint.onStrokeOpacityChange($event)"
-            aria-label="Stroke opacity"
-            data-testid="colors-stroke-opacity" />
-          <input
-            type="number"
-            class="range-number"
-            [class.mixed-control]="paint.strokeOpacitiesMixed()"
-            min="0"
-            max="1"
-            step="0.01"
-            [disabled]="paint.anySelectedShapeLocked()"
-            [value]="paint.strokeOpacitiesMixed() ? '' : (shape.strokeOpacity ?? 1)"
-            [attr.placeholder]="paint.strokeOpacitiesMixed() ? '—' : ''"
-            (change)="paint.onStrokeOpacityChange($event)"
-            aria-label="Stroke opacity value"
-            data-testid="colors-stroke-opacity-value" />
+        <label class="property-label">{{ paint.textOutlineLabels() ? 'Outline color' : 'Stroke color' }}</label>
+        <div class="color-input-group">
+          @if (paint.isPatternStroke(shape)) {
+            <app-paint-swatch-popover
+              target="stroke"
+              mode="solid"
+              [color]="paint.strokePickerColor(shape)"
+              [disabled]="true"
+              [gradientModesDisabled]="true"
+              data-testid="colors-stroke-paint-swatch" />
+            <p class="paint-ref-hint" id="colors-stroke-pattern-hint">
+              Pattern stroke; the editor does not edit patterns here yet.
+            </p>
+          } @else {
+            <app-paint-swatch-popover
+              target="stroke"
+              [mode]="paint.strokeSwatchMode(shape)"
+              [color]="paint.strokePickerColor(shape)"
+              [gradientModel]="paint.gradientModelForShape(shape, 'stroke')"
+              [empty]="paint.allSelectedLackStroke(shape)"
+              [indeterminate]="paint.strokePaintMixed()"
+              [gradientModesDisabled]="paint.strokeGradientModesDisabled()"
+              [disabled]="paint.anySelectedShapeLocked()"
+              (paintModeChange)="paint.onStrokePaintModeChange($event)"
+              (colorChange)="paint.onStrokeColorChange($event)"
+              data-testid="colors-stroke-paint-swatch" />
+          }
         </div>
       </div>
+
+      @if (paint.selectionCount() === 1 && paint.canShowGradientEditor(shape, 'stroke')) {
+        <details class="gradient-fill-details" open data-testid="colors-gradient-stroke-details">
+          <summary class="gradient-fill-summary" data-testid="colors-gradient-stroke-summary">
+            {{ paint.gradientEditorSummaryLabel('stroke') }}
+          </summary>
+          <app-gradient-fill-editor
+            [shapeId]="shape.id"
+            paintProperty="stroke"
+            [disabled]="paint.anySelectedShapeLocked()"
+            data-testid="colors-gradient-stroke-editor" />
+        </details>
+      }
     </div>
   }
 </div>

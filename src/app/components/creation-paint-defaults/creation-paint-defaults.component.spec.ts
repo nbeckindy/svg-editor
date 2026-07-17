@@ -35,11 +35,11 @@ describe('CreationPaintDefaultsComponent', () => {
     fixture.detectChanges();
   });
 
-  it('renders fill, stroke, and stroke-width controls', () => {
+  it('renders fill and stroke-width controls without stroke color', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('[data-testid="creation-paint-defaults"]')).toBeTruthy();
     expect(el.querySelector('[data-testid="creation-default-fill"]')).toBeTruthy();
-    expect(el.querySelector('[data-testid="creation-default-stroke"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="creation-default-stroke"]')).toBeNull();
     expect(el.querySelector('[data-testid="creation-default-stroke-width"]')).toBeTruthy();
   });
 
@@ -58,11 +58,6 @@ describe('CreationPaintDefaultsComponent', () => {
     expect(chromeApply.applyCreationStrokeDefault).not.toHaveBeenCalled();
   });
 
-  it('stroke color change calls creation-only apply', () => {
-    fixture.componentInstance.onStrokeChange('#00aaff');
-    expect(chromeApply.applyCreationStrokeDefault).toHaveBeenCalledWith('#00aaff');
-  });
-
   it('stroke width change calls creation-only apply', () => {
     const input = document.createElement('input');
     input.value = '3';
@@ -70,10 +65,9 @@ describe('CreationPaintDefaultsComponent', () => {
     expect(chromeApply.applyCreationStrokeWidthDefault).toHaveBeenCalledWith(3);
   });
 
-  it('reports empty fill/stroke for none', () => {
+  it('reports empty fill for none', () => {
     drawingDefaults.setDefaults({ ...BASE_DRAWING_STYLE_DEFAULTS, fill: 'none', stroke: 'none' });
     fixture.detectChanges();
     expect(fixture.componentInstance.fillEmpty()).toBe(true);
-    expect(fixture.componentInstance.strokeEmpty()).toBe(true);
   });
 });

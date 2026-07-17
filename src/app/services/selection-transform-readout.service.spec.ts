@@ -6,13 +6,12 @@ import { SelectionTransformReadoutService } from './selection-transform-readout.
 import { ShapeSelectionService } from './shape-selection.service';
 import { SvgManipulationService } from './svg-manipulation.service';
 import { EditorHistoryService } from './editor-history.service';
-import { EditorToolService } from './editor-tool.service';
 import { ShapeProperties } from '../models/shape-properties.interface';
+import { editorPortTestProviders } from '../testing/editor-port-test-providers';
 
 describe('SelectionTransformReadoutService', () => {
   let service: SelectionTransformReadoutService;
   const selectedShapesSignal = signal<ShapeProperties[]>([]);
-  const editorToolSignal = signal<'selector' | 'zoom' | 'text'>('selector');
   const editorHistoryRevision = signal(0);
 
   beforeEach(async () => {
@@ -27,27 +26,22 @@ describe('SelectionTransformReadoutService', () => {
       getSVGInstance: vi.fn()
     };
 
-    const editorToolMock = {
-      currentTool: editorToolSignal
-    };
-
     const editorHistoryMock = {
       revision: editorHistoryRevision
     };
 
     await TestBed.configureTestingModule({
       providers: [
+        ...editorPortTestProviders,
         SelectionTransformReadoutService,
         { provide: ShapeSelectionService, useValue: shapeSelectionMock },
         { provide: SvgManipulationService, useValue: svgManipulationMock },
-        { provide: EditorToolService, useValue: editorToolMock },
         { provide: EditorHistoryService, useValue: editorHistoryMock }
       ]
     }).compileComponents();
 
     service = TestBed.inject(SelectionTransformReadoutService);
     selectedShapesSignal.set([]);
-    editorToolSignal.set('selector');
   });
 
   it('skew readout uses per-element matrix skew', () => {
@@ -71,5 +65,17 @@ describe('SelectionTransformReadoutService', () => {
     const out = service.selectionSkewReadout();
     expect(String(out.skewX)).toContain('12');
     expect(String(out.skewY)).toMatch(/0\.0/);
+  });
+
+  it('bbox field model is available whenever a shape is selected', () => {
+    selectedShapesSignal.set([
+      { id: 'rect-1', type: 'rect', fill: '#000000', stroke: 'none', strokeWidth: 0, opacity: 1 }
+    ]);
+    const model = service.selectionBBoxFieldModel();
+    expect(model?.ok).toBe(true);
+    if (model?.ok) {
+      expect(model.w).toBe(80);
+      expect(model.h).toBe(40);
+    }
   });
 });

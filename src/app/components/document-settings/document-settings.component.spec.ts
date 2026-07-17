@@ -11,19 +11,17 @@ describe('DocumentSettingsComponent', () => {
   let component: DocumentSettingsComponent;
   let mockSvgManip: any;
   let mockHistory: any;
-  let svgInstanceValue: any;
   let artboardSig: WritableSignal<ArtboardModel>;
   let resizeAnchorSig: WritableSignal<ArtboardResizeAnchor>;
 
   beforeEach(async () => {
-    svgInstanceValue = {};
     artboardSig = signal({ ...DEFAULT_ARTBOARD });
     resizeAnchorSig = signal('top-left');
     mockSvgManip = {
       artboard: computed(() => artboardSig()),
       artboardResizeAnchor: computed(() => resizeAnchorSig()),
       getArtboard: () => artboardSig(),
-      getSVGInstance: vi.fn(() => svgInstanceValue),
+      getSVGInstance: vi.fn(() => ({})),
       setArtboardSize: vi.fn(),
       setArtboardResizeAnchor: vi.fn((a: ArtboardResizeAnchor) => resizeAnchorSig.set(a)),
       setBackgroundColor: vi.fn(),
@@ -52,20 +50,11 @@ describe('DocumentSettingsComponent', () => {
     expect(component).toBeTruthy();
   });
 
-  it('should show document settings when SVG is loaded', () => {
+  it('should always show document settings for artboard data', () => {
     const el = fixture.nativeElement;
-    const content = el.querySelector('.settings-content');
-    expect(content).toBeTruthy();
-  });
-
-  it('should show empty state when no SVG loaded', async () => {
-    svgInstanceValue = null;
-    const noDocFixture = TestBed.createComponent(DocumentSettingsComponent);
-    noDocFixture.detectChanges();
-    const el = noDocFixture.nativeElement;
-    const emptyState = el.querySelector('.empty-state');
-    expect(emptyState).toBeTruthy();
-    expect(emptyState.textContent).toContain('No document loaded');
+    expect(el.querySelector('.settings-content')).toBeTruthy();
+    expect(el.querySelector('.empty-state')).toBeNull();
+    expect(el.textContent).not.toContain('No document loaded');
   });
 
   it('should display default artboard dimensions', () => {

@@ -3,7 +3,6 @@ import { Element as SvgJsElement, Matrix } from '@svgdotjs/svg.js';
 import { ShapeSelectionService } from './shape-selection.service';
 import { SELECTION_TRANSFORM_READOUT_SVG_PORT } from './manipulation-port-tokens';
 import { EditorHistoryService } from './editor-history.service';
-import { EditorToolService } from './editor-tool.service';
 import {
   ROTATION_MIXED_EPS_DEG,
   SKEW_MIXED_EPS_DEG,
@@ -21,7 +20,6 @@ export class SelectionTransformReadoutService {
   private readonly shapeSelection = inject(ShapeSelectionService);
   private readonly svg = inject(SELECTION_TRANSFORM_READOUT_SVG_PORT);
   private readonly editorHistory = inject(EditorHistoryService);
-  private readonly editorTool = inject(EditorToolService);
 
   /**
    * Matrix-derived skew angles (degrees). Approximate when rotation and skew are combined.
@@ -30,10 +28,6 @@ export class SelectionTransformReadoutService {
   readonly selectionSkewReadout = computed(() => {
     this.editorHistory.revision();
     this.svg.documentRevision();
-
-    if (this.editorTool.currentTool() !== 'selector') {
-      return { skewX: '—' as const, skewY: '—' as const };
-    }
 
     const shapes = this.shapeSelection.selectedShapes();
     if (shapes.length === 0) {
@@ -82,10 +76,6 @@ export class SelectionTransformReadoutService {
     this.svg.documentRevision();
 
     const dash = '—' as const;
-    if (this.editorTool.currentTool() !== 'selector') {
-      return { x: dash, y: dash, w: dash, h: dash, r: dash };
-    }
-
     const shapes = this.shapeSelection.selectedShapes();
     if (shapes.length === 0) {
       return { x: dash, y: dash, w: dash, h: dash, r: dash };
@@ -134,10 +124,6 @@ export class SelectionTransformReadoutService {
   readonly selectionBBoxFieldModel = computed(() => {
     this.editorHistory.revision();
     this.svg.documentRevision();
-
-    if (this.editorTool.currentTool() !== 'selector') {
-      return null;
-    }
 
     const shapes = this.shapeSelection.selectedShapes();
     if (shapes.length === 0) {

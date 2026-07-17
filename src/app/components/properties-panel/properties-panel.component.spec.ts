@@ -430,14 +430,15 @@ describe('PropertiesPanelComponent', () => {
       expect(font?.disabled).toBe(true);
     });
   });
-  it('shows transform readouts only in selector mode', () => {
+  it('shows transform readouts for any tool when a shape is selected', () => {
     selectedShapesSignal.set([{ id: 'shape-1', type: 'rect' }]);
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')).toBeTruthy();
 
     editorToolService.currentTool.set('zoom');
     fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-skew-x"]')).toBeTruthy();
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Align');
   });
   it('does not host align/distribute controls (moved to Align & distribute section)', () => {

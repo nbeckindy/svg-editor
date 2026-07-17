@@ -1,5 +1,4 @@
-import { Component, inject, computed } from '@angular/core';
-import { CommonModule } from '@angular/common';
+import { Component, inject } from '@angular/core';
 import { FormsModule } from '@angular/forms';
 import { DOCUMENT_SETTINGS_SVG_PORT } from '../../services/manipulation-port-tokens';
 import { EditorHistoryService } from '../../services/editor-history.service';
@@ -9,7 +8,7 @@ import { ArtboardSizeCommand, ArtboardBackgroundCommand } from '../../models/edi
 
 @Component({
   selector: 'app-document-settings',
-  imports: [CommonModule, FormsModule, ColorPickerComponent],
+  imports: [FormsModule, ColorPickerComponent],
   templateUrl: './document-settings.component.html',
   styleUrl: './document-settings.component.css',
   host: {
@@ -23,7 +22,6 @@ export class DocumentSettingsComponent {
 
   readonly artboard = this.svg.artboard;
   readonly artboardResizeAnchor = this.svg.artboardResizeAnchor;
-  readonly hasDocument = computed(() => this.svg.getSVGInstance() != null);
 
   readonly MIN_DIMENSION = 1;
   readonly MAX_DIMENSION = 10000;

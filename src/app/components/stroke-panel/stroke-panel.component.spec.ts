@@ -123,16 +123,18 @@ describe('StrokePanelComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="stroke-paint-swatch"]')).toBeNull();
   });
 
-  it('shows stroke paint and width when a shape is selected', () => {
+  it('shows stroke width and opacity when a shape is selected', () => {
     selectedShapesSignal.set([
-      { id: 'shape-1', type: 'rect', stroke: '#000000', strokeWidth: 2 }
+      { id: 'shape-1', type: 'rect', stroke: '#000000', strokeWidth: 2, strokeOpacity: 0.7 }
     ]);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('[data-testid="stroke-paint-swatch"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="stroke-paint-swatch"]')).toBeNull();
     expect(el.querySelector('#stroke-width')).toBeTruthy();
-    expect(el.textContent).toContain('Stroke color');
+    expect(el.querySelector('[data-testid="stroke-opacity"]')).toBeTruthy();
+    expect(el.textContent).not.toContain('Stroke color');
     expect(el.textContent).toContain('Stroke width');
+    expect(el.textContent).toContain('Stroke opacity');
   });
 
   it('uses outline-oriented labels for text-only selection', () => {
@@ -141,8 +143,8 @@ describe('StrokePanelComponent', () => {
     ]);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Outline color');
     expect(el.textContent).toContain('Outline width');
+    expect(el.textContent).toContain('Outline opacity');
     expect(el.querySelector('[data-testid="stroke-text-outline-paint-hint"]')).toBeTruthy();
   });
 
@@ -153,17 +155,26 @@ describe('StrokePanelComponent', () => {
     ]);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
-    expect(el.textContent).toContain('Stroke color');
     expect(el.textContent).toContain('Stroke width');
+    expect(el.textContent).toContain('Stroke opacity');
   });
 
-  it('updates stroke color through chrome apply', () => {
+  it('updates stroke opacity through chrome apply', () => {
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect', strokeOpacity: 1 }]);
+    fixture.detectChanges();
+    component.paint.onStrokeOpacityChange({ target: { value: '0.25' } } as unknown as Event);
+    expect(svgManipulationService.updateStrokeOpacity).toHaveBeenCalledWith('shape-1', 0.25);
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({ strokeOpacity: 0.25 });
+  });
+
+  it('shows Mixed for stroke opacity when selection disagrees', () => {
     selectedShapesSignal.set([
-      { id: 'shape-1', type: 'rect', stroke: '#000000', strokeWidth: 2 }
+      { id: 'a', type: 'rect', strokeOpacity: 0.1 },
+      { id: 'b', type: 'rect', strokeOpacity: 1 }
     ]);
     fixture.detectChanges();
-    component.paint.onStrokeColorChange('#445566');
-    expect(svgManipulationService.updateStrokeColor).toHaveBeenCalledWith('shape-1', '#445566');
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#stroke-opacity')?.classList.contains('mixed-control')).toBe(true);
   });
 
   it('updates stroke width through chrome apply', () => {
@@ -182,55 +193,5 @@ describe('StrokePanelComponent', () => {
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('#dash-pattern')).toBeTruthy();
     expect(fixture.nativeElement.querySelector('#dash-offset')).toBeTruthy();
-  });
-
-  it('routes stroke gradient mode through chrome apply', () => {
-    const history = TestBed.inject(EditorHistoryService) as unknown as {
-      pushAndExecute: ReturnType<typeof vi.fn>;
-    };
-    selectedShapesSignal.set([
-      {
-        id: 'shape-1',
-        type: 'rect',
-        stroke: '#00aa00',
-        strokePaintType: 'solid',
-        strokeWidth: 2
-      } as ShapeProperties
-    ]);
-    fixture.detectChanges();
-    component.paint.onStrokePaintModeChange('linear');
-    expect(svgManipulationService.capturePaintGradientSnapshot).toHaveBeenCalledWith('shape-1', 'stroke');
-    expect(history.pushAndExecute).toHaveBeenCalled();
-  });
-
-  it('renders gradient stroke editor for single gradient selection', () => {
-    const model = {
-      id: 'sg1',
-      kind: 'linear' as const,
-      gradientUnits: 'objectBoundingBox' as const,
-      stops: [
-        { offset: '0%', color: '#000000' },
-        { offset: '100%', color: '#ffffff' }
-      ]
-    };
-    (svgManipulationService.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({
-      findOne: vi.fn(() => ({ attr: vi.fn((name: string) => (name === 'stroke' ? 'url(#sg1)' : null)) }))
-    });
-    (svgManipulationService.readEditableGradientModelById as ReturnType<typeof vi.fn>).mockReturnValue(model);
-    selectedShapesSignal.set([
-      {
-        id: 'shape-1',
-        type: 'rect',
-        strokePaintType: 'gradient',
-        strokeUrl: 'url(#sg1)',
-        strokeWidth: 2
-      } as ShapeProperties
-    ]);
-    fixture.detectChanges();
-    expect(fixture.nativeElement.querySelector('[data-testid="stroke-gradient-details"]')).toBeTruthy();
-    expect(
-      fixture.nativeElement.querySelector('[data-testid="stroke-gradient-summary"]')?.textContent
-    ).toContain('Edit gradient stroke');
-    expect(svgManipulationService.ensureDedicatedPaintGradient).toHaveBeenCalledWith('shape-1', 'stroke');
   });
 });

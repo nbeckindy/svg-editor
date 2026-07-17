@@ -64,7 +64,7 @@ describe('ToolStripComponent', () => {
     const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('[data-testid="creation-paint-defaults"]')).toBeTruthy();
     expect(compiled.querySelector('[data-testid="creation-default-fill"]')).toBeTruthy();
-    expect(compiled.querySelector('[data-testid="creation-default-stroke"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="creation-default-stroke"]')).toBeNull();
     expect(compiled.querySelector('[data-testid="creation-default-stroke-width"]')).toBeTruthy();
   });
 

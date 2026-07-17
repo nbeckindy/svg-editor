@@ -35,7 +35,6 @@ export class PropertiesPanelComponent {
   readonly selectionTransformReadout = this.transformReadoutSvc.selectionTransformReadout;
   readonly selectionBBoxFieldModel = this.transformReadoutSvc.selectionBBoxFieldModel;
 
-  readonly isSelectorMode = computed(() => this.editorTool.currentTool() === 'selector');
   readonly hasSelection = computed(() => this.selectionCount() > 0);
   /**
    * True when the current selection includes any shape under a locked layer row

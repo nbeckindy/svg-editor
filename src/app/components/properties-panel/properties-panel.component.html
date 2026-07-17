@@ -12,7 +12,6 @@
           </p>
         }
 
-        @if (isSelectorMode()) {
         @if (selectionBBoxFieldModel(); as bb) {
         @if (bb.ok) {
         <div class="property-group transform-bbox-readout">
@@ -127,7 +126,6 @@
             {{ selectionSkewReadout().skewY }}
           </div>
         </div>
-        }
 
         @if (selectionCount() > 1) {
           <p class="multi-select-hint">
@@ -336,7 +334,7 @@
     } @else if (textToolPlacementMode()) {
       <div class="properties-content">
         <p class="paint-effective-hint" data-testid="text-tool-placement-hint">
-          Adjust typography for the next text you place. Creation fill and stroke defaults live on the tool strip.
+          Adjust typography for the next text you place. Creation fill defaults live on the tool strip.
         </p>
         <div class="property-group">
           <label class="property-label" for="font-family-text-tool">Font</label>

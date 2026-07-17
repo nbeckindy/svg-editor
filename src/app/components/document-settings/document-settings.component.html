@@ -1,72 +1,65 @@
 <div class="document-settings" data-testid="document-settings">
-  @if (hasDocument()) {
-    <div class="settings-content">
-      <div class="property-group">
-        <label class="property-label">Artboard Size</label>
-        <div class="dimension-row">
-          <div class="dimension-field">
-            <label class="dimension-label" for="artboard-width">W</label>
-            <input
-              type="number"
-              id="artboard-width"
-              class="dimension-input"
-              data-testid="artboard-width"
-              [min]="MIN_DIMENSION"
-              [max]="MAX_DIMENSION"
-              step="1"
-              [value]="artboard().width"
-              (change)="onWidthChange($event)">
-            <span class="dimension-unit">px</span>
-          </div>
-          <div class="dimension-field">
-            <label class="dimension-label" for="artboard-height">H</label>
-            <input
-              type="number"
-              id="artboard-height"
-              class="dimension-input"
-              data-testid="artboard-height"
-              [min]="MIN_DIMENSION"
-              [max]="MAX_DIMENSION"
-              step="1"
-              [value]="artboard().height"
-              (change)="onHeightChange($event)">
-            <span class="dimension-unit">px</span>
-          </div>
+  <div class="settings-content">
+    <div class="property-group">
+      <label class="property-label">Artboard Size</label>
+      <div class="dimension-row">
+        <div class="dimension-field">
+          <label class="dimension-label" for="artboard-width">W</label>
+          <input
+            type="number"
+            id="artboard-width"
+            class="dimension-input"
+            data-testid="artboard-width"
+            [min]="MIN_DIMENSION"
+            [max]="MAX_DIMENSION"
+            step="1"
+            [value]="artboard().width"
+            (change)="onWidthChange($event)">
+          <span class="dimension-unit">px</span>
         </div>
-        <p class="property-hint">Resize anchor — fixed point when width or height changes</p>
-        <div
-          class="anchor-grid"
-          role="radiogroup"
-          aria-label="Artboard resize anchor">
-          @for (cell of resizeAnchorCells; track cell) {
-            <button
-              type="button"
-              class="anchor-cell"
-              [attr.data-testid]="'artboard-resize-anchor-' + cell"
-              [class.anchor-cell-selected]="artboardResizeAnchor() === cell"
-              [attr.aria-checked]="artboardResizeAnchor() === cell"
-              role="radio"
-              (click)="onResizeAnchorSelect(cell)">
-              <span class="anchor-dot" aria-hidden="true"></span>
-            </button>
-          }
+        <div class="dimension-field">
+          <label class="dimension-label" for="artboard-height">H</label>
+          <input
+            type="number"
+            id="artboard-height"
+            class="dimension-input"
+            data-testid="artboard-height"
+            [min]="MIN_DIMENSION"
+            [max]="MAX_DIMENSION"
+            step="1"
+            [value]="artboard().height"
+            (change)="onHeightChange($event)">
+          <span class="dimension-unit">px</span>
         </div>
       </div>
+      <p class="property-hint">Resize anchor — fixed point when width or height changes</p>
+      <div
+        class="anchor-grid"
+        role="radiogroup"
+        aria-label="Artboard resize anchor">
+        @for (cell of resizeAnchorCells; track cell) {
+          <button
+            type="button"
+            class="anchor-cell"
+            [attr.data-testid]="'artboard-resize-anchor-' + cell"
+            [class.anchor-cell-selected]="artboardResizeAnchor() === cell"
+            [attr.aria-checked]="artboardResizeAnchor() === cell"
+            role="radio"
+            (click)="onResizeAnchorSelect(cell)">
+            <span class="anchor-dot" aria-hidden="true"></span>
+          </button>
+        }
+      </div>
+    </div>
 
-      <div class="property-group">
-        <label class="property-label">Background Color</label>
-        <div class="color-input-group">
-          <app-color-picker
-            [color]="artboard().backgroundColor"
-            (colorChange)="onBackgroundColorChange($event)">
-          </app-color-picker>
-        </div>
+    <div class="property-group">
+      <label class="property-label">Background Color</label>
+      <div class="color-input-group">
+        <app-color-picker
+          [color]="artboard().backgroundColor"
+          (colorChange)="onBackgroundColorChange($event)">
+        </app-color-picker>
       </div>
     </div>
-  } @else {
-    <div class="empty-state">
-      <p>No document loaded</p>
-      <p class="hint">Upload or create an SVG to edit document settings</p>
-    </div>
-  }
+  </div>
 </div>
