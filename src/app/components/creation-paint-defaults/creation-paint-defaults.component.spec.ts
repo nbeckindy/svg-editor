@@ -35,21 +35,12 @@ describe('CreationPaintDefaultsComponent', () => {
     fixture.detectChanges();
   });
 
-  it('renders fill and stroke-width controls without stroke color', () => {
+  it('renders fill and stroke color controls without stroke width', () => {
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('[data-testid="creation-paint-defaults"]')).toBeTruthy();
     expect(el.querySelector('[data-testid="creation-default-fill"]')).toBeTruthy();
-    expect(el.querySelector('[data-testid="creation-default-stroke"]')).toBeNull();
-    expect(el.querySelector('[data-testid="creation-default-stroke-width"]')).toBeTruthy();
-  });
-
-  it('stroke width input reflects drawing defaults', () => {
-    drawingDefaults.updateDefaults({ strokeWidth: 5.5 });
-    fixture.detectChanges();
-    const input = (fixture.nativeElement as HTMLElement).querySelector(
-      '[data-testid="creation-default-stroke-width"]'
-    ) as HTMLInputElement;
-    expect(input.value).toBe('5.5');
+    expect(el.querySelector('[data-testid="creation-default-stroke"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="creation-default-stroke-width"]')).toBeNull();
   });
 
   it('fill color change calls creation-only apply', () => {
@@ -58,16 +49,15 @@ describe('CreationPaintDefaultsComponent', () => {
     expect(chromeApply.applyCreationStrokeDefault).not.toHaveBeenCalled();
   });
 
-  it('stroke width change calls creation-only apply', () => {
-    const input = document.createElement('input');
-    input.value = '3';
-    fixture.componentInstance.onStrokeWidthChange({ target: input } as unknown as Event);
-    expect(chromeApply.applyCreationStrokeWidthDefault).toHaveBeenCalledWith(3);
+  it('stroke color change calls creation-only apply', () => {
+    fixture.componentInstance.onStrokeChange('#00aaff');
+    expect(chromeApply.applyCreationStrokeDefault).toHaveBeenCalledWith('#00aaff');
   });
 
-  it('reports empty fill for none', () => {
+  it('reports empty fill/stroke for none', () => {
     drawingDefaults.setDefaults({ ...BASE_DRAWING_STYLE_DEFAULTS, fill: 'none', stroke: 'none' });
     fixture.detectChanges();
     expect(fixture.componentInstance.fillEmpty()).toBe(true);
+    expect(fixture.componentInstance.strokeEmpty()).toBe(true);
   });
 });

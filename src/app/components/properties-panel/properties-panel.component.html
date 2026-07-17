@@ -114,19 +114,6 @@
         }
         }
 
-        <div class="property-group transform-skew-readout">
-          <label class="property-label">Skew X</label>
-          <div class="property-value readonly" data-testid="properties-skew-x">
-            {{ selectionSkewReadout().skewX }}
-          </div>
-        </div>
-        <div class="property-group transform-skew-readout">
-          <label class="property-label">Skew Y</label>
-          <div class="property-value readonly" data-testid="properties-skew-y">
-            {{ selectionSkewReadout().skewY }}
-          </div>
-        </div>
-
         @if (selectionCount() > 1) {
           <p class="multi-select-hint">
             {{ selectionCount() }} shapes selected. Edits apply to every selected shape.
@@ -325,16 +312,11 @@
           </div>
         }
 
-        <div class="panel-actions">
-          <button class="btn-secondary" (click)="onClearSelection()">
-            Clear Selection
-          </button>
-        </div>
       </div>
     } @else if (textToolPlacementMode()) {
       <div class="properties-content">
         <p class="paint-effective-hint" data-testid="text-tool-placement-hint">
-          Adjust typography for the next text you place. Creation fill defaults live on the tool strip.
+          Adjust typography for the next text you place. Creation fill and stroke defaults live on the tool strip.
         </p>
         <div class="property-group">
           <label class="property-label" for="font-family-text-tool">Font</label>

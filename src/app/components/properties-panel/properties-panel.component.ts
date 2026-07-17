@@ -31,7 +31,6 @@ export class PropertiesPanelComponent {
   private chromeApply = inject(ChromeEditorApplyService);
   private readonly transformReadoutSvc = inject(SelectionTransformReadoutService);
   private readonly layerLock = inject(LAYER_LOCK_READ_PORT);
-  readonly selectionSkewReadout = this.transformReadoutSvc.selectionSkewReadout;
   readonly selectionTransformReadout = this.transformReadoutSvc.selectionTransformReadout;
   readonly selectionBBoxFieldModel = this.transformReadoutSvc.selectionBBoxFieldModel;
 
@@ -329,9 +328,5 @@ export class PropertiesPanelComponent {
 
   onSelectParentGroupClick(): void {
     this.chromeApply.selectParentGroupForSingleSelection();
-  }
-
-  onClearSelection(): void {
-    this.chromeApply.clearInspectorSelection();
   }
 }

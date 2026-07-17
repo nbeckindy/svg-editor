@@ -417,31 +417,6 @@
   text-align: center;
 }
 
-.panel-actions {
-  margin-top: 24px;
-  padding-top: 16px;
-  border-top: 1px solid var(--editor-border-strong);
-}
-
-.btn-secondary {
-  width: 100%;
-  padding: 10px 16px;
-  background: #fff;
-  color: #666;
-  border: 1px solid var(--editor-border-strong);
-  border-radius: 4px;
-  cursor: pointer;
-  font-size: 14px;
-  font-weight: 500;
-  transition: all 0.2s ease;
-}
-
-.btn-secondary:hover {
-  background: #f5f5f5;
-  border-color: #999;
-  color: var(--editor-text-heading);
-}
-
 .empty-state {
   padding: 40px 16px;
   text-align: center;

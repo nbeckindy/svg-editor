@@ -22,13 +22,16 @@ export class CreationPaintDefaultsComponent {
     return !f || f.toLowerCase() === 'none';
   }
 
+  strokeEmpty(): boolean {
+    const s = this.defaults.stroke();
+    return !s || s.toLowerCase() === 'none';
+  }
+
   onFillChange(color: string): void {
     this.chromeApply.applyCreationFillDefault(color);
   }
 
-  onStrokeWidthChange(event: Event): void {
-    const raw = (event.target as HTMLInputElement).value;
-    const width = parseFloat(raw);
-    this.chromeApply.applyCreationStrokeWidthDefault(width);
+  onStrokeChange(color: string): void {
+    this.chromeApply.applyCreationStrokeDefault(color);
   }
 }

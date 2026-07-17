@@ -12,19 +12,13 @@
         [clearable]="true"
         (colorChange)="onFillChange($event)" />
     </div>
+    <div class="swatch-slot swatch-slot-stroke" data-testid="creation-default-stroke">
+      <span class="swatch-caption">Stroke</span>
+      <app-color-picker
+        [color]="strokeEmpty() ? '#000000' : defaults.stroke()"
+        [empty]="strokeEmpty()"
+        [clearable]="true"
+        (colorChange)="onStrokeChange($event)" />
+    </div>
   </div>
-  <label class="stroke-width-field" for="creation-default-stroke-width">
-    <span class="swatch-caption">Width</span>
-    <input
-      id="creation-default-stroke-width"
-      type="number"
-      class="stroke-width-input"
-      data-testid="creation-default-stroke-width"
-      min="0"
-      max="40"
-      step="0.5"
-      [value]="defaults.strokeWidth()"
-      (change)="onStrokeWidthChange($event)"
-      aria-label="Default stroke width" />
-  </label>
 </div>

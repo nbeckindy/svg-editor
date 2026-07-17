@@ -214,7 +214,7 @@ describe('PropertiesPanelComponent', () => {
     expect(compiled.textContent).toContain('shape-1');
     expect(compiled.querySelector('[data-testid="document-settings-panel"]')).toBeNull();
   });
-  it('should show Skew X/Y from shape transform matrix', () => {
+  it('should show selected shape properties without skew or clear-selection chrome', () => {
     const mockShape: ShapeProperties = {
       id: 'rect-1',
       type: 'rect',
@@ -223,24 +223,16 @@ describe('PropertiesPanelComponent', () => {
       strokeWidth: 0,
       opacity: 1
     };
-    const m = new Matrix().skewX(12, 40, 25);
     vi.mocked(svgManipulationService.getUnionBBox).mockReturnValue({ x: 5, y: 10, width: 80, height: 40 });
-    vi.mocked(svgManipulationService.getSVGInstance).mockReturnValue({
-      findOne: vi.fn((sel: string) => {
-        if (sel === '#rect-1') {
-          return { matrix: () => m.clone() };
-        }
-        return null;
-      })
-    } as any);
 
     selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
-    const elX = fixture.nativeElement.querySelector('[data-testid="properties-skew-x"]');
-    const elY = fixture.nativeElement.querySelector('[data-testid="properties-skew-y"]');
-    expect(elX?.textContent?.trim()).toContain('12');
-    expect(elY?.textContent?.trim()).toMatch(/0\.0/);
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="properties-transform-x"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="properties-skew-x"]')).toBeNull();
+    expect(el.querySelector('[data-testid="properties-skew-y"]')).toBeNull();
+    expect(el.textContent).not.toContain('Clear Selection');
     expect(svgManipulationService.getUnionBBox).toHaveBeenCalledWith(['rect-1']);
   });
   it('commits numeric X via translate commands and history', () => {
@@ -392,21 +384,6 @@ describe('PropertiesPanelComponent', () => {
     expect(Number.parseFloat(xIn1.value)).toBeCloseTo(100, 5);
   });
 
-  it('should clear selection when clear button is clicked', () => {
-    const mockShape: ShapeProperties = {
-      id: 'shape-1',
-      type: 'rect'
-    };
-
-    selectedShapesSignal.set([mockShape]);
-    fixture.detectChanges();
-
-    component.onClearSelection();
-    fixture.detectChanges();
-
-    expect(shapeSelectionService.clearSelection).toHaveBeenCalled();
-    expect(svgManipulationService.clearHighlight).toHaveBeenCalled();
-  });
   it('should reflect selected shape from signal', () => {
     const mockShape: ShapeProperties = {
       id: 'shape-2',
@@ -438,7 +415,7 @@ describe('PropertiesPanelComponent', () => {
     editorToolService.currentTool.set('zoom');
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-x"]')).toBeTruthy();
-    expect(fixture.nativeElement.querySelector('[data-testid="properties-skew-x"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="properties-transform-w"]')).toBeTruthy();
     expect((fixture.nativeElement as HTMLElement).textContent).not.toContain('Align');
   });
   it('does not host align/distribute controls (moved to Align & distribute section)', () => {
