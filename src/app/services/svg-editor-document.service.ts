@@ -77,8 +77,8 @@ export class SvgEditorDocumentService implements DocumentReadinessPort, SvgExpor
   }
 
   /**
-   * Update artboard dimensions. Syncs the viewBox rect, outside rect, and stage viewBox
-   * without changing the root SVG element's pixel size (that's managed by zoom/layout).
+   * Update artboard dimensions. Syncs the viewBox rect, outside rect, root SVG CSS size,
+   * and stage viewBox so 1 user unit stays 1 CSS pixel at 100% canvas zoom (same as load).
    */
   setArtboardSize(
     width: number,
@@ -104,15 +104,23 @@ export class SvgEditorDocumentService implements DocumentReadinessPort, SvgExpor
       viewBoxRect.move(minX, minY);
     }
 
+    // Match empty-document init: outside covers the artboard (not a forced pasteboard margin).
+    // A 50% margin with an unchanged root CSS size was squeezing more user units into the same
+    // pixels and made the artboard look zoomed-out while canvasScale stayed the same.
     if (outsideRect) {
-      const margin = Math.max(width, height) * 0.5;
-      const outerW = width + margin * 2;
-      const outerH = height + margin * 2;
-      outsideRect.size(outerW, outerH);
-      outsideRect.move(minX - margin, minY - margin);
+      outsideRect.size(width, height);
+      outsideRect.move(minX, minY);
     }
 
+    this.svgInstance.size(width, height);
     this.syncStageViewBox();
+
+    const stageVb = this.svgInstance.viewbox();
+    if (outsideRect && stageVb) {
+      outsideRect.size(stageVb.width, stageVb.height);
+      outsideRect.move(stageVb.x, stageVb.y);
+    }
+
     this.bumpDocumentRevision();
   }
 

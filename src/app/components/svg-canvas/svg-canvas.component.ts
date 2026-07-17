@@ -1580,6 +1580,15 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       this.snap.setShapeEnabled(this.editorTool.isShapeSnapEnabled());
     });
     effect(() => {
+      const ab = this.svgManipulation.artboard();
+      void ab.width;
+      void ab.height;
+      void ab.minX;
+      void ab.minY;
+      // Keep overlay / pointer mapping in sync when Document panel resizes the artboard.
+      queueMicrotask(() => this.syncOverlayViewBox());
+    });
+    effect(() => {
       const shapes = this.shapeSelection.selectedShapes();
       this.canvasDocumentActions.syncDuplicateCounterForSelection(shapes.map((shape) => shape.id));
       if (

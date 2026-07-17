@@ -2102,6 +2102,19 @@ describe('SvgManipulationService', () => {
       expect(service.getDocumentViewBox()).toBe('0 0 500 400');
     });
 
+    it('setArtboardSize updates root SVG CSS size to match artboard (keeps 1:1 user/CSS mapping)', () => {
+      const svgContent =
+        '<svg viewBox="0 0 800 600" width="800" height="600"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
+      service.initializeSVG(container, svgContent);
+      service.setArtboardSize(1000, 600);
+      const node = service.getSVGInstance()!.node as SVGSVGElement;
+      expect(node.getAttribute('width')).toBe('1000');
+      expect(node.getAttribute('height')).toBe('600');
+      const stageVb = service.getSVGInstance()!.viewbox();
+      expect(stageVb.width).toBe(1000);
+      expect(stageVb.height).toBe(600);
+    });
+
     it('setArtboardSize with bottom-right anchor keeps bottom-right corner fixed', () => {
       const svgContent = '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);
