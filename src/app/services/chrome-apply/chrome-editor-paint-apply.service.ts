@@ -9,6 +9,8 @@ import {
   SetStrokeCommand,
   UpdateDrawingDefaultsCommand,
   OpacityCommand,
+  FillOpacityCommand,
+  StrokeOpacityCommand,
   StrokeDashArrayCommand,
   StrokeDashOffsetCommand,
   FontCommand,
@@ -290,6 +292,26 @@ export class ChromeEditorPaintApplyService {
     );
     this.pushCommand(commands, `Change opacity to ${opacity}`);
     this.shapeSelection.patchAllSelected({ opacity });
+  }
+
+  applyFillOpacity(opacity: number): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
+    if (!Number.isFinite(opacity)) return;
+    const commands = this.selectedShapesList().map(
+      (s) => new FillOpacityCommand(this.paintSvg, s.id, s.fillOpacity ?? 1, opacity)
+    );
+    this.pushCommand(commands, `Change fill opacity to ${opacity}`);
+    this.shapeSelection.patchAllSelected({ fillOpacity: opacity });
+  }
+
+  applyStrokeOpacity(opacity: number): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
+    if (!Number.isFinite(opacity)) return;
+    const commands = this.selectedShapesList().map(
+      (s) => new StrokeOpacityCommand(this.paintSvg, s.id, s.strokeOpacity ?? 1, opacity)
+    );
+    this.pushCommand(commands, `Change stroke opacity to ${opacity}`);
+    this.shapeSelection.patchAllSelected({ strokeOpacity: opacity });
   }
 
   applyStrokeDasharray(dasharray: string): void {

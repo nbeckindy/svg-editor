@@ -38,6 +38,8 @@ export class ChromeEditorApplyService {
   applyStrokeColor(color: string) { return this.paint.applyStrokeColor(color); }
   applyStrokeWidth(width: number) { return this.paint.applyStrokeWidth(width); }
   applyOpacity(opacity: number) { return this.paint.applyOpacity(opacity); }
+  applyFillOpacity(opacity: number) { return this.paint.applyFillOpacity(opacity); }
+  applyStrokeOpacity(opacity: number) { return this.paint.applyStrokeOpacity(opacity); }
   applyStrokeDasharray(dasharray: string) { return this.paint.applyStrokeDasharray(dasharray); }
   applyStrokeDashoffset(offset: number) { return this.paint.applyStrokeDashoffset(offset); }
   applyTextFontFamilyFromChrome(fontFamily: string, textShapes: ShapeProperties[], placementDefaults: boolean) {

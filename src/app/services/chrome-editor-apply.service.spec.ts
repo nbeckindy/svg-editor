@@ -44,6 +44,11 @@ describe('ChromeEditorApplyService', () => {
       removeStroke: vi.fn(),
       updateStrokeDasharray: vi.fn(),
       updateStrokeDashoffset: vi.fn(),
+      updateOpacity: vi.fn(),
+      updateFillOpacity: vi.fn(),
+      updateStrokeOpacity: vi.fn(),
+      updateFillColor: vi.fn(),
+      updateStrokeColor: vi.fn(),
       moveElementForward: vi.fn(),
       moveElementBackward: vi.fn(),
       moveElementToFront: vi.fn(),
@@ -190,6 +195,39 @@ describe('ChromeEditorApplyService', () => {
     };
     service.applyOpacity(Number.NaN);
     expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('applyFillOpacity patches selection and pushes history', () => {
+    selectedShapesSignal.set([{ id: 's1', type: 'rect', fill: '#000', fillOpacity: 1 }]);
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      updateFillOpacity: ReturnType<typeof vi.fn>;
+    };
+    service.applyFillOpacity(0.35);
+    expect(manip.updateFillOpacity).toHaveBeenCalledWith('s1', 0.35);
+    expect(selectedShapesSignal()[0].fillOpacity).toBe(0.35);
+  });
+
+  it('applyFillOpacity does nothing when opacity is not finite', () => {
+    selectedShapesSignal.set([{ id: 's1', type: 'rect', fill: '#000', fillOpacity: 1 }]);
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    service.applyFillOpacity(Number.NaN);
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
+  it('applyStrokeOpacity patches selection and pushes history', () => {
+    selectedShapesSignal.set([
+      { id: 's1', type: 'rect', stroke: '#111', strokeWidth: 1, strokeOpacity: 1 },
+      { id: 's2', type: 'rect', stroke: '#111', strokeWidth: 1, strokeOpacity: 0.2 }
+    ]);
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      updateStrokeOpacity: ReturnType<typeof vi.fn>;
+    };
+    service.applyStrokeOpacity(0.6);
+    expect(manip.updateStrokeOpacity).toHaveBeenCalledWith('s1', 0.6);
+    expect(manip.updateStrokeOpacity).toHaveBeenCalledWith('s2', 0.6);
+    expect(selectedShapesSignal().every((s) => s.strokeOpacity === 0.6)).toBe(true);
   });
 
   it('applyStrokeDashoffset does nothing when offset is not finite', () => {
