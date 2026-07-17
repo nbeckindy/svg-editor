@@ -112,7 +112,10 @@ import {
   refreshSvgCanvasPointerIntentDebug,
   type SvgCanvasPointerIntentDebugContext
 } from './svg-canvas-pointer-intent-debug.controller';
-import { sampleSolidComputedPaint } from '../../utils/svg-computed-color-sample';
+import {
+  buildEyedropperPaintSample,
+  resolveContentShapeElement
+} from '../../utils/eyedropper-paint-sample';
 import {
   InlineTextEditSession,
   type InlineTextEditSessionPorts
@@ -2323,16 +2326,19 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   private tryEyedropperSample(event: MouseEvent): void {
     if (!this.svgContent() || !this.canvasView.isInitialized()) return;
-    const el = this.findEyedropperHitElement(event.clientX, event.clientY);
-    if (!el) return;
-    const kind = event.shiftKey ? 'stroke' : 'fill';
-    const color = sampleSolidComputedPaint(el, kind);
-    if (!color) return;
-    if (kind === 'fill') {
-      this.chromeEditorApply.applyFillColor(color);
-    } else {
-      this.chromeEditorApply.applyStrokeColor(color);
-    }
+    const hit = this.findEyedropperHitElement(event.clientX, event.clientY);
+    if (!hit) return;
+    const shapeNode = resolveContentShapeElement(hit);
+    const shapeId = shapeNode?.getAttribute('id');
+    if (!shapeId) return;
+    const svg = this.svgManipulation.getSVGInstance();
+    const shape = svg?.findOne(`#${shapeId}`) as SVGElement | undefined;
+    if (!shape) return;
+    const props = this.svgManipulation.getShapeProperties(shape);
+    const sample = buildEyedropperPaintSample(props, (gradId) =>
+      this.svgManipulation.readEditableGradientModelById(gradId)
+    );
+    this.chromeEditorApply.applyEyedropperPaintSample(sample);
     this.cdr.markForCheck();
   }
 

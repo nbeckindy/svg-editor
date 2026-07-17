@@ -676,4 +676,133 @@ describe('ChromeEditorApplyService', () => {
       })
     );
   });
+
+  it('applyEyedropperPaintSample copies solid fill/stroke style and updates defaults', () => {
+    selectedShapesSignal.set([
+      {
+        id: 's1',
+        type: 'rect',
+        fill: '#000000',
+        fillPaintType: 'solid',
+        fillOpacity: 1,
+        stroke: '#111111',
+        strokePaintType: 'solid',
+        strokeWidth: 1,
+        strokeOpacity: 1
+      }
+    ]);
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      addStroke: ReturnType<typeof vi.fn>;
+      updateFillOpacity: ReturnType<typeof vi.fn>;
+      updateStrokeOpacity: ReturnType<typeof vi.fn>;
+      updateStrokeDasharray: ReturnType<typeof vi.fn>;
+    };
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    manip.capturePaintGradientSnapshot.mockReturnValue({
+      gradientId: null,
+      shapePaintAttr: '#000000',
+      gradientOuterHtml: null
+    });
+
+    service.applyEyedropperPaintSample({
+      fill: { kind: 'solid', solid: '#ff00aa' },
+      fillOpacity: 0.5,
+      stroke: { kind: 'solid', solid: '#00ffaa' },
+      strokeWidth: 4,
+      strokeOpacity: 0.7,
+      strokeDasharray: '5 3',
+      strokeDashoffset: 2
+    });
+
+    expect(history.pushAndExecute).toHaveBeenCalled();
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'fill',
+      expect.objectContaining({ shapePaintAttr: '#ff00aa', gradientId: null })
+    );
+    expect(manip.addStroke).toHaveBeenCalledWith('s1', '#00ffaa', 4);
+    expect(manip.updateFillOpacity).toHaveBeenCalledWith('s1', 0.5);
+    expect(manip.updateStrokeOpacity).toHaveBeenCalledWith('s1', 0.7);
+    expect(manip.updateStrokeDasharray).toHaveBeenCalledWith('s1', '5 3');
+    expect(drawingDefaultsSignal().fill).toBe('#ff00aa');
+    expect(drawingDefaultsSignal().stroke).toBe('#00ffaa');
+    expect(drawingDefaultsSignal().strokeWidth).toBe(4);
+  });
+
+  it('applyEyedropperPaintSample clones fill and stroke gradients onto the selection', () => {
+    selectedShapesSignal.set([
+      {
+        id: 's1',
+        type: 'rect',
+        fill: '#000000',
+        fillPaintType: 'solid',
+        fillOpacity: 1,
+        strokePaintType: 'none',
+        strokeWidth: 0,
+        strokeOpacity: 1
+      }
+    ]);
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      allocateUniqueDefId: ReturnType<typeof vi.fn>;
+      capturePaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      applyPaintGradientSnapshot: ReturnType<typeof vi.fn>;
+      addStroke: ReturnType<typeof vi.fn>;
+    };
+    manip.allocateUniqueDefId.mockReturnValueOnce('grad-fill-1').mockReturnValueOnce('grad-stroke-1');
+    manip.capturePaintGradientSnapshot.mockReturnValue({
+      gradientId: null,
+      shapePaintAttr: null,
+      gradientOuterHtml: null
+    });
+
+    const grad = {
+      id: 'src',
+      kind: 'linear' as const,
+      gradientUnits: 'objectBoundingBox' as const,
+      x1: '0%',
+      y1: '0%',
+      x2: '100%',
+      y2: '0%',
+      stops: [
+        { offset: '0%', color: '#ff0000' },
+        { offset: '100%', color: '#0000ff' }
+      ]
+    };
+
+    service.applyEyedropperPaintSample({
+      fill: { kind: 'gradient', solid: '#ff0000', gradient: grad },
+      fillOpacity: 1,
+      stroke: { kind: 'gradient', solid: '#ff0000', gradient: grad },
+      strokeWidth: 3,
+      strokeOpacity: 1,
+      strokeDasharray: '',
+      strokeDashoffset: 0
+    });
+
+    expect(manip.allocateUniqueDefId).toHaveBeenCalledWith('grad');
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'fill',
+      expect.objectContaining({
+        gradientId: 'grad-fill-1',
+        shapePaintAttr: 'url(#grad-fill-1)',
+        gradientOuterHtml: expect.stringContaining('grad-fill-1')
+      })
+    );
+    expect(manip.applyPaintGradientSnapshot).toHaveBeenCalledWith(
+      's1',
+      'stroke',
+      expect.objectContaining({
+        gradientId: 'grad-stroke-1',
+        shapePaintAttr: 'url(#grad-stroke-1)'
+      })
+    );
+    expect(manip.addStroke).toHaveBeenCalledWith('s1', 'url(#grad-stroke-1)', 3);
+    expect(drawingDefaultsSignal().fillGradient?.kind).toBe('linear');
+    expect(drawingDefaultsSignal().strokeGradient?.kind).toBe('linear');
+  });
 });

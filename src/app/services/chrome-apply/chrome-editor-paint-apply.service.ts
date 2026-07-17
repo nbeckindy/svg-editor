@@ -33,6 +33,13 @@ import {
 } from '../../models/svg-gradient';
 import type { PaintSwatchMode, PaintSwatchTarget } from '../../components/paint-swatch-popover/paint-swatch-popover.component';
 import type { DrawingStyleDefaults } from '../../models/drawing-style-defaults';
+import type {
+  EyedropperPaintChannel,
+  EyedropperPaintSample
+} from '../../models/eyedropper-paint-sample';
+import {
+  cloneGradientModelWithId
+} from '../../utils/eyedropper-paint-sample';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
 import { LAYER_REORDER_GROUP_SVG_PORT, PROPERTIES_PANEL_SVG_PORT } from './chrome-apply.tokens';
 
@@ -203,6 +210,244 @@ export class ChromeEditorPaintApplyService {
       ],
       `Set default stroke width to ${width}`
     );
+  }
+
+  /**
+   * Apply a full eyedropper paint sample to the Selection (and Creation paint defaults)
+   * as a single undo step. Gradients are cloned into dedicated defs per target shape.
+   */
+  applyEyedropperPaintSample(sample: EyedropperPaintSample): void {
+    if (this.shouldBlockShapeOnlyMutations()) return;
+    const shapes = this.selectedShapesList();
+    const commands: EditorCommand[] = [];
+
+    for (const shape of shapes) {
+      if (this.layerSvg.isElementOrAncestorLocked(shape.id)) continue;
+      commands.push(...this.buildEyedropperCommandsForShape(shape, sample));
+    }
+
+    const defaultsCmd = this.buildEyedropperDefaultsCommand(sample);
+    if (defaultsCmd) commands.push(defaultsCmd);
+
+    if (commands.length === 0) return;
+    this.pushCommandsAndSyncSelection(commands, 'Eyedropper paint');
+  }
+
+  private buildEyedropperCommandsForShape(
+    shape: ShapeProperties,
+    sample: EyedropperPaintSample
+  ): EditorCommand[] {
+    const cmds: EditorCommand[] = [];
+
+    if (sample.fill) {
+      cmds.push(...this.buildEyedropperFillCommands(shape, sample.fill));
+    }
+    if ((shape.fillOpacity ?? 1) !== sample.fillOpacity) {
+      cmds.push(
+        new FillOpacityCommand(this.paintSvg, shape.id, shape.fillOpacity ?? 1, sample.fillOpacity)
+      );
+    }
+
+    if (sample.stroke) {
+      cmds.push(...this.buildEyedropperStrokeCommands(shape, sample));
+    }
+    if ((shape.strokeOpacity ?? 1) !== sample.strokeOpacity) {
+      cmds.push(
+        new StrokeOpacityCommand(
+          this.paintSvg,
+          shape.id,
+          shape.strokeOpacity ?? 1,
+          sample.strokeOpacity
+        )
+      );
+    }
+
+    const nextDash = sample.stroke?.kind === 'none' ? '' : sample.strokeDasharray;
+    const nextOffset = sample.stroke?.kind === 'none' ? 0 : sample.strokeDashoffset;
+    if ((shape.strokeDasharray ?? '') !== nextDash) {
+      cmds.push(
+        new StrokeDashArrayCommand(this.paintSvg, shape.id, shape.strokeDasharray ?? '', nextDash)
+      );
+    }
+    if ((shape.strokeDashoffset ?? 0) !== nextOffset) {
+      cmds.push(
+        new StrokeDashOffsetCommand(this.paintSvg, shape.id, shape.strokeDashoffset ?? 0, nextOffset)
+      );
+    }
+
+    return cmds;
+  }
+
+  private buildEyedropperFillCommands(
+    shape: ShapeProperties,
+    fill: EyedropperPaintChannel
+  ): EditorCommand[] {
+    const before = this.propertiesSvg.capturePaintGradientSnapshot(shape.id, 'fill');
+    if (fill.kind === 'none') {
+      if ((before.shapePaintAttr ?? '').toLowerCase() === 'none' || before.shapePaintAttr == null) {
+        if (shape.fillPaintType === 'none' || !this.hasFillColor(shape)) return [];
+      }
+      const after: PaintGradientSnapshot = {
+        gradientId: null,
+        shapePaintAttr: 'none',
+        gradientOuterHtml: null
+      };
+      return [new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, 'fill', before, after)];
+    }
+    if (fill.kind === 'solid') {
+      const color = fill.solid ?? '#000000';
+      if (!before.gradientId && (shape.fill ?? '') === color) return [];
+      const after: PaintGradientSnapshot = {
+        gradientId: null,
+        shapePaintAttr: color,
+        gradientOuterHtml: null
+      };
+      return [new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, 'fill', before, after)];
+    }
+    if (!fill.gradient) return [];
+    const id = this.propertiesSvg.allocateUniqueDefId('grad');
+    const model = cloneGradientModelWithId(fill.gradient, id);
+    const after = this.buildGradientSnapshot(model);
+    return [new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, 'fill', before, after)];
+  }
+
+  private shapeHasVisibleStroke(shape: ShapeProperties): boolean {
+    if ((shape.strokeWidth ?? 0) <= 0) return false;
+    return (
+      shape.strokePaintType === 'gradient' ||
+      shape.strokePaintType === 'pattern' ||
+      this.hasStrokeColor(shape)
+    );
+  }
+
+  private buildEyedropperStrokeCommands(
+    shape: ShapeProperties,
+    sample: EyedropperPaintSample
+  ): EditorCommand[] {
+    const stroke = sample.stroke!;
+    const cmds: EditorCommand[] = [];
+    const hadStroke = this.shapeHasVisibleStroke(shape);
+    const before = this.propertiesSvg.capturePaintGradientSnapshot(shape.id, 'stroke');
+    const oldColor = shape.stroke ?? before.shapePaintAttr ?? '#000000';
+    const oldWidth = shape.strokeWidth ?? 0;
+
+    if (stroke.kind === 'none' || sample.strokeWidth <= 0) {
+      if (!hadStroke && !before.gradientId) return [];
+      if (before.gradientId) {
+        const after: PaintGradientSnapshot = {
+          gradientId: null,
+          shapePaintAttr: 'none',
+          gradientOuterHtml: null
+        };
+        cmds.push(
+          new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, 'stroke', before, after)
+        );
+      }
+      cmds.push(new RemoveStrokeCommand(this.paintSvg, shape.id, oldColor, oldWidth > 0 ? oldWidth : 1));
+      return cmds;
+    }
+
+    const seed = stroke.solid ?? '#000000';
+    const width = sample.strokeWidth;
+
+    if (stroke.kind === 'solid') {
+      if (before.gradientId) {
+        const solidAfter: PaintGradientSnapshot = {
+          gradientId: null,
+          shapePaintAttr: seed,
+          gradientOuterHtml: null
+        };
+        cmds.push(
+          new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, 'stroke', before, solidAfter)
+        );
+      }
+      if (!hadStroke) {
+        cmds.push(new AddStrokeCommand(this.paintSvg, shape.id, seed, width));
+      } else if (before.gradientId || (shape.stroke ?? '') !== seed || oldWidth !== width) {
+        cmds.push(
+          new SetStrokeCommand(this.paintSvg, shape.id, hadStroke, oldColor, oldWidth, seed, width)
+        );
+      }
+      return cmds;
+    }
+
+    if (!stroke.gradient) return [];
+    const id = this.propertiesSvg.allocateUniqueDefId('grad');
+    const model = cloneGradientModelWithId(stroke.gradient, id);
+    const after = this.buildGradientSnapshot(model);
+    const url = after.shapePaintAttr ?? `url(#${id})`;
+
+    // Snapshot installs the dedicated gradient def + paint attr; SetStroke keeps width in sync
+    // without dropping the url (addStroke accepts url(#…) as color).
+    cmds.push(new GradientFillSnapshotCommand(this.propertiesSvg, shape.id, 'stroke', before, after));
+    if (!hadStroke || oldWidth !== width) {
+      cmds.push(
+        new SetStrokeCommand(this.paintSvg, shape.id, hadStroke, oldColor, oldWidth, url, width)
+      );
+    }
+    return cmds;
+  }
+
+  private buildEyedropperDefaultsCommand(sample: EyedropperPaintSample): EditorCommand | null {
+    const before = this.drawingDefaults.defaults();
+    const after: DrawingStyleDefaults = { ...before };
+
+    if (sample.fill) {
+      if (sample.fill.kind === 'none') {
+        after.fill = 'none';
+        after.fillGradient = null;
+      } else if (sample.fill.kind === 'solid') {
+        after.fill = sample.fill.solid ?? '#000000';
+        after.fillGradient = null;
+      } else if (sample.fill.gradient) {
+        after.fill = sample.fill.solid ?? firstStopColor(sample.fill.gradient);
+        after.fillGradient = cloneGradientModelWithId(sample.fill.gradient, 'creation-fill-grad');
+      }
+    }
+
+    if (sample.stroke) {
+      if (sample.stroke.kind === 'none' || sample.strokeWidth <= 0) {
+        after.stroke = 'none';
+        after.strokeGradient = null;
+      } else if (sample.stroke.kind === 'solid') {
+        after.stroke = sample.stroke.solid ?? '#000000';
+        after.strokeGradient = null;
+        after.strokeWidth = sample.strokeWidth;
+      } else if (sample.stroke.gradient) {
+        after.stroke = sample.stroke.solid ?? firstStopColor(sample.stroke.gradient);
+        after.strokeGradient = cloneGradientModelWithId(
+          sample.stroke.gradient,
+          'creation-stroke-grad'
+        );
+        after.strokeWidth = sample.strokeWidth;
+      }
+    } else if (sample.strokeWidth > 0) {
+      after.strokeWidth = sample.strokeWidth;
+    }
+
+    const fillGradSame =
+      (after.fillGradient == null && before.fillGradient == null) ||
+      (after.fillGradient != null &&
+        before.fillGradient != null &&
+        serializeGradientElementToOuterHtml(after.fillGradient) ===
+          serializeGradientElementToOuterHtml(before.fillGradient));
+    const strokeGradSame =
+      (after.strokeGradient == null && before.strokeGradient == null) ||
+      (after.strokeGradient != null &&
+        before.strokeGradient != null &&
+        serializeGradientElementToOuterHtml(after.strokeGradient) ===
+          serializeGradientElementToOuterHtml(before.strokeGradient));
+    if (
+      after.fill === before.fill &&
+      after.stroke === before.stroke &&
+      after.strokeWidth === before.strokeWidth &&
+      fillGradSame &&
+      strokeGradSame
+    ) {
+      return null;
+    }
+
+    return new UpdateDrawingDefaultsCommand(this.drawingDefaults, before, after, 'all');
   }
 
   applyFillColor(color: string): void {

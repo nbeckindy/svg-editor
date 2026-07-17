@@ -1,6 +1,7 @@
 import { Injectable, inject } from '@angular/core';
 import type { ReparentElementsMode } from '../models/editor-commands';
 import { ShapeProperties } from '../models/shape-properties.interface';
+import type { EyedropperPaintSample } from '../models/eyedropper-paint-sample';
 import type { BooleanOp } from '../models/path-boolean';
 import { ChromeEditorApplySupport } from './chrome-apply/chrome-editor-apply-support.service';
 import { ChromeEditorPaintApplyService } from './chrome-apply/chrome-editor-paint-apply.service';
@@ -94,6 +95,9 @@ export class ChromeEditorApplyService {
   }
   applyPaintModeFromChrome(shape: ShapeProperties, target: PaintSwatchTarget, mode: PaintSwatchMode) {
     return this.paint.applyPaintModeFromChrome(shape, target, mode);
+  }
+  applyEyedropperPaintSample(sample: EyedropperPaintSample) {
+    return this.paint.applyEyedropperPaintSample(sample);
   }
 
   applyAlignFromChrome(direction: 'left' | 'center' | 'right' | 'top' | 'middle' | 'bottom', shapeIds: string[]) {
