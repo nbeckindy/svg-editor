@@ -72,6 +72,12 @@
   padding-bottom: 0;
 }
 
+.tool-group-defaults {
+  border-bottom: 0;
+  padding-bottom: 0;
+  padding-top: var(--editor-spacing-sm);
+}
+
 @media (max-width: 1040px) {
   .tool-strip {
     padding: var(--editor-spacing-md) 0;

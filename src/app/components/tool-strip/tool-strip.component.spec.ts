@@ -9,6 +9,8 @@ import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
 import { RasterImageInsertService } from '../../services/raster-image-insert.service';
+import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
+import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 
 describe('ToolStripComponent', () => {
   let fixture: ComponentFixture<ToolStripComponent>;
@@ -30,6 +32,15 @@ describe('ToolStripComponent', () => {
       providers: [
         EditorToolService,
         ToolRegistryService,
+        DrawingStyleDefaultsService,
+        {
+          provide: ChromeEditorApplyService,
+          useValue: {
+            applyCreationFillDefault: vi.fn(),
+            applyCreationStrokeDefault: vi.fn(),
+            applyCreationStrokeWidthDefault: vi.fn()
+          }
+        },
         { provide: SvgEditorDocumentService, useValue: editorDocumentMock },
         { provide: ShapeSelectionService, useValue: { selectShape: vi.fn() } },
         { provide: EditorHistoryService, useValue: { pushAndExecute: vi.fn() } },
@@ -47,6 +58,14 @@ describe('ToolStripComponent', () => {
 
   it('should create', () => {
     expect(fixture.componentInstance).toBeTruthy();
+  });
+
+  it('hosts creation paint defaults on the strip', () => {
+    const compiled = fixture.nativeElement as HTMLElement;
+    expect(compiled.querySelector('[data-testid="creation-paint-defaults"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="creation-default-fill"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="creation-default-stroke"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="creation-default-stroke-width"]')).toBeTruthy();
   });
 
   it('should have Selector active by default', () => {

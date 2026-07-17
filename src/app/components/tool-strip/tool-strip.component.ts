@@ -7,11 +7,11 @@ import { SvgEditorDocumentService } from '../../services/svg-editor-document.ser
 import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.store';
 import { RasterImageInsertService } from '../../services/raster-image-insert.service';
 import { parseRootViewBox } from '../../utils/raster-insert-layout';
+import { CreationPaintDefaultsComponent } from '../creation-paint-defaults/creation-paint-defaults.component';
 
 @Component({
   selector: 'app-tool-strip',
-  standalone: true,
-  imports: [MatIconModule],
+  imports: [MatIconModule, CreationPaintDefaultsComponent],
   templateUrl: './tool-strip.component.html',
   styleUrl: './tool-strip.component.css'
 })

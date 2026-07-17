@@ -1,0 +1,75 @@
+.creation-paint-defaults {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--editor-spacing-sm);
+  width: 100%;
+  padding: 0 var(--editor-spacing-sm);
+}
+
+.swatch-stack {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--editor-spacing-sm);
+  width: 100%;
+}
+
+.swatch-slot {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+}
+
+.swatch-caption {
+  font-size: 9px;
+  font-weight: 600;
+  letter-spacing: 0.02em;
+  text-transform: uppercase;
+  color: var(--editor-text-muted, #666);
+  line-height: 1.2;
+}
+
+.stroke-width-field {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  width: 100%;
+}
+
+.stroke-width-input {
+  width: var(--editor-tool-btn-size);
+  height: 28px;
+  box-sizing: border-box;
+  padding: 0 4px;
+  text-align: center;
+  font-size: var(--editor-font-size-sm);
+  border: 1px solid var(--editor-border-strong);
+  border-radius: var(--editor-radius-md);
+  background: var(--editor-surface);
+  color: var(--editor-text-heading);
+}
+
+.stroke-width-input:focus {
+  outline: 2px solid var(--editor-accent-strong);
+  outline-offset: 1px;
+}
+
+/* Compact swatches to match tool-button footprint */
+:host ::ng-deep .cp-swatch,
+:host ::ng-deep .cp-summary {
+  width: var(--editor-tool-btn-size);
+  height: var(--editor-tool-btn-size);
+}
+
+:host ::ng-deep .cp-empty-mat-icon {
+  font-size: 20px;
+}
+
+:host ::ng-deep .cp-panel {
+  left: calc(100% + 6px);
+  top: 0;
+  min-width: 200px;
+}
