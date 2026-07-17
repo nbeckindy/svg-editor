@@ -1,4 +1,5 @@
 import { Component, computed, inject } from '@angular/core';
+import { MatIconModule } from '@angular/material/icon';
 import { ShapeSelectionService } from '../../services/shape-selection.service';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { ShapeProperties } from '../../models/shape-properties.interface';
@@ -9,7 +10,7 @@ import { LAYER_LOCK_READ_PORT } from '../../services/manipulation-port-tokens';
 
 @Component({
   selector: 'app-properties-panel',
-  imports: [],
+  imports: [MatIconModule],
   templateUrl: './properties-panel.component.html',
   styleUrl: './properties-panel.component.css'
 })
@@ -56,6 +57,16 @@ export class PropertiesPanelComponent {
 
   onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event): void {
     this.chromeApply.onSelectionBBoxFieldCommit(field, event);
+  }
+
+  onShapeIdChange(event: Event): void {
+    const input = event.target as HTMLInputElement;
+    const nextId = input.value;
+    this.chromeApply.applyShapeIdFromChrome(nextId);
+    const current = this.selectedShape();
+    if (current && input.value.trim() !== current.id) {
+      input.value = current.id;
+    }
   }
 
   private selectedShapesList(): ShapeProperties[] {

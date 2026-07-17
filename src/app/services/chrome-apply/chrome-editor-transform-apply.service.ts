@@ -6,9 +6,9 @@ import {
   UnionRotateCommand,
   AlignCommand,
   DistributeCommand,
-  RectCornerRadiusCommand
+  RectCornerRadiusCommand,
+  ChangeElementIdCommand
 } from '../../models/editor-commands';
-import { EditorToolService } from '../editor-tool.service';
 import { SelectionTransformReadoutService } from '../selection-transform-readout.service';
 import { MIN_UNION_SIZE } from '../../utils/selection-resize';
 import { unionRotationPivot } from '../../utils/selection-rotate';
@@ -29,10 +29,10 @@ export class ChromeEditorTransformApplyService {
   private readonly support = inject(ChromeEditorApplySupport);
   private readonly propertiesSvg = inject(PROPERTIES_PANEL_SVG_PORT);
   private readonly transformSvg = inject(SELECTION_TRANSFORM_APPLY_SVG_PORT);
-  private readonly editorTool = inject(EditorToolService);
   private readonly transformReadout = inject(SelectionTransformReadoutService);
 
   private get shapeSelection() { return this.support.shapeSelection; }
+  private get editorHistory() { return this.support.editorHistory; }
   private selectedShapesList() { return this.support.selectedShapesList(); }
   private shapeIdsTouchLocked(ids: string[]) { return this.support.shapeIdsTouchLocked(ids); }
   private shouldBlockShapeOnlyMutations() { return this.support.shouldBlockShapeOnlyMutations(); }
@@ -85,8 +85,23 @@ export class ChromeEditorTransformApplyService {
     this.propertiesSvg.clearHighlight();
   }
 
+  /** Properties panel: change the selected element's SVG `id` (single selection only). */
+  applyShapeIdFromChrome(rawId: string): void {
+    const shapes = this.selectedShapesList();
+    if (shapes.length !== 1) return;
+    if (this.shouldBlockShapeOnlyMutations()) return;
+    const oldId = shapes[0]!.id;
+    const newId = rawId.trim();
+    if (!newId || newId === oldId) return;
+    if (!/^[A-Za-z_][\w.\-:]*$/.test(newId)) return;
+    if (this.shapeIdsTouchLocked([oldId])) return;
+
+    this.editorHistory.pushAndExecute(
+      new ChangeElementIdCommand(this.propertiesSvg, oldId, newId, this.shapeSelection)
+    );
+  }
+
   onSelectionBBoxFieldCommit(field: 'x' | 'y' | 'w' | 'h' | 'r', event: Event): void {
-    if (this.editorTool.currentTool() !== 'selector') return;
     const target = event.target as HTMLInputElement;
     const raw = target.value.trim();
     if (raw === '') return;

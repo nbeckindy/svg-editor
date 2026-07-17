@@ -26,6 +26,7 @@ import {
   ToggleVisibilityCommand,
   ToggleLayerLockCommand,
   RenameElementCommand,
+  ChangeElementIdCommand,
   ReorderBeforeSiblingCommand,
   GroupCommand,
   UngroupCommand,
@@ -1072,6 +1073,29 @@ describe('RenameElementCommand', () => {
 
   it('should have description "Rename layer"', () => {
     expect(new RenameElementCommand(mockSvc(), 'l1', null, 'x').description).toBe('Rename layer');
+  });
+});
+
+describe('ChangeElementIdCommand', () => {
+  it('changes id on execute and restores on undo', () => {
+    const el = { node: {} };
+    const findOne = vi.fn((sel: string) => (sel === '#new-id' || sel === '#old-id' ? el : null));
+    const svc = mockSvc({
+      changeElementId: vi.fn().mockReturnValue(true),
+      getSVGInstance: vi.fn().mockReturnValue({ findOne }),
+      getShapeProperties: vi.fn().mockReturnValue({ id: 'new-id', type: 'rect' })
+    });
+    const selection = { selectShapes: vi.fn(), clearSelection: vi.fn() };
+    const cmd = new ChangeElementIdCommand(svc, 'old-id', 'new-id', selection);
+    cmd.execute();
+    expect(svc.changeElementId).toHaveBeenCalledWith('old-id', 'new-id');
+    expect(selection.selectShapes).toHaveBeenCalledWith([{ id: 'new-id', type: 'rect' }]);
+    cmd.undo();
+    expect(svc.changeElementId).toHaveBeenCalledWith('new-id', 'old-id');
+  });
+
+  it('should have description "Change element id"', () => {
+    expect(new ChangeElementIdCommand(mockSvc(), 'a', 'b').description).toBe('Change element id');
   });
 });
 

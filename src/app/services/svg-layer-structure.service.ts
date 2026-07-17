@@ -263,6 +263,28 @@ export class SvgLayerStructureService implements SvgLayerStructurePort {
     this.setElementDataName(elementId, trimmed.length > 0 ? trimmed : null);
   }
 
+  /**
+   * Change an element's SVG `id`. Rejects empty/invalid ids and collisions.
+   * Valid pattern: letter or underscore, then letters/digits/`_`/`.`/`:`/`-`.
+   */
+  changeElementId(oldId: string, newId: string): boolean {
+    if (!this.doc.getSVGInstance()) return false;
+    const trimmed = newId.trim();
+    if (!trimmed || trimmed === oldId) return false;
+    if (!/^[A-Za-z_][\w.\-:]*$/.test(trimmed)) return false;
+
+    const svg = this.doc.getSVGInstance()!;
+    const el = svg.findOne(`#${oldId}`) as SvgJsElement | undefined;
+    if (!el) return false;
+
+    const collision = svg.findOne(`#${trimmed}`) as SvgJsElement | undefined;
+    if (collision && collision.node !== el.node) return false;
+
+    el.id(trimmed);
+    this.doc.bumpDocumentRevision();
+    return true;
+  }
+
   getElementDataName(elementId: string): string | null {
     if (!this.doc.getSVGInstance()) return null;
     const el = this.doc.getSVGInstance()!.findOne(`#${elementId}`) as SvgJsElement | undefined;

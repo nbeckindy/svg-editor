@@ -49,6 +49,18 @@ export interface LayerReorderGroupSvgPort {
   getElementDataName(elementId: string): string | null;
   setElementDataName(elementId: string, value: string | null): void;
   resolveLayerDisplayName(elementId: string, kind: LayerRowKind): string;
+  /**
+   * Rename an element's `id` attribute. Returns false when the element is missing,
+   * `newId` is invalid/unchanged, or another element already owns `newId`.
+   */
+  changeElementId(oldId: string, newId: string): boolean;
+}
+
+/** Svg seam for `ChangeElementIdCommand` (DOM id + selection resync). */
+export interface ChangeElementIdSvgPort {
+  changeElementId(oldId: string, newId: string): boolean;
+  getSVGInstance(): Svg | null;
+  getShapeProperties(element: SvgJsElement): ShapeProperties;
 }
 
 /**

@@ -17,7 +17,7 @@ export type { SelectionTransformReadoutSvgPort } from '../history/selection-tran
 export type { DocumentArtboardCommandSvgPort, DocumentSettingsSvgPort } from '../history/document-settings-svg.port';
 export type { SvgDebugPanelSvgPort, AppRootSvgManipulationPort } from '../history/editor-chrome-svg.port';
 export type { GradientFillSnapshotSvgPort, GradientFillEditorSvgPort } from '../history/gradient-fill-editor-svg.port';
-export type { LayerReorderGroupSvgPort, LayersPanelSvgPort } from '../history/layers-panel-svg.port';
+export type { LayerReorderGroupSvgPort, LayersPanelSvgPort, ChangeElementIdSvgPort } from '../history/layers-panel-svg.port';
 export type { ClipPathSvgPort } from '../history/clip-path-svg.port';
 export type { ElementParentSnapshot } from '../services/svg-layer-structure.port';
 export type { AlignDistributeSvgPort } from '../history/align-distribute-svg.port';

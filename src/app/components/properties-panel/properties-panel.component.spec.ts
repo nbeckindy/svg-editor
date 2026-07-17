@@ -119,7 +119,8 @@ describe('PropertiesPanelComponent', () => {
       isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
       isElementDirectLocked: vi.fn().mockReturnValue(false),
       setLayerLocked: vi.fn(),
-      moveElementBeforeNextSibling: vi.fn().mockReturnValue(true)
+      moveElementBeforeNextSibling: vi.fn().mockReturnValue(true),
+      changeElementId: vi.fn().mockReturnValue(true)
     };
     const editorToolServiceMock = {
       currentTool: editorToolSignal
@@ -208,11 +209,39 @@ describe('PropertiesPanelComponent', () => {
     selectedShapesSignal.set([mockShape]);
     fixture.detectChanges();
 
-    const compiled = fixture.nativeElement;
+    const compiled = fixture.nativeElement as HTMLElement;
     expect(compiled.querySelector('.properties-content')).toBeTruthy();
-    expect(compiled.textContent).toContain('circle');
-    expect(compiled.textContent).toContain('shape-1');
+    expect(compiled.querySelector('[data-testid="properties-shape-type"]')?.textContent?.trim()).toBe('circle');
+    const idInput = compiled.querySelector('[data-testid="properties-shape-id"]') as HTMLInputElement;
+    expect(idInput).toBeTruthy();
+    expect(idInput.value).toBe('shape-1');
     expect(compiled.querySelector('[data-testid="document-settings-panel"]')).toBeNull();
+  });
+
+  it('places X/Y and W/H on shared rows with compact rotation control', () => {
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect' }]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    const rows = el.querySelectorAll('.transform-row');
+    expect(rows.length).toBeGreaterThanOrEqual(3);
+    expect(rows[0]?.querySelector('[data-testid="properties-transform-x"]')).toBeTruthy();
+    expect(rows[0]?.querySelector('[data-testid="properties-transform-y"]')).toBeTruthy();
+    expect(rows[1]?.querySelector('[data-testid="properties-transform-w"]')).toBeTruthy();
+    expect(rows[1]?.querySelector('[data-testid="properties-transform-h"]')).toBeTruthy();
+    expect(rows[2]?.querySelector('.transform-rotate-icon')).toBeTruthy();
+    expect(rows[2]?.querySelector('[data-testid="properties-transform-r"]')).toBeTruthy();
+  });
+
+  it('commits shape id changes through chrome apply', () => {
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect' }]);
+    fixture.detectChanges();
+    const input = fixture.nativeElement.querySelector(
+      '[data-testid="properties-shape-id"]'
+    ) as HTMLInputElement;
+    input.value = 'hero-rect';
+    input.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+    expect(svgManipulationService.changeElementId).toHaveBeenCalledWith('shape-1', 'hero-rect');
   });
   it('should show selected shape properties without skew or clear-selection chrome', () => {
     const mockShape: ShapeProperties = {

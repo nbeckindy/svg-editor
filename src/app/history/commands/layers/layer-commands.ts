@@ -2,7 +2,8 @@ import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { EditorCommand } from '../../../models/editor-command';
 import { CompositeCommand } from '../../../models/editor-command';
 import type { ElementParentSnapshot } from '../../../services/svg-layer-structure.port';
-import type { LayerReorderGroupSvgPort } from '../../layers-panel-svg.port';
+import type { ChangeElementIdSvgPort, LayerReorderGroupSvgPort } from '../../layers-panel-svg.port';
+import type { SelectionSyncPort } from '../../history-selection.port';
 
 export type ReorderDirection = 'forward' | 'backward' | 'front' | 'back';
 
@@ -121,6 +122,34 @@ export class RenameElementCommand implements EditorCommand {
 
   undo(): void {
     this.svc.setElementDataName(this.elementId, this.oldDataName);
+  }
+}
+
+export class ChangeElementIdCommand implements EditorCommand {
+  readonly description = 'Change element id';
+
+  constructor(
+    private readonly svc: ChangeElementIdSvgPort,
+    private readonly oldId: string,
+    private readonly newId: string,
+    private readonly selectionSync?: SelectionSyncPort
+  ) {}
+
+  execute(): void {
+    this.svc.changeElementId(this.oldId, this.newId);
+    this.resyncSelection(this.newId);
+  }
+
+  undo(): void {
+    this.svc.changeElementId(this.newId, this.oldId);
+    this.resyncSelection(this.oldId);
+  }
+
+  private resyncSelection(id: string): void {
+    if (!this.selectionSync) return;
+    const el = this.svc.getSVGInstance()?.findOne(`#${id}`) as SvgJsElement | undefined;
+    if (!el) return;
+    this.selectionSync.selectShapes([this.svc.getShapeProperties(el)]);
   }
 }
 

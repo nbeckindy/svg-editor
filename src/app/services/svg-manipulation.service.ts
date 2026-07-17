@@ -554,6 +554,10 @@ export class SvgManipulationService
     this.layers.renameElement(elementId, newName);
   }
 
+  changeElementId(oldId: string, newId: string): boolean {
+    return this.layers.changeElementId(oldId, newId);
+  }
+
   getElementDataName(elementId: string): string | null {
     return this.layers.getElementDataName(elementId);
   }

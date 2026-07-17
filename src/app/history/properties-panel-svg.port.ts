@@ -54,4 +54,5 @@ export interface PropertiesPanelSvgPort
   allocateUniqueDefId(prefix: string): string;
   capturePaintGradientSnapshot(shapeId: string, paintProperty: 'fill' | 'stroke'): PaintGradientSnapshot;
   readEditableGradientModelById(gradientId: string): EditableGradientModel | null;
+  changeElementId(oldId: string, newId: string): boolean;
 }

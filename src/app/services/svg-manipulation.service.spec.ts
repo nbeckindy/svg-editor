@@ -1661,6 +1661,30 @@ describe('SvgManipulationService', () => {
     });
   });
 
+  describe('changeElementId', () => {
+    it('renames an element id when the new id is free', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.changeElementId('r1', 'hero')).toBe(true);
+      expect(container.querySelector('#r1')).toBeNull();
+      expect(container.querySelector('#hero')).toBeTruthy();
+    });
+
+    it('rejects collisions and invalid ids', () => {
+      const svgContent = `<svg viewBox="0 0 100 100">
+        <rect id="r1" x="0" y="0" width="10" height="10"/>
+        <rect id="r2" x="10" y="10" width="10" height="10"/>
+      </svg>`;
+      service.initializeSVG(container, svgContent);
+      expect(service.changeElementId('r1', 'r2')).toBe(false);
+      expect(service.changeElementId('r1', '1bad')).toBe(false);
+      expect(service.changeElementId('r1', 'has space')).toBe(false);
+      expect(container.querySelector('#r1')).toBeTruthy();
+    });
+  });
+
   describe('layer display name port helpers', () => {
     it('resolveLayerDisplayName matches clip carrier tree fallback', () => {
       const svgContent = `<svg viewBox="0 0 100 100">

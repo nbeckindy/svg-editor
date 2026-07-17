@@ -2,6 +2,10 @@
   <div class="panel-scroll">
     @if (selectedShape(); as shape) {
       <div class="properties-content">
+        <div class="properties-header">
+          <span class="shape-type-badge" data-testid="properties-shape-type">{{ shapeTypeLabel(shape) }}</span>
+        </div>
+
         @if (hasTextSelection()) {
           <p class="paint-ref-hint" data-testid="properties-text-outline-paint-hint">
             On <code>&lt;text&gt;</code>, stroke is the <strong>outline</strong>. Default SVG order paints the
@@ -14,102 +18,120 @@
 
         @if (selectionBBoxFieldModel(); as bb) {
         @if (bb.ok) {
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label" for="properties-bbox-x">X</label>
-          <input
-            id="properties-bbox-x"
-            type="number"
-            class="range-number transform-bbox-num"
-            step="any"
-            inputmode="decimal"
-            data-testid="properties-transform-x"
-            [disabled]="anySelectedShapeLocked()"
-            [value]="bb.x"
-            (change)="onSelectionBBoxFieldCommit('x', $event)"
-            aria-label="Selection bounding box X" />
-        </div>
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label" for="properties-bbox-y">Y</label>
-          <input
-            id="properties-bbox-y"
-            type="number"
-            class="range-number transform-bbox-num"
-            step="any"
-            inputmode="decimal"
-            data-testid="properties-transform-y"
-            [disabled]="anySelectedShapeLocked()"
-            [value]="bb.y"
-            (change)="onSelectionBBoxFieldCommit('y', $event)"
-            aria-label="Selection bounding box Y" />
-        </div>
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label" for="properties-bbox-w">W</label>
-          <input
-            id="properties-bbox-w"
-            type="number"
-            class="range-number transform-bbox-num"
-            step="any"
-            inputmode="decimal"
-            data-testid="properties-transform-w"
-            [disabled]="anySelectedShapeLocked()"
-            [value]="bb.w"
-            (change)="onSelectionBBoxFieldCommit('w', $event)"
-            aria-label="Selection bounding box width" />
-        </div>
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label" for="properties-bbox-h">H</label>
-          <input
-            id="properties-bbox-h"
-            type="number"
-            class="range-number transform-bbox-num"
-            step="any"
-            inputmode="decimal"
-            data-testid="properties-transform-h"
-            [disabled]="anySelectedShapeLocked()"
-            [value]="bb.h"
-            (change)="onSelectionBBoxFieldCommit('h', $event)"
-            aria-label="Selection bounding box height" />
-        </div>
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label" for="properties-bbox-r">R</label>
-          @if (!bb.rMixed && bb.rDeg != null) {
+        <div class="transform-row" role="group" aria-label="Position">
+          <div class="transform-field">
+            <label class="transform-label" for="properties-bbox-x">X</label>
             <input
-              id="properties-bbox-r"
+              id="properties-bbox-x"
               type="number"
-              class="range-number transform-bbox-num"
+              class="transform-num"
               step="any"
               inputmode="decimal"
-              data-testid="properties-transform-r"
+              data-testid="properties-transform-x"
               [disabled]="anySelectedShapeLocked()"
-              [value]="bb.rDeg"
-              (change)="onSelectionBBoxFieldCommit('r', $event)"
-              aria-label="Selection rotation in degrees" />
-          } @else {
-            <div class="property-value readonly" data-testid="properties-transform-r">
-              {{ selectionTransformReadout().r }}
-            </div>
-          }
+              [value]="bb.x"
+              (change)="onSelectionBBoxFieldCommit('x', $event)"
+              aria-label="Selection bounding box X" />
+          </div>
+          <div class="transform-field">
+            <label class="transform-label" for="properties-bbox-y">Y</label>
+            <input
+              id="properties-bbox-y"
+              type="number"
+              class="transform-num"
+              step="any"
+              inputmode="decimal"
+              data-testid="properties-transform-y"
+              [disabled]="anySelectedShapeLocked()"
+              [value]="bb.y"
+              (change)="onSelectionBBoxFieldCommit('y', $event)"
+              aria-label="Selection bounding box Y" />
+          </div>
+        </div>
+        <div class="transform-row" role="group" aria-label="Size">
+          <div class="transform-field">
+            <label class="transform-label" for="properties-bbox-w">W</label>
+            <input
+              id="properties-bbox-w"
+              type="number"
+              class="transform-num"
+              step="any"
+              inputmode="decimal"
+              data-testid="properties-transform-w"
+              [disabled]="anySelectedShapeLocked()"
+              [value]="bb.w"
+              (change)="onSelectionBBoxFieldCommit('w', $event)"
+              aria-label="Selection bounding box width" />
+          </div>
+          <div class="transform-field">
+            <label class="transform-label" for="properties-bbox-h">H</label>
+            <input
+              id="properties-bbox-h"
+              type="number"
+              class="transform-num"
+              step="any"
+              inputmode="decimal"
+              data-testid="properties-transform-h"
+              [disabled]="anySelectedShapeLocked()"
+              [value]="bb.h"
+              (change)="onSelectionBBoxFieldCommit('h', $event)"
+              aria-label="Selection bounding box height" />
+          </div>
+        </div>
+        <div class="transform-row transform-row-rotation" role="group" aria-label="Rotation">
+          <div class="transform-field transform-field-rotation">
+            <label class="transform-label transform-label-icon" for="properties-bbox-r" title="Rotation">
+              <mat-icon class="transform-rotate-icon" aria-hidden="true">rotate_right</mat-icon>
+              <span class="visually-hidden">Rotation</span>
+            </label>
+            @if (!bb.rMixed && bb.rDeg != null) {
+              <input
+                id="properties-bbox-r"
+                type="number"
+                class="transform-num"
+                step="any"
+                inputmode="decimal"
+                data-testid="properties-transform-r"
+                [disabled]="anySelectedShapeLocked()"
+                [value]="bb.rDeg"
+                (change)="onSelectionBBoxFieldCommit('r', $event)"
+                aria-label="Selection rotation in degrees" />
+            } @else {
+              <div class="property-value readonly transform-num-readonly" data-testid="properties-transform-r">
+                {{ selectionTransformReadout().r }}
+              </div>
+            }
+          </div>
         </div>
         } @else {
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label">X</label>
-          <div class="property-value readonly" data-testid="properties-transform-x">{{ selectionTransformReadout().x }}</div>
+        <div class="transform-row" role="group" aria-label="Position">
+          <div class="transform-field">
+            <span class="transform-label">X</span>
+            <div class="property-value readonly transform-num-readonly" data-testid="properties-transform-x">{{ selectionTransformReadout().x }}</div>
+          </div>
+          <div class="transform-field">
+            <span class="transform-label">Y</span>
+            <div class="property-value readonly transform-num-readonly" data-testid="properties-transform-y">{{ selectionTransformReadout().y }}</div>
+          </div>
         </div>
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label">Y</label>
-          <div class="property-value readonly" data-testid="properties-transform-y">{{ selectionTransformReadout().y }}</div>
+        <div class="transform-row" role="group" aria-label="Size">
+          <div class="transform-field">
+            <span class="transform-label">W</span>
+            <div class="property-value readonly transform-num-readonly" data-testid="properties-transform-w">{{ selectionTransformReadout().w }}</div>
+          </div>
+          <div class="transform-field">
+            <span class="transform-label">H</span>
+            <div class="property-value readonly transform-num-readonly" data-testid="properties-transform-h">{{ selectionTransformReadout().h }}</div>
+          </div>
         </div>
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label">W</label>
-          <div class="property-value readonly" data-testid="properties-transform-w">{{ selectionTransformReadout().w }}</div>
-        </div>
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label">H</label>
-          <div class="property-value readonly" data-testid="properties-transform-h">{{ selectionTransformReadout().h }}</div>
-        </div>
-        <div class="property-group transform-bbox-readout">
-          <label class="property-label">R</label>
-          <div class="property-value readonly" data-testid="properties-transform-r">{{ selectionTransformReadout().r }}</div>
+        <div class="transform-row transform-row-rotation" role="group" aria-label="Rotation">
+          <div class="transform-field transform-field-rotation">
+            <span class="transform-label transform-label-icon" title="Rotation">
+              <mat-icon class="transform-rotate-icon" aria-hidden="true">rotate_right</mat-icon>
+              <span class="visually-hidden">Rotation</span>
+            </span>
+            <div class="property-value readonly transform-num-readonly" data-testid="properties-transform-r">{{ selectionTransformReadout().r }}</div>
+          </div>
         </div>
         }
         }
@@ -120,14 +142,23 @@
           </p>
         }
 
-        <div class="property-group">
-          <label class="property-label">Shape Type</label>
-          <div class="property-value readonly">{{ shapeTypeLabel(shape) }}</div>
-        </div>
-
-        <div class="property-group">
-          <label class="property-label">ID</label>
-          <div class="property-value readonly">{{ idLabel(shape) }}</div>
+        <div class="property-group property-group-compact">
+          <label class="property-label" for="properties-shape-id">ID</label>
+          @if (selectionCount() === 1) {
+            <input
+              id="properties-shape-id"
+              type="text"
+              class="shape-id-input"
+              data-testid="properties-shape-id"
+              spellcheck="false"
+              autocomplete="off"
+              [disabled]="anySelectedShapeLocked()"
+              [value]="shape.id"
+              (change)="onShapeIdChange($event)"
+              aria-label="Shape ID" />
+          } @else {
+            <div class="property-value readonly" data-testid="properties-shape-id">{{ idLabel(shape) }}</div>
+          }
         </div>
 
         @if (hasRectSelection()) {

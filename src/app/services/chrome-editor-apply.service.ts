@@ -105,6 +105,9 @@ export class ChromeEditorApplyService {
   applyRectCornerRadiusFromChrome(radius: number) {
     return this.transform.applyRectCornerRadiusFromChrome(radius);
   }
+  applyShapeIdFromChrome(rawId: string) {
+    return this.transform.applyShapeIdFromChrome(rawId);
+  }
 
   applyPathBooleanUnion(pathIds: string[]) { return this.pathOps.applyPathBooleanUnion(pathIds); }
   applyPathBooleanSubtract(pathIds: string[]) { return this.pathOps.applyPathBooleanSubtract(pathIds); }

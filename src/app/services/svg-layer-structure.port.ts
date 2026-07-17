@@ -94,4 +94,5 @@ export interface SvgLayerStructurePort {
   isGroupClipMaskCarrier(groupId: string): boolean;
   renameElement(elementId: string, newName: string): void;
   getElementName(elementId: string): string;
+  changeElementId(oldId: string, newId: string): boolean;
 }
