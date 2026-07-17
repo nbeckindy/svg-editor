@@ -8,7 +8,9 @@
       <div class="context-slot" aria-hidden="true"></div>
     }
     @case ('node-edit-selector') {
-      <div class="context-slot" aria-hidden="true"></div>
+      <div class="context-slot node-edit-context" data-testid="node-edit-tool-context">
+        <app-path-node-anchor-tools />
+      </div>
     }
     @case ('eyedropper') {
       <div class="context-slot" aria-hidden="true"></div>

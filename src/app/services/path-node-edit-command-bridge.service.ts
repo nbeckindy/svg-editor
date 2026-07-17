@@ -3,7 +3,7 @@ import { Injectable, signal } from '@angular/core';
 /** Mutually exclusive anchor modes at the selected path node (node-edit chrome). */
 export type PathNodeAnchorMode = 'corner' | 'mirror' | 'independent' | 'none';
 
-/** Snapshot for properties panel + path-node chrome (driven from svg-canvas). */
+/** Snapshot for Node-edit tool context bar path-node chrome (driven from svg-canvas). */
 export interface PathNodeEditBridgeChrome {
   toolIsNodeEdit: boolean;
   hasSelectedPathNode: boolean;
@@ -34,7 +34,7 @@ export interface PathNodeEditCommandBridgeHandlers {
 }
 
 /**
- * Bridges path node-edit commands from chrome (e.g. properties panel) to the canvas.
+ * Bridges path node-edit commands from chrome (tool context bar) to the canvas.
  * {@link SvgCanvasComponent} registers handlers in its constructor and clears them on destroy.
  */
 @Injectable({ providedIn: 'root' })

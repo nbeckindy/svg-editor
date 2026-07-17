@@ -1,28 +1,29 @@
 .path-node-anchor-group {
   flex-shrink: 0;
-  padding: 12px 16px;
-  background: #fff;
-  border-bottom: 1px solid #ddd;
 }
 
 .path-node-anchor-buttons {
   display: flex;
   flex-wrap: wrap;
-  gap: 8px;
-  margin-top: 6px;
+  align-items: center;
+  gap: var(--editor-spacing-sm, 8px);
 }
 
 .path-node-anchor-btn {
-  padding: 6px 10px;
-  font-size: 13px;
-  border: 1px solid #ccc;
-  border-radius: 4px;
-  background: #fafafa;
+  flex-shrink: 0;
+  padding: var(--editor-spacing-xs, 4px) 10px;
+  font: inherit;
+  font-size: var(--editor-font-size-sm, 13px);
+  line-height: 1.3;
+  border: 1px solid var(--editor-border, #ccc);
+  border-radius: var(--editor-radius-sm, 4px);
+  background: var(--editor-surface, #fafafa);
+  color: inherit;
   cursor: pointer;
 }
 
 .path-node-anchor-btn:hover:not(:disabled) {
-  background: #eee;
+  background: var(--editor-surface-hover, rgba(0, 0, 0, 0.04));
 }
 
 .path-node-anchor-btn:disabled {
@@ -31,18 +32,7 @@
 }
 
 .path-node-anchor-btn.active:not(:disabled) {
-  background: #e3f2fd;
-  border-color: #90caf9;
-}
-
-.property-group {
-  display: block;
-}
-
-.property-label {
-  display: block;
-  font-size: 12px;
-  font-weight: 600;
-  color: #555;
-  margin-bottom: 2px;
+  border-color: var(--editor-accent-strong, #90caf9);
+  background: var(--editor-accent-surface-active, #e3f2fd);
+  color: var(--editor-accent-text-dark, inherit);
 }

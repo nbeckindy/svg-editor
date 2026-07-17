@@ -6,11 +6,10 @@ import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaul
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { SelectionTransformReadoutService } from '../../services/selection-transform-readout.service';
 import { LAYER_LOCK_READ_PORT } from '../../services/manipulation-port-tokens';
-import { PathNodeAnchorToolsComponent } from '../path-node-anchor-tools/path-node-anchor-tools.component';
 
 @Component({
   selector: 'app-properties-panel',
-  imports: [PathNodeAnchorToolsComponent],
+  imports: [],
   templateUrl: './properties-panel.component.html',
   styleUrl: './properties-panel.component.css'
 })
