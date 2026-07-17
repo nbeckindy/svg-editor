@@ -3,53 +3,40 @@
     <div class="property-group">
       <label class="property-label">Artboard Size</label>
       <div class="dimension-row">
-        <div
-          class="anchor-grid"
-          role="radiogroup"
-          aria-label="Artboard resize anchor"
-          title="Resize anchor — fixed point when width or height changes">
-          @for (cell of resizeAnchorCells; track cell) {
-            <button
-              type="button"
-              class="anchor-cell"
-              [attr.data-testid]="'artboard-resize-anchor-' + cell"
-              [class.anchor-cell-selected]="artboardResizeAnchor() === cell"
-              [attr.aria-checked]="artboardResizeAnchor() === cell"
-              role="radio"
-              (click)="onResizeAnchorSelect(cell)">
-              <span class="anchor-dot" aria-hidden="true"></span>
-            </button>
-          }
+        <app-orientation-grid
+          [value]="artboardResizeAnchor()"
+          ariaLabel="Artboard resize anchor"
+          title="Resize anchor — fixed point when width or height changes"
+          testIdPrefix="artboard-resize-anchor"
+          (valueChange)="onResizeAnchorSelect($event)">
+        </app-orientation-grid>
+        <div class="dimension-field">
+          <label class="dimension-label" for="artboard-width">W</label>
+          <input
+            type="number"
+            id="artboard-width"
+            class="dimension-input"
+            data-testid="artboard-width"
+            [min]="MIN_DIMENSION"
+            [max]="MAX_DIMENSION"
+            step="1"
+            [value]="artboard().width"
+            (change)="onWidthChange($event)">
+          <span class="dimension-unit">px</span>
         </div>
-        <div class="dimension-fields">
-          <div class="dimension-field">
-            <label class="dimension-label" for="artboard-width">W</label>
-            <input
-              type="number"
-              id="artboard-width"
-              class="dimension-input"
-              data-testid="artboard-width"
-              [min]="MIN_DIMENSION"
-              [max]="MAX_DIMENSION"
-              step="1"
-              [value]="artboard().width"
-              (change)="onWidthChange($event)">
-            <span class="dimension-unit">px</span>
-          </div>
-          <div class="dimension-field">
-            <label class="dimension-label" for="artboard-height">H</label>
-            <input
-              type="number"
-              id="artboard-height"
-              class="dimension-input"
-              data-testid="artboard-height"
-              [min]="MIN_DIMENSION"
-              [max]="MAX_DIMENSION"
-              step="1"
-              [value]="artboard().height"
-              (change)="onHeightChange($event)">
-            <span class="dimension-unit">px</span>
-          </div>
+        <div class="dimension-field">
+          <label class="dimension-label" for="artboard-height">H</label>
+          <input
+            type="number"
+            id="artboard-height"
+            class="dimension-input"
+            data-testid="artboard-height"
+            [min]="MIN_DIMENSION"
+            [max]="MAX_DIMENSION"
+            step="1"
+            [value]="artboard().height"
+            (change)="onHeightChange($event)">
+          <span class="dimension-unit">px</span>
         </div>
       </div>
     </div>

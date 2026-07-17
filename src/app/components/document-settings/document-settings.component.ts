@@ -3,12 +3,13 @@ import { FormsModule } from '@angular/forms';
 import { DOCUMENT_SETTINGS_SVG_PORT } from '../../services/manipulation-port-tokens';
 import { EditorHistoryService } from '../../services/editor-history.service';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
+import { OrientationGridComponent } from '../orientation-grid/orientation-grid.component';
 import { ArtboardResizeAnchor } from '../../models/artboard.model';
 import { ArtboardSizeCommand, ArtboardBackgroundCommand } from '../../models/editor-commands';
 
 @Component({
   selector: 'app-document-settings',
-  imports: [FormsModule, ColorPickerComponent],
+  imports: [FormsModule, ColorPickerComponent, OrientationGridComponent],
   templateUrl: './document-settings.component.html',
   styleUrl: './document-settings.component.css',
   host: {
@@ -25,19 +26,6 @@ export class DocumentSettingsComponent {
 
   readonly MIN_DIMENSION = 1;
   readonly MAX_DIMENSION = 10000;
-
-  /** Row-major grid: top → bottom, left → right (nine-point). */
-  readonly resizeAnchorCells: ArtboardResizeAnchor[] = [
-    'top-left',
-    'top-center',
-    'top-right',
-    'middle-left',
-    'center',
-    'middle-right',
-    'bottom-left',
-    'bottom-center',
-    'bottom-right'
-  ];
 
   onWidthChange(event: Event): void {
     const value = Number((event.target as HTMLInputElement).value);

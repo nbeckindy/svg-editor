@@ -1,0 +1,74 @@
+:host {
+  display: inline-block;
+  flex-shrink: 0;
+  line-height: 0;
+}
+
+.orientation-grid {
+  display: grid;
+  grid-template-columns: repeat(3, 18px);
+  grid-template-rows: repeat(3, 18px);
+  gap: 0;
+  border: 1px solid #ccc;
+  border-radius: 3px;
+  overflow: hidden;
+  background: #fff;
+}
+
+.orientation-cell {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 18px;
+  height: 18px;
+  margin: 0;
+  padding: 0;
+  border: none;
+  border-right: 1px solid #ccc;
+  border-bottom: 1px solid #ccc;
+  border-radius: 0;
+  background: transparent;
+  color: #666;
+  cursor: pointer;
+}
+
+.orientation-cell:nth-child(3n) {
+  border-right: none;
+}
+
+.orientation-cell:nth-child(n + 7) {
+  border-bottom: none;
+}
+
+.orientation-cell:hover {
+  background: #f3f8fd;
+  color: #1976d2;
+}
+
+.orientation-cell:focus-visible {
+  outline: 2px solid #1976d2;
+  outline-offset: -2px;
+  z-index: 1;
+}
+
+.orientation-cell-selected {
+  background: #e3f2fd;
+  color: #1976d2;
+}
+
+.orientation-center {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: currentColor;
+}
+
+.orientation-arrow {
+  display: block;
+  width: 0;
+  height: 0;
+  border-style: solid;
+  border-width: 0 3.5px 6px 3.5px;
+  border-color: transparent transparent currentColor transparent;
+  transform-origin: 50% 60%;
+}

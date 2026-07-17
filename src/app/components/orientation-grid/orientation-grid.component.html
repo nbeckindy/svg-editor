@@ -1,0 +1,26 @@
+<div
+  class="orientation-grid"
+  role="radiogroup"
+  [attr.aria-label]="ariaLabel()"
+  [attr.title]="title() ?? null">
+  @for (cell of cells; track cell) {
+    <button
+      type="button"
+      class="orientation-cell"
+      [attr.data-testid]="testIdPrefix() + '-' + cell"
+      [class.orientation-cell-selected]="value() === cell"
+      [attr.aria-checked]="value() === cell"
+      [attr.aria-label]="cell"
+      role="radio"
+      (click)="select(cell)">
+      @if (cell === 'center') {
+        <span class="orientation-center" aria-hidden="true"></span>
+      } @else {
+        <span
+          class="orientation-arrow"
+          aria-hidden="true"
+          [style.transform]="'rotate(' + arrowRotationDeg[cell] + 'deg)'"></span>
+      }
+    </button>
+  }
+</div>
