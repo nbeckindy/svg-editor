@@ -14,8 +14,6 @@ export type PenDiscardReason = 'tool switch' | 'document replace/load';
  */
 export interface PenToolSessionPorts extends CanvasAdapterContext {
   pathNodeOverlay: PenToolSessionPathNodeOverlayPort;
-  isPenAltCurveMode(): boolean;
-  setPenAltCurveMode(enabled: boolean): void;
   svgBboxToOverlayPixels(bbox: { x: number; y: number; width: number; height: number }): {
     x: number;
     y: number;

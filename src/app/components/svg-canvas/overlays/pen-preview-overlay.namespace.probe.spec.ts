@@ -45,7 +45,6 @@ describe('pen preview overlay SVG namespace', () => {
     component.wrapperWidth = 100;
     component.wrapperHeight = 100;
     editorToolService.setTool('pen');
-    editorToolService.setPenAltCurveMode(false);
     stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
     fixture.detectChanges();
 

@@ -22,13 +22,8 @@ export class EditorToolService {
   readonly currentTool = signal<EditorTool>('selector');
   readonly gridSnapEnabled = signal<boolean>(false);
   readonly shapeSnapEnabled = signal<boolean>(false);
-  /** Pen: hold Control while dragging to author Q / S / T instead of cubic (svg-editor-h76). */
-  readonly penAltCurveMode = signal<boolean>(false);
 
   setTool(tool: EditorTool): void {
-    if (tool !== 'pen') {
-      this.penAltCurveMode.set(false);
-    }
     this.currentTool.set(tool);
   }
 
@@ -58,14 +53,6 @@ export class EditorToolService {
 
   isShapeSnapEnabled(): boolean {
     return this.shapeSnapEnabled();
-  }
-
-  setPenAltCurveMode(enabled: boolean): void {
-    this.penAltCurveMode.set(enabled);
-  }
-
-  isPenAltCurveMode(): boolean {
-    return this.penAltCurveMode();
   }
 
   isCreationTool(tool?: EditorTool): boolean {

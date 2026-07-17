@@ -18,8 +18,6 @@ function minimalPorts(overrides: Partial<PenToolSessionPorts> = {}): PenToolSess
     pathNodeOverlay: noopPathNodeOverlay(),
     markForCheck: vi.fn(),
     getCurrentTool: () => 'pen',
-    isPenAltCurveMode: () => false,
-    setPenAltCurveMode: vi.fn(),
     setTool: vi.fn(),
     clientToEditorSvgPoint: vi.fn(() => ({ x: 10, y: 20 })),
     svgBboxToOverlayPixels: (bbox) => ({ x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height }),

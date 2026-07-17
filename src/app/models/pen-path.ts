@@ -141,11 +141,11 @@ export function penReflectStateAfterCommitted(segments: readonly PenPathSegment[
 }
 
 /**
- * Alternate pen curve mode (Control held or toolbar toggle):
+ * Alternate pen curve mode (historically Control held or toolbar toggle):
  * normally Q after `M`/`L`, S after `C`/`S`, T after `Q`/`T`.
  *
  * Quadratic (`Q`) authoring after `M`/`L` is temporarily disabled so pen work focuses on
- * cubic; alternate mode still yields cubic there until re-enabled.
+ * cubic; callers currently always pass `ctrlKey: false` (alt-curve UI removed).
  */
 export function penDragCurveAuthoringKind(
   ctrlKey: boolean,

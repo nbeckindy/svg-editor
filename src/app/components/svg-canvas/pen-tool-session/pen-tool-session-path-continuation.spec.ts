@@ -53,8 +53,6 @@ function makePorts(): PenToolSessionPorts {
     isCanvasReady: () => true,
     isEditorContentShapeTarget: () => false,
     clientToEditorSvgPoint: () => null,
-    isPenAltCurveMode: () => false,
-    setPenAltCurveMode: () => {},
     confirmDiscardInProgressPath: () => true,
     armPenClosePostNodeEditEmptyClickSelectionGuard: () => {},
     svgBboxToOverlayPixels: (bbox) => ({ x: bbox.x, y: bbox.y, width: bbox.width, height: bbox.height }),

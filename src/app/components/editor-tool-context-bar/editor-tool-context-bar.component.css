@@ -17,40 +17,9 @@
   min-height: 1px;
 }
 
-.pen-context,
 .node-edit-context {
   display: flex;
   align-items: center;
   gap: var(--editor-spacing-lg);
   flex-wrap: wrap;
-}
-
-.pen-alt-curve-toggle {
-  flex-shrink: 0;
-  padding: var(--editor-spacing-xs) 10px;
-  font: inherit;
-  font-size: var(--editor-font-size-sm);
-  line-height: 1.3;
-  border: 1px solid var(--editor-border);
-  border-radius: var(--editor-radius-sm);
-  background: var(--editor-surface);
-  color: inherit;
-  cursor: pointer;
-}
-
-.pen-alt-curve-toggle:hover {
-  background: var(--editor-surface-hover, rgba(0, 0, 0, 0.04));
-}
-
-.pen-alt-curve-toggle.active {
-  border-color: var(--editor-accent-strong);
-  background: var(--editor-accent-surface-active);
-  color: var(--editor-accent-text-dark);
-}
-
-.pen-curve-hint {
-  font-size: var(--editor-font-size-sm);
-  line-height: 1.35;
-  color: var(--editor-muted, #616161);
-  max-width: 52ch;
 }

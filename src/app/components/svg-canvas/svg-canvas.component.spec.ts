@@ -4156,7 +4156,6 @@ describe('SvgCanvasComponent', () => {
       component.wrapperWidth = 100;
       component.wrapperHeight = 100;
       editorToolService.setTool('pen');
-      editorToolService.setPenAltCurveMode(false);
       stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
       fixture.detectChanges();
     }
@@ -4174,7 +4173,6 @@ describe('SvgCanvasComponent', () => {
       component.wrapperWidth = 100;
       component.wrapperHeight = 100;
       editorToolService.setTool('pen');
-      editorToolService.setPenAltCurveMode(false);
       stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100.3 100.7');
       fixture.detectChanges();
     }
@@ -4558,37 +4556,6 @@ describe('SvgCanvasComponent', () => {
 
       const penSession = component.penTool;
       expect(penSession.getPenSessionSegments().length).toBe(2);
-      expect(penSession.getPenSessionSegments()[1].type).toBe('C');
-    });
-
-    it('toolbar Alt curve mode authors cubic while Q authoring is disabled (h76)', async () => {
-      await loadEmptySvgAndPenMode();
-      editorToolService.setPenAltCurveMode(true);
-      editorToolService.setGridSnapEnabled(false);
-      editorToolService.setShapeSnapEnabled(false);
-      fixture.detectChanges();
-
-      component.onCanvasMouseDown({
-        button: 0,
-        clientX: 10,
-        clientY: 10,
-        detail: 1,
-        preventDefault: vi.fn()
-      } as unknown as MouseEvent);
-      component.onCanvasMouseDown({
-        button: 0,
-        clientX: 50,
-        clientY: 10,
-        detail: 1,
-        ctrlKey: false,
-        preventDefault: vi.fn()
-      } as unknown as MouseEvent);
-      const bend = MARQUEE_MIN_DRAG_PX + 4;
-      component.onDocumentMouseMove({ clientX: 50, clientY: 10 + bend } as MouseEvent);
-      component.onDocumentMouseUp({ button: 0, clientX: 50, clientY: 10 + bend } as MouseEvent);
-      fixture.detectChanges();
-
-      const penSession = component.penTool;
       expect(penSession.getPenSessionSegments()[1].type).toBe('C');
     });
 
@@ -5445,7 +5412,6 @@ describe('SvgCanvasComponent', () => {
       await new Promise((r) => setTimeout(r, 50));
       fixture.detectChanges();
       editorToolService.setTool('pen');
-      editorToolService.setPenAltCurveMode(false);
       stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 600, 400), '0 0 600 400');
       fixture.detectChanges();
       const svgRoot = component.svgContainer()?.nativeElement.querySelector('svg');

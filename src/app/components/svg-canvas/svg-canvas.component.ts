@@ -1744,8 +1744,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         isPathInNodeEditState: (pathId) =>
           this.pathNodeEditSession.getPathNodeEditState()?.paths.some((state) => state.pathId === pathId) ?? false
       },
-      isPenAltCurveMode: () => this.editorTool.isPenAltCurveMode(),
-      setPenAltCurveMode: (enabled) => this.editorTool.setPenAltCurveMode(enabled),
       svgBboxToOverlayPixels: (bbox) => this.coordinateMapping.svgBboxToOverlayPixels(bbox),
       parseOverlayViewBox: () => this.coordinateMapping.parseOverlayViewBox(),
       confirmDiscardInProgressPath: (reason) =>

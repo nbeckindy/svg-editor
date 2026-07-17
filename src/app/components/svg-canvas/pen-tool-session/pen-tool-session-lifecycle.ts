@@ -68,7 +68,6 @@ export function clearDrawingStateForView(v: PenDrawingStateClearView): void {
     v.penContinuingPathRewrite = null;
     v.penOutgoingHandleDrag = null;
     v.clearPenInsertOnPathDragState();
-    v.ports.setPenAltCurveMode(false);
     v.clearPenFirstAnchorAwaitingDraft();
     v.clearPenColocatedSegmentEndpointDraft();
     v.purgeProvisionalPenSegmentHistory();

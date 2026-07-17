@@ -131,7 +131,7 @@ export function handlePenCanvasMouseDownForView(v: PenCanvasInputView, event: Mo
       anchor: { x: pt.x, y: pt.y },
       startClient: { x: event.clientX, y: event.clientY },
       startSvg: { x: pt.x, y: pt.y },
-      ctrlCurve: v.ports.isPenAltCurveMode() || event.ctrlKey
+      ctrlCurve: false
     };
     v.pendingLastClient = { x: event.clientX, y: event.clientY };
     v.pendingDragSvg = { x: pt.x, y: pt.y };
@@ -159,7 +159,7 @@ export function handlePenCanvasMouseDownForView(v: PenCanvasInputView, event: Mo
       anchor: { x: lv.x, y: lv.y },
       startClient: { x: event.clientX, y: event.clientY },
       startSvg: { x: pt.x, y: pt.y },
-      ctrlCurve: v.ports.isPenAltCurveMode() || event.ctrlKey
+      ctrlCurve: false
     };
     v.pendingLastClient = { x: event.clientX, y: event.clientY };
     v.pendingDragSvg = { x: pt.x, y: pt.y };
@@ -174,7 +174,7 @@ export function handlePenCanvasMouseDownForView(v: PenCanvasInputView, event: Mo
     anchor: { x: anchor.x, y: anchor.y },
     startClient: { x: event.clientX, y: event.clientY },
     startSvg: { x: pt.x, y: pt.y },
-    ctrlCurve: v.ports.isPenAltCurveMode() || event.ctrlKey
+    ctrlCurve: false
   };
   if (penPathOnlyMoveto(segs) && v.firstAnchorP3Draft) {
     const m0 = segs[0];

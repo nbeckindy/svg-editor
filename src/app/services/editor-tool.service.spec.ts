@@ -14,21 +14,6 @@ describe('EditorToolService', () => {
     registerDefaultToolDescriptors(TestBed.inject(ToolRegistryService));
     service = TestBed.inject(EditorToolService);
     service.currentTool.set('selector');
-    service.penAltCurveMode.set(true);
-  });
-
-  it('setTool clears penAltCurveMode when leaving pen', () => {
-    service.setTool('pen');
-    service.setPenAltCurveMode(true);
-    expect(service.penAltCurveMode()).toBe(true);
-    service.setTool('selector');
-    expect(service.penAltCurveMode()).toBe(false);
-  });
-
-  it('setTool does not clear penAltCurveMode when switching to pen', () => {
-    service.setPenAltCurveMode(true);
-    service.setTool('pen');
-    expect(service.penAltCurveMode()).toBe(true);
   });
 
   it('isCreationTool is true only for rect, ellipse, and line', () => {
