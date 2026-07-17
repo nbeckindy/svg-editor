@@ -4,7 +4,6 @@ import { CreationPaintDefaultsComponent } from './creation-paint-defaults.compon
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { BASE_DRAWING_STYLE_DEFAULTS } from '../../models/drawing-style-defaults';
-import { defaultLinearGradientModel } from '../../models/svg-gradient';
 
 describe('CreationPaintDefaultsComponent', () => {
   let fixture: ComponentFixture<CreationPaintDefaultsComponent>;
@@ -50,6 +49,14 @@ describe('CreationPaintDefaultsComponent', () => {
     expect(el.querySelector('[data-testid="creation-default-stroke-width"]')).toBeNull();
   });
 
+  it('omits gradient mode tabs on creation defaults', () => {
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('[data-testid="paint-swatch-mode-solid"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="paint-swatch-mode-none"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="paint-swatch-mode-linear"]')).toBeNull();
+    expect(el.querySelector('[data-testid="paint-swatch-mode-radial"]')).toBeNull();
+  });
+
   it('fill color change calls creation-only apply', () => {
     fixture.componentInstance.onFillChange('#ff00aa');
     expect(chromeApply.applyCreationFillDefault).toHaveBeenCalledWith('#ff00aa');
@@ -61,11 +68,18 @@ describe('CreationPaintDefaultsComponent', () => {
     expect(chromeApply.applyCreationStrokeDefault).toHaveBeenCalledWith('#00aaff');
   });
 
-  it('paint mode change calls creation-only apply', () => {
+  it('solid and none paint mode changes call creation-only apply', () => {
+    fixture.componentInstance.onFillPaintModeChange('none');
+    expect(chromeApply.applyCreationFillPaintMode).toHaveBeenCalledWith('none');
+    fixture.componentInstance.onStrokePaintModeChange('solid');
+    expect(chromeApply.applyCreationStrokePaintMode).toHaveBeenCalledWith('solid');
+  });
+
+  it('ignores gradient paint mode changes on the rail', () => {
     fixture.componentInstance.onFillPaintModeChange('linear');
-    expect(chromeApply.applyCreationFillPaintMode).toHaveBeenCalledWith('linear');
-    fixture.componentInstance.onStrokePaintModeChange('none');
-    expect(chromeApply.applyCreationStrokePaintMode).toHaveBeenCalledWith('none');
+    fixture.componentInstance.onStrokePaintModeChange('radial');
+    expect(chromeApply.applyCreationFillPaintMode).not.toHaveBeenCalled();
+    expect(chromeApply.applyCreationStrokePaintMode).not.toHaveBeenCalled();
   });
 
   it('reports empty fill/stroke for none', () => {
@@ -74,21 +88,5 @@ describe('CreationPaintDefaultsComponent', () => {
     expect(fixture.componentInstance.fillEmpty()).toBe(true);
     expect(fixture.componentInstance.strokeEmpty()).toBe(true);
     expect(fixture.componentInstance.fillMode()).toBe('none');
-  });
-
-  it('shows gradient mode and preview when fillGradient is set', () => {
-    const model = defaultLinearGradientModel('creation-fill-grad', '#ff0000', '#0000ff');
-    drawingDefaults.setDefaults({
-      ...BASE_DRAWING_STYLE_DEFAULTS,
-      fill: '#ff0000',
-      fillGradient: model
-    });
-    fixture.detectChanges();
-    expect(fixture.componentInstance.fillMode()).toBe('linear');
-    expect(fixture.componentInstance.fillEmpty()).toBe(false);
-    const swatch = fixture.nativeElement.querySelector('.psp-swatch-gradient') as HTMLElement;
-    expect(swatch).toBeTruthy();
-    expect(swatch.style.backgroundImage).toContain('linear-gradient');
-    expect(fixture.nativeElement.querySelector('[data-testid="paint-swatch-popover-empty-icon"]')).toBeNull();
   });
 });

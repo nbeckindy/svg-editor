@@ -3,16 +3,14 @@ import {
   PaintSwatchPopoverComponent,
   type PaintSwatchMode
 } from '../paint-swatch-popover/paint-swatch-popover.component';
-import {
-  creationFillPaintMode,
-  creationStrokePaintMode
-} from '../../models/drawing-style-defaults';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 
 /**
  * Compact **Creation paint defaults** for the tool strip.
  * Updates next-draw defaults only — never Selection paint (ADR 0003).
+ *
+ * Gradient modes are hidden here for now: there is no creation-default gradient editor.
  */
 @Component({
   selector: 'app-creation-paint-defaults',
@@ -24,12 +22,15 @@ export class CreationPaintDefaultsComponent {
   private readonly chromeApply = inject(ChromeEditorApplyService);
   readonly defaults = inject(DrawingStyleDefaultsService);
 
+  /** Solid / none only — rail does not expose creation gradient defaults. */
   fillMode(): PaintSwatchMode {
-    return creationFillPaintMode(this.defaults.defaults());
+    const f = this.defaults.fill();
+    return !f || f.toLowerCase() === 'none' ? 'none' : 'solid';
   }
 
   strokeMode(): PaintSwatchMode {
-    return creationStrokePaintMode(this.defaults.defaults());
+    const s = this.defaults.stroke();
+    return !s || s.toLowerCase() === 'none' ? 'none' : 'solid';
   }
 
   fillEmpty(): boolean {
@@ -51,10 +52,12 @@ export class CreationPaintDefaultsComponent {
   }
 
   onFillPaintModeChange(mode: PaintSwatchMode): void {
+    if (mode === 'linear' || mode === 'radial') return;
     this.chromeApply.applyCreationFillPaintMode(mode);
   }
 
   onStrokePaintModeChange(mode: PaintSwatchMode): void {
+    if (mode === 'linear' || mode === 'radial') return;
     this.chromeApply.applyCreationStrokePaintMode(mode);
   }
 

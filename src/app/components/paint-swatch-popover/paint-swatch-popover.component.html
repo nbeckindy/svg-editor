@@ -75,28 +75,30 @@
           (click)="onModeTabClick('solid', $event)">
           Solid
         </button>
-        <button
-          type="button"
-          class="psp-mode-tab"
-          role="tab"
-          data-testid="paint-swatch-mode-linear"
-          [class.active]="activeModeTab() === 'linear'"
-          [attr.aria-selected]="activeModeTab() === 'linear'"
-          [disabled]="gradientModesDisabled()"
-          (click)="onModeTabClick('linear', $event)">
-          Linear
-        </button>
-        <button
-          type="button"
-          class="psp-mode-tab"
-          role="tab"
-          data-testid="paint-swatch-mode-radial"
-          [class.active]="activeModeTab() === 'radial'"
-          [attr.aria-selected]="activeModeTab() === 'radial'"
-          [disabled]="gradientModesDisabled()"
-          (click)="onModeTabClick('radial', $event)">
-          Radial
-        </button>
+        @if (gradientModesVisible()) {
+          <button
+            type="button"
+            class="psp-mode-tab"
+            role="tab"
+            data-testid="paint-swatch-mode-linear"
+            [class.active]="activeModeTab() === 'linear'"
+            [attr.aria-selected]="activeModeTab() === 'linear'"
+            [disabled]="gradientModesDisabled()"
+            (click)="onModeTabClick('linear', $event)">
+            Linear
+          </button>
+          <button
+            type="button"
+            class="psp-mode-tab"
+            role="tab"
+            data-testid="paint-swatch-mode-radial"
+            [class.active]="activeModeTab() === 'radial'"
+            [attr.aria-selected]="activeModeTab() === 'radial'"
+            [disabled]="gradientModesDisabled()"
+            (click)="onModeTabClick('radial', $event)">
+            Radial
+          </button>
+        }
         <button
           type="button"
           class="psp-mode-tab"

@@ -33,6 +33,8 @@ export class PaintSwatchPopoverComponent {
   readonly disabled = input(false);
   /** Disables linear/radial tabs (mixed paint, pattern, etc.). */
   readonly gradientModesDisabled = input(false);
+  /** When false, Linear/Radial tabs are omitted (e.g. creation defaults with no gradient editor). */
+  readonly gradientModesVisible = input(true);
   /** Align popover panel to the swatch start (left) or end (right) edge. */
   readonly panelAlign = input<PaintSwatchPanelAlign>('start');
   /** Open panel below the swatch (dock) or to the side (tool strip). */
@@ -78,7 +80,7 @@ export class PaintSwatchPopoverComponent {
   onModeTabClick(mode: PaintSwatchMode, event: Event): void {
     if (this.disabled()) return;
     if (mode === 'linear' || mode === 'radial') {
-      if (this.gradientModesDisabled()) return;
+      if (!this.gradientModesVisible() || this.gradientModesDisabled()) return;
     }
     event.preventDefault();
     event.stopPropagation();

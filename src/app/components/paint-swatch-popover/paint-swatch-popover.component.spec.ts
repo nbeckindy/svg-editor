@@ -94,6 +94,15 @@ describe('PaintSwatchPopoverComponent', () => {
     expect(emitted).toEqual([]);
   });
 
+  it('omits gradient tabs when gradientModesVisible is false', () => {
+    fixture.componentRef.setInput('gradientModesVisible', false);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="paint-swatch-mode-linear"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="paint-swatch-mode-radial"]')).toBeNull();
+    expect(fixture.nativeElement.querySelector('[data-testid="paint-swatch-mode-solid"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="paint-swatch-mode-none"]')).toBeTruthy();
+  });
+
   it('shows solid color controls only in solid mode', () => {
     fixture.componentRef.setInput('mode', 'solid');
     fixture.detectChanges();

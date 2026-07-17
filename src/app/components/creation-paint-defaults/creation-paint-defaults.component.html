@@ -9,9 +9,9 @@
       <app-paint-swatch-popover
         target="fill"
         panelPlacement="aside"
+        [gradientModesVisible]="false"
         [mode]="fillMode()"
         [color]="fillPickerColor()"
-        [gradientModel]="defaults.defaults().fillGradient"
         [empty]="fillEmpty()"
         (paintModeChange)="onFillPaintModeChange($event)"
         (colorChange)="onFillChange($event)"
@@ -22,9 +22,9 @@
       <app-paint-swatch-popover
         target="stroke"
         panelPlacement="aside"
+        [gradientModesVisible]="false"
         [mode]="strokeMode()"
         [color]="strokePickerColor()"
-        [gradientModel]="defaults.defaults().strokeGradient"
         [empty]="strokeEmpty()"
         (paintModeChange)="onStrokePaintModeChange($event)"
         (colorChange)="onStrokeChange($event)"
