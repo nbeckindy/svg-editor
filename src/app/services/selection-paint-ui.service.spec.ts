@@ -134,6 +134,19 @@ describe('SelectionPaintUiService', () => {
     ).toBe('none');
   });
 
+  it('treats gradient fill as having paint so empty swatch is false', () => {
+    const shape = {
+      id: 'shape-1',
+      type: 'rect',
+      fillPaintType: 'gradient',
+      fillUrl: 'url(#g1)',
+      fill: undefined
+    } as ShapeProperties;
+    expect(service.hasFillColor(shape)).toBe(true);
+    expect(service.allSelectedLackFill(shape)).toBe(false);
+    expect(service.fillSwatchMode(shape)).toBe('linear');
+  });
+
   it('parses paint def ids from url()', () => {
     expect(service.paintDefIdFromUrl('url(#myGrad)')).toBe('myGrad');
     expect(service.paintDefIdFromUrl(undefined)).toBeNull();

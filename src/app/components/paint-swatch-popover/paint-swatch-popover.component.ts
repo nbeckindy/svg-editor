@@ -1,5 +1,4 @@
 import { Component, computed, ElementRef, inject, input, output, viewChild } from '@angular/core';
-import { CommonModule } from '@angular/common';
 import { MatIconModule } from '@angular/material/icon';
 import { ColorPickerComponent } from '../color-picker/color-picker.component';
 import { EditableGradientModel, cssGradientPreviewFromModel } from '../../models/svg-gradient';
@@ -7,10 +6,12 @@ import { EditableGradientModel, cssGradientPreviewFromModel } from '../../models
 export type PaintSwatchTarget = 'fill' | 'stroke';
 export type PaintSwatchMode = 'solid' | 'linear' | 'radial' | 'none';
 export type PaintSwatchPanelAlign = 'start' | 'end';
+/** Where the popover panel opens relative to the swatch. */
+export type PaintSwatchPanelPlacement = 'below' | 'aside';
 
 @Component({
   selector: 'app-paint-swatch-popover',
-  imports: [CommonModule, MatIconModule, ColorPickerComponent],
+  imports: [MatIconModule, ColorPickerComponent],
   templateUrl: './paint-swatch-popover.component.html',
   styleUrl: './paint-swatch-popover.component.css',
   host: {
@@ -34,6 +35,8 @@ export class PaintSwatchPopoverComponent {
   readonly gradientModesDisabled = input(false);
   /** Align popover panel to the swatch start (left) or end (right) edge. */
   readonly panelAlign = input<PaintSwatchPanelAlign>('start');
+  /** Open panel below the swatch (dock) or to the side (tool strip). */
+  readonly panelPlacement = input<PaintSwatchPanelPlacement>('below');
 
   readonly paintModeChange = output<PaintSwatchMode>();
   readonly colorChange = output<string>();

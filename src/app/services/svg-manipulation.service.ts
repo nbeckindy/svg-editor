@@ -637,6 +637,10 @@ export class SvgManipulationService
     this.gradients.writeEditableGradientModel(model);
   }
 
+  materializeCreationGradientTemplate(template: EditableGradientModel): string {
+    return this.gradients.materializeCreationGradientTemplate(template);
+  }
+
   createLinearGradientFillForShape(shapeId: string, fromColor: string, toColor = '#ffffff'): string {
     return this.gradients.createLinearGradientFillForShape(shapeId, fromColor, toColor);
   }

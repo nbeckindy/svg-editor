@@ -253,6 +253,18 @@ export class SvgGradientDefsService implements SvgGradientDefsPort {
     applyEditableGradientModelToElement(el, model);
   }
 
+  materializeCreationGradientTemplate(template: EditableGradientModel): string {
+    if (!this.doc.getSVGInstance()) return '';
+    const id = this.allocateUniqueDefId('grad');
+    const model: EditableGradientModel = {
+      ...template,
+      id,
+      stops: template.stops.map((s) => ({ ...s }))
+    };
+    this.writeEditableGradientModel(model);
+    return `url(#${id})`;
+  }
+
   createLinearGradientFillForShape(shapeId: string, fromColor: string, toColor = '#ffffff'): string {
     if (!this.doc.getSVGInstance()) return '';
     const id = this.allocateUniqueDefId('grad');

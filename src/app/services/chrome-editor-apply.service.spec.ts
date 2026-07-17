@@ -364,6 +364,31 @@ describe('ChromeEditorApplyService', () => {
     expect(history.pushAndExecute).not.toHaveBeenCalled();
   });
 
+  it('applyCreationFillPaintMode sets gradient template without touching selection', () => {
+    drawingDefaultsSignal.set({ ...BASE_DRAWING_STYLE_DEFAULTS });
+    selectedShapesSignal.set([
+      { id: 's1', type: 'rect', fill: '#112233', stroke: '#445566', strokeWidth: 2 }
+    ]);
+    const shapeSelection = TestBed.inject(ShapeSelectionService) as unknown as {
+      patchAllSelected: ReturnType<typeof vi.fn>;
+    };
+
+    service.applyCreationFillPaintMode('linear');
+
+    expect(drawingDefaultsSignal().fillGradient?.kind).toBe('linear');
+    expect(drawingDefaultsSignal().fill).toBe('#000000');
+    expect(shapeSelection.patchAllSelected).not.toHaveBeenCalled();
+    expect(selectedShapesSignal()[0].fill).toBe('#112233');
+  });
+
+  it('applyCreationFillPaintMode none clears gradient template', () => {
+    drawingDefaultsSignal.set({ ...BASE_DRAWING_STYLE_DEFAULTS });
+    service.applyCreationFillPaintMode('linear');
+    service.applyCreationFillPaintMode('none');
+    expect(drawingDefaultsSignal().fill).toBe('none');
+    expect(drawingDefaultsSignal().fillGradient).toBeNull();
+  });
+
   it('applyAlignFromChrome does not push when fewer than two shape ids', () => {
     const history = TestBed.inject(EditorHistoryService) as unknown as {
       pushAndExecute: ReturnType<typeof vi.fn>;

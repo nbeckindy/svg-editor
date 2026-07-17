@@ -69,10 +69,26 @@ export class DrawingStyleDefaultsService implements DrawingStyleDefaultsWritePor
         ? next.textAnchor
         : fallback.textAnchor;
 
+    const fillGradient =
+      next.fillGradient === null
+        ? null
+        : next.fillGradient && typeof next.fillGradient === 'object'
+          ? next.fillGradient
+          : fallback.fillGradient;
+
+    const strokeGradient =
+      next.strokeGradient === null
+        ? null
+        : next.strokeGradient && typeof next.strokeGradient === 'object'
+          ? next.strokeGradient
+          : fallback.strokeGradient;
+
     return {
       fill: typeof next.fill === 'string' && next.fill.trim() ? next.fill : fallback.fill,
       stroke: typeof next.stroke === 'string' && next.stroke.trim() ? next.stroke : fallback.stroke,
       strokeWidth,
+      fillGradient,
+      strokeGradient,
       fontFamily,
       fontSize,
       fontWeight,

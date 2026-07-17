@@ -38,6 +38,8 @@ describe('ToolStripComponent', () => {
           useValue: {
             applyCreationFillDefault: vi.fn(),
             applyCreationStrokeDefault: vi.fn(),
+            applyCreationFillPaintMode: vi.fn(),
+            applyCreationStrokePaintMode: vi.fn(),
             applyCreationStrokeWidthDefault: vi.fn()
           }
         },

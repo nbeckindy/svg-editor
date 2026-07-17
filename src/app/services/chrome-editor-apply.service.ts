@@ -31,6 +31,12 @@ export class ChromeEditorApplyService {
   applyCreationStrokeDefault(color: string) {
     return this.paint.applyCreationStrokeDefault(color);
   }
+  applyCreationFillPaintMode(mode: PaintSwatchMode) {
+    return this.paint.applyCreationFillPaintMode(mode);
+  }
+  applyCreationStrokePaintMode(mode: PaintSwatchMode) {
+    return this.paint.applyCreationStrokePaintMode(mode);
+  }
   applyCreationStrokeWidthDefault(width: number) {
     return this.paint.applyCreationStrokeWidthDefault(width);
   }

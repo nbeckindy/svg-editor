@@ -1,15 +1,18 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement, G } from '@svgdotjs/svg.js';
 import { EDITOR_PATH_NODE_HANDLE_LINK_ATTR } from '../../models/path-node-handle-link';
+import type { DrawingStyleDefaults } from '../../models/drawing-style-defaults';
 import type { SvgShapePathDataPort } from './svg-shape-path-data.port';
 import { DrawingStyleDefaultsService } from '../drawing-style-defaults.service';
 import { SvgEditorDocumentService } from '../svg-editor-document.service';
+import { SvgGradientDefsService } from '../svg-gradient-defs.service';
 import { EDITOR_CONTENT_GROUP_ID } from '../svg-editor-stage.constants';
 
 @Injectable({ providedIn: 'root' })
 export class SvgShapePathDataService implements SvgShapePathDataPort {
   private readonly doc = inject(SvgEditorDocumentService);
   private readonly drawingStyleDefaults = inject(DrawingStyleDefaultsService);
+  private readonly gradients = inject(SvgGradientDefsService);
 
   updatePathData(pathId: string, d: string): void {
     if (!this.doc.getSVGInstance()) return;
@@ -65,13 +68,34 @@ export class SvgShapePathDataService implements SvgShapePathDataPort {
     const pathFactory = contentGroup as G & { path(pathD: string): SvgJsElement };
     const shape = pathFactory.path(d);
     shape.id(newId);
-    const fill = attrs?.fill ?? (options?.closedPath ? defaults.fill : 'none');
+    const fill =
+      attrs?.fill !== undefined
+        ? attrs.fill
+        : options?.closedPath
+          ? this.resolveCreationFill(defaults)
+          : 'none';
     shape.fill(fill);
     shape.stroke({
-      color: attrs?.stroke ?? defaults.stroke,
+      color: attrs?.stroke !== undefined ? attrs.stroke : this.resolveCreationStroke(defaults),
       width: attrs?.strokeWidth ?? defaults.strokeWidth
     });
     this.doc.bumpDocumentRevision();
     return newId;
+  }
+
+  private resolveCreationFill(defaults: DrawingStyleDefaults): string {
+    if (defaults.fillGradient) {
+      const url = this.gradients.materializeCreationGradientTemplate(defaults.fillGradient);
+      if (url) return url;
+    }
+    return defaults.fill;
+  }
+
+  private resolveCreationStroke(defaults: DrawingStyleDefaults): string {
+    if (defaults.strokeGradient) {
+      const url = this.gradients.materializeCreationGradientTemplate(defaults.strokeGradient);
+      if (url) return url;
+    }
+    return defaults.stroke;
   }
 }

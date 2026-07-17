@@ -7,17 +7,17 @@
     <div class="psp-summary psp-summary-disabled" data-testid="paint-swatch-popover-swatch">
       @if (indeterminate()) {
         <span class="psp-swatch psp-swatch-mixed" aria-hidden="true"></span>
+      } @else if (mode() === 'linear' || mode() === 'radial') {
+        <span
+          class="psp-swatch psp-swatch-gradient"
+          [style.background-image]="swatchBackground() ?? ''"
+          aria-hidden="true"></span>
       } @else if (empty() || mode() === 'none') {
         <span class="psp-swatch psp-swatch-empty" aria-hidden="true">
           <mat-icon class="psp-empty-mat-icon" data-testid="paint-swatch-popover-empty-icon" aria-hidden="true"
             >format_color_reset</mat-icon
           >
         </span>
-      } @else if (mode() === 'linear' || mode() === 'radial') {
-        <span
-          class="psp-swatch psp-swatch-gradient"
-          [style.background-image]="swatchBackground() ?? ''"
-          aria-hidden="true"></span>
       } @else {
         <span class="psp-swatch psp-swatch-solid" [style.background-color]="color()" aria-hidden="true"></span>
       }
@@ -34,21 +34,27 @@
       class="psp-summary"
       data-testid="paint-swatch-popover-swatch"
       [attr.aria-label]="
-        indeterminate() ? 'Paint — mixed selection' : empty() || mode() === 'none' ? noPaintLabel() + ' — open to edit' : 'Paint — open to edit'
+        indeterminate()
+          ? 'Paint — mixed selection'
+          : mode() === 'linear' || mode() === 'radial'
+            ? 'Paint — open to edit'
+            : empty() || mode() === 'none'
+              ? noPaintLabel() + ' — open to edit'
+              : 'Paint — open to edit'
       ">
       @if (indeterminate()) {
         <span class="psp-swatch psp-swatch-mixed" aria-hidden="true"></span>
+      } @else if (mode() === 'linear' || mode() === 'radial') {
+        <span
+          class="psp-swatch psp-swatch-gradient"
+          [style.background-image]="swatchBackground() ?? ''"
+          aria-hidden="true"></span>
       } @else if (empty() || mode() === 'none') {
         <span class="psp-swatch psp-swatch-empty" aria-hidden="true">
           <mat-icon class="psp-empty-mat-icon" data-testid="paint-swatch-popover-empty-icon" aria-hidden="true"
             >format_color_reset</mat-icon
           >
         </span>
-      } @else if (mode() === 'linear' || mode() === 'radial') {
-        <span
-          class="psp-swatch psp-swatch-gradient"
-          [style.background-image]="swatchBackground() ?? ''"
-          aria-hidden="true"></span>
       } @else {
         <span class="psp-swatch psp-swatch-solid" [style.background-color]="color()" aria-hidden="true"></span>
       }
@@ -56,6 +62,7 @@
     <div
       class="psp-panel"
       [class.psp-panel--align-end]="panelAlign() === 'end'"
+      [class.psp-panel--aside]="panelPlacement() === 'aside'"
       (click)="$event.stopPropagation()">
       <div class="psp-mode-tabs" role="tablist" [attr.aria-label]="target() === 'fill' ? 'Fill paint mode' : 'Stroke paint mode'">
         <button

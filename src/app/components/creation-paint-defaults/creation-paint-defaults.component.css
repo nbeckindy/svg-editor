@@ -32,18 +32,16 @@
 }
 
 /* Compact swatches to match tool-button footprint */
-:host ::ng-deep .cp-swatch,
-:host ::ng-deep .cp-summary {
+:host ::ng-deep .psp-swatch,
+:host ::ng-deep .psp-summary {
   width: var(--editor-tool-btn-size);
   height: var(--editor-tool-btn-size);
 }
 
-:host ::ng-deep .cp-empty-mat-icon {
+:host ::ng-deep .psp-empty-mat-icon {
   font-size: 20px;
 }
 
-:host ::ng-deep .cp-panel {
-  left: calc(100% + 6px);
-  top: 0;
+:host ::ng-deep .psp-panel {
   min-width: 200px;
 }

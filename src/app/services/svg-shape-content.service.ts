@@ -10,6 +10,7 @@ import type {
 import type { ClipboardPayload } from '../models/clipboard-payload';
 import { DrawingStyleDefaultsService } from './drawing-style-defaults.service';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
+import { SvgGradientDefsService } from './svg-gradient-defs.service';
 import { SvgSelectionGeometryService } from './svg-selection-geometry.service';
 import { CONTENT_SHAPE_SELECTOR, EDITOR_CONTENT_GROUP_ID, SVG_NS } from './svg-editor-stage.constants';
 import { SvgShapePaintService } from './shape-content/svg-shape-paint.service';
@@ -20,11 +21,13 @@ import { SvgSelectionHitTestService } from './shape-content/svg-selection-hit-te
 import { SvgClipboardService } from './shape-content/svg-clipboard.service';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 import { LiveTreeMarkup } from '../utils/svg-sanitize';
+import type { DrawingStyleDefaults } from '../models/drawing-style-defaults';
 
 @Injectable({ providedIn: 'root' })
 export class SvgShapeContentService implements SvgShapeContentPort {
   private readonly drawingStyleDefaults = inject(DrawingStyleDefaultsService);
   private readonly doc = inject(SvgEditorDocumentService);
+  private readonly gradients = inject(SvgGradientDefsService);
   private readonly geometry = inject(SvgSelectionGeometryService);
   private readonly paint = inject(SvgShapePaintService);
   private readonly pathData = inject(SvgShapePathDataService);
@@ -299,8 +302,8 @@ export class SvgShapeContentService implements SvgShapeContentPort {
     let shape: SvgJsElement;
 
     const defaults = this.drawingStyleDefaults.defaults();
-    const fill = attrs.fill ?? defaults.fill;
-    const stroke = attrs.stroke ?? defaults.stroke;
+    const fill = this.resolveCreationFill(attrs.fill, defaults);
+    const stroke = this.resolveCreationStroke(attrs.stroke, defaults);
     const strokeWidth = attrs.strokeWidth ?? defaults.strokeWidth;
 
     if (type === 'rect') {
@@ -355,6 +358,30 @@ export class SvgShapeContentService implements SvgShapeContentPort {
     shape.id(newId);
     this.doc.bumpDocumentRevision();
     return newId;
+  }
+
+  private resolveCreationFill(
+    override: string | undefined,
+    defaults: DrawingStyleDefaults
+  ): string {
+    if (override !== undefined) return override;
+    if (defaults.fillGradient) {
+      const url = this.gradients.materializeCreationGradientTemplate(defaults.fillGradient);
+      if (url) return url;
+    }
+    return defaults.fill;
+  }
+
+  private resolveCreationStroke(
+    override: string | undefined,
+    defaults: DrawingStyleDefaults
+  ): string {
+    if (override !== undefined) return override;
+    if (defaults.strokeGradient) {
+      const url = this.gradients.materializeCreationGradientTemplate(defaults.strokeGradient);
+      if (url) return url;
+    }
+    return defaults.stroke;
   }
 
   /**

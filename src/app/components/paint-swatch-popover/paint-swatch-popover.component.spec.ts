@@ -57,6 +57,16 @@ describe('PaintSwatchPopoverComponent', () => {
     expect(swatch.style.backgroundImage).toContain('linear-gradient');
   });
 
+  it('prefers gradient preview over empty icon when empty is true', () => {
+    const model = defaultLinearGradientModel('g1', '#ff0000', '#0000ff');
+    fixture.componentRef.setInput('mode', 'linear');
+    fixture.componentRef.setInput('gradientModel', model);
+    fixture.componentRef.setInput('empty', true);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('.psp-swatch-gradient')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="paint-swatch-popover-empty-icon"]')).toBeNull();
+  });
+
   it('emits paintModeChange when a mode tab is clicked', () => {
     const emitted: PaintSwatchMode[] = [];
     component.paintModeChange.subscribe((m) => emitted.push(m));

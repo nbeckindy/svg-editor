@@ -193,11 +193,17 @@ export class SelectionPaintUiService {
   }
 
   hasFillColor(shape: ShapeProperties): boolean {
+    if (shape.fillPaintType === 'gradient' || shape.fillPaintType === 'pattern') {
+      return true;
+    }
     const f = shape.fill;
     return f != null && f.trim() !== '' && f.toLowerCase() !== 'none';
   }
 
   hasStrokeColor(shape: ShapeProperties): boolean {
+    if (shape.strokePaintType === 'gradient' || shape.strokePaintType === 'pattern') {
+      return true;
+    }
     const s = shape.stroke;
     return s != null && s.trim() !== '' && s.toLowerCase() !== 'none';
   }

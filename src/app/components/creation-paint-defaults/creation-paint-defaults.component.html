@@ -6,19 +6,29 @@
   <div class="swatch-stack" aria-hidden="false">
     <div class="swatch-slot swatch-slot-fill" data-testid="creation-default-fill">
       <span class="swatch-caption">Fill</span>
-      <app-color-picker
-        [color]="fillEmpty() ? '#000000' : defaults.fill()"
+      <app-paint-swatch-popover
+        target="fill"
+        panelPlacement="aside"
+        [mode]="fillMode()"
+        [color]="fillPickerColor()"
+        [gradientModel]="defaults.defaults().fillGradient"
         [empty]="fillEmpty()"
-        [clearable]="true"
-        (colorChange)="onFillChange($event)" />
+        (paintModeChange)="onFillPaintModeChange($event)"
+        (colorChange)="onFillChange($event)"
+        data-testid="creation-fill-paint-swatch" />
     </div>
     <div class="swatch-slot swatch-slot-stroke" data-testid="creation-default-stroke">
       <span class="swatch-caption">Stroke</span>
-      <app-color-picker
-        [color]="strokeEmpty() ? '#000000' : defaults.stroke()"
+      <app-paint-swatch-popover
+        target="stroke"
+        panelPlacement="aside"
+        [mode]="strokeMode()"
+        [color]="strokePickerColor()"
+        [gradientModel]="defaults.defaults().strokeGradient"
         [empty]="strokeEmpty()"
-        [clearable]="true"
-        (colorChange)="onStrokeChange($event)" />
+        (paintModeChange)="onStrokePaintModeChange($event)"
+        (colorChange)="onStrokeChange($event)"
+        data-testid="creation-stroke-paint-swatch" />
     </div>
   </div>
 </div>

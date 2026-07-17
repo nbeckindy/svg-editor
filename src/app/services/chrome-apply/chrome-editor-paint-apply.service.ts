@@ -32,6 +32,7 @@ import {
   type PaintGradientSnapshot
 } from '../../models/svg-gradient';
 import type { PaintSwatchMode, PaintSwatchTarget } from '../../components/paint-swatch-popover/paint-swatch-popover.component';
+import type { DrawingStyleDefaults } from '../../models/drawing-style-defaults';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
 import { LAYER_REORDER_GROUP_SVG_PORT, PROPERTIES_PANEL_SVG_PORT } from './chrome-apply.tokens';
 
@@ -75,13 +76,13 @@ export class ChromeEditorPaintApplyService {
     const cleared = !color || color.toLowerCase() === 'none';
     const nextFill = cleared ? 'none' : color;
     const before = this.drawingDefaults.defaults();
-    if (before.fill === nextFill) return;
+    if (before.fill === nextFill && before.fillGradient == null) return;
     this.pushCommand(
       [
         new UpdateDrawingDefaultsCommand(
           this.drawingDefaults,
           before,
-          { ...before, fill: nextFill },
+          { ...before, fill: nextFill, fillGradient: null },
           'fill'
         )
       ],
@@ -94,18 +95,96 @@ export class ChromeEditorPaintApplyService {
     const cleared = !color || color.toLowerCase() === 'none';
     const nextStroke = cleared ? 'none' : color;
     const before = this.drawingDefaults.defaults();
-    if (before.stroke === nextStroke) return;
+    if (before.stroke === nextStroke && before.strokeGradient == null) return;
     this.pushCommand(
       [
         new UpdateDrawingDefaultsCommand(
           this.drawingDefaults,
           before,
-          { ...before, stroke: nextStroke },
+          { ...before, stroke: nextStroke, strokeGradient: null },
           'stroke'
         )
       ],
       cleared ? 'Set default stroke to none' : `Set default stroke to ${nextStroke}`
     );
+  }
+
+  /**
+   * Creation paint mode (Solid / Linear / Radial / No paint) for tool-strip defaults.
+   * Never rewrites Selection paint.
+   */
+  applyCreationFillPaintMode(mode: PaintSwatchMode): void {
+    const before = this.drawingDefaults.defaults();
+    const after = this.buildCreationPaintDefaultsAfter(before, 'fill', mode);
+    if (!after) return;
+    this.pushCommand(
+      [new UpdateDrawingDefaultsCommand(this.drawingDefaults, before, after, 'fill')],
+      this.creationPaintModeDescription('fill', mode)
+    );
+  }
+
+  /** Creation stroke paint mode — never rewrites Selection paint. */
+  applyCreationStrokePaintMode(mode: PaintSwatchMode): void {
+    const before = this.drawingDefaults.defaults();
+    const after = this.buildCreationPaintDefaultsAfter(before, 'stroke', mode);
+    if (!after) return;
+    this.pushCommand(
+      [new UpdateDrawingDefaultsCommand(this.drawingDefaults, before, after, 'stroke')],
+      this.creationPaintModeDescription('stroke', mode)
+    );
+  }
+
+  private creationPaintModeDescription(target: 'fill' | 'stroke', mode: PaintSwatchMode): string {
+    switch (mode) {
+      case 'none':
+        return `Set default ${target} to none`;
+      case 'solid':
+        return `Set default ${target} to solid`;
+      case 'linear':
+        return `Set default ${target} to linear gradient`;
+      case 'radial':
+        return `Set default ${target} to radial gradient`;
+    }
+  }
+
+  private buildCreationPaintDefaultsAfter(
+    before: DrawingStyleDefaults,
+    target: 'fill' | 'stroke',
+    mode: PaintSwatchMode
+  ): DrawingStyleDefaults | null {
+    const solidKey = target === 'fill' ? 'fill' : 'stroke';
+    const gradKey = target === 'fill' ? 'fillGradient' : 'strokeGradient';
+    const solid = before[solidKey];
+    const existing = before[gradKey];
+    const seed =
+      solid && solid.toLowerCase() !== 'none' && !solid.includes('url(') ? solid : '#000000';
+
+    switch (mode) {
+      case 'none': {
+        if (solid === 'none' && existing == null) return null;
+        return { ...before, [solidKey]: 'none', [gradKey]: null };
+      }
+      case 'solid': {
+        const nextSolid = existing ? firstStopColor(existing) : seed;
+        if (solid === nextSolid && existing == null) return null;
+        return { ...before, [solidKey]: nextSolid, [gradKey]: null };
+      }
+      case 'linear':
+      case 'radial': {
+        let model: EditableGradientModel;
+        if (existing) {
+          if (existing.kind === mode) return null;
+          model = switchGradientKindModel(existing, mode);
+        } else {
+          const templateId = target === 'fill' ? 'creation-fill-grad' : 'creation-stroke-grad';
+          model =
+            mode === 'linear'
+              ? defaultLinearGradientModel(templateId, seed, '#ffffff')
+              : defaultRadialGradientModel(templateId, seed, '#ffffff');
+        }
+        return { ...before, [solidKey]: seed, [gradKey]: model };
+      }
+    }
   }
 
   /** Creation paint defaults only — never rewrites Selection paint. */
@@ -139,7 +218,7 @@ export class ChromeEditorPaintApplyService {
       new UpdateDrawingDefaultsCommand(
         this.drawingDefaults,
         defaultsBefore,
-        { ...defaultsBefore, fill: cleared ? 'none' : color },
+        { ...defaultsBefore, fill: cleared ? 'none' : color, fillGradient: null },
         'fill'
       )
     );
@@ -175,7 +254,7 @@ export class ChromeEditorPaintApplyService {
         new UpdateDrawingDefaultsCommand(
           this.drawingDefaults,
           defaultsBefore,
-          { ...defaultsBefore, stroke: 'none' },
+          { ...defaultsBefore, stroke: 'none', strokeGradient: null },
           'stroke'
         )
       );
@@ -208,7 +287,7 @@ export class ChromeEditorPaintApplyService {
       new UpdateDrawingDefaultsCommand(
         this.drawingDefaults,
         defaultsBefore,
-        { ...defaultsBefore, stroke: color },
+        { ...defaultsBefore, stroke: color, strokeGradient: null },
         'stroke'
       )
     );
@@ -728,7 +807,7 @@ export class ChromeEditorPaintApplyService {
       new UpdateDrawingDefaultsCommand(
         this.drawingDefaults,
         defaultsBefore,
-        { ...defaultsBefore, fill: 'none' },
+        { ...defaultsBefore, fill: 'none', fillGradient: null },
         'fill'
       )
     ];

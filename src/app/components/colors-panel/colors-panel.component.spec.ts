@@ -237,6 +237,11 @@ describe('ColorsPanelComponent', () => {
     ]);
     fixture.detectChanges();
     expect(fixture.nativeElement.querySelector('[data-testid="colors-gradient-fill-details"]')).toBeTruthy();
+    const fillSwatch = fixture.nativeElement.querySelector(
+      '[data-testid="colors-fill-paint-swatch"]'
+    ) as HTMLElement;
+    expect(fillSwatch.querySelector('.psp-swatch-gradient')).toBeTruthy();
+    expect(fillSwatch.querySelector('[data-testid="paint-swatch-popover-empty-icon"]')).toBeNull();
     expect(svgManipulationService.ensureDedicatedPaintGradient).toHaveBeenCalledWith('shape-1', 'fill');
   });
 

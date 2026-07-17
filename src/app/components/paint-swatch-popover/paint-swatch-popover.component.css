@@ -90,6 +90,11 @@
   right: 0;
 }
 
+.psp-panel--aside {
+  left: calc(100% + 6px);
+  top: 0;
+}
+
 .psp-mode-tabs {
   display: flex;
   flex-wrap: wrap;

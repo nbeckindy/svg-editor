@@ -25,6 +25,11 @@ export interface SvgGradientDefsPort {
     snapshot: PaintGradientSnapshot
   ): void;
   writeEditableGradientModel(model: EditableGradientModel): void;
+  /**
+   * Clone a creation-defaults gradient template into document defs with a fresh id.
+   * Returns `url(#id)` for use as fill/stroke, or `''` if defs are unavailable.
+   */
+  materializeCreationGradientTemplate(template: EditableGradientModel): string;
   createLinearGradientFillForShape(shapeId: string, fromColor: string, toColor?: string): string;
   applyGradientModelToShapePaint(
     shapeId: string,
