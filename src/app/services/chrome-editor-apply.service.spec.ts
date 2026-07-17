@@ -265,6 +265,67 @@ describe('ChromeEditorApplyService', () => {
     expect(history.pushAndExecute).toHaveBeenCalled();
   });
 
+  it('applyCreationFillDefault updates defaults only and leaves selection paint alone', () => {
+    selectedShapesSignal.set([
+      { id: 's1', type: 'rect', fill: '#112233', stroke: '#445566', strokeWidth: 2 }
+    ]);
+    const shapeSelection = TestBed.inject(ShapeSelectionService) as unknown as {
+      patchAllSelected: ReturnType<typeof vi.fn>;
+    };
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    const manip = TestBed.inject(SvgManipulationService) as unknown as {
+      addStroke: ReturnType<typeof vi.fn>;
+    };
+
+    service.applyCreationFillDefault('#abcdef');
+
+    expect(history.pushAndExecute).toHaveBeenCalled();
+    expect(drawingDefaultsSignal().fill).toBe('#abcdef');
+    expect(shapeSelection.patchAllSelected).not.toHaveBeenCalled();
+    expect(selectedShapesSignal()[0].fill).toBe('#112233');
+    expect(manip.addStroke).not.toHaveBeenCalled();
+  });
+
+  it('applyCreationStrokeDefault updates defaults only and leaves selection paint alone', () => {
+    selectedShapesSignal.set([
+      { id: 's1', type: 'rect', fill: '#112233', stroke: '#445566', strokeWidth: 2 }
+    ]);
+    const shapeSelection = TestBed.inject(ShapeSelectionService) as unknown as {
+      patchAllSelected: ReturnType<typeof vi.fn>;
+    };
+
+    service.applyCreationStrokeDefault('#fedcba');
+
+    expect(drawingDefaultsSignal().stroke).toBe('#fedcba');
+    expect(shapeSelection.patchAllSelected).not.toHaveBeenCalled();
+    expect(selectedShapesSignal()[0].stroke).toBe('#445566');
+  });
+
+  it('applyCreationStrokeWidthDefault updates defaults only and leaves selection paint alone', () => {
+    selectedShapesSignal.set([
+      { id: 's1', type: 'rect', fill: '#112233', stroke: '#445566', strokeWidth: 2 }
+    ]);
+    const shapeSelection = TestBed.inject(ShapeSelectionService) as unknown as {
+      patchAllSelected: ReturnType<typeof vi.fn>;
+    };
+
+    service.applyCreationStrokeWidthDefault(7);
+
+    expect(drawingDefaultsSignal().strokeWidth).toBe(7);
+    expect(shapeSelection.patchAllSelected).not.toHaveBeenCalled();
+    expect(selectedShapesSignal()[0].strokeWidth).toBe(2);
+  });
+
+  it('applyCreationStrokeWidthDefault ignores non-finite widths', () => {
+    const history = TestBed.inject(EditorHistoryService) as unknown as {
+      pushAndExecute: ReturnType<typeof vi.fn>;
+    };
+    service.applyCreationStrokeWidthDefault(Number.NaN);
+    expect(history.pushAndExecute).not.toHaveBeenCalled();
+  });
+
   it('applyAlignFromChrome does not push when fewer than two shape ids', () => {
     const history = TestBed.inject(EditorHistoryService) as unknown as {
       pushAndExecute: ReturnType<typeof vi.fn>;

@@ -33,6 +33,8 @@ describe('SelectionPaintUiService', () => {
             applyStrokeColor: vi.fn(),
             applyStrokeWidth: vi.fn(),
             applyOpacity: vi.fn(),
+            applyFillOpacity: vi.fn(),
+            applyStrokeOpacity: vi.fn(),
             applyStrokeDasharray: vi.fn(),
             applyStrokeDashoffset: vi.fn(),
             applyPaintModeFromChrome: vi.fn()
@@ -82,6 +84,34 @@ describe('SelectionPaintUiService', () => {
       { id: 'b', type: 'rect', fill: '#00ff00' }
     ]);
     expect(service.fillMixed()).toBe(true);
+  });
+
+  it('reports fillOpacitiesMixed and strokeOpacitiesMixed when values disagree', () => {
+    selectedShapes.set([
+      { id: 'a', type: 'rect', fillOpacity: 0.2, strokeOpacity: 0.5 },
+      { id: 'b', type: 'rect', fillOpacity: 0.9, strokeOpacity: 0.5 }
+    ]);
+    expect(service.fillOpacitiesMixed()).toBe(true);
+    expect(service.strokeOpacitiesMixed()).toBe(false);
+
+    selectedShapes.set([
+      { id: 'a', type: 'rect', fillOpacity: 1, strokeOpacity: 0.2 },
+      { id: 'b', type: 'rect', fillOpacity: 1, strokeOpacity: 0.8 }
+    ]);
+    expect(service.fillOpacitiesMixed()).toBe(false);
+    expect(service.strokeOpacitiesMixed()).toBe(true);
+  });
+
+  it('routes fill and stroke opacity changes through chrome apply', () => {
+    const chrome = TestBed.inject(ChromeEditorApplyService) as unknown as {
+      applyFillOpacity: ReturnType<typeof vi.fn>;
+      applyStrokeOpacity: ReturnType<typeof vi.fn>;
+    };
+    selectedShapes.set([{ id: 'a', type: 'rect', fillOpacity: 1, strokeOpacity: 1 }]);
+    service.onFillOpacityChange({ target: { value: '0.4' } } as unknown as Event);
+    service.onStrokeOpacityChange({ target: { value: '0.7' } } as unknown as Event);
+    expect(chrome.applyFillOpacity).toHaveBeenCalledWith(0.4);
+    expect(chrome.applyStrokeOpacity).toHaveBeenCalledWith(0.7);
   });
 
   it('disables gradient modes for multi-select', () => {

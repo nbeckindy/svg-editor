@@ -9,7 +9,9 @@ function mockPaintPort(): HistoryPaintPort {
   return {
     updateFillColor: vi.fn(),
     updateStrokeColor: vi.fn(),
-    updateOpacity: vi.fn()
+    updateOpacity: vi.fn(),
+    updateFillOpacity: vi.fn(),
+    updateStrokeOpacity: vi.fn()
   };
 }
 

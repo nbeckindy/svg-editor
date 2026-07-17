@@ -204,6 +204,62 @@ export class OpacityCommand implements CoalesceableCommand {
   }
 }
 
+export class FillOpacityCommand implements CoalesceableCommand {
+  readonly description: string;
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly paint: HistoryPaintPort,
+    private readonly shapeId: string,
+    private readonly oldOpacity: number,
+    private readonly newOpacity: number
+  ) {
+    this.description = `Change fill opacity to ${newOpacity}`;
+    this.coalesceKey = `fill-opacity:${shapeId}`;
+  }
+
+  execute(): void {
+    this.paint.updateFillOpacity(this.shapeId, this.newOpacity);
+  }
+
+  undo(): void {
+    this.paint.updateFillOpacity(this.shapeId, this.oldOpacity);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as FillOpacityCommand;
+    return new FillOpacityCommand(this.paint, this.shapeId, this.oldOpacity, n.newOpacity);
+  }
+}
+
+export class StrokeOpacityCommand implements CoalesceableCommand {
+  readonly description: string;
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly paint: HistoryPaintPort,
+    private readonly shapeId: string,
+    private readonly oldOpacity: number,
+    private readonly newOpacity: number
+  ) {
+    this.description = `Change stroke opacity to ${newOpacity}`;
+    this.coalesceKey = `stroke-opacity:${shapeId}`;
+  }
+
+  execute(): void {
+    this.paint.updateStrokeOpacity(this.shapeId, this.newOpacity);
+  }
+
+  undo(): void {
+    this.paint.updateStrokeOpacity(this.shapeId, this.oldOpacity);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as StrokeOpacityCommand;
+    return new StrokeOpacityCommand(this.paint, this.shapeId, this.oldOpacity, n.newOpacity);
+  }
+}
+
 export class StrokeDashArrayCommand implements CoalesceableCommand {
   readonly description: string;
   readonly coalesceKey: string;

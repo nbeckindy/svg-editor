@@ -25,6 +25,15 @@ export class ChromeEditorApplyService {
   private readonly layers = inject(ChromeEditorLayersApplyService);
   private readonly pathOps = inject(ChromeEditorPathOpsApplyService);
 
+  applyCreationFillDefault(color: string) {
+    return this.paint.applyCreationFillDefault(color);
+  }
+  applyCreationStrokeDefault(color: string) {
+    return this.paint.applyCreationStrokeDefault(color);
+  }
+  applyCreationStrokeWidthDefault(width: number) {
+    return this.paint.applyCreationStrokeWidthDefault(width);
+  }
   applyFillColor(color: string) { return this.paint.applyFillColor(color); }
   applyStrokeColor(color: string) { return this.paint.applyStrokeColor(color); }
   applyStrokeWidth(width: number) { return this.paint.applyStrokeWidth(width); }

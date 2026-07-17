@@ -65,6 +65,65 @@ export class ChromeEditorPaintApplyService {
     return this.support.drawingDefaults.strokeWidth();
   }
 
+  /**
+   * Creation paint defaults only (tool strip). Never rewrites Selection paint.
+   * @see docs/adr/0003-editor-chrome-ownership.md
+   */
+  applyCreationFillDefault(color: string): void {
+    const cleared = !color || color.toLowerCase() === 'none';
+    const nextFill = cleared ? 'none' : color;
+    const before = this.drawingDefaults.defaults();
+    if (before.fill === nextFill) return;
+    this.pushCommand(
+      [
+        new UpdateDrawingDefaultsCommand(
+          this.drawingDefaults,
+          before,
+          { ...before, fill: nextFill },
+          'fill'
+        )
+      ],
+      cleared ? 'Set default fill to none' : `Set default fill to ${nextFill}`
+    );
+  }
+
+  /** Creation paint defaults only — never rewrites Selection paint. */
+  applyCreationStrokeDefault(color: string): void {
+    const cleared = !color || color.toLowerCase() === 'none';
+    const nextStroke = cleared ? 'none' : color;
+    const before = this.drawingDefaults.defaults();
+    if (before.stroke === nextStroke) return;
+    this.pushCommand(
+      [
+        new UpdateDrawingDefaultsCommand(
+          this.drawingDefaults,
+          before,
+          { ...before, stroke: nextStroke },
+          'stroke'
+        )
+      ],
+      cleared ? 'Set default stroke to none' : `Set default stroke to ${nextStroke}`
+    );
+  }
+
+  /** Creation paint defaults only — never rewrites Selection paint. */
+  applyCreationStrokeWidthDefault(width: number): void {
+    if (!Number.isFinite(width) || width < 0) return;
+    const before = this.drawingDefaults.defaults();
+    if (before.strokeWidth === width) return;
+    this.pushCommand(
+      [
+        new UpdateDrawingDefaultsCommand(
+          this.drawingDefaults,
+          before,
+          { ...before, strokeWidth: width },
+          'strokeWidth'
+        )
+      ],
+      `Set default stroke width to ${width}`
+    );
+  }
+
   applyFillColor(color: string): void {
     if (this.shouldBlockShapeOnlyMutations()) return;
     const cleared = !color || color.toLowerCase() === 'none';

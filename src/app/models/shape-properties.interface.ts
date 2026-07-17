@@ -45,7 +45,15 @@ export interface ShapeProperties {
   strokeDasharray?: string;
   /** SVG `stroke-dashoffset` value. Defaults to 0 when unset. */
   strokeDashoffset?: number;
+  /**
+   * Element-level SVG `opacity` (multiplies fill and stroke). Still read for layers / import
+   * fidelity; Colors chrome edits `fillOpacity` / `strokeOpacity` instead.
+   */
   opacity?: number;
+  /** SVG `fill-opacity` presentation attribute (0–1). Defaults to 1 when unset. */
+  fillOpacity?: number;
+  /** SVG `stroke-opacity` presentation attribute (0–1). Defaults to 1 when unset. */
+  strokeOpacity?: number;
   /** What kind of paint the fill resolves to (solid hex, gradient url, pattern url, or none). */
   fillPaintType?: PaintType;
   /** Raw fill value when it is a `url(#...)` reference (gradient or pattern). */

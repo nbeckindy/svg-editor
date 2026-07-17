@@ -61,6 +61,8 @@ describe('ColorsPanelComponent', () => {
       addStroke: vi.fn(),
       removeStroke: vi.fn(),
       updateOpacity: vi.fn(),
+      updateFillOpacity: vi.fn(),
+      updateStrokeOpacity: vi.fn(),
       getSVGInstance: vi.fn(),
       documentRevision: signal(0),
       allocateUniqueDefId: vi.fn(() => 'grad-test'),
@@ -129,16 +131,19 @@ describe('ColorsPanelComponent', () => {
     expect(fixture.nativeElement.querySelector('[data-testid="colors-fill-paint-swatch"]')).toBeNull();
   });
 
-  it('shows fill swatch and opacity when a shape is selected', () => {
+  it('shows fill swatch and fill/stroke opacity when a shape is selected', () => {
     selectedShapesSignal.set([
-      { id: 'shape-1', type: 'rect', fill: '#ff0000', opacity: 0.8 }
+      { id: 'shape-1', type: 'rect', fill: '#ff0000', fillOpacity: 0.8, strokeOpacity: 0.6 }
     ]);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('[data-testid="colors-fill-paint-swatch"]')).toBeTruthy();
-    expect(el.querySelector('#colors-opacity')).toBeTruthy();
+    expect(el.querySelector('[data-testid="colors-fill-opacity"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="colors-stroke-opacity"]')).toBeTruthy();
+    expect(el.querySelector('#colors-opacity')).toBeNull();
     expect(el.textContent).toContain('Fill');
-    expect(el.textContent).toContain('Opacity');
+    expect(el.textContent).toContain('Fill opacity');
+    expect(el.textContent).toContain('Stroke opacity');
   });
 
   it('updates fill color through chrome apply', () => {
@@ -154,12 +159,47 @@ describe('ColorsPanelComponent', () => {
     });
   });
 
-  it('updates opacity through chrome apply', () => {
-    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect', opacity: 1 }]);
+  it('updates fill opacity through chrome apply', () => {
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect', fillOpacity: 1 }]);
     fixture.detectChanges();
-    component.paint.onOpacityChange({ target: { value: '0.5' } } as unknown as Event);
-    expect(svgManipulationService.updateOpacity).toHaveBeenCalledWith('shape-1', 0.5);
-    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({ opacity: 0.5 });
+    component.paint.onFillOpacityChange({ target: { value: '0.5' } } as unknown as Event);
+    expect(svgManipulationService.updateFillOpacity).toHaveBeenCalledWith('shape-1', 0.5);
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({ fillOpacity: 0.5 });
+  });
+
+  it('updates stroke opacity through chrome apply', () => {
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect', strokeOpacity: 1 }]);
+    fixture.detectChanges();
+    component.paint.onStrokeOpacityChange({ target: { value: '0.25' } } as unknown as Event);
+    expect(svgManipulationService.updateStrokeOpacity).toHaveBeenCalledWith('shape-1', 0.25);
+    expect(shapeSelectionService.patchAllSelected).toHaveBeenCalledWith({ strokeOpacity: 0.25 });
+  });
+
+  it('shows Mixed for fill opacity when selection disagrees', () => {
+    selectedShapesSignal.set([
+      { id: 'a', type: 'rect', fill: '#ff0000', fillOpacity: 0.2 },
+      { id: 'b', type: 'rect', fill: '#ff0000', fillOpacity: 0.9 }
+    ]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.textContent).toContain('Mixed');
+    expect(el.querySelector('#colors-fill-opacity')?.classList.contains('mixed-control')).toBe(true);
+  });
+
+  it('shows Mixed for stroke opacity when selection disagrees', () => {
+    selectedShapesSignal.set([
+      { id: 'a', type: 'rect', strokeOpacity: 0.1 },
+      { id: 'b', type: 'rect', strokeOpacity: 1 }
+    ]);
+    fixture.detectChanges();
+    const el = fixture.nativeElement as HTMLElement;
+    expect(el.querySelector('#colors-stroke-opacity')?.classList.contains('mixed-control')).toBe(true);
+  });
+
+  it('does not duplicate dock section name as an h3', () => {
+    selectedShapesSignal.set([{ id: 'shape-1', type: 'rect', fill: '#ff0000' }]);
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('h3')).toBeNull();
   });
 
   it('routes fill gradient mode through chrome apply', () => {

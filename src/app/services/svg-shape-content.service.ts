@@ -43,6 +43,8 @@ export class SvgShapeContentService implements SvgShapeContentPort {
   updateStrokeDasharray(shapeId: string, dasharray: string) { this.paint.updateStrokeDasharray(shapeId, dasharray); }
   updateStrokeDashoffset(shapeId: string, dashoffset: number) { this.paint.updateStrokeDashoffset(shapeId, dashoffset); }
   updateOpacity(shapeId: string, opacity: number) { this.paint.updateOpacity(shapeId, opacity); }
+  updateFillOpacity(shapeId: string, opacity: number) { this.paint.updateFillOpacity(shapeId, opacity); }
+  updateStrokeOpacity(shapeId: string, opacity: number) { this.paint.updateStrokeOpacity(shapeId, opacity); }
   bakeEffectiveFillToLocal(shapeId: string) { this.paint.bakeEffectiveFillToLocal(shapeId); }
   bakeEffectiveStrokeToLocal(shapeId: string) { this.paint.bakeEffectiveStrokeToLocal(shapeId); }
   restoreBakedFillPresentation(shapeId: string, before: { fillAttr: string | null; fillStyleValue: string }) {

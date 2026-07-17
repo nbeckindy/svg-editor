@@ -12,6 +12,8 @@ import {
   RemoveStrokeCommand,
   SetStrokeCommand,
   OpacityCommand,
+  FillOpacityCommand,
+  StrokeOpacityCommand,
   AlignCommand,
   DistributeCommand,
   TranslateCommand,
@@ -58,6 +60,8 @@ function mockSvc(overrides: Partial<Record<keyof SvgManipulationService, unknown
     addStroke: vi.fn(),
     removeStroke: vi.fn(),
     updateOpacity: vi.fn(),
+    updateFillOpacity: vi.fn(),
+    updateStrokeOpacity: vi.fn(),
     translateShape: vi.fn(),
     applyUnionScaleFromSnapshot: vi.fn(),
     applyUnionScaleFromCenter: vi.fn(),
@@ -377,6 +381,38 @@ describe('OpacityCommand', () => {
 
   it('should have a non-empty description', () => {
     expect(new OpacityCommand(mockSvc(), 's1', 1.0, 0.5).description).toBeTruthy();
+  });
+});
+
+describe('FillOpacityCommand', () => {
+  it('should call updateFillOpacity with newOpacity on execute', () => {
+    const svc = mockSvc();
+    const cmd = new FillOpacityCommand(svc, 's1', 1.0, 0.5);
+    cmd.execute();
+    expect(svc.updateFillOpacity).toHaveBeenCalledWith('s1', 0.5);
+  });
+
+  it('should call updateFillOpacity with oldOpacity on undo', () => {
+    const svc = mockSvc();
+    const cmd = new FillOpacityCommand(svc, 's1', 1.0, 0.5);
+    cmd.undo();
+    expect(svc.updateFillOpacity).toHaveBeenCalledWith('s1', 1.0);
+  });
+});
+
+describe('StrokeOpacityCommand', () => {
+  it('should call updateStrokeOpacity with newOpacity on execute', () => {
+    const svc = mockSvc();
+    const cmd = new StrokeOpacityCommand(svc, 's1', 1.0, 0.5);
+    cmd.execute();
+    expect(svc.updateStrokeOpacity).toHaveBeenCalledWith('s1', 0.5);
+  });
+
+  it('should call updateStrokeOpacity with oldOpacity on undo', () => {
+    const svc = mockSvc();
+    const cmd = new StrokeOpacityCommand(svc, 's1', 1.0, 0.5);
+    cmd.undo();
+    expect(svc.updateStrokeOpacity).toHaveBeenCalledWith('s1', 1.0);
   });
 });
 

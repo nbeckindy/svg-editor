@@ -20,15 +20,46 @@ export class SvgShapePaintService implements SvgShapePaintPort {
       const style = window.getComputedStyle(node as unknown as globalThis.Element);
       const strokeWidth = Number.parseFloat(style.strokeWidth || '');
       const opacity = Number.parseFloat(style.opacity || '');
+      const fillOpacity = Number.parseFloat(style.fillOpacity || '');
+      const strokeOpacity = Number.parseFloat(style.strokeOpacity || '');
       return {
         fill: style.fill || undefined,
         stroke: style.stroke || undefined,
         strokeWidth: Number.isFinite(strokeWidth) ? strokeWidth : undefined,
-        opacity: Number.isFinite(opacity) ? opacity : undefined
+        opacity: Number.isFinite(opacity) ? opacity : undefined,
+        fillOpacity: Number.isFinite(fillOpacity) ? fillOpacity : undefined,
+        strokeOpacity: Number.isFinite(strokeOpacity) ? strokeOpacity : undefined
       };
     } catch {
       return {};
     }
+  }
+
+  private readPresentationOpacity(
+    element: SvgJsElement,
+    node: Element,
+    attrName: 'fill-opacity' | 'stroke-opacity',
+    computed?: number
+  ): number {
+    const raw = Number.parseFloat(String(element.attr(attrName) ?? ''));
+    if (Number.isFinite(raw)) return raw;
+    if (Number.isFinite(computed ?? Number.NaN)) return computed as number;
+    if (typeof window !== 'undefined' && typeof window.getComputedStyle === 'function') {
+      try {
+        const cssName = attrName === 'fill-opacity' ? 'fill-opacity' : 'stroke-opacity';
+        const value = window
+          .getComputedStyle(node as unknown as globalThis.Element)
+          .getPropertyValue(cssName)
+          ?.trim();
+        if (value) {
+          const n = Number.parseFloat(value);
+          if (Number.isFinite(n)) return n;
+        }
+      } catch {
+        /* ignore */
+      }
+    }
+    return 1;
   }
 
   /**
@@ -358,6 +389,18 @@ export class SvgShapePaintService implements SvgShapePaintPort {
     const opacity = Number.isFinite(rendered.opacity ?? Number.NaN)
       ? (rendered.opacity as number)
       : (Number.isFinite(rawOpacity) ? rawOpacity : 1);
+    const fillOpacity = this.readPresentationOpacity(
+      element,
+      node,
+      'fill-opacity',
+      rendered.fillOpacity
+    );
+    const strokeOpacity = this.readPresentationOpacity(
+      element,
+      node,
+      'stroke-opacity',
+      rendered.strokeOpacity
+    );
 
     const fillSource = this.getPaintSourceForProperty(node, 'fill');
     const strokeSource = this.getPaintSourceForProperty(node, 'stroke');
@@ -379,6 +422,8 @@ export class SvgShapePaintService implements SvgShapePaintPort {
       strokeDasharray: rawDasharray,
       strokeDashoffset: rawDashoffset,
       opacity,
+      fillOpacity,
+      strokeOpacity,
       fillPaintType,
       fillUrl,
       strokePaintType,
@@ -469,7 +514,7 @@ export class SvgShapePaintService implements SvgShapePaintPort {
   }
 
   /**
-   * Update opacity of a shape
+   * Update element-level opacity of a shape (layers / import fidelity).
    */
   updateOpacity(shapeId: string, opacity: number): void {
     if (!this.doc.getSVGInstance()) return;
@@ -479,6 +524,32 @@ export class SvgShapePaintService implements SvgShapePaintPort {
       shape.opacity(opacity);
       this.doc.bumpDocumentRevision();
     }
+  }
+
+  /** Update SVG `fill-opacity` presentation attribute (0–1). */
+  updateFillOpacity(shapeId: string, opacity: number): void {
+    this.updatePresentationOpacity(shapeId, 'fill-opacity', opacity);
+  }
+
+  /** Update SVG `stroke-opacity` presentation attribute (0–1). */
+  updateStrokeOpacity(shapeId: string, opacity: number): void {
+    this.updatePresentationOpacity(shapeId, 'stroke-opacity', opacity);
+  }
+
+  private updatePresentationOpacity(
+    shapeId: string,
+    attrName: 'fill-opacity' | 'stroke-opacity',
+    opacity: number
+  ): void {
+    if (!this.doc.getSVGInstance()) return;
+    const shape = this.doc.getSVGInstance()!.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!shape) return;
+    if (opacity === 1) {
+      shape.attr(attrName, null);
+    } else {
+      shape.attr(attrName, opacity);
+    }
+    this.doc.bumpDocumentRevision();
   }
 
     bakeEffectiveFillToLocal(shapeId: string): void {

@@ -7,6 +7,8 @@ export interface SvgShapePaintReadout {
   stroke?: string;
   strokeWidth?: number;
   opacity?: number;
+  fillOpacity?: number;
+  strokeOpacity?: number;
 }
 
 export interface SvgShapePaintPort {
@@ -21,6 +23,8 @@ export interface SvgShapePaintPort {
   updateStrokeDasharray(shapeId: string, dasharray: string): void;
   updateStrokeDashoffset(shapeId: string, dashoffset: number): void;
   updateOpacity(shapeId: string, opacity: number): void;
+  updateFillOpacity(shapeId: string, opacity: number): void;
+  updateStrokeOpacity(shapeId: string, opacity: number): void;
 
   bakeEffectiveFillToLocal(shapeId: string): void;
   bakeEffectiveStrokeToLocal(shapeId: string): void;

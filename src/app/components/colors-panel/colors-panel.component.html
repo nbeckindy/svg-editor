@@ -59,36 +59,75 @@
         </details>
       }
 
+      @if (paint.supportsFill(shape)) {
+        <div class="property-group">
+          <label class="property-label" for="colors-fill-opacity">Fill opacity</label>
+          @if (paint.fillOpacitiesMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <div class="range-input-group">
+            <input
+              type="range"
+              id="colors-fill-opacity"
+              class="range-slider"
+              [class.mixed-control]="paint.fillOpacitiesMixed()"
+              min="0"
+              max="1"
+              step="0.01"
+              [disabled]="paint.anySelectedShapeLocked()"
+              [value]="paint.fillOpacitiesMixed() ? 1 : (shape.fillOpacity ?? 1)"
+              (input)="paint.onFillOpacityChange($event)"
+              aria-label="Fill opacity"
+              data-testid="colors-fill-opacity" />
+            <input
+              type="number"
+              class="range-number"
+              [class.mixed-control]="paint.fillOpacitiesMixed()"
+              min="0"
+              max="1"
+              step="0.01"
+              [disabled]="paint.anySelectedShapeLocked()"
+              [value]="paint.fillOpacitiesMixed() ? '' : (shape.fillOpacity ?? 1)"
+              [attr.placeholder]="paint.fillOpacitiesMixed() ? '—' : ''"
+              (change)="paint.onFillOpacityChange($event)"
+              aria-label="Fill opacity value"
+              data-testid="colors-fill-opacity-value" />
+          </div>
+        </div>
+      }
+
       <div class="property-group">
-        <label class="property-label" for="colors-opacity">Opacity</label>
-        @if (paint.opacitiesMixed()) {
+        <label class="property-label" for="colors-stroke-opacity">Stroke opacity</label>
+        @if (paint.strokeOpacitiesMixed()) {
           <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
         }
         <div class="range-input-group">
           <input
             type="range"
-            id="colors-opacity"
+            id="colors-stroke-opacity"
             class="range-slider"
-            [class.mixed-control]="paint.opacitiesMixed()"
+            [class.mixed-control]="paint.strokeOpacitiesMixed()"
             min="0"
             max="1"
             step="0.01"
             [disabled]="paint.anySelectedShapeLocked()"
-            [value]="paint.opacitiesMixed() ? 1 : (shape.opacity || 1)"
-            (input)="paint.onOpacityChange($event)"
-            aria-label="Opacity" />
+            [value]="paint.strokeOpacitiesMixed() ? 1 : (shape.strokeOpacity ?? 1)"
+            (input)="paint.onStrokeOpacityChange($event)"
+            aria-label="Stroke opacity"
+            data-testid="colors-stroke-opacity" />
           <input
             type="number"
             class="range-number"
-            [class.mixed-control]="paint.opacitiesMixed()"
+            [class.mixed-control]="paint.strokeOpacitiesMixed()"
             min="0"
             max="1"
             step="0.01"
             [disabled]="paint.anySelectedShapeLocked()"
-            [value]="paint.opacitiesMixed() ? '' : (shape.opacity || 1)"
-            [attr.placeholder]="paint.opacitiesMixed() ? '—' : ''"
-            (change)="paint.onOpacityChange($event)"
-            aria-label="Opacity value" />
+            [value]="paint.strokeOpacitiesMixed() ? '' : (shape.strokeOpacity ?? 1)"
+            [attr.placeholder]="paint.strokeOpacitiesMixed() ? '—' : ''"
+            (change)="paint.onStrokeOpacityChange($event)"
+            aria-label="Stroke opacity value"
+            data-testid="colors-stroke-opacity-value" />
         </div>
       </div>
     </div>

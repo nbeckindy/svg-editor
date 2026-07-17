@@ -63,6 +63,8 @@ export interface SvgShapeContentPort {
   updateStrokeDasharray(shapeId: string, dasharray: string): void;
   updateStrokeDashoffset(shapeId: string, dashoffset: number): void;
   updateOpacity(shapeId: string, opacity: number): void;
+  updateFillOpacity(shapeId: string, opacity: number): void;
+  updateStrokeOpacity(shapeId: string, opacity: number): void;
   updatePathData(pathId: string, d: string): void;
 
   getPathNodeHandleLinkRaw(pathId: string): string | null;

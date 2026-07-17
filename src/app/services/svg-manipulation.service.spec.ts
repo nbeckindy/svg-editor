@@ -106,25 +106,40 @@ describe('SvgManipulationService', () => {
   });
 
   it('should get shape properties', () => {
-    const svgContent = '<svg><circle id="test-circle" cx="50" cy="50" r="40" fill="#FF0000" stroke="#000000" stroke-width="2" opacity="0.8"/></svg>';
-    
+    const svgContent = '<svg><circle id="test-circle" cx="50" cy="50" r="40" fill="#FF0000" stroke="#000000" stroke-width="2" opacity="0.8" fill-opacity="0.5" stroke-opacity="0.25"/></svg>';
+
     service.initializeSVG(container, svgContent);
-    
+
     const svgInstance = service.getSVGInstance();
     const shape = svgInstance?.findOne('#test-circle') as any;
-    
+
     if (shape) {
       const properties = service.getShapeProperties(shape);
-      
+
       expect(properties.id).toBe('test-circle');
       expect(properties.type).toBe('circle');
       expect(properties.fill).toBe('#FF0000');
       expect(properties.stroke).toBe('#000000');
       expect(properties.strokeWidth).toBe(2);
       expect(properties.opacity).toBe(0.8);
+      expect(properties.fillOpacity).toBe(0.5);
+      expect(properties.strokeOpacity).toBe(0.25);
       expect(properties.fillSource?.kind).toBe('presentation-attr');
       expect(properties.strokeSource?.kind).toBe('presentation-attr');
     }
+  });
+
+  it('updateFillOpacity and updateStrokeOpacity write presentation attributes', () => {
+    const svgContent =
+      '<svg viewBox="0 0 100 100"><rect id="r1" x="0" y="0" width="10" height="10" fill="#ff0000" stroke="#000" stroke-width="1"/></svg>';
+    service.initializeSVG(container, svgContent);
+    service.updateFillOpacity('r1', 0.4);
+    service.updateStrokeOpacity('r1', 0.7);
+    const el = container.querySelector('#r1');
+    expect(el?.getAttribute('fill-opacity')).toBe('0.4');
+    expect(el?.getAttribute('stroke-opacity')).toBe('0.7');
+    service.updateFillOpacity('r1', 1);
+    expect(el?.getAttribute('fill-opacity')).toBeNull();
   });
 
   it('getNearestGroupAncestorId returns first g ancestor with id inside content group', () => {

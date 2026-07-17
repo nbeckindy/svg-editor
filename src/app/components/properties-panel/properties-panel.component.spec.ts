@@ -72,6 +72,8 @@ describe('PropertiesPanelComponent', () => {
       addStroke: vi.fn(),
       removeStroke: vi.fn(),
       updateOpacity: vi.fn(),
+      updateFillOpacity: vi.fn(),
+      updateStrokeOpacity: vi.fn(),
       clearHighlight: vi.fn(),
       getNearestGroupAncestorId: vi.fn(() => null),
       bakeEffectiveFillToLocal: vi.fn(),

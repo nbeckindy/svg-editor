@@ -197,6 +197,14 @@ export class SvgManipulationService
     this.shapes.updateOpacity(shapeId, opacity);
   }
 
+  updateFillOpacity(shapeId: string, opacity: number): void {
+    this.shapes.updateFillOpacity(shapeId, opacity);
+  }
+
+  updateStrokeOpacity(shapeId: string, opacity: number): void {
+    this.shapes.updateStrokeOpacity(shapeId, opacity);
+  }
+
   updatePathData(pathId: string, d: string): void {
     this.shapes.updatePathData(pathId, d);
   }

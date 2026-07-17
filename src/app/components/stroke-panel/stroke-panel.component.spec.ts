@@ -51,6 +51,8 @@ describe('StrokePanelComponent', () => {
       addStroke: vi.fn(),
       removeStroke: vi.fn(),
       updateOpacity: vi.fn(),
+      updateFillOpacity: vi.fn(),
+      updateStrokeOpacity: vi.fn(),
       updateStrokeDasharray: vi.fn(),
       updateStrokeDashoffset: vi.fn(),
       getSVGInstance: vi.fn(),

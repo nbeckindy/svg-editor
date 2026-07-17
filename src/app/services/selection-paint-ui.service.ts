@@ -98,6 +98,20 @@ export class SelectionPaintUiService {
     return keys.size > 1;
   }
 
+  fillOpacitiesMixed(): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const keys = new Set(shapes.map((s) => String(s.fillOpacity ?? 1)));
+    return keys.size > 1;
+  }
+
+  strokeOpacitiesMixed(): boolean {
+    const shapes = this.selectedShapesList();
+    if (shapes.length <= 1) return false;
+    const keys = new Set(shapes.map((s) => String(s.strokeOpacity ?? 1)));
+    return keys.size > 1;
+  }
+
   /** True when every selected shape is `<text>` — use outline-oriented stroke labels. */
   textOutlineLabels(): boolean {
     const shapes = this.selectedShapesList();
@@ -334,6 +348,18 @@ export class SelectionPaintUiService {
     const target = event.target as HTMLInputElement;
     const opacity = parseFloat(target.value);
     this.chromeApply.applyOpacity(opacity);
+  }
+
+  onFillOpacityChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    const opacity = parseFloat(target.value);
+    this.chromeApply.applyFillOpacity(opacity);
+  }
+
+  onStrokeOpacityChange(event: Event): void {
+    const target = event.target as HTMLInputElement;
+    const opacity = parseFloat(target.value);
+    this.chromeApply.applyStrokeOpacity(opacity);
   }
 
   dashArraysMixed(): boolean {

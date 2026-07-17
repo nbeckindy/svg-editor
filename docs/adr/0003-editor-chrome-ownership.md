@@ -15,5 +15,5 @@ We locked where **Chrome** lives so new UI does not keep dumping globals into th
 - **Creation paint defaults** belong on the **tool strip** (`svg-editor-w9n`), not in Colors/Properties empty states.
 - Document / Colors / Stroke / Align & distribute / Layers / Path Ops / Properties are separate stack sections (see `svg-editor-uos` children).
 - Path-node anchor tools belong on the **tool context bar** under **Node-edit tool** (`svg-editor-dub`), not Path Ops / Properties.
-- Prefer separate fill/stroke opacity in Colors when implemented (`svg-editor-3r7`).
+- Prefer separate fill/stroke opacity in Colors (`svg-editor-3r7`). Element-level `opacity` remains readable for layers/import fidelity; Colors does not expose it as the primary control.
 - Defer **menu bar** as a larger chrome epic; do not invent interim homes that conflict with that destination.

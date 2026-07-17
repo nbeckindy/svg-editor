@@ -3,4 +3,6 @@ export interface HistoryPaintPort {
   updateFillColor(shapeId: string, color: string): void;
   updateStrokeColor(shapeId: string, color: string): void;
   updateOpacity(shapeId: string, opacity: number): void;
+  updateFillOpacity(shapeId: string, opacity: number): void;
+  updateStrokeOpacity(shapeId: string, opacity: number): void;
 }
