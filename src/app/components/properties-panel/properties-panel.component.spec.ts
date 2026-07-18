@@ -428,12 +428,11 @@ describe('PropertiesPanelComponent', () => {
     expect(component.selectedShape()).toEqual(mockShape);
   });
   describe('layer lock disables inspector inputs', () => {
-    it('disables typography when selected text is under a locked layer', () => {
+    it('does not host typography controls (moved to Text panel)', () => {
       vi.mocked(svgManipulationService.isElementOrAncestorLocked).mockReturnValue(true);
       selectedShapesSignal.set([{ id: 'text-1', type: 'text', fontFamily: 'Arial, sans-serif' }]);
       fixture.detectChanges();
-      const font = fixture.nativeElement.querySelector('#font-family') as HTMLSelectElement | null;
-      expect(font?.disabled).toBe(true);
+      expect(fixture.nativeElement.querySelector('#font-family')).toBeNull();
     });
   });
   it('shows transform readouts for any tool when a shape is selected', () => {
@@ -458,19 +457,13 @@ describe('PropertiesPanelComponent', () => {
     expect(el.querySelector('button[title*="Align left"]')).toBeNull();
     expect(el.querySelector('button[title*="Distribute horizontally"]')).toBeNull();
   });
-  it('shows text controls when selection includes text shapes', () => {
+  it('does not host typography controls (moved to Text panel)', () => {
     selectedShapesSignal.set([{ id: 'text-1', type: 'text', textContent: 'Hello', fontFamily: 'Arial, sans-serif' }]);
-    fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('#font-family')).toBeTruthy();
-    expect(el.textContent).toContain('Text Align');
-  });
-  it('hides text controls when no text shape is selected', () => {
-    selectedShapesSignal.set([{ id: 'rect-1', type: 'rect' }]);
     fixture.detectChanges();
     const el = fixture.nativeElement as HTMLElement;
     expect(el.querySelector('#font-family')).toBeNull();
     expect(el.textContent).not.toContain('Text Align');
+    expect(el.querySelector('[data-testid="properties-text-paint-order"]')).toBeNull();
   });
   it('shows corner radius control when a rect is selected', () => {
     selectedShapesSignal.set([
@@ -518,40 +511,6 @@ describe('PropertiesPanelComponent', () => {
     fixture.detectChanges();
     component.onRectCornerRadiusChange({ target: { value: '6' } } as unknown as Event);
     expect(svgManipulationService.updateRectCornerRadius).toHaveBeenCalledWith('rect-1', 6);
-  });
-  it('updates text font family through command path', () => {
-    selectedShapesSignal.set([{ id: 'text-1', type: 'text', fontFamily: 'Arial, sans-serif' }]);
-    fixture.detectChanges();
-    component.onFontFamilyChange({ target: { value: 'Verdana, sans-serif' } } as unknown as Event);
-    expect(svgManipulationService.updateTextFontFamily).toHaveBeenCalledWith('text-1', 'Verdana, sans-serif');
-  });
-  it('updates text alignment through command path', () => {
-    selectedShapesSignal.set([{ id: 'text-1', type: 'text', textAnchor: 'start' }]);
-    fixture.detectChanges();
-    component.onTextAlignChange('middle');
-    expect(svgManipulationService.updateTextAnchor).toHaveBeenCalledWith('text-1', 'middle');
-  });
-  it('shows text outline semantics controls for text selection', () => {
-    selectedShapesSignal.set([{ id: 'text-1', type: 'text', fontFamily: 'Arial, sans-serif' }]);
-    fixture.detectChanges();
-    const el = fixture.nativeElement as HTMLElement;
-    expect(el.querySelector('[data-testid="properties-text-outline-paint-hint"]')).toBeTruthy();
-    expect(el.querySelector('[data-testid="properties-text-paint-order"]')).toBeTruthy();
-    expect(el.querySelector('[data-testid="properties-text-vector-effect"]')).toBeTruthy();
-    expect(el.textContent).not.toContain('Outline color');
-    expect(el.textContent).not.toContain('Stroke Color');
-  });
-  it('applies text paint order via command path', () => {
-    selectedShapesSignal.set([{ id: 'text-1', type: 'text' }]);
-    fixture.detectChanges();
-    component.onTextPaintOrderChange({ target: { value: 'stroke fill' } } as unknown as Event);
-    expect(svgManipulationService.updateTextPaintOrder).toHaveBeenCalledWith('text-1', 'stroke fill');
-  });
-  it('applies non-scaling stroke toggle via command path', () => {
-    selectedShapesSignal.set([{ id: 'text-1', type: 'text' }]);
-    fixture.detectChanges();
-    component.onTextNonScalingStrokeChange({ target: { checked: true } } as unknown as Event);
-    expect(svgManipulationService.updateTextVectorEffect).toHaveBeenCalledWith('text-1', 'non-scaling-stroke');
   });
 
   it('does not host fill/stroke paint controls (moved to Colors and Stroke sections)', () => {

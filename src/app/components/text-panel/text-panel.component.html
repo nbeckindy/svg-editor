@@ -1,8 +1,165 @@
 <div class="text-panel" data-testid="text-panel">
-  <div class="empty-state">
-    <p class="hint" data-testid="text-panel-stub-hint">
-      Select text or activate the text tool to edit typography. Controls move here from Properties
-      in a follow-up.
-    </p>
+  <div class="panel-scroll">
+    @if (hasTextTypographyPanel()) {
+      <div class="text-content">
+        @if (hasTextSelection()) {
+          <p class="paint-ref-hint" data-testid="text-outline-paint-hint">
+            On <code>&lt;text&gt;</code>, stroke is the <strong>outline</strong>. Default SVG order paints the
+            <strong>fill first</strong>, then the stroke on top. Use <strong>Outline / fill order</strong> below for
+            <code>paint-order: stroke fill</code> (stroke underneath) where the browser supports it. Changing
+            <code>paint-order</code> does nothing in very old engines — verify in your target browsers.
+            Fill and stroke paint live under Colors and Stroke.
+          </p>
+        } @else if (textToolPlacementMode()) {
+          <p class="paint-effective-hint" data-testid="text-tool-placement-hint">
+            Adjust typography for the next text you place. Creation fill and stroke defaults live on the tool strip.
+          </p>
+        }
+
+        <div class="property-group">
+          <label class="property-label" for="font-family">Font</label>
+          @if (fontFamiliesMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <select
+            id="font-family"
+            class="dash-select"
+            data-testid="text-font-family"
+            [class.mixed-control]="fontFamiliesMixed()"
+            [disabled]="textSelectionTouchesLocked()"
+            [value]="fontFamilyControlValue()"
+            (change)="onFontFamilyChange($event)">
+            @for (font of fontFamilies; track font) {
+              <option [value]="font">{{ font }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="property-group">
+          <label class="property-label" for="font-size">Font Size</label>
+          @if (fontSizesMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <input
+            id="font-size"
+            type="number"
+            class="range-number"
+            data-testid="text-font-size"
+            min="1"
+            step="1"
+            [disabled]="textSelectionTouchesLocked()"
+            [class.mixed-control]="fontSizesMixed()"
+            [value]="fontSizeControlValue()"
+            [attr.placeholder]="fontSizesMixed() ? '—' : ''"
+            (change)="onFontSizeChange($event)" />
+        </div>
+
+        <div class="property-group">
+          <label class="property-label">Style</label>
+          <div class="align-toolbar">
+            <button
+              type="button"
+              class="align-btn"
+              data-testid="text-toggle-bold"
+              [disabled]="textSelectionTouchesLocked()"
+              [class.active]="!fontWeightsMixed() && fontWeightControlValue() === 'bold'"
+              (click)="onToggleBold()">
+              Bold
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              data-testid="text-toggle-italic"
+              [disabled]="textSelectionTouchesLocked()"
+              [class.active]="!fontStylesMixed() && fontStyleControlValue() === 'italic'"
+              (click)="onToggleItalic()">
+              Italic
+            </button>
+          </div>
+        </div>
+
+        <div class="property-group">
+          <label class="property-label">Text Align</label>
+          <div class="align-toolbar">
+            <button
+              type="button"
+              class="align-btn"
+              data-testid="text-align-start"
+              [disabled]="textSelectionTouchesLocked()"
+              [class.active]="!textAnchorsMixed() && textAnchorControlValue() === 'start'"
+              (click)="onTextAlignChange('start')">
+              Left
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              data-testid="text-align-middle"
+              [disabled]="textSelectionTouchesLocked()"
+              [class.active]="!textAnchorsMixed() && textAnchorControlValue() === 'middle'"
+              (click)="onTextAlignChange('middle')">
+              Center
+            </button>
+            <button
+              type="button"
+              class="align-btn"
+              data-testid="text-align-end"
+              [disabled]="textSelectionTouchesLocked()"
+              [class.active]="!textAnchorsMixed() && textAnchorControlValue() === 'end'"
+              (click)="onTextAlignChange('end')">
+              Right
+            </button>
+          </div>
+        </div>
+
+        @if (hasTextSelection()) {
+          <div class="property-group">
+            <label class="property-label" for="text-paint-order">Outline / fill order</label>
+            @if (textPaintOrdersMixed()) {
+              <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+            }
+            <select
+              id="text-paint-order"
+              class="dash-select"
+              data-testid="text-paint-order"
+              [class.mixed-control]="textPaintOrdersMixed()"
+              [disabled]="textPaintOrdersMixed() || textSelectionTouchesLocked()"
+              [value]="textPaintOrdersMixed() ? '' : selectedTextPaintOrderForSelect()"
+              [attr.title]="
+                'Default: fill then stroke (outline on top). stroke fill: draw stroke beneath the fill (SVG paint-order). Browser support varies.'
+              "
+              (change)="onTextPaintOrderChange($event)">
+              @if (textPaintOrdersMixed()) {
+                <option value="" selected disabled>Mixed</option>
+              }
+              <option value="normal">Fill on top of stroke (default)</option>
+              <option value="stroke fill">Stroke behind fill</option>
+            </select>
+          </div>
+
+          <div class="property-group">
+            <label class="property-label" for="text-non-scaling-stroke">Outline vs zoom</label>
+            <div class="text-outline-checkbox-row">
+              <input
+                type="checkbox"
+                id="text-non-scaling-stroke"
+                data-testid="text-vector-effect"
+                [disabled]="textSelectionTouchesLocked()"
+                [checked]="textNonScalingStrokeOutline()"
+                [attr.title]="
+                  'vector-effect=non-scaling-stroke keeps outline width in screen pixels when the SVG is scaled (e.g. editor zoom). Without it, outline scales in user space like the glyphs.'
+                "
+                (change)="onTextNonScalingStrokeChange($event)" />
+              <label for="text-non-scaling-stroke" class="checkbox-inline-label">
+                Keep outline width when zooming (<code>non-scaling-stroke</code>)
+              </label>
+            </div>
+          </div>
+        }
+      </div>
+    } @else {
+      <div class="empty-state">
+        <p class="hint">Select text or activate the text tool to edit typography</p>
+      </div>
+    }
   </div>
 </div>
