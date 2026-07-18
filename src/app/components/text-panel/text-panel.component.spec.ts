@@ -25,6 +25,9 @@ describe('TextPanelComponent', () => {
     fontWeight: string;
     fontStyle: 'normal' | 'italic';
     textAnchor: 'start' | 'middle' | 'end';
+    dominantBaseline: 'auto' | 'middle' | 'hanging' | 'text-before-edge';
+    letterSpacing: number;
+    wordSpacing: number;
   }>;
 
   beforeEach(async () => {
@@ -37,7 +40,10 @@ describe('TextPanelComponent', () => {
       fontSize: 16,
       fontWeight: 'normal',
       fontStyle: 'normal',
-      textAnchor: 'start'
+      textAnchor: 'start',
+      dominantBaseline: 'auto',
+      letterSpacing: 0,
+      wordSpacing: 0
     });
 
     const editorToolSignal = signal<'selector' | 'zoom' | 'text'>('selector');
@@ -71,6 +77,9 @@ describe('TextPanelComponent', () => {
       updateTextFontWeight: vi.fn(),
       updateTextFontStyle: vi.fn(),
       updateTextAnchor: vi.fn(),
+      updateTextDominantBaseline: vi.fn(),
+      updateTextLetterSpacing: vi.fn(),
+      updateTextWordSpacing: vi.fn(),
       updateTextPaintOrder: vi.fn(),
       updateTextVectorEffect: vi.fn(),
       isElementOrAncestorLocked: vi.fn().mockReturnValue(false),
@@ -92,6 +101,9 @@ describe('TextPanelComponent', () => {
       fontWeight: computed(() => drawingDefaultsSignal().fontWeight),
       fontStyle: computed(() => drawingDefaultsSignal().fontStyle),
       textAnchor: computed(() => drawingDefaultsSignal().textAnchor),
+      dominantBaseline: computed(() => drawingDefaultsSignal().dominantBaseline),
+      letterSpacing: computed(() => drawingDefaultsSignal().letterSpacing),
+      wordSpacing: computed(() => drawingDefaultsSignal().wordSpacing),
       setDefaults: vi.fn(
         (next: {
           fill: string;
@@ -102,6 +114,9 @@ describe('TextPanelComponent', () => {
           fontWeight: string;
           fontStyle: 'normal' | 'italic';
           textAnchor: 'start' | 'middle' | 'end';
+          dominantBaseline: 'auto' | 'middle' | 'hanging' | 'text-before-edge';
+          letterSpacing: number;
+          wordSpacing: number;
         }) => {
           drawingDefaultsSignal.set(next);
         }
@@ -216,6 +231,39 @@ describe('TextPanelComponent', () => {
     expect(svgManipulationService.updateTextVectorEffect).toHaveBeenCalledWith(
       'text-1',
       'non-scaling-stroke'
+    );
+  });
+
+  it('applies dominant-baseline via command path', () => {
+    selectedShapesSignal.set([{ id: 'text-1', type: 'text' }]);
+    fixture.detectChanges();
+    component.onDominantBaselineChange({ target: { value: 'middle' } } as unknown as Event);
+    expect(svgManipulationService.updateTextDominantBaseline).toHaveBeenCalledWith('text-1', 'middle');
+  });
+
+  it('applies letter-spacing via command path', () => {
+    selectedShapesSignal.set([{ id: 'text-1', type: 'text' }]);
+    fixture.detectChanges();
+    component.onLetterSpacingChange({ target: { value: '2' } } as unknown as Event);
+    expect(svgManipulationService.updateTextLetterSpacing).toHaveBeenCalledWith('text-1', 2);
+  });
+
+  it('applies word-spacing via command path', () => {
+    selectedShapesSignal.set([{ id: 'text-1', type: 'text' }]);
+    fixture.detectChanges();
+    component.onWordSpacingChange({ target: { value: '4' } } as unknown as Event);
+    expect(svgManipulationService.updateTextWordSpacing).toHaveBeenCalledWith('text-1', 4);
+  });
+
+  it('shows Mixed for disagreeing letter-spacing', () => {
+    selectedShapesSignal.set([
+      { id: 'text-1', type: 'text', letterSpacing: 0 },
+      { id: 'text-2', type: 'text', letterSpacing: 2 }
+    ]);
+    fixture.detectChanges();
+    expect(component.letterSpacingsMixed()).toBe(true);
+    expect(fixture.nativeElement.querySelector('[data-testid="text-letter-spacing"]').placeholder).toBe(
+      '—'
     );
   });
 });

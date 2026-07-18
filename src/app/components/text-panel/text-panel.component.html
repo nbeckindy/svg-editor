@@ -111,6 +111,64 @@
           </div>
         </div>
 
+        <div class="property-group">
+          <label class="property-label" for="text-dominant-baseline">Baseline</label>
+          @if (dominantBaselinesMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <select
+            id="text-dominant-baseline"
+            class="dash-select"
+            data-testid="text-dominant-baseline"
+            [class.mixed-control]="dominantBaselinesMixed()"
+            [disabled]="textSelectionTouchesLocked()"
+            [value]="dominantBaselineControlValue()"
+            (change)="onDominantBaselineChange($event)">
+            @if (dominantBaselinesMixed()) {
+              <option value="" selected disabled>Mixed</option>
+            }
+            @for (preset of dominantBaselinePresets; track preset.value) {
+              <option [value]="preset.value">{{ preset.label }}</option>
+            }
+          </select>
+        </div>
+
+        <div class="property-group">
+          <label class="property-label" for="text-letter-spacing">Letter spacing</label>
+          @if (letterSpacingsMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <input
+            id="text-letter-spacing"
+            type="number"
+            class="range-number"
+            data-testid="text-letter-spacing"
+            step="0.5"
+            [disabled]="textSelectionTouchesLocked()"
+            [class.mixed-control]="letterSpacingsMixed()"
+            [value]="letterSpacingControlValue()"
+            [attr.placeholder]="letterSpacingsMixed() ? '—' : ''"
+            (change)="onLetterSpacingChange($event)" />
+        </div>
+
+        <div class="property-group">
+          <label class="property-label" for="text-word-spacing">Word spacing</label>
+          @if (wordSpacingsMixed()) {
+            <span class="mixed-value-hint" aria-hidden="true">Mixed</span>
+          }
+          <input
+            id="text-word-spacing"
+            type="number"
+            class="range-number"
+            data-testid="text-word-spacing"
+            step="0.5"
+            [disabled]="textSelectionTouchesLocked()"
+            [class.mixed-control]="wordSpacingsMixed()"
+            [value]="wordSpacingControlValue()"
+            [attr.placeholder]="wordSpacingsMixed() ? '—' : ''"
+            (change)="onWordSpacingChange($event)" />
+        </div>
+
         @if (hasTextSelection()) {
           <div class="property-group">
             <label class="property-label" for="text-paint-order">Outline / fill order</label>

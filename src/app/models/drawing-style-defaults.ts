@@ -22,6 +22,15 @@ export interface DrawingStyleDefaults {
   fontWeight: string;
   fontStyle: 'normal' | 'italic';
   textAnchor: 'start' | 'middle' | 'end';
+  /**
+   * Default `dominant-baseline` for new `<text>`.
+   * `auto` clears the attribute (browser default).
+   */
+  dominantBaseline: 'auto' | 'middle' | 'hanging' | 'text-before-edge';
+  /** Default `letter-spacing` in user units. */
+  letterSpacing: number;
+  /** Default `word-spacing` in user units. */
+  wordSpacing: number;
 }
 
 /**
@@ -38,7 +47,10 @@ export const BASE_DRAWING_STYLE_DEFAULTS: DrawingStyleDefaults = {
   fontSize: 16,
   fontWeight: 'normal',
   fontStyle: 'normal',
-  textAnchor: 'start'
+  textAnchor: 'start',
+  dominantBaseline: 'auto',
+  letterSpacing: 0,
+  wordSpacing: 0
 };
 
 /** Paint mode implied by a solid color string + optional gradient template. */

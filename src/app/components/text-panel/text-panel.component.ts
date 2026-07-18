@@ -183,6 +183,91 @@ export class TextPanelComponent {
     );
   }
 
+  dominantBaselinePresets = [
+    { value: 'auto', label: 'Auto' },
+    { value: 'middle', label: 'Middle' },
+    { value: 'hanging', label: 'Hanging' },
+    { value: 'text-before-edge', label: 'Text before edge' }
+  ] as const;
+
+  private normalizeDominantBaselineKey(raw: string | undefined): string {
+    const t = (raw ?? '').trim().toLowerCase();
+    if (!t || t === 'auto') return 'auto';
+    if (t === 'middle' || t === 'hanging' || t === 'text-before-edge') return t;
+    return t;
+  }
+
+  dominantBaselinesMixed(): boolean {
+    return this.textSelectionMixed((s) => this.normalizeDominantBaselineKey(s.dominantBaseline));
+  }
+
+  dominantBaselineControlValue(): string {
+    if (this.hasTextSelection()) {
+      if (this.dominantBaselinesMixed()) return '';
+      return this.normalizeDominantBaselineKey(this.textSelection()[0]?.dominantBaseline);
+    }
+    if (this.textToolPlacementMode()) return this.drawingDefaults.dominantBaseline();
+    return 'auto';
+  }
+
+  onDominantBaselineChange(event: Event): void {
+    const raw = (event.target as HTMLSelectElement).value;
+    if (raw === '') return;
+    const next =
+      raw === 'middle' || raw === 'hanging' || raw === 'text-before-edge' || raw === 'auto'
+        ? raw
+        : 'auto';
+    this.chromeApply.applyTextDominantBaselineFromChrome(
+      next,
+      this.textSelection(),
+      this.textToolPlacementMode()
+    );
+  }
+
+  letterSpacingsMixed(): boolean {
+    return this.textSelectionMixed((s) => s.letterSpacing);
+  }
+
+  letterSpacingControlValue(): string {
+    if (this.hasTextSelection()) {
+      return this.textSelectionValue((s) => s.letterSpacing, '0');
+    }
+    if (this.textToolPlacementMode()) return String(this.drawingDefaults.letterSpacing());
+    return '0';
+  }
+
+  onLetterSpacingChange(event: Event): void {
+    const letterSpacing = Number.parseFloat((event.target as HTMLInputElement).value);
+    if (!Number.isFinite(letterSpacing)) return;
+    this.chromeApply.applyTextLetterSpacingFromChrome(
+      letterSpacing,
+      this.textSelection(),
+      this.textToolPlacementMode()
+    );
+  }
+
+  wordSpacingsMixed(): boolean {
+    return this.textSelectionMixed((s) => s.wordSpacing);
+  }
+
+  wordSpacingControlValue(): string {
+    if (this.hasTextSelection()) {
+      return this.textSelectionValue((s) => s.wordSpacing, '0');
+    }
+    if (this.textToolPlacementMode()) return String(this.drawingDefaults.wordSpacing());
+    return '0';
+  }
+
+  onWordSpacingChange(event: Event): void {
+    const wordSpacing = Number.parseFloat((event.target as HTMLInputElement).value);
+    if (!Number.isFinite(wordSpacing)) return;
+    this.chromeApply.applyTextWordSpacingFromChrome(
+      wordSpacing,
+      this.textSelection(),
+      this.textToolPlacementMode()
+    );
+  }
+
   private normalizeTextPaintOrderKey(raw: string | undefined): string {
     const t = (raw ?? '').trim().toLowerCase();
     if (!t || t === 'normal') return 'normal';

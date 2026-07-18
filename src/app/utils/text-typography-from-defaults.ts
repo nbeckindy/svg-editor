@@ -31,7 +31,14 @@ export function applyTextTypographyFromDrawingDefaults(
     'font-weight': d.fontWeight,
     'font-style': d.fontStyle,
     'text-anchor': d.textAnchor,
+    'letter-spacing': d.letterSpacing,
+    'word-spacing': d.wordSpacing,
     'pointer-events': 'none',
     opacity
   });
+  if (d.dominantBaseline && d.dominantBaseline !== 'auto') {
+    el.attr('dominant-baseline', d.dominantBaseline);
+  } else {
+    el.attr('dominant-baseline', null);
+  }
 }

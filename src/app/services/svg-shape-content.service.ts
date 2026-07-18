@@ -71,6 +71,15 @@ export class SvgShapeContentService implements SvgShapeContentPort {
   updateTextFontWeight(textId: string, fontWeight: string) { this.text.updateTextFontWeight(textId, fontWeight); }
   updateTextFontStyle(textId: string, fontStyle: string) { this.text.updateTextFontStyle(textId, fontStyle); }
   updateTextAnchor(textId: string, textAnchor: 'start' | 'middle' | 'end') { this.text.updateTextAnchor(textId, textAnchor); }
+  updateTextDominantBaseline(textId: string, baseline: string | undefined) {
+    this.text.updateTextDominantBaseline(textId, baseline);
+  }
+  updateTextLetterSpacing(textId: string, letterSpacing: number) {
+    this.text.updateTextLetterSpacing(textId, letterSpacing);
+  }
+  updateTextWordSpacing(textId: string, wordSpacing: number) {
+    this.text.updateTextWordSpacing(textId, wordSpacing);
+  }
   updateTextPaintOrder(textId: string, paintOrder: string | undefined) { this.text.updateTextPaintOrder(textId, paintOrder); }
   updateTextVectorEffect(textId: string, effect: string | undefined) { this.text.updateTextVectorEffect(textId, effect); }
   updateRectCornerRadius(shapeId: string, radius: number) { this.rect.updateRectCornerRadius(shapeId, radius); }
@@ -350,8 +359,14 @@ export class SvgShapeContentService implements SvgShapeContentPort {
         'font-family': attrs.fontFamily ?? defaults.fontFamily,
         'font-weight': attrs.fontWeight ?? defaults.fontWeight,
         'font-style': attrs.fontStyle ?? defaults.fontStyle,
-        'text-anchor': attrs.textAnchor ?? defaults.textAnchor
+        'text-anchor': attrs.textAnchor ?? defaults.textAnchor,
+        'letter-spacing': attrs.letterSpacing ?? defaults.letterSpacing,
+        'word-spacing': attrs.wordSpacing ?? defaults.wordSpacing
       });
+      const baseline = attrs.dominantBaseline ?? defaults.dominantBaseline;
+      if (baseline && baseline !== 'auto') {
+        el.attr('dominant-baseline', baseline);
+      }
       shape = el;
     }
 

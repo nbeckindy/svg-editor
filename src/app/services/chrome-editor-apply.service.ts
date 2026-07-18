@@ -70,6 +70,27 @@ export class ChromeEditorApplyService {
   applyTextVectorEffectFromChrome(textShapes: ShapeProperties[], vectorEffect: 'non-scaling-stroke' | undefined) {
     return this.paint.applyTextVectorEffectFromChrome(textShapes, vectorEffect);
   }
+  applyTextDominantBaselineFromChrome(
+    dominantBaseline: 'auto' | 'middle' | 'hanging' | 'text-before-edge',
+    textShapes: ShapeProperties[],
+    placementDefaults: boolean
+  ) {
+    return this.paint.applyTextDominantBaselineFromChrome(dominantBaseline, textShapes, placementDefaults);
+  }
+  applyTextLetterSpacingFromChrome(
+    letterSpacing: number,
+    textShapes: ShapeProperties[],
+    placementDefaults: boolean
+  ) {
+    return this.paint.applyTextLetterSpacingFromChrome(letterSpacing, textShapes, placementDefaults);
+  }
+  applyTextWordSpacingFromChrome(
+    wordSpacing: number,
+    textShapes: ShapeProperties[],
+    placementDefaults: boolean
+  ) {
+    return this.paint.applyTextWordSpacingFromChrome(wordSpacing, textShapes, placementDefaults);
+  }
   applyBakeFillFromChrome(shapes: ShapeProperties[]) { return this.paint.applyBakeFillFromChrome(shapes); }
   applyBakeStrokeFromChrome(shapes: ShapeProperties[]) { return this.paint.applyBakeStrokeFromChrome(shapes); }
   applyAddLinearGradientFillFromChrome(shape: ShapeProperties, solidFrom: string) {

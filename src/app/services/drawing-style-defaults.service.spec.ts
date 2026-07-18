@@ -33,7 +33,10 @@ describe('DrawingStyleDefaultsService', () => {
       fontSize: 16,
       fontWeight: 'normal',
       fontStyle: 'normal',
-      textAnchor: 'start'
+      textAnchor: 'start',
+      dominantBaseline: 'auto',
+      letterSpacing: 0,
+      wordSpacing: 0
     });
   });
 
@@ -48,7 +51,10 @@ describe('DrawingStyleDefaultsService', () => {
       fontSize: 20,
       fontWeight: 'bold',
       fontStyle: 'italic',
-      textAnchor: 'middle'
+      textAnchor: 'middle',
+      dominantBaseline: 'middle',
+      letterSpacing: 1,
+      wordSpacing: 2
     });
 
     expect(service.defaults()).toEqual({
@@ -61,7 +67,10 @@ describe('DrawingStyleDefaultsService', () => {
       fontSize: 20,
       fontWeight: 'bold',
       fontStyle: 'italic',
-      textAnchor: 'middle'
+      textAnchor: 'middle',
+      dominantBaseline: 'middle',
+      letterSpacing: 1,
+      wordSpacing: 2
     });
   });
 
@@ -83,7 +92,10 @@ describe('DrawingStyleDefaultsService', () => {
       fontSize: 16,
       fontWeight: 'normal',
       fontStyle: 'normal',
-      textAnchor: 'start'
+      textAnchor: 'start',
+      dominantBaseline: 'auto',
+      letterSpacing: 0,
+      wordSpacing: 0
     });
   });
 

@@ -245,6 +245,18 @@ export class SvgManipulationService
     this.shapes.updateTextAnchor(textId, textAnchor);
   }
 
+  updateTextDominantBaseline(textId: string, baseline: string | undefined): void {
+    this.shapes.updateTextDominantBaseline(textId, baseline);
+  }
+
+  updateTextLetterSpacing(textId: string, letterSpacing: number): void {
+    this.shapes.updateTextLetterSpacing(textId, letterSpacing);
+  }
+
+  updateTextWordSpacing(textId: string, wordSpacing: number): void {
+    this.shapes.updateTextWordSpacing(textId, wordSpacing);
+  }
+
   updateTextPaintOrder(textId: string, paintOrder: string | undefined): void {
     this.shapes.updateTextPaintOrder(textId, paintOrder);
   }

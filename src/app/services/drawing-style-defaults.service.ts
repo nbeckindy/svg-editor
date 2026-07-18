@@ -23,6 +23,9 @@ export class DrawingStyleDefaultsService implements DrawingStyleDefaultsWritePor
   readonly fontWeight = computed(() => this.defaultsState().fontWeight);
   readonly fontStyle = computed(() => this.defaultsState().fontStyle);
   readonly textAnchor = computed(() => this.defaultsState().textAnchor);
+  readonly dominantBaseline = computed(() => this.defaultsState().dominantBaseline);
+  readonly letterSpacing = computed(() => this.defaultsState().letterSpacing);
+  readonly wordSpacing = computed(() => this.defaultsState().wordSpacing);
 
   setDefaults(next: DrawingStyleDefaults): void {
     this.defaultsState.set(this.normalize(next, this.defaultsState()));
@@ -69,6 +72,24 @@ export class DrawingStyleDefaultsService implements DrawingStyleDefaultsWritePor
         ? next.textAnchor
         : fallback.textAnchor;
 
+    const dominantBaseline: DrawingStyleDefaults['dominantBaseline'] =
+      next.dominantBaseline === 'middle' ||
+      next.dominantBaseline === 'hanging' ||
+      next.dominantBaseline === 'text-before-edge' ||
+      next.dominantBaseline === 'auto'
+        ? next.dominantBaseline
+        : fallback.dominantBaseline;
+
+    const letterSpacing =
+      typeof next.letterSpacing === 'number' && Number.isFinite(next.letterSpacing)
+        ? next.letterSpacing
+        : fallback.letterSpacing;
+
+    const wordSpacing =
+      typeof next.wordSpacing === 'number' && Number.isFinite(next.wordSpacing)
+        ? next.wordSpacing
+        : fallback.wordSpacing;
+
     const fillGradient =
       next.fillGradient === null
         ? null
@@ -93,7 +114,10 @@ export class DrawingStyleDefaultsService implements DrawingStyleDefaultsWritePor
       fontSize,
       fontWeight,
       fontStyle,
-      textAnchor
+      textAnchor,
+      dominantBaseline,
+      letterSpacing,
+      wordSpacing
     };
   }
 }

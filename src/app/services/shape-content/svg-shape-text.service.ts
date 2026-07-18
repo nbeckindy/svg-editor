@@ -19,6 +19,9 @@ export class SvgShapeTextService implements SvgShapeTextPort {
     | 'fontWeight'
     | 'fontStyle'
     | 'textAnchor'
+    | 'dominantBaseline'
+    | 'letterSpacing'
+    | 'wordSpacing'
     | 'paintOrder'
     | 'vectorEffect'
   > {
@@ -41,6 +44,19 @@ export class SvgShapeTextService implements SvgShapeTextPort {
         ? textAnchorAttr
         : undefined;
 
+    const rawDominantBaseline = textNode?.getAttribute('dominant-baseline')?.trim();
+    const dominantBaseline =
+      rawDominantBaseline && rawDominantBaseline.length > 0 && rawDominantBaseline.toLowerCase() !== 'auto'
+        ? rawDominantBaseline
+        : undefined;
+
+    const rawLetterSpacing = textNode
+      ? Number.parseFloat(textNode.getAttribute('letter-spacing') ?? '')
+      : Number.NaN;
+    const rawWordSpacing = textNode
+      ? Number.parseFloat(textNode.getAttribute('word-spacing') ?? '')
+      : Number.NaN;
+
     return {
       textContent: textNode?.textContent ?? undefined,
       fontFamily: textNode?.getAttribute('font-family') ?? undefined,
@@ -48,6 +64,9 @@ export class SvgShapeTextService implements SvgShapeTextPort {
       fontWeight: textNode?.getAttribute('font-weight') ?? undefined,
       fontStyle: textNode?.getAttribute('font-style') ?? undefined,
       textAnchor,
+      dominantBaseline,
+      letterSpacing: Number.isFinite(rawLetterSpacing) ? rawLetterSpacing : undefined,
+      wordSpacing: Number.isFinite(rawWordSpacing) ? rawWordSpacing : undefined,
       paintOrder,
       vectorEffect
     };
@@ -89,6 +108,31 @@ export class SvgShapeTextService implements SvgShapeTextPort {
 
   updateTextAnchor(textId: string, textAnchor: 'start' | 'middle' | 'end'): void {
     this.updateTextAttr(textId, 'text-anchor', textAnchor);
+  }
+
+  /**
+   * Sets SVG `dominant-baseline` on the target `<text>`. Pass `undefined` or `'auto'` to clear.
+   */
+  updateTextDominantBaseline(textId: string, baseline: string | undefined): void {
+    const shape = this.resolveTextSvgShape(textId);
+    if (!shape) return;
+    const trimmed = baseline?.trim();
+    if (!trimmed || trimmed.toLowerCase() === 'auto') {
+      shape.attr('dominant-baseline', null);
+    } else {
+      shape.attr('dominant-baseline', trimmed);
+    }
+    this.doc.bumpDocumentRevision();
+  }
+
+  updateTextLetterSpacing(textId: string, letterSpacing: number): void {
+    if (!Number.isFinite(letterSpacing)) return;
+    this.updateTextAttr(textId, 'letter-spacing', `${letterSpacing}`);
+  }
+
+  updateTextWordSpacing(textId: string, wordSpacing: number): void {
+    if (!Number.isFinite(wordSpacing)) return;
+    this.updateTextAttr(textId, 'word-spacing', `${wordSpacing}`);
   }
 
   /**

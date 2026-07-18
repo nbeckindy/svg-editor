@@ -38,6 +38,9 @@ export interface ShapeCreationAttrs {
   fontWeight?: string;
   fontStyle?: 'normal' | 'italic';
   textAnchor?: 'start' | 'middle' | 'end';
+  dominantBaseline?: 'auto' | 'middle' | 'hanging' | 'text-before-edge';
+  letterSpacing?: number;
+  wordSpacing?: number;
   fill?: string;
   stroke?: string;
   strokeWidth?: number;

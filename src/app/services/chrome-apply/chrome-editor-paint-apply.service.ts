@@ -17,6 +17,9 @@ import {
   TextAlignCommand,
   TextPaintOrderCommand,
   TextVectorEffectCommand,
+  TextDominantBaselineCommand,
+  TextLetterSpacingCommand,
+  TextWordSpacingCommand,
   GradientFillSnapshotCommand,
   BakeFillCommand,
   BakeStrokeCommand
@@ -866,6 +869,109 @@ export class ChromeEditorPaintApplyService {
       commands,
       vectorEffect ? 'Enable non-scaling text outline' : 'Disable non-scaling text outline'
     );
+  }
+
+  applyTextDominantBaselineFromChrome(
+    dominantBaseline: 'auto' | 'middle' | 'hanging' | 'text-before-edge',
+    textShapes: ShapeProperties[],
+    placementDefaults: boolean
+  ): void {
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
+    const stored = dominantBaseline === 'auto' ? undefined : dominantBaseline;
+    if (textShapes.length > 0) {
+      const commands = textShapes.map(
+        (s) =>
+          new TextDominantBaselineCommand(
+            this.propertiesSvg,
+            s.id,
+            s.dominantBaseline,
+            stored
+          )
+      );
+      this.pushCommandsAndSyncSelection(commands, 'Set text dominant-baseline');
+      return;
+    }
+    if (placementDefaults) {
+      const before = this.drawingDefaults.defaults();
+      this.pushCommand(
+        [
+          new UpdateDrawingDefaultsCommand(
+            this.drawingDefaults,
+            before,
+            { ...before, dominantBaseline },
+            'typography'
+          )
+        ],
+        'Set default text dominant-baseline'
+      );
+    }
+  }
+
+  applyTextLetterSpacingFromChrome(
+    letterSpacing: number,
+    textShapes: ShapeProperties[],
+    placementDefaults: boolean
+  ): void {
+    if (!Number.isFinite(letterSpacing)) return;
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
+    if (textShapes.length > 0) {
+      const commands = textShapes.map(
+        (s) =>
+          new TextLetterSpacingCommand(
+            this.propertiesSvg,
+            s.id,
+            s.letterSpacing ?? 0,
+            letterSpacing
+          )
+      );
+      this.pushCommandsAndSyncSelection(commands, `Set letter spacing to ${letterSpacing}`);
+      return;
+    }
+    if (placementDefaults) {
+      const before = this.drawingDefaults.defaults();
+      this.pushCommand(
+        [
+          new UpdateDrawingDefaultsCommand(
+            this.drawingDefaults,
+            before,
+            { ...before, letterSpacing },
+            'typography'
+          )
+        ],
+        `Set default letter spacing to ${letterSpacing}`
+      );
+    }
+  }
+
+  applyTextWordSpacingFromChrome(
+    wordSpacing: number,
+    textShapes: ShapeProperties[],
+    placementDefaults: boolean
+  ): void {
+    if (!Number.isFinite(wordSpacing)) return;
+    if (textShapes.length > 0 && this.shapeIdsTouchLocked(textShapes.map((s) => s.id))) return;
+    if (textShapes.length > 0) {
+      const commands = textShapes.map(
+        (s) =>
+          new TextWordSpacingCommand(this.propertiesSvg, s.id, s.wordSpacing ?? 0, wordSpacing)
+      );
+      this.pushCommandsAndSyncSelection(commands, `Set word spacing to ${wordSpacing}`);
+      return;
+    }
+    if (placementDefaults) {
+      const before = this.drawingDefaults.defaults();
+      this.pushCommand(
+        [
+          new UpdateDrawingDefaultsCommand(
+            this.drawingDefaults,
+            before,
+            { ...before, wordSpacing },
+            'typography'
+          )
+        ],
+        `Set default word spacing to ${wordSpacing}`
+      );
+    }
   }
 
   applyBakeFillFromChrome(shapes: ShapeProperties[]): void {

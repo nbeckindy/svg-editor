@@ -154,3 +154,87 @@ export class TextVectorEffectCommand implements CoalesceableCommand {
     return new TextVectorEffectCommand(this.svc, this.textId, this.oldEffect, n.newEffect);
   }
 }
+
+/** Sets `dominant-baseline` on `<text>`. */
+export class TextDominantBaselineCommand implements CoalesceableCommand {
+  readonly description = 'Set text dominant-baseline';
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly svc: PropertiesPanelTextSvgPort,
+    private readonly textId: string,
+    private readonly oldBaseline: string | undefined,
+    private readonly newBaseline: string | undefined
+  ) {
+    this.coalesceKey = `dominant-baseline:${textId}`;
+  }
+
+  execute(): void {
+    this.svc.updateTextDominantBaseline(this.textId, this.newBaseline);
+  }
+
+  undo(): void {
+    this.svc.updateTextDominantBaseline(this.textId, this.oldBaseline);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as TextDominantBaselineCommand;
+    return new TextDominantBaselineCommand(this.svc, this.textId, this.oldBaseline, n.newBaseline);
+  }
+}
+
+/** Sets `letter-spacing` on `<text>`. */
+export class TextLetterSpacingCommand implements CoalesceableCommand {
+  readonly description = 'Set letter spacing';
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly svc: PropertiesPanelTextSvgPort,
+    private readonly textId: string,
+    private readonly oldSpacing: number,
+    private readonly newSpacing: number
+  ) {
+    this.coalesceKey = `letter-spacing:${textId}`;
+  }
+
+  execute(): void {
+    this.svc.updateTextLetterSpacing(this.textId, this.newSpacing);
+  }
+
+  undo(): void {
+    this.svc.updateTextLetterSpacing(this.textId, this.oldSpacing);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as TextLetterSpacingCommand;
+    return new TextLetterSpacingCommand(this.svc, this.textId, this.oldSpacing, n.newSpacing);
+  }
+}
+
+/** Sets `word-spacing` on `<text>`. */
+export class TextWordSpacingCommand implements CoalesceableCommand {
+  readonly description = 'Set word spacing';
+  readonly coalesceKey: string;
+
+  constructor(
+    private readonly svc: PropertiesPanelTextSvgPort,
+    private readonly textId: string,
+    private readonly oldSpacing: number,
+    private readonly newSpacing: number
+  ) {
+    this.coalesceKey = `word-spacing:${textId}`;
+  }
+
+  execute(): void {
+    this.svc.updateTextWordSpacing(this.textId, this.newSpacing);
+  }
+
+  undo(): void {
+    this.svc.updateTextWordSpacing(this.textId, this.oldSpacing);
+  }
+
+  coalesceWith(newer: CoalesceableCommand): CoalesceableCommand {
+    const n = newer as TextWordSpacingCommand;
+    return new TextWordSpacingCommand(this.svc, this.textId, this.oldSpacing, n.newSpacing);
+  }
+}

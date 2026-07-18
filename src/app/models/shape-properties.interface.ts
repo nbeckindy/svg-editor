@@ -29,6 +29,14 @@ export interface ShapeProperties {
   fontStyle?: string;
   textAnchor?: 'start' | 'middle' | 'end';
   /**
+   * SVG `dominant-baseline` when set (e.g. `middle`, `hanging`). Cleared / `auto` means browser default.
+   */
+  dominantBaseline?: string;
+  /** SVG `letter-spacing` in user units (number). */
+  letterSpacing?: number;
+  /** SVG `word-spacing` in user units (number). */
+  wordSpacing?: number;
+  /**
    * SVG `paint-order` when set (e.g. `stroke fill` draws stroke beneath fill). Mostly relevant for
    * `<text>` outlines; browser support is good in modern engines but not guaranteed everywhere.
    */

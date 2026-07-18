@@ -19,6 +19,9 @@ import {
   TextAlignCommand,
   TextPaintOrderCommand,
   TextVectorEffectCommand,
+  TextDominantBaselineCommand,
+  TextLetterSpacingCommand,
+  TextWordSpacingCommand,
   UpdateDrawingDefaultsCommand,
 } from '../../../models/editor-commands';
 
@@ -332,6 +335,39 @@ describe('TextVectorEffectCommand', () => {
     expect(svc.updateTextVectorEffect).toHaveBeenCalledWith('text-a', 'non-scaling-stroke');
     cmd.undo();
     expect(svc.updateTextVectorEffect).toHaveBeenCalledWith('text-a', undefined);
+  });
+});
+
+describe('TextDominantBaselineCommand', () => {
+  it('updates dominant-baseline and restores on undo', () => {
+    const svc = mockSvc();
+    const cmd = new TextDominantBaselineCommand(svc, 'text-a', undefined, 'middle');
+    cmd.execute();
+    expect(svc.updateTextDominantBaseline).toHaveBeenCalledWith('text-a', 'middle');
+    cmd.undo();
+    expect(svc.updateTextDominantBaseline).toHaveBeenCalledWith('text-a', undefined);
+  });
+});
+
+describe('TextLetterSpacingCommand', () => {
+  it('updates letter-spacing and restores on undo', () => {
+    const svc = mockSvc();
+    const cmd = new TextLetterSpacingCommand(svc, 'text-a', 0, 2);
+    cmd.execute();
+    expect(svc.updateTextLetterSpacing).toHaveBeenCalledWith('text-a', 2);
+    cmd.undo();
+    expect(svc.updateTextLetterSpacing).toHaveBeenCalledWith('text-a', 0);
+  });
+});
+
+describe('TextWordSpacingCommand', () => {
+  it('updates word-spacing and restores on undo', () => {
+    const svc = mockSvc();
+    const cmd = new TextWordSpacingCommand(svc, 'text-a', 0, 4);
+    cmd.execute();
+    expect(svc.updateTextWordSpacing).toHaveBeenCalledWith('text-a', 4);
+    cmd.undo();
+    expect(svc.updateTextWordSpacing).toHaveBeenCalledWith('text-a', 0);
   });
 });
 
