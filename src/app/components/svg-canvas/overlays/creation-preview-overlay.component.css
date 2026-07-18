@@ -1,0 +1,15 @@
+.creation-ghost-shape {
+  pointer-events: none;
+}
+
+/** Thin chrome guide on top of the defaults-styled paint preview. */
+.creation-ghost-guide {
+  fill: none;
+  stroke: #2196f3;
+  stroke-width: 1.25;
+  vector-effect: non-scaling-stroke;
+}
+
+.creation-ghost-paint {
+  pointer-events: none;
+}

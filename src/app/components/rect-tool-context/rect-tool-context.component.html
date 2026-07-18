@@ -1,0 +1,51 @@
+<div class="rect-tool-context" data-testid="rect-tool-context" role="group" aria-label="Rectangle creation options">
+  <app-orientation-grid
+    [value]="defaults.orientation()"
+    ariaLabel="Rectangle placement anchor"
+    title="Placement anchor — which point of the rectangle sits on the click"
+    testIdPrefix="rect-place-anchor"
+    (valueChange)="onOrientationSelect($event)" />
+  <div class="dimension-field">
+    <label class="dimension-label" for="rect-creation-width">W</label>
+    <input
+      id="rect-creation-width"
+      type="number"
+      class="dimension-input"
+      data-testid="rect-creation-width"
+      min="0.0001"
+      step="any"
+      inputmode="decimal"
+      [value]="defaults.width()"
+      (change)="onWidthChange($event)"
+      aria-label="Default rectangle width" />
+  </div>
+  <div class="dimension-field">
+    <label class="dimension-label" for="rect-creation-height">H</label>
+    <input
+      id="rect-creation-height"
+      type="number"
+      class="dimension-input"
+      data-testid="rect-creation-height"
+      min="0.0001"
+      step="any"
+      inputmode="decimal"
+      [value]="defaults.height()"
+      (change)="onHeightChange($event)"
+      aria-label="Default rectangle height" />
+  </div>
+  <div class="dimension-field">
+    <label class="dimension-label" for="rect-creation-corner">R</label>
+    <input
+      id="rect-creation-corner"
+      type="number"
+      class="dimension-input"
+      data-testid="rect-creation-corner"
+      min="0"
+      step="any"
+      inputmode="decimal"
+      [value]="defaults.effectiveCornerRadius()"
+      (change)="onCornerChange($event)"
+      aria-label="Default rectangle corner radius"
+      title="Corner radius (rx = ry)" />
+  </div>
+</div>

@@ -19,6 +19,20 @@ Each creation tool must show a ghost that matches the shape being drawn:
 - **ellipse** tool → `<ellipse>` ghost
 - **line** tool → `<line>` ghost
 
+Render via `CreationPreviewOverlayComponent` (`g[app-creation-preview-overlay]`):
+1. **Paint layer** (`canvas-creation-ghost-paint`) — drawing defaults fill/stroke/stroke-width (line fill is always `none`)
+2. **Guide layer** (`canvas-creation-ghost`, class `creation-ghost-guide`) — thin solid `#2196f3` on top so the gesture stays visible when paint is none
+
+Do **not** put chrome stroke on `.creation-ghost-shape` alone — pen previews reuse that class with drawing-default stroke attrs.
+
+## Rect tool context bar + click-place
+
+When the **rect** tool is active, the **tool context bar** hosts W / H / corner (linked `rx`=`ry`) and `app-orientation-grid` (default top-left) via `RectCreationDefaultsService` (session signals, not History).
+
+- **Click (sub-threshold mouseup):** place fixed W×H rect with orientation anchor at the press point; apply clamped corner.
+- **Drag:** size from drag; still apply corner from defaults; do **not** rewrite W/H defaults.
+- **Ghost:** no preview until drag past threshold; then drag-sized ghost (with corner from defaults). Click-place still commits on sub-threshold mouseup with no ghost.
+
 ## Shift constraints per shape type
 
 When Shift is held during creation drag:

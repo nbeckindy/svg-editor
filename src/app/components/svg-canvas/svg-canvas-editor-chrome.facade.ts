@@ -90,6 +90,9 @@ export class SvgCanvasEditorChromeFacade {
   get creationGhostRect() {
     return this.root.creationGhostRect;
   }
+  get creationGhostCornerRadiusOverlay() {
+    return this.root.creationGhostCornerRadiusOverlay;
+  }
   get creationShapeType(): string {
     return this.root.creationShapeType;
   }

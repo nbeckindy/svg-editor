@@ -59,6 +59,8 @@ export interface CreateSvgCanvasPointerStackArgs {
   setLastBbox: (bbox: Rect | null) => void;
   getSmartGuideCandidates: () => SnapCandidateShape[];
   isSnapTemporarilyDisabled: () => boolean;
+  /** Rect tool creation defaults (click-place size / corner / orientation). */
+  getRectCreationDefaults: () => import('../../services/rect-creation-defaults.service').RectCreationDefaultsSnapshot;
   // Tool registration
   toolRegistry: ToolRegistryService;
   canvasBoundToolRegistrar: CanvasBoundToolRegistrar;
@@ -123,7 +125,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
   const resize = new ResizeGesture();
   const rotate = new RotateGesture();
   const skew = new SkewGesture();
-  const creation = new CreationGesture();
+  const creation = new CreationGesture(() => args.getRectCreationDefaults());
   const selectionMarquee = new SelectionMarqueeGesture();
   const zoomMarquee = new ZoomMarqueeGesture();
 

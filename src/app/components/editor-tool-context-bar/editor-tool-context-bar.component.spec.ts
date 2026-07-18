@@ -33,6 +33,24 @@ describe('EditorToolContextBarComponent', () => {
     fixture.detectChanges();
   });
 
+  it('hosts rect creation controls when rect tool is active', () => {
+    editorTool.setTool('rect');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="rect-tool-context-slot"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="rect-tool-context"]')).toBeTruthy();
+    expect(fixture.nativeElement.querySelector('[data-testid="rect-creation-width"]')).toBeTruthy();
+  });
+
+  it('hides rect creation controls when another tool is active', () => {
+    editorTool.setTool('rect');
+    fixture.detectChanges();
+    editorTool.setTool('ellipse');
+    fixture.detectChanges();
+
+    expect(fixture.nativeElement.querySelector('[data-testid="rect-tool-context"]')).toBeNull();
+  });
+
   it('hosts path-node anchor tools in the node-edit context slot when a node is selected', () => {
     editorTool.setTool('node-edit-selector');
     pathNodeBridge.setChrome(selectedNodeChrome);

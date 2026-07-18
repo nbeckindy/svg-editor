@@ -114,49 +114,15 @@
             [handleRadius]="editorChrome.selectionHandleRadiusOverlay"
             [skewEdgeOutset]="editorChrome.selectionSkewEdgeOutset"
             [rotateHandleOffset]="editorChrome.rotateHandleOffset"/>
-          @if (editorChrome.creationGhostRect; as ghost) {
-            @if (editorChrome.creationShapeType === 'ellipse') {
-              <ellipse
-                class="creation-ghost-shape"
-                data-testid="canvas-creation-ghost"
-                [attr.cx]="ghost.x + ghost.width / 2"
-                [attr.cy]="ghost.y + ghost.height / 2"
-                [attr.rx]="ghost.width / 2"
-                [attr.ry]="ghost.height / 2"
-                fill="rgba(33, 150, 243, 0.08)"
-                stroke="#2196f3"
-                stroke-width="2"
-                stroke-dasharray="6 3"
-                vector-effect="non-scaling-stroke"/>
-            } @else if (editorChrome.creationShapeType === 'line') {
-              @if (editorChrome.creationGhostLineOverlay; as gl) {
-                <line
-                  class="creation-ghost-shape"
-                  data-testid="canvas-creation-ghost"
-                  [attr.x1]="gl.x1"
-                  [attr.y1]="gl.y1"
-                  [attr.x2]="gl.x2"
-                  [attr.y2]="gl.y2"
-                  stroke="#2196f3"
-                  stroke-width="2"
-                  stroke-dasharray="6 3"
-                  vector-effect="non-scaling-stroke"/>
-              }
-            } @else {
-              <rect
-                class="creation-ghost-shape"
-                data-testid="canvas-creation-ghost"
-                [attr.x]="ghost.x"
-                [attr.y]="ghost.y"
-                [attr.width]="ghost.width"
-                [attr.height]="ghost.height"
-                fill="rgba(33, 150, 243, 0.08)"
-                stroke="#2196f3"
-                stroke-width="2"
-                stroke-dasharray="6 3"
-                vector-effect="non-scaling-stroke"/>
-            }
-          }
+          <g
+            app-creation-preview-overlay
+            [shapeType]="editorChrome.creationShapeType"
+            [ghostRect]="editorChrome.creationGhostRect"
+            [lineOverlay]="editorChrome.creationGhostLineOverlay"
+            [cornerRadiusOverlay]="editorChrome.creationGhostCornerRadiusOverlay"
+            [fill]="drawingDefaults.fill()"
+            [stroke]="drawingDefaults.stroke()"
+            [strokeWidth]="drawingDefaults.strokeWidth()"/>
           <g
             app-pen-preview-overlay
             [stroke]="drawingDefaults.stroke()"

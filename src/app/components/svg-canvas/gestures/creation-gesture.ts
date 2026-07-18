@@ -5,12 +5,19 @@ import type { EditorTool } from '../../../services/editor-tool.service';
 import { AddShapeCommand } from '../../../models/editor-commands';
 import type { SmartGuideResult } from '../../../services/snap.service';
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
+import type { RectCreationDefaultsSnapshot } from '../../../services/rect-creation-defaults.service';
+import {
+  clampRectCornerRadius,
+  placeRectAtOrientation
+} from '../../../utils/rect-creation-geometry';
 
 const TOOL_TO_SHAPE: Partial<Record<EditorTool, CreatableShapeType>> = {
   rect: 'rect',
   ellipse: 'ellipse',
   line: 'line'
 };
+
+export type RectCreationDefaultsProvider = () => RectCreationDefaultsSnapshot;
 
 /**
  * 8-way angle snap for line tool when Shift is held.
@@ -39,12 +46,16 @@ export class CreationGesture {
   private shapeType: CreatableShapeType = 'rect';
 
   ghostRect: Rect | null = null;
+  /** Corner radius in overlay pixels for rect ghost (rx = ry). */
+  ghostCornerRadiusOverlay: number | null = null;
   /** Expose the current shape type for template rendering. */
   get activeShapeType(): CreatableShapeType { return this.shapeType; }
   /** For line ghost: start point in SVG user space. */
   ghostLineStart: Point | null = null;
   /** For line ghost: end point in SVG user space. */
   ghostLineEnd: Point | null = null;
+
+  constructor(private readonly getRectDefaults?: RectCreationDefaultsProvider) {}
 
   start(
     ctx: GestureRuntimeContext,
@@ -64,6 +75,9 @@ export class CreationGesture {
     this.startSvg = svgPoint;
     this.currentSvg = svgPoint;
     this.ghostRect = null;
+    this.ghostCornerRadiusOverlay = null;
+    this.ghostLineStart = null;
+    this.ghostLineEnd = null;
     return true;
   }
 
@@ -76,8 +90,9 @@ export class CreationGesture {
     const screenDx = Math.abs(clientX - this.startClient.x);
     const screenDy = Math.abs(clientY - this.startClient.y);
     if (screenDx < MARQUEE_MIN_DRAG_PX && screenDy < MARQUEE_MIN_DRAG_PX) {
-      this.ghostRect = null;
       this.currentSvg = raw;
+      this.ghostRect = null;
+      this.ghostCornerRadiusOverlay = null;
       ctx.pointer.cdr.detectChanges();
       return;
     }
@@ -86,6 +101,8 @@ export class CreationGesture {
     this.currentSvg = this.applySnap(ctx, this.startSvg, constrained, shiftKey);
     const bbox = this.computeGhostBbox(this.startSvg, this.currentSvg);
     this.ghostRect = ctx.pointer.svgBboxToOverlayPixels(bbox);
+    this.ghostCornerRadiusOverlay =
+      this.shapeType === 'rect' ? this.overlayCornerFromUserBbox(bbox, this.ghostRect) : null;
     if (this.shapeType === 'line') {
       this.ghostLineStart = this.startSvg;
       this.ghostLineEnd = this.currentSvg;
@@ -109,7 +126,12 @@ export class CreationGesture {
 
     const screenDx = Math.abs(clientX - this.startClient.x);
     const screenDy = Math.abs(clientY - this.startClient.y);
-    if (screenDx < MARQUEE_MIN_DRAG_PX && screenDy < MARQUEE_MIN_DRAG_PX) {
+    const belowThreshold = screenDx < MARQUEE_MIN_DRAG_PX && screenDy < MARQUEE_MIN_DRAG_PX;
+
+    if (belowThreshold) {
+      if (this.shapeType === 'rect') {
+        return this.commitRectClickPlace(ctx, this.startSvg);
+      }
       this.justEnded = true;
       this.reset();
       ctx.pointer.cdr.detectChanges();
@@ -128,6 +150,40 @@ export class CreationGesture {
     const endPt = this.applySnap(ctx, this.startSvg, constrained, shiftKey);
     const attrs = this.computeAttrs(this.startSvg, endPt);
 
+    return this.commitShape(ctx, attrs);
+  }
+
+  consumeJustEnded(): boolean {
+    if (this.justEnded) {
+      this.justEnded = false;
+      return true;
+    }
+    return false;
+  }
+
+  /** Abandon in-progress creation without committing a shape (e.g. tool deactivate). */
+  abort(): void {
+    this.reset();
+  }
+
+  private commitRectClickPlace(ctx: GestureRuntimeContext, anchor: Point): string | null {
+    const defaults = this.getRectDefaults?.();
+    const width = defaults?.width ?? 100;
+    const height = defaults?.height ?? 100;
+    const orientation = defaults?.orientation ?? 'top-left';
+    const corner = clampRectCornerRadius(width, height, defaults?.cornerRadius ?? 0);
+    const placed = placeRectAtOrientation(anchor, { width, height }, orientation);
+    const attrs: ShapeCreationAttrs = {
+      x: placed.x,
+      y: placed.y,
+      width: placed.width,
+      height: placed.height,
+      ...(corner > 0 ? { rx: corner, ry: corner } : {})
+    };
+    return this.commitShape(ctx, attrs);
+  }
+
+  private commitShape(ctx: GestureRuntimeContext, attrs: ShapeCreationAttrs): string | null {
     const newId = ctx.doc.svgManipulation.addShape(this.shapeType, attrs);
 
     if (newId) {
@@ -152,17 +208,15 @@ export class CreationGesture {
     return newId;
   }
 
-  consumeJustEnded(): boolean {
-    if (this.justEnded) {
-      this.justEnded = false;
-      return true;
-    }
-    return false;
-  }
-
-  /** Abandon in-progress creation without committing a shape (e.g. tool deactivate). */
-  abort(): void {
-    this.reset();
+  private overlayCornerFromUserBbox(userBbox: Rect, overlayBbox: Rect): number | null {
+    const defaults = this.getRectDefaults?.();
+    const corner = clampRectCornerRadius(
+      userBbox.width,
+      userBbox.height,
+      defaults?.cornerRadius ?? 0
+    );
+    if (corner <= 0 || userBbox.width <= 0) return null;
+    return corner * (overlayBbox.width / userBbox.width);
   }
 
   private reset(): void {
@@ -171,6 +225,7 @@ export class CreationGesture {
     this.startSvg = null;
     this.currentSvg = null;
     this.ghostRect = null;
+    this.ghostCornerRadiusOverlay = null;
     this.ghostLineStart = null;
     this.ghostLineEnd = null;
   }
@@ -221,10 +276,10 @@ export class CreationGesture {
       return { x, y, width: Math.abs(end.x - start.x), height: Math.abs(end.y - start.y) };
     }
 
-    let w = Math.abs(end.x - start.x);
-    let h = Math.abs(end.y - start.y);
-    let x = Math.min(start.x, end.x);
-    let y = Math.min(start.y, end.y);
+    const w = Math.abs(end.x - start.x);
+    const h = Math.abs(end.y - start.y);
+    const x = Math.min(start.x, end.x);
+    const y = Math.min(start.y, end.y);
 
     return { x, y, width: w, height: h };
   }
@@ -236,7 +291,15 @@ export class CreationGesture {
       const y = Math.min(start.y, end.y);
       const w = Math.abs(end.x - start.x);
       const h = Math.abs(end.y - start.y);
-      return { x, y, width: w, height: h };
+      const defaults = this.getRectDefaults?.();
+      const corner = clampRectCornerRadius(w, h, defaults?.cornerRadius ?? 0);
+      return {
+        x,
+        y,
+        width: w,
+        height: h,
+        ...(corner > 0 ? { rx: corner, ry: corner } : {})
+      };
     }
     if (this.shapeType === 'ellipse') {
       const x = Math.min(start.x, end.x);

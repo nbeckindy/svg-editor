@@ -323,6 +323,12 @@ export class SvgShapeContentService implements SvgShapeContentPort {
       const el = contentGroup.rect(w, h).move(x, y);
       el.fill(fill);
       el.stroke({ color: stroke, width: strokeWidth });
+      const rx = attrs.rx;
+      const ry = attrs.ry ?? attrs.rx;
+      if (rx != null && ry != null && (rx > 0 || ry > 0)) {
+        el.attr('rx', rx);
+        el.attr('ry', ry);
+      }
       shape = el;
     } else if (type === 'ellipse') {
       const rx = attrs.rx ?? 50;

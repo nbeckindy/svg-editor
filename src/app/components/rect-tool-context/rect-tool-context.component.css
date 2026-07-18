@@ -1,0 +1,38 @@
+.rect-tool-context {
+  display: flex;
+  align-items: center;
+  gap: var(--editor-spacing-lg, 12px);
+  flex-wrap: wrap;
+  min-height: 1px;
+}
+
+.dimension-field {
+  display: flex;
+  align-items: center;
+  gap: 4px;
+  min-width: 0;
+}
+
+.dimension-label {
+  font-size: 12px;
+  font-weight: 600;
+  color: #888;
+  min-width: 14px;
+}
+
+.dimension-input {
+  width: 4.5rem;
+  min-width: 0;
+  padding: 4px 6px;
+  border: 1px solid var(--editor-border, #ddd);
+  border-radius: 4px;
+  font-size: 13px;
+  text-align: center;
+  background: var(--editor-surface, #fff);
+}
+
+.dimension-input:focus {
+  outline: none;
+  border-color: #1976d2;
+  box-shadow: 0 0 0 2px rgba(25, 118, 210, 0.15);
+}

@@ -120,6 +120,22 @@ describe('CreationGesture', () => {
       expect(gesture.ghostRect).toBeNull();
     });
 
+    it('below drag threshold does not show fixed-size ghost for rect either', () => {
+      const getDefaults = () => ({
+        width: 100,
+        height: 50,
+        cornerRadius: 0,
+        orientation: 'top-left' as const
+      });
+      gesture = new CreationGesture(getDefaults);
+      (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({});
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 10, y: 20 });
+      gesture.start(ctx, 'rect', makeMouseEvent(100, 100));
+      expect(gesture.ghostRect).toBeNull();
+      gesture.move(ctx, 100 + MARQUEE_MIN_DRAG_PX - 1, 100 + MARQUEE_MIN_DRAG_PX - 1, false);
+      expect(gesture.ghostRect).toBeNull();
+    });
+
     it('above drag threshold creates ghost rect', () => {
       gesture.move(ctx, 100 + MARQUEE_MIN_DRAG_PX + 5, 100 + MARQUEE_MIN_DRAG_PX + 5, false);
       expect(gesture.ghostRect).not.toBeNull();
@@ -162,10 +178,40 @@ describe('CreationGesture', () => {
       gesture.start(ctx, 'rect', makeMouseEvent(100, 100));
     });
 
-    it('below drag threshold produces no shape (returns null)', () => {
+    it('below drag threshold produces no shape for ellipse (returns null)', () => {
+      gesture = new CreationGesture();
+      installSvgFindOneMock(ctx);
+      gesture.start(ctx, 'ellipse', makeMouseEvent(100, 100));
       const id = gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX - 1, 100 + MARQUEE_MIN_DRAG_PX - 1, false);
       expect(id).toBeNull();
       expect(ctx.doc.svgManipulation.addShape).not.toHaveBeenCalled();
+    });
+
+    it('below drag threshold click-places a rect from defaults', () => {
+      const getDefaults = () => ({
+        width: 80,
+        height: 40,
+        cornerRadius: 5,
+        orientation: 'center' as const
+      });
+      gesture = new CreationGesture(getDefaults);
+      installSvgFindOneMock(ctx);
+      (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 100, y: 100 });
+      gesture.start(ctx, 'rect', makeMouseEvent(100, 100));
+      (ctx.doc.svgManipulation.addShape as ReturnType<typeof vi.fn>).mockReturnValue('shape-placed');
+      const id = gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX - 1, 100 + MARQUEE_MIN_DRAG_PX - 1, false);
+      expect(id).toBe('shape-placed');
+      expect(ctx.doc.svgManipulation.addShape).toHaveBeenCalledWith(
+        'rect',
+        expect.objectContaining({
+          x: 60,
+          y: 80,
+          width: 80,
+          height: 40,
+          rx: 5,
+          ry: 5
+        })
+      );
     });
 
     it('above drag threshold creates a shape (returns an ID)', () => {
@@ -240,7 +286,7 @@ describe('CreationGesture', () => {
   describe('consumeJustEnded()', () => {
     it('returns true once after end, then false', () => {
       (ctx.doc.svgManipulation.getSVGInstance as ReturnType<typeof vi.fn>).mockReturnValue({});
-      gesture.start(ctx, 'rect', makeMouseEvent(100, 100));
+      gesture.start(ctx, 'ellipse', makeMouseEvent(100, 100));
       (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 10, y: 20 });
       gesture.end(ctx, 100 + MARQUEE_MIN_DRAG_PX - 1, 100 + MARQUEE_MIN_DRAG_PX - 1, false);
       expect(gesture.consumeJustEnded()).toBe(true);

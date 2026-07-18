@@ -1,0 +1,49 @@
+@if (ghostRect(); as ghost) {
+  @if (shapeType() === 'ellipse') {
+    @for (layer of layers; track layer) {
+      <svg:ellipse
+        [class]="layerClass(layer)"
+        [attr.data-testid]="layerTestId(layer)"
+        [attr.cx]="ghost.x + ghost.width / 2"
+        [attr.cy]="ghost.y + ghost.height / 2"
+        [attr.rx]="ghost.width / 2"
+        [attr.ry]="ghost.height / 2"
+        [attr.fill]="layerFill(layer)"
+        [attr.stroke]="layerStroke(layer)"
+        [attr.stroke-width]="layerStrokeWidth(layer)"
+        [attr.vector-effect]="layer === 'paint' ? 'non-scaling-stroke' : null"/>
+    }
+  } @else if (shapeType() === 'line') {
+    @if (lineOverlay(); as gl) {
+      @for (layer of layers; track layer) {
+        <svg:line
+          [class]="layerClass(layer)"
+          [attr.data-testid]="layerTestId(layer)"
+          [attr.x1]="gl.x1"
+          [attr.y1]="gl.y1"
+          [attr.x2]="gl.x2"
+          [attr.y2]="gl.y2"
+          [attr.fill]="layerFill(layer)"
+          [attr.stroke]="layerStroke(layer)"
+          [attr.stroke-width]="layerStrokeWidth(layer)"
+          [attr.vector-effect]="layer === 'paint' ? 'non-scaling-stroke' : null"/>
+      }
+    }
+  } @else {
+    @for (layer of layers; track layer) {
+      <svg:rect
+        [class]="layerClass(layer)"
+        [attr.data-testid]="layerTestId(layer)"
+        [attr.x]="ghost.x"
+        [attr.y]="ghost.y"
+        [attr.width]="ghost.width"
+        [attr.height]="ghost.height"
+        [attr.rx]="cornerRadiusOverlay()"
+        [attr.ry]="cornerRadiusOverlay()"
+        [attr.fill]="layerFill(layer)"
+        [attr.stroke]="layerStroke(layer)"
+        [attr.stroke-width]="layerStrokeWidth(layer)"
+        [attr.vector-effect]="layer === 'paint' ? 'non-scaling-stroke' : null"/>
+    }
+  }
+}

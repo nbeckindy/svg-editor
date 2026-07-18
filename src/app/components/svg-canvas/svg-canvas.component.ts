@@ -84,6 +84,7 @@ import { penSvgDistanceSq } from '../../models/pen-path';
 import { parsePathDForNodeEditing } from '../../models/path-d';
 import { buildPathSelectionOutlineOverlayD } from '../../models/path-selection-outline';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
+import { RectCreationDefaultsService } from '../../services/rect-creation-defaults.service';
 import {
   applyTextTypographyFromDrawingDefaults,
   isTextToolPreviewNode,
@@ -128,6 +129,7 @@ import { GridOverlayComponent } from './overlays/grid-overlay.component';
 import { SmartGuideOverlayComponent } from './overlays/smart-guide-overlay.component';
 import { PenPreviewOverlayComponent } from './overlays/pen-preview-overlay.component';
 import { BooleanPreviewOverlayComponent } from './overlays/boolean-preview-overlay.component';
+import { CreationPreviewOverlayComponent } from './overlays/creation-preview-overlay.component';
 import { SnapCandidateShape } from '../../services/snap.service';
 import { CanvasViewportChromePresenter, type CanvasViewportChromePresenterHost } from './canvas-viewport-chrome.presenter';
 import type { PenToolSessionSvgPort } from './pen-tool-session/pen-tool-session-svg.port';
@@ -227,6 +229,7 @@ export function rotateHandleOffsetOverlayPx(scale: number): number {
     SmartGuideOverlayComponent,
     PenPreviewOverlayComponent,
     BooleanPreviewOverlayComponent,
+    CreationPreviewOverlayComponent,
     InlineTextEditorOverlayComponent,
     MatMenuModule,
     MatDivider
@@ -409,6 +412,9 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   get isSelectionMarquee(): boolean { return this.selectionMarquee.isActive; }
   get isZoomMarquee(): boolean { return this.zoomMarquee.isActive; }
   get creationGhostRect(): Rect | null { return this.creation.ghostRect; }
+  get creationGhostCornerRadiusOverlay(): number | null {
+    return this.creation.ghostCornerRadiusOverlay;
+  }
   get creationShapeType(): string { return this.creation.activeShapeType; }
 
   get creationGhostLineOverlay(): { x1: number; y1: number; x2: number; y2: number } | null {
@@ -1318,6 +1324,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     private editorHistory: EditorHistoryService,
     private clipboard: ClipboardService,
     protected drawingDefaults: DrawingStyleDefaultsService,
+    private rectCreationDefaults: RectCreationDefaultsService,
     private chromeEditorApply: ChromeEditorApplyService,
     private pathBooleanSelectionRead: PathBooleanSelectionReadService,
     private pathNodeEditBridge: PathNodeEditCommandBridgeService,
@@ -1341,6 +1348,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         setLastBbox: (bbox) => { this.lastBbox = bbox; },
         getSmartGuideCandidates: () => this.getSmartGuideCandidates(),
         isSnapTemporarilyDisabled: () => this.altKeyPressed,
+        getRectCreationDefaults: () => this.rectCreationDefaults.snapshot(),
         createPenToolSessionPorts: () => this.createPenToolSessionPorts(),
         toolRegistry: this.toolRegistry,
         canvasBoundToolRegistrar: this.canvasBoundToolRegistrar,

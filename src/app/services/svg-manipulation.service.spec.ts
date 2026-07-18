@@ -2312,6 +2312,15 @@ describe('SvgManipulationService', () => {
       expect(el?.getAttribute('y')).toBe('20');
     });
 
+    it('applies corner radius attrs when rx/ry provided', () => {
+      const svgContent = '<svg viewBox="0 0 200 200"></svg>';
+      service.initializeSVG(container, svgContent);
+      const id = service.addShape('rect', { x: 0, y: 0, width: 50, height: 30, rx: 6, ry: 6 });
+      const el = container.querySelector(`#${id}`);
+      expect(el?.getAttribute('rx')).toBe('6');
+      expect(el?.getAttribute('ry')).toBe('6');
+    });
+
     it('creates an ellipse with correct attributes', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="existing" x="0" y="0" width="10" height="10"/></svg>';
       service.initializeSVG(container, svgContent);

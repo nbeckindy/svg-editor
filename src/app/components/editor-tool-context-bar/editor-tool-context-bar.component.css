@@ -17,6 +17,11 @@
   min-height: 1px;
 }
 
+.rect-tool-context-slot {
+  display: flex;
+  align-items: center;
+}
+
 .node-edit-context {
   display: flex;
   align-items: center;

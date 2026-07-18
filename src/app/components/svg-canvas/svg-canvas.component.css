@@ -148,10 +148,6 @@
   background: rgba(76, 175, 80, 0.12);
 }
 
-.creation-ghost-shape {
-  pointer-events: none;
-}
-
 .zoom-level {
   position: absolute;
   top: 8px;

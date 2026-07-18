@@ -22,7 +22,9 @@
       <div class="context-slot" aria-hidden="true"></div>
     }
     @case ('rect') {
-      <div class="context-slot" aria-hidden="true"></div>
+      <div class="context-slot rect-tool-context-slot" data-testid="rect-tool-context-slot">
+        <app-rect-tool-context />
+      </div>
     }
     @case ('ellipse') {
       <div class="context-slot" aria-hidden="true"></div>
