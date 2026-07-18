@@ -14,6 +14,7 @@ function createResizeContext(): GestureRuntimeContext {
       getUnionBBox: vi.fn().mockReturnValue({ x: 0, y: 0, width: 100, height: 100 }),
       snapshotSelectionTransforms: vi.fn().mockReturnValue(new Map()),
       snapshotVectorEffectsForShapes: vi.fn().mockReturnValue(new Map()),
+      snapshotTextScaleAttrs: vi.fn().mockReturnValue(new Map()),
       setShapeVisibility: vi.fn(),
       getSVGInstance: vi.fn().mockReturnValue({}),
       getShapeIdsInDomOrder: vi.fn((ids: string[]) => ids),
@@ -21,7 +22,7 @@ function createResizeContext(): GestureRuntimeContext {
       isElementOrAncestorLocked: vi.fn().mockReturnValue(false)
     },
     shapeSelection: {
-      getSelectedShapes: vi.fn().mockReturnValue([{ id: 'shape-a' }])
+      getSelectedShapes: vi.fn().mockReturnValue([{ id: 'shape-a', type: 'rect' }])
     },
     editorHistory: {
       pushAndExecute: vi.fn()
@@ -44,7 +45,10 @@ function createResizeContext(): GestureRuntimeContext {
       setLastBbox: vi.fn()
     },
     snap: {
-      snap: {} as never,
+      snap: {
+        shapeEnabled: vi.fn(() => false),
+        snapDeltaToSmartGuides: vi.fn()
+      } as never,
       getSmartGuideCandidates: vi.fn(() => []),
       isSnapTemporarilyDisabled: vi.fn(() => false)
     }
@@ -58,11 +62,12 @@ describe('ResizeGesture', () => {
   beforeEach(() => {
     vi.spyOn(GhostSession.prototype, 'buildFragmentsForUnion').mockReturnValue([
       {
-        outerGroup: { matrix: vi.fn() },
-        nestedSvg: { attr: vi.fn(), viewbox: vi.fn() },
+        outerGroup: { matrix: vi.fn(), remove: vi.fn() },
+        nestedSvg: { attr: vi.fn(), viewbox: vi.fn(), size: vi.fn() },
         worldToUnion: { matrix: vi.fn() }
       }
     ] as never);
+    vi.spyOn(GhostSession.prototype, 'removeFragments').mockImplementation(() => undefined);
     gesture = new ResizeGesture();
     ctx = createResizeContext();
   });
@@ -101,5 +106,46 @@ describe('ResizeGesture', () => {
     expect(ok).toBe(true);
     expect(gesture.isActive).toBe(true);
     expect(ctx.doc.svgManipulation.setShapeVisibility).toHaveBeenCalled();
+  });
+
+  it('end commits TextUniformScaleCommand for text-only selection', () => {
+    (ctx.doc.shapeSelection.getSelectedShapes as ReturnType<typeof vi.fn>).mockReturnValue([
+      { id: 't1', type: 'text' }
+    ]);
+    (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 200, y: 200 });
+    expect(gesture.start(ctx, 'se', { clientX: 0, clientY: 0 } as MouseEvent)).toBe(true);
+    gesture.move(ctx, 200, 200, false, false);
+    gesture.end(ctx, false);
+    expect(ctx.doc.editorHistory.pushAndExecute).toHaveBeenCalledTimes(1);
+    const cmd = (ctx.doc.editorHistory.pushAndExecute as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(cmd.description).toBe('Resize text');
+    expect(ctx.doc.svgManipulation.snapshotTextScaleAttrs).toHaveBeenCalled();
+  });
+
+  it('end commits UnionScaleCommand for non-text selection', () => {
+    expect(gesture.start(ctx, 'se', { clientX: 0, clientY: 0 } as MouseEvent)).toBe(true);
+    gesture.move(ctx, 150, 150, false, false);
+    gesture.end(ctx, false);
+    const cmd = (ctx.doc.editorHistory.pushAndExecute as ReturnType<typeof vi.fn>).mock.calls[0][0];
+    expect(cmd.description).toBe('Resize shapes');
+  });
+
+  it('text-only move aspect-locks without Shift (union stays proportional)', () => {
+    (ctx.doc.shapeSelection.getSelectedShapes as ReturnType<typeof vi.fn>).mockReturnValue([
+      { id: 't1', type: 'text' }
+    ]);
+    (ctx.doc.svgManipulation.getUnionBBox as ReturnType<typeof vi.fn>).mockReturnValue({
+      x: 0,
+      y: 0,
+      width: 100,
+      height: 50
+    });
+    // Drag SE toward a non-diagonal point; aspect lock should keep height/width = 0.5
+    (ctx.pointer.clientToEditorSvgPoint as ReturnType<typeof vi.fn>).mockReturnValue({ x: 200, y: 80 });
+    expect(gesture.start(ctx, 'se', { clientX: 0, clientY: 0 } as MouseEvent)).toBe(true);
+    gesture.move(ctx, 200, 80, false, false);
+    const overlay = gesture.overlayRect;
+    expect(overlay).toBeTruthy();
+    expect(overlay!.width / overlay!.height).toBeCloseTo(2, 5);
   });
 });

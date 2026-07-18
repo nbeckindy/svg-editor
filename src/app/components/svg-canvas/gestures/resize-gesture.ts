@@ -1,5 +1,9 @@
 import { Matrix, Svg } from '@svgdotjs/svg.js';
-import { UnionScaleCommand, UnionScaleFromCenterCommand } from '../../../models/editor-commands';
+import {
+  TextUniformScaleCommand,
+  UnionScaleCommand,
+  UnionScaleFromCenterCommand
+} from '../../../models/editor-commands';
 import { SmartGuideResult } from '../../../services/snap.service';
 import {
   computeCenterAnchoredResize,
@@ -11,6 +15,7 @@ import {
   type BBox,
   type ResizeHandle
 } from '../../../utils/selection-resize';
+import { isTextOnlyShapeList } from '../../../utils/text-uniform-scale';
 import type { GestureRuntimeContext, GhostPreviewFragment, Rect } from './gesture-context';
 import { computeGestureVisibilityToggleIds } from './gesture-visibility';
 import { isGestureSelectionLocked } from './gesture-layer-lock';
@@ -94,28 +99,44 @@ export class ResizeGesture {
   end(ctx: GestureRuntimeContext, centerAnchored: boolean): void {
     if (!this.isActive || !this.handle || !this.unionStart || !this.lastUnion) return;
     const ids = ctx.transformDoc.selectedShapeIds();
-    const ve = this.vectorEffectSnapshot;
-    if (centerAnchored) {
-      const cmd = new UnionScaleFromCenterCommand(
+    const textOnly = isTextOnlyShapeList(ctx.doc.shapeSelection.getSelectedShapes());
+
+    if (textOnly) {
+      const attrSnap = ctx.transformDoc.commandSvg().snapshotTextScaleAttrs(ids);
+      const mode = centerAnchored ? 'center' : this.handle;
+      const cmd = new TextUniformScaleCommand(
         ctx.transformDoc.commandSvg(),
         ids,
         this.unionStart,
         this.lastUnion,
-        this.snapshot,
-        ve
+        attrSnap,
+        mode
       );
       ctx.transformDoc.pushAndExecute(cmd);
     } else {
-      const cmd = new UnionScaleCommand(
-        ctx.transformDoc.commandSvg(),
-        ids,
-        this.unionStart,
-        this.lastUnion,
-        this.snapshot,
-        this.handle,
-        ve
-      );
-      ctx.transformDoc.pushAndExecute(cmd);
+      const ve = this.vectorEffectSnapshot;
+      if (centerAnchored) {
+        const cmd = new UnionScaleFromCenterCommand(
+          ctx.transformDoc.commandSvg(),
+          ids,
+          this.unionStart,
+          this.lastUnion,
+          this.snapshot,
+          ve
+        );
+        ctx.transformDoc.pushAndExecute(cmd);
+      } else {
+        const cmd = new UnionScaleCommand(
+          ctx.transformDoc.commandSvg(),
+          ids,
+          this.unionStart,
+          this.lastUnion,
+          this.snapshot,
+          this.handle,
+          ve
+        );
+        ctx.transformDoc.pushAndExecute(cmd);
+      }
     }
 
     for (const id of this.visibilityShapeIds) {
@@ -214,7 +235,8 @@ export class ResizeGesture {
       this.smartGuides = { vertical: [], horizontal: [] };
       return { x: 0, y: 0, width: 0, height: 0 };
     }
-    const resizedUnion = this.computeRawUnion(svgX, svgY, centerAnchored, shiftKey);
+    const forceAspectLock = isTextOnlyShapeList(ctx.doc.shapeSelection.getSelectedShapes());
+    const resizedUnion = this.computeRawUnion(svgX, svgY, centerAnchored, shiftKey || forceAspectLock);
     if (ctx.snap.isSnapTemporarilyDisabled() || !ctx.snap.snap.shapeEnabled()) {
       this.smartGuides = { vertical: [], horizontal: [] };
       return resizedUnion;

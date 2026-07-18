@@ -1,6 +1,7 @@
 import type { Matrix, Svg } from '@svgdotjs/svg.js';
 import type { ResizeHandle } from '../utils/selection-resize';
 import type { SkewAxis } from '../utils/selection-skew';
+import type { TextScaleAttrSnapshot, TextUniformScaleMode } from '../utils/text-uniform-scale';
 
 /** Union bbox in editor (user) space — matches geometry helpers used by union transforms. */
 export type TransformGestureUnionRect = { x: number; y: number; width: number; height: number };
@@ -42,6 +43,18 @@ export interface TransformGestureSvgPort {
   ): void;
   /** Restore each shape's `transform` matrix from a prior {@link snapshotSelectionTransforms} map (undo for pointer transforms). */
   restoreSelectionTransformsFromSnapshot(shapeIds: string[], snapshot: Map<string, Matrix>): void;
+  snapshotTextScaleAttrs(shapeIds: string[]): Map<string, TextScaleAttrSnapshot>;
+  applyTextUniformScaleFromSnapshot(
+    shapeIds: string[],
+    unionBefore: TransformGestureUnionRect,
+    unionAfter: TransformGestureUnionRect,
+    attrSnapshot: Map<string, TextScaleAttrSnapshot>,
+    mode: TextUniformScaleMode
+  ): void;
+  restoreTextScaleAttrsFromSnapshot(
+    shapeIds: string[],
+    snapshot: Map<string, TextScaleAttrSnapshot>
+  ): void;
 }
 
 /**

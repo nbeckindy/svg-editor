@@ -103,6 +103,9 @@ describe('PropertiesPanelComponent', () => {
       snapshotVectorEffectsForShapes: vi.fn(() => new Map<string, (string | null)[]>()),
       translateShape: vi.fn(),
       applyUnionScaleFromSnapshot: vi.fn(),
+      snapshotTextScaleAttrs: vi.fn().mockReturnValue(new Map()),
+      applyTextUniformScaleFromSnapshot: vi.fn(),
+      restoreTextScaleAttrsFromSnapshot: vi.fn(),
       applyUnionRotationFromSnapshot: vi.fn(),
       getSelectionRotationPivot: vi.fn(() => null),
       allocateUniqueDefId: vi.fn(() => 'grad-test'),
@@ -309,6 +312,40 @@ describe('PropertiesPanelComponent', () => {
     expect(args[2]).toEqual({ x: 0, y: 0, width: 200, height: 50 });
     expect(args[4]).toBe('e');
   });
+
+  it('commits text-only width via TextUniformScale with aspect-locked union', () => {
+    vi.mocked(svgManipulationService.getUnionBBox).mockReturnValue({ x: 0, y: 0, width: 100, height: 50 });
+    vi.mocked(svgManipulationService.snapshotTextScaleAttrs).mockReturnValue(
+      new Map([
+        [
+          't1',
+          {
+            fontSize: '16',
+            letterSpacing: null,
+            wordSpacing: null,
+            x: '0',
+            y: '20'
+          }
+        ]
+      ])
+    );
+    selectedShapesSignal.set([{ id: 't1', type: 'text', fontSize: 16, textContent: 'Hi' }]);
+    fixture.detectChanges();
+
+    const wIn = fixture.nativeElement.querySelector('[data-testid="properties-transform-w"]') as HTMLInputElement;
+    wIn.value = '200';
+    wIn.dispatchEvent(new Event('change'));
+    fixture.detectChanges();
+
+    expect(svgManipulationService.applyUnionScaleFromSnapshot).not.toHaveBeenCalled();
+    expect(svgManipulationService.applyTextUniformScaleFromSnapshot).toHaveBeenCalledTimes(1);
+    const args = vi.mocked(svgManipulationService.applyTextUniformScaleFromSnapshot).mock.calls[0];
+    expect(args[0]).toEqual(['t1']);
+    expect(args[1]).toEqual({ x: 0, y: 0, width: 100, height: 50 });
+    expect(args[2]).toEqual({ x: 0, y: 0, width: 200, height: 100 });
+    expect(args[4]).toBe('e');
+  });
+
   it('rejects invalid width (non-positive)', () => {
     vi.mocked(svgManipulationService.getUnionBBox).mockReturnValue({ x: 0, y: 0, width: 100, height: 50 });
     vi.mocked(svgManipulationService.snapshotSelectionTransforms).mockReturnValue(new Map());

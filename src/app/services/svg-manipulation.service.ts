@@ -37,6 +37,7 @@ import type { PropertiesPanelSvgPort } from '../history/properties-panel-svg.por
 import type { EditorShapeLifecycleSvgPort, PathDataEditorSvgPort, PathNodeHandleLinkSvgPort } from '../history/editor-shape-lifecycle-svg.port';
 import type { RasterImageInsertSvgPort } from '../history/raster-image-insert.port';
 import type { ResizeHandle } from '../utils/selection-resize';
+import type { TextScaleAttrSnapshot, TextUniformScaleMode } from '../utils/text-uniform-scale';
 import type { AxisAlignedRect } from '../utils/marquee-selection';
 
 export type { CreatableShapeType, InsertRasterImageAttrs, ShapeCreationAttrs } from './svg-shape-content.port';
@@ -401,6 +402,33 @@ export class SvgManipulationService
 
   restoreSelectionTransformsFromSnapshot(shapeIds: string[], snapshot: Map<string, Matrix>): void {
     this.geometry.restoreSelectionTransformsFromSnapshot(shapeIds, snapshot);
+  }
+
+  snapshotTextScaleAttrs(shapeIds: string[]): Map<string, TextScaleAttrSnapshot> {
+    return this.geometry.snapshotTextScaleAttrs(shapeIds);
+  }
+
+  applyTextUniformScaleFromSnapshot(
+    shapeIds: string[],
+    unionBefore: { x: number; y: number; width: number; height: number },
+    unionAfter: { x: number; y: number; width: number; height: number },
+    attrSnapshot: Map<string, TextScaleAttrSnapshot>,
+    mode: TextUniformScaleMode
+  ): void {
+    this.geometry.applyTextUniformScaleFromSnapshot(
+      shapeIds,
+      unionBefore,
+      unionAfter,
+      attrSnapshot,
+      mode
+    );
+  }
+
+  restoreTextScaleAttrsFromSnapshot(
+    shapeIds: string[],
+    snapshot: Map<string, TextScaleAttrSnapshot>
+  ): void {
+    this.geometry.restoreTextScaleAttrsFromSnapshot(shapeIds, snapshot);
   }
 
   getShapePropertiesIntersectingRect(rect: AxisAlignedRect): ShapeProperties[] {

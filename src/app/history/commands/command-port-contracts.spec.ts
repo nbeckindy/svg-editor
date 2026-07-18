@@ -24,7 +24,10 @@ function mockTransformPort(): TransformGestureSvgPort {
     applyUnionScaleFromCenter: vi.fn(),
     applyUnionRotationFromSnapshot: vi.fn(),
     applyUnionSkewFromSnapshot: vi.fn(),
-    restoreSelectionTransformsFromSnapshot: vi.fn()
+    restoreSelectionTransformsFromSnapshot: vi.fn(),
+    snapshotTextScaleAttrs: vi.fn().mockReturnValue(new Map()),
+    applyTextUniformScaleFromSnapshot: vi.fn(),
+    restoreTextScaleAttrsFromSnapshot: vi.fn()
   };
 }
 

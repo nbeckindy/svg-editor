@@ -7,6 +7,15 @@ import {
   rootUserPointToLocalPoint,
   screenRectToRootSvgUserRect
 } from '../utils/svg-screen-user';
+import {
+  computeTextUniformScaleFactor,
+  nudgeToKeepScaledReference,
+  parseOptionalNumberAttr,
+  referencePointForTextScale,
+  scaleNumericAttrString,
+  type TextScaleAttrSnapshot,
+  type TextUniformScaleMode
+} from '../utils/text-uniform-scale';
 import { SvgEditorDocumentService } from './svg-editor-document.service';
 import type { SvgSelectionGeometryPort } from './svg-selection-geometry.port';
 
@@ -457,6 +466,128 @@ export class SvgSelectionGeometryService implements SvgSelectionGeometryPort {
       if (shape && saved && typeof shape.matrix === 'function') {
         shape.matrix(saved);
       }
+    }
+  }
+
+  /**
+   * Snapshot typography + position attrs for text uniform scale (undo without matrix restore).
+   */
+  snapshotTextScaleAttrs(shapeIds: string[]): Map<string, TextScaleAttrSnapshot> {
+    const out = new Map<string, TextScaleAttrSnapshot>();
+    if (!this.doc.getSVGInstance()) return out;
+    for (const id of shapeIds) {
+      const shape = this.resolveTextShape(id);
+      if (!shape) continue;
+      out.set(id, {
+        fontSize: this.readAttrString(shape, 'font-size'),
+        letterSpacing: this.readAttrString(shape, 'letter-spacing'),
+        wordSpacing: this.readAttrString(shape, 'word-spacing'),
+        x: this.readAttrString(shape, 'x'),
+        y: this.readAttrString(shape, 'y')
+      });
+    }
+    return out;
+  }
+
+  /**
+   * Uniform scale for text-only selections: bake into `font-size` (+ spacing) and nudge `x`/`y`.
+   * Does **not** compose a scale transform matrix.
+   */
+  applyTextUniformScaleFromSnapshot(
+    shapeIds: string[],
+    unionBefore: { x: number; y: number; width: number; height: number },
+    unionAfter: { x: number; y: number; width: number; height: number },
+    attrSnapshot: Map<string, TextScaleAttrSnapshot>,
+    mode: TextUniformScaleMode
+  ): void {
+    if (!this.doc.getSVGInstance()) return;
+    const { s, ax, ay } = computeTextUniformScaleFactor(mode, unionBefore, unionAfter);
+    const eps = 1e-9;
+    if (!Number.isFinite(s) || Math.abs(s) < eps) return;
+    const pivot = { x: ax, y: ay };
+
+    for (const id of shapeIds) {
+      const shape = this.resolveTextShape(id);
+      const snap = attrSnapshot.get(id);
+      if (!shape || !snap) continue;
+
+      const bboxBefore = this.getShapeBBox(id);
+      const refBefore = bboxBefore ? referencePointForTextScale(bboxBefore, mode) : null;
+
+      const baseFont = parseOptionalNumberAttr(snap.fontSize) ?? 16;
+      shape.attr('font-size', `${baseFont * s}`);
+      const newLetter = scaleNumericAttrString(snap.letterSpacing, s);
+      if (newLetter != null) {
+        shape.attr('letter-spacing', newLetter);
+      }
+      const newWord = scaleNumericAttrString(snap.wordSpacing, s);
+      if (newWord != null) {
+        shape.attr('word-spacing', newWord);
+      }
+
+      if (refBefore) {
+        const bboxAfter = this.getShapeBBox(id);
+        if (bboxAfter) {
+          const refAfter = referencePointForTextScale(bboxAfter, mode);
+          const { x: dx, y: dy } = nudgeToKeepScaledReference(refBefore, refAfter, pivot, s);
+          if (Math.abs(dx) > eps || Math.abs(dy) > eps) {
+            const x0 = parseOptionalNumberAttr(this.readAttrString(shape, 'x')) ?? 0;
+            const y0 = parseOptionalNumberAttr(this.readAttrString(shape, 'y')) ?? 0;
+            shape.attr('x', `${x0 + dx}`);
+            shape.attr('y', `${y0 + dy}`);
+          }
+        }
+      }
+    }
+    this.doc.bumpDocumentRevision();
+  }
+
+  restoreTextScaleAttrsFromSnapshot(
+    shapeIds: string[],
+    snapshot: Map<string, TextScaleAttrSnapshot>
+  ): void {
+    if (!this.doc.getSVGInstance()) return;
+    for (const id of shapeIds) {
+      const shape = this.resolveTextShape(id);
+      const saved = snapshot.get(id);
+      if (!shape || !saved) continue;
+      this.writeAttrOrClear(shape, 'font-size', saved.fontSize);
+      this.writeAttrOrClear(shape, 'letter-spacing', saved.letterSpacing);
+      this.writeAttrOrClear(shape, 'word-spacing', saved.wordSpacing);
+      this.writeAttrOrClear(shape, 'x', saved.x);
+      this.writeAttrOrClear(shape, 'y', saved.y);
+    }
+    this.doc.bumpDocumentRevision();
+  }
+
+  private resolveTextShape(shapeId: string): SvgJsElement | null {
+    if (!this.doc.getSVGInstance()) return null;
+    let current = this.doc.getSVGInstance()!.findOne(`#${shapeId}`) as SvgJsElement | undefined;
+    if (!current?.node) return null;
+    for (let depth = 0; depth < 24 && current; depth++) {
+      if (current.type === 'text') {
+        return current;
+      }
+      const parent = current.parent() as SvgJsElement | undefined;
+      if (!parent || parent === current) {
+        break;
+      }
+      current = parent;
+    }
+    return null;
+  }
+
+  private readAttrString(shape: SvgJsElement, name: string): string | null {
+    const v = shape.attr(name);
+    if (v == null || v === '') return null;
+    return String(v);
+  }
+
+  private writeAttrOrClear(shape: SvgJsElement, name: string, value: string | null): void {
+    if (value == null || value === '') {
+      shape.attr(name, null);
+    } else {
+      shape.attr(name, value);
     }
   }
 

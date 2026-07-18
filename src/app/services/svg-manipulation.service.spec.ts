@@ -648,6 +648,49 @@ describe('SvgManipulationService', () => {
       expect(rect?.getAttribute('transform')).toBeTruthy();
     });
 
+    it('applyTextUniformScaleFromSnapshot bakes font-size and does not set transform scale', () => {
+      const svgContent =
+        '<svg viewBox="0 0 200 200"><text id="t1" x="10" y="40" font-size="16" letter-spacing="2">Hi</text></svg>';
+      service.initializeSVG(container, svgContent);
+      const attrSnap = service.snapshotTextScaleAttrs(['t1']);
+      const unionBefore = { x: 10, y: 24, width: 20, height: 16 };
+      const unionAfter = { x: 10, y: 24, width: 40, height: 32 };
+
+      // First getBBox (before) → original; second (after font change) → doubled size same origin
+      let calls = 0;
+      vi.spyOn(service, 'getShapeBBox').mockImplementation(() => {
+        calls += 1;
+        if (calls === 1) {
+          return { x: 10, y: 24, width: 20, height: 16 };
+        }
+        return { x: 10, y: 24, width: 40, height: 32 };
+      });
+
+      service.applyTextUniformScaleFromSnapshot(['t1'], unionBefore, unionAfter, attrSnap, 'se');
+
+      const el = container.querySelector('#t1') as Element;
+      expect(el.getAttribute('font-size')).toBe('32');
+      expect(el.getAttribute('letter-spacing')).toBe('4');
+      // SE fixed NW: origin already matches desired; x/y may stay or nudge by ~0
+      expect(el.getAttribute('transform')).toBeFalsy();
+      expect(Number.parseFloat(el.getAttribute('x') ?? '0')).toBeCloseTo(10, 5);
+      expect(Number.parseFloat(el.getAttribute('y') ?? '0')).toBeCloseTo(40, 5);
+    });
+
+    it('restoreTextScaleAttrsFromSnapshot restores font-size and position', () => {
+      const svgContent =
+        '<svg viewBox="0 0 200 200"><text id="t1" x="10" y="40" font-size="16">Hi</text></svg>';
+      service.initializeSVG(container, svgContent);
+      const snap = service.snapshotTextScaleAttrs(['t1']);
+      const text = service.getSVGInstance()!.findOne('#t1') as { attr: (k: string, v?: string) => unknown };
+      text.attr('font-size', '32');
+      text.attr('x', '5');
+      service.restoreTextScaleAttrsFromSnapshot(['t1'], snap);
+      const el = container.querySelector('#t1') as Element;
+      expect(el.getAttribute('font-size')).toBe('16');
+      expect(el.getAttribute('x')).toBe('10');
+    });
+
     it('getShapeBBox should reflect transformed bounds after applyUnionScaleFromSnapshot', () => {
       const svgContent = '<svg viewBox="0 0 200 200"><rect id="r1" x="10" y="20" width="100" height="50"/></svg>';
       service.initializeSVG(container, svgContent);

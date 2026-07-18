@@ -5,6 +5,7 @@ export * from './paint/text-commands';
 export * from './transform/translate-command';
 export * from './transform/align-distribute-commands';
 export * from './transform/union-transform-commands';
+export * from './transform/text-uniform-scale-command';
 export * from './layers/layer-commands';
 export * from './layers/clip-path-commands';
 export * from './document/document-lifecycle-commands';

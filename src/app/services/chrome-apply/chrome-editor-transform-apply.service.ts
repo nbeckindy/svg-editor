@@ -4,6 +4,7 @@ import {
   TranslateCommand,
   UnionScaleCommand,
   UnionRotateCommand,
+  TextUniformScaleCommand,
   AlignCommand,
   DistributeCommand,
   RectCornerRadiusCommand,
@@ -18,6 +19,10 @@ import {
   normDeg0To360,
   shortestSignedDeltaDeg
 } from '../../utils/selection-transform-matrix';
+import {
+  isTextOnlyShapeList,
+  proportionalUnionAfterAxisEdit
+} from '../../utils/text-uniform-scale';
 import { ChromeEditorApplySupport } from './chrome-editor-apply-support.service';
 import {
   PROPERTIES_PANEL_SVG_PORT,
@@ -135,6 +140,24 @@ export class ChromeEditorTransformApplyService {
     if (field === 'w') {
       if (!isFinitePositiveDim(parsed) || parsed < MIN_UNION_SIZE) return;
       if (Math.abs(parsed - unionBefore.width) < epsPos) return;
+      if (isTextOnlyShapeList(this.selectedShapesList())) {
+        const unionAfter = proportionalUnionAfterAxisEdit(unionBefore, 'w', parsed);
+        const attrSnap = this.transformSvg.snapshotTextScaleAttrs(ids);
+        this.pushCommandsAndSyncSelection(
+          [
+            new TextUniformScaleCommand(
+              this.transformSvg,
+              ids,
+              unionBefore,
+              unionAfter,
+              attrSnap,
+              'e'
+            )
+          ],
+          `Set selection width to ${parsed}`
+        );
+        return;
+      }
       const unionAfter = { ...unionBefore, width: parsed };
       const snap = this.transformSvg.snapshotSelectionTransforms(ids);
       const ve = this.transformSvg.snapshotVectorEffectsForShapes(ids);
@@ -148,6 +171,24 @@ export class ChromeEditorTransformApplyService {
     if (field === 'h') {
       if (!isFinitePositiveDim(parsed) || parsed < MIN_UNION_SIZE) return;
       if (Math.abs(parsed - unionBefore.height) < epsPos) return;
+      if (isTextOnlyShapeList(this.selectedShapesList())) {
+        const unionAfter = proportionalUnionAfterAxisEdit(unionBefore, 'h', parsed);
+        const attrSnap = this.transformSvg.snapshotTextScaleAttrs(ids);
+        this.pushCommandsAndSyncSelection(
+          [
+            new TextUniformScaleCommand(
+              this.transformSvg,
+              ids,
+              unionBefore,
+              unionAfter,
+              attrSnap,
+              's'
+            )
+          ],
+          `Set selection height to ${parsed}`
+        );
+        return;
+      }
       const unionAfter = { ...unionBefore, height: parsed };
       const snap = this.transformSvg.snapshotSelectionTransforms(ids);
       const ve = this.transformSvg.snapshotVectorEffectsForShapes(ids);

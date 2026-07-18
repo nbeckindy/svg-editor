@@ -13,8 +13,10 @@ import {
   UnionScaleFromCenterCommand,
   UnionRotateCommand,
   SkewCommand,
+  TextUniformScaleCommand,
   isCoalesceable,
 } from '../../../models/editor-commands';
+import type { TextScaleAttrSnapshot } from '../../../utils/text-uniform-scale';
 
 describe('TranslateCommand', () => {
   it('should call translateShape on execute', () => {
@@ -395,6 +397,73 @@ describe('UnionScaleFromCenterCommand', () => {
     cmd.undo();
     expect(svc.restoreSelectionTransformsFromSnapshot).toHaveBeenCalledWith(['s1'], new Map([['s1', m1]]));
     expect(svc.restoreVectorEffectsForShapeSubtrees).toHaveBeenCalledWith(['s1'], ve);
+  });
+});
+
+describe('TextUniformScaleCommand', () => {
+  const before = { x: 0, y: 0, width: 100, height: 50 };
+  const after = { x: 0, y: 0, width: 200, height: 100 };
+
+  function textSnap(fontSize = '16'): Map<string, TextScaleAttrSnapshot> {
+    return new Map([
+      [
+        't1',
+        {
+          fontSize,
+          letterSpacing: '1',
+          wordSpacing: null,
+          x: '10',
+          y: '20'
+        }
+      ]
+    ]);
+  }
+
+  it('calls applyTextUniformScaleFromSnapshot on execute', () => {
+    const snap = textSnap();
+    const svc = mockSvc();
+    const cmd = new TextUniformScaleCommand(svc, ['t1'], before, after, snap, 'se');
+    cmd.execute();
+    expect(svc.applyTextUniformScaleFromSnapshot).toHaveBeenCalledWith(
+      ['t1'],
+      before,
+      after,
+      snap,
+      'se'
+    );
+  });
+
+  it('restores text attrs on undo', () => {
+    const snap = textSnap();
+    const svc = mockSvc();
+    const cmd = new TextUniformScaleCommand(svc, ['t1'], before, after, snap, 'se');
+    cmd.undo();
+    expect(svc.restoreTextScaleAttrsFromSnapshot).toHaveBeenCalledWith(['t1'], snap);
+  });
+
+  it('coalesceWith keeps first unionBefore and snapshot; uses latest unionAfter', () => {
+    const mid = { x: 0, y: 0, width: 150, height: 75 };
+    const end = { x: 0, y: 0, width: 200, height: 100 };
+    const snap = textSnap();
+    const svc = mockSvc();
+    const first = new TextUniformScaleCommand(svc, ['t1'], before, mid, snap, 'se');
+    const second = new TextUniformScaleCommand(svc, ['t1'], mid, end, snap, 'se');
+    expect(isCoalesceable(first)).toBe(true);
+    const merged = first.coalesceWith(second) as TextUniformScaleCommand;
+    merged.execute();
+    expect(svc.applyTextUniformScaleFromSnapshot).toHaveBeenCalledWith(
+      ['t1'],
+      before,
+      end,
+      snap,
+      'se'
+    );
+  });
+
+  it('has description Resize text', () => {
+    expect(new TextUniformScaleCommand(mockSvc(), ['t1'], before, after, textSnap(), 'center').description).toBe(
+      'Resize text'
+    );
   });
 });
 

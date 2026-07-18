@@ -1148,6 +1148,54 @@ describe('SvgCanvasComponent', () => {
     expect(selectShapesSpy).not.toHaveBeenCalled();
   });
 
+  it.each([
+    { tool: 'line' as const, tag: 'line' },
+    { tool: 'rect' as const, tag: 'rect' },
+    { tool: 'ellipse' as const, tag: 'ellipse' }
+  ])('creation drag preview for $tool shows defaults paint under thin blue guide', async ({ tool, tag }) => {
+    const drawingDefaults = TestBed.inject(DrawingStyleDefaultsService);
+    drawingDefaults.updateDefaults({ fill: '#abcdef', stroke: '#123456', strokeWidth: 3.5 });
+
+    fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 50));
+    fixture.detectChanges();
+    stubEditorSvgScreenMapping(component);
+    editorToolService.setTool(tool);
+
+    component.onCanvasMouseDown({
+      button: 0,
+      clientX: 10,
+      clientY: 10,
+      preventDefault: vi.fn()
+    } as unknown as MouseEvent);
+    component.onDocumentMouseMove({
+      clientX: 10 + MARQUEE_MIN_DRAG_PX + 1,
+      clientY: 10 + MARQUEE_MIN_DRAG_PX + 1,
+      shiftKey: false
+    } as MouseEvent);
+    fixture.detectChanges();
+
+    const paint = fixture.nativeElement.querySelector(
+      '[data-testid="canvas-creation-ghost-paint"]'
+    ) as SVGElement | null;
+    const guide = fixture.nativeElement.querySelector(
+      '[data-testid="canvas-creation-ghost"]'
+    ) as SVGElement | null;
+    expect(paint).toBeTruthy();
+    expect(guide).toBeTruthy();
+    expect(paint?.tagName.toLowerCase()).toBe(tag);
+    expect(guide?.tagName.toLowerCase()).toBe(tag);
+    expect(guide?.classList.contains('creation-ghost-guide')).toBe(true);
+    expect(paint?.getAttribute('stroke')).toBe('#123456');
+    expect(paint?.getAttribute('stroke-width')).toBe('3.5');
+    if (tool === 'line') {
+      expect(paint?.getAttribute('fill')).toBe('none');
+    } else {
+      expect(paint?.getAttribute('fill')).toBe('#abcdef');
+    }
+  });
+
   it('creates a text element at click coordinates and switches back to selector', () => {
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
     fixture.detectChanges();
@@ -1363,6 +1411,42 @@ describe('SvgCanvasComponent', () => {
       stroke: undefined,
       strokeWidth: 0,
       opacity: 1
+    });
+    await new Promise((r) => setTimeout(r, 0));
+    fixture.detectChanges();
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-handle-skew-n"]')).toBeFalsy();
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-handle-resize-n"]')).toBeTruthy();
+  });
+
+  it('hides skew handles for text-only selection but keeps resize handles', async () => {
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 16
+    });
+    vi.spyOn(svgManipulationService, 'getUnionBBox').mockReturnValue({
+      x: 10,
+      y: 20,
+      width: 40,
+      height: 16
+    });
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><text id="t1" x="10" y="30" font-size="16">Hi</text></svg>'
+    );
+    component.wrapperWidth = 100;
+    component.wrapperHeight = 100;
+    fixture.detectChanges();
+    shapeSelectionService.selectShape({
+      id: 't1',
+      type: 'text',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1,
+      fontSize: 16,
+      textContent: 'Hi'
     });
     await new Promise((r) => setTimeout(r, 0));
     fixture.detectChanges();
