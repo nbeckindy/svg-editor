@@ -9,7 +9,7 @@ import { ShapeSelectionService } from './shape-selection.service';
 
 /**
  * Selection-scoped paint presentation helpers and chrome apply wrappers
- * shared by the Colors and Stroke dock panels.
+ * shared by the Colors / Stroke dock panels and tool-strip fill/stroke swatches.
  */
 @Injectable({ providedIn: 'root' })
 export class SelectionPaintUiService {

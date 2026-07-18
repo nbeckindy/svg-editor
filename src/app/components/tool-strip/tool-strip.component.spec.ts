@@ -1,5 +1,5 @@
 import { ComponentFixture, TestBed } from '@angular/core/testing';
-import { signal } from '@angular/core';
+import { computed, signal } from '@angular/core';
 import { ToolStripComponent } from './tool-strip.component';
 import { EditorToolService } from '../../services/editor-tool.service';
 import { registerDefaultToolDescriptors } from '../../tools/register-default-tool-descriptors';
@@ -11,6 +11,7 @@ import { RasterInsertAnchorStore } from '../../services/raster-insert-anchor.sto
 import { RasterImageInsertService } from '../../services/raster-image-insert.service';
 import { ChromeEditorApplyService } from '../../services/chrome-editor-apply.service';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
+import { SelectionPaintUiService } from '../../services/selection-paint-ui.service';
 
 describe('ToolStripComponent', () => {
   let fixture: ComponentFixture<ToolStripComponent>;
@@ -41,6 +42,31 @@ describe('ToolStripComponent', () => {
             applyCreationFillPaintMode: vi.fn(),
             applyCreationStrokePaintMode: vi.fn(),
             applyCreationStrokeWidthDefault: vi.fn()
+          }
+        },
+        {
+          provide: SelectionPaintUiService,
+          useValue: {
+            hasSelection: computed(() => false),
+            selectedShape: computed(() => null),
+            selectionCount: computed(() => 0),
+            anySelectedShapeLocked: computed(() => false),
+            fillSwatchMode: vi.fn(),
+            strokeSwatchMode: vi.fn(),
+            fillPickerColor: vi.fn(),
+            strokePickerColor: vi.fn(),
+            allSelectedLackFill: vi.fn(),
+            allSelectedLackStroke: vi.fn(),
+            fillPaintMixed: vi.fn(() => false),
+            strokePaintMixed: vi.fn(() => false),
+            supportsFill: vi.fn(() => true),
+            isPatternFill: vi.fn(() => false),
+            isPatternStroke: vi.fn(() => false),
+            gradientModelForShape: vi.fn(() => null),
+            onFillColorChange: vi.fn(),
+            onStrokeColorChange: vi.fn(),
+            onFillPaintModeChange: vi.fn(),
+            onStrokePaintModeChange: vi.fn()
           }
         },
         { provide: SvgEditorDocumentService, useValue: editorDocumentMock },

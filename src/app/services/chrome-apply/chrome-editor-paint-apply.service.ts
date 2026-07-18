@@ -79,7 +79,8 @@ export class ChromeEditorPaintApplyService {
   }
 
   /**
-   * Creation paint defaults only (tool strip). Never rewrites Selection paint.
+   * Creation paint defaults only (tool strip with empty selection).
+   * Selection paint goes through applyFillColor / applyPaintModeFromChrome.
    * @see docs/adr/0003-editor-chrome-ownership.md
    */
   applyCreationFillDefault(color: string): void {
@@ -100,7 +101,7 @@ export class ChromeEditorPaintApplyService {
     );
   }
 
-  /** Creation paint defaults only — never rewrites Selection paint. */
+  /** Creation stroke default (empty selection on strip). */
   applyCreationStrokeDefault(color: string): void {
     const cleared = !color || color.toLowerCase() === 'none';
     const nextStroke = cleared ? 'none' : color;
@@ -120,8 +121,7 @@ export class ChromeEditorPaintApplyService {
   }
 
   /**
-   * Creation paint mode (Solid / Linear / Radial / No paint) for tool-strip defaults.
-   * Never rewrites Selection paint.
+   * Creation paint mode (Solid / Linear / Radial / No paint) for empty-selection strip defaults.
    */
   applyCreationFillPaintMode(mode: PaintSwatchMode): void {
     const before = this.drawingDefaults.defaults();
@@ -133,7 +133,7 @@ export class ChromeEditorPaintApplyService {
     );
   }
 
-  /** Creation stroke paint mode — never rewrites Selection paint. */
+  /** Creation stroke paint mode (empty selection on strip). */
   applyCreationStrokePaintMode(mode: PaintSwatchMode): void {
     const before = this.drawingDefaults.defaults();
     const after = this.buildCreationPaintDefaultsAfter(before, 'stroke', mode);
@@ -197,7 +197,7 @@ export class ChromeEditorPaintApplyService {
     }
   }
 
-  /** Creation paint defaults only — never rewrites Selection paint. */
+  /** Creation stroke-width default (empty selection on strip). */
   applyCreationStrokeWidthDefault(width: number): void {
     if (!Number.isFinite(width) || width < 0) return;
     const before = this.drawingDefaults.defaults();

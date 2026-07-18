@@ -2,7 +2,7 @@
   class="creation-paint-defaults"
   data-testid="creation-paint-defaults"
   role="group"
-  aria-label="Creation paint defaults">
+  [attr.aria-label]="groupAriaLabel()">
   <div class="swatch-stack" aria-hidden="false">
     <div class="swatch-slot swatch-slot-fill" data-testid="creation-default-fill">
       <span class="swatch-caption">Fill</span>
@@ -12,7 +12,10 @@
         [gradientModesVisible]="false"
         [mode]="fillMode()"
         [color]="fillPickerColor()"
+        [gradientModel]="fillGradientModel()"
         [empty]="fillEmpty()"
+        [indeterminate]="fillIndeterminate()"
+        [disabled]="fillDisabled()"
         (paintModeChange)="onFillPaintModeChange($event)"
         (colorChange)="onFillChange($event)"
         data-testid="creation-fill-paint-swatch" />
@@ -25,7 +28,10 @@
         [gradientModesVisible]="false"
         [mode]="strokeMode()"
         [color]="strokePickerColor()"
+        [gradientModel]="strokeGradientModel()"
         [empty]="strokeEmpty()"
+        [indeterminate]="strokeIndeterminate()"
+        [disabled]="strokeDisabled()"
         (paintModeChange)="onStrokePaintModeChange($event)"
         (colorChange)="onStrokeChange($event)"
         data-testid="creation-stroke-paint-swatch" />

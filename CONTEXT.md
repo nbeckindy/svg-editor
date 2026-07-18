@@ -232,7 +232,7 @@ UI metadata for a **Tool** (`ToolDescriptor`: label, icon, strip group, `interac
 _Avoid_: Duplicating strip labels in HTML; using descriptor fields for runtime tool behavior (behavior belongs in the **CanvasTool** adapter or orchestrator).
 
 **Tool strip**:
-Left-dock **Chrome** that activates a **Tool** (and may hold compact **Creation paint defaults**)—not **Selection** property editing, not per-**Tool** option chrome, and not the lasting home for file open/import.
+Left-dock **Chrome** that activates a **Tool** and holds compact fill/stroke swatches (**Creation paint defaults** or **Selection** paint depending on selection)—not full property panels, not per-**Tool** option chrome, and not the lasting home for file open/import.
 _Avoid_: Putting full properties or layer trees on the **tool strip**; calling tool buttons a **Tool** (the mode is the **Tool**; the control is a tool button); treating SVG open/import as permanently strip-owned once a **menu bar** exists.
 
 **Tool context bar**:
@@ -248,8 +248,8 @@ Future Windows-style dropdown menus along the top (File / View / …) for sessio
 _Avoid_: Designing as if **menu bar** already exists; merging **menu bar** with **tool context bar** in prose; treating New/Download/open as permanently “top-bar or strip buttons only” once menus ship.
 
 **Creation paint defaults**:
-Compact fill/stroke (and related) defaults on the **tool strip** used when creating new shapes—session draw defaults only. Changing a default does not rewrite paint on the current **Selection**; selected-shape paint is edited only in a **Selection-aware dock panel**, which need not expose or own those defaults.
-_Avoid_: Equating defaults with selected-shape paint; dual-writing strip changes into **Selection**; putting the full paint editor in the **tool context bar**; assuming the properties **Dock panel** must keep a “defaults when empty” paint UI.
+Compact fill/stroke defaults on the **tool strip** used when creating new shapes—session draw defaults. With an **empty selection**, strip swatches edit these defaults only. With a **Selection**, the same swatches edit **Selection** paint via the Colors apply path (and dual-write defaults), matching user expectation that rail color controls recolor selected art. Gradient authoring stays in the Colors **Dock panel**; the strip keeps solid/none tabs.
+_Avoid_: Treating strip swatches as creation-only when shapes are selected; putting the full gradient editor on the strip; putting paint UI in the **tool context bar**; assuming the properties **Dock panel** must keep a “defaults when empty” paint UI.
 
 **Dock panel**:
 A registered collapsible section in the right-dock **Chrome** stack—e.g. Document, Properties, Colors, Stroke, Align & distribute, layers, **Path ops panel**—not **Editor chrome** on the **Canvas**. Sections share one scrollable column (no exclusive tab switcher); each has a header that collapses/expands its body. Do not repeat the section title as an inner `h3`.
@@ -277,7 +277,7 @@ _Avoid_: Treating selection-awareness as “hidden from the dock until relevant�
 - **Tool strip** chooses the **Tool** (plus optional **Creation paint defaults**); **tool context bar** hosts active-**Tool** options only (permanent row); **editor top bar** holds app/document actions and interim session options (snap); planned **menu bar** absorbs those session/document menus (New, Download, open/import, snap, fit-to-view, …) later—without moving them onto the **tool strip** or folding the **tool context bar** into menus.
 - **Dock panel**s host **Document** / **Selection** / **Layer** data—not mode options. Locked stack order: Document → Properties → Text → Colors → Stroke → Align & distribute → Layers → Path Ops.
 - Fill paint and **fill/stroke opacity** live under Colors; stroke paint/styling under Stroke; geometry under Properties; typography (and text-outline semantics such as `paint-order` / `vector-effect`) under Text; artboard under **Document settings panel**. Element-level SVG `opacity` is preserved on import and for layers, but Colors chrome edits `fill-opacity` / `stroke-opacity` (not whole-element `opacity`).
-- **Creation paint defaults** affect subsequent creation only; they do not apply to **Selection**. A **Selection-aware dock panel**’s paint UI can be Selection-gated (hidden/empty when **empty selection**) without owning defaults.
+- **Creation paint defaults** (empty selection on the strip) affect subsequent creation only. With a **Selection**, strip fill/stroke swatches apply **Selection** paint like Colors. A **Selection-aware dock panel**’s paint UI can still be Selection-gated (hidden/empty when **empty selection**) without owning defaults.
 - **Selection** names shapes in the **Live tree**; **Editor chrome** visualizes and manipulates **Selection** but is not **Selection** itself.
 - **Tool** describes how pointers and keys are interpreted on the **Canvas**; **Selection** describes which shapes are targeted—app code may couple changes, but the concepts differ.
 - **Editor chrome** (handles, marquee, guides) reacts to both **Tool** and **Selection**.
@@ -381,7 +381,7 @@ Shell templates expose `data-testid` on major regions (e.g. tool strip, right do
 > **Contributor:** "Alt-curve is **tool context bar** (active **Tool** option). Selected-shape fill is a **Selection-aware dock panel**. New-shape fill/stroke defaults are **Creation paint defaults** on the **tool strip**—three homes, don't merge them."
 
 > **Dev:** "I changed the strip fill while a rect is selected—did the rect repaint?"
-> **Contributor:** "No — strip only updates **Creation paint defaults**. Edit the rect’s fill in the Colors **Dock panel**."
+> **Contributor:** "Yes — with a **Selection**, strip swatches use the same apply path as Colors (selection + defaults). Empty selection still edits **Creation paint defaults** only."
 
 > **Dev:** "Where do artboard width and fit-to-artboard live?"
 > **Contributor:** "Width/height/background → **Document settings panel**. Fit-to-artboard is a **Canvas** view command—don’t stuff it into document settings as if it were an **Artboard** attribute."
