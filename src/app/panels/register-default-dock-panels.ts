@@ -5,11 +5,12 @@ import { DocumentSettingsComponent } from '../components/document-settings/docum
 import { LayersPanelComponent } from '../components/layers-panel/layers-panel.component';
 import { PropertiesPanelComponent } from '../components/properties-panel/properties-panel.component';
 import { StrokePanelComponent } from '../components/stroke-panel/stroke-panel.component';
+import { TextPanelComponent } from '../components/text-panel/text-panel.component';
 import type { DockPanelRegistryService } from './dock-panel-registry.service';
-import { pathOpsMultiPathRelevance } from './dock-panel-relevance';
+import { pathOpsMultiPathRelevance, textPanelRelevance } from './dock-panel-relevance';
 
 /**
- * Registers the seven dock stack sections in locked product order.
+ * Registers the eight dock stack sections in locked product order.
  */
 export function registerDefaultDockPanels(registry: DockPanelRegistryService): void {
   registry.register({
@@ -39,9 +40,24 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
   });
 
   registry.register({
+    id: 'text',
+    label: 'Text',
+    order: 3,
+    availability: 'selection-aware',
+    component: TextPanelComponent,
+    headerTestId: 'dock-section-text',
+    areaTestId: 'editor-text-area',
+    ariaLabel: 'Text',
+    panelClass: 'text-panel-host',
+    defaultExpanded: false,
+    relevantTools: ['text', 'selector'],
+    isRelevantWhen: textPanelRelevance
+  });
+
+  registry.register({
     id: 'colors',
     label: 'Colors',
-    order: 3,
+    order: 4,
     availability: 'selection-aware',
     component: ColorsPanelComponent,
     headerTestId: 'dock-section-colors',
@@ -54,7 +70,7 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
   registry.register({
     id: 'stroke',
     label: 'Stroke',
-    order: 4,
+    order: 5,
     availability: 'selection-aware',
     component: StrokePanelComponent,
     headerTestId: 'dock-section-stroke',
@@ -67,7 +83,7 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
   registry.register({
     id: 'alignDistribute',
     label: 'Align & distribute',
-    order: 5,
+    order: 6,
     availability: 'selection-aware',
     component: AlignDistributePanelComponent,
     headerTestId: 'dock-section-align-distribute',
@@ -80,7 +96,7 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
   registry.register({
     id: 'layers',
     label: 'Layers',
-    order: 6,
+    order: 7,
     availability: 'always-available',
     component: LayersPanelComponent,
     headerTestId: 'dock-section-layers',
@@ -93,7 +109,7 @@ export function registerDefaultDockPanels(registry: DockPanelRegistryService): v
   registry.register({
     id: 'pathOps',
     label: 'Path Ops',
-    order: 7,
+    order: 8,
     availability: 'selection-aware',
     component: BooleanPathPanelComponent,
     headerTestId: 'dock-section-path-ops',

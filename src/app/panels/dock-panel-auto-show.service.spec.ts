@@ -6,7 +6,7 @@ import { DockPanelRegistryService } from './dock-panel-registry.service';
 import { EditorToolService } from '../services/editor-tool.service';
 import { ShapeSelectionService } from '../services/shape-selection.service';
 import type { DockPanelDescriptor } from './dock-panel-descriptor';
-import { pathOpsMultiPathRelevance } from './dock-panel-relevance';
+import { pathOpsMultiPathRelevance, textPanelRelevance } from './dock-panel-relevance';
 
 class StubPanelComponent {}
 
@@ -47,7 +47,8 @@ describe('DockPanelAutoShowService', () => {
 
     registry.register(makeDescriptor('properties', 1));
     registry.register(makeDescriptor('layers', 2));
-    registry.register(makeDescriptor('pathOps', 3, ['selector'], pathOpsMultiPathRelevance));
+    registry.register(makeDescriptor('text', 3, ['text', 'selector'], textPanelRelevance));
+    registry.register(makeDescriptor('pathOps', 4, ['selector'], pathOpsMultiPathRelevance));
   });
 
   it('suggests path ops when selector has two paths selected', () => {
@@ -59,6 +60,25 @@ describe('DockPanelAutoShowService', () => {
 
     expect(service.suggestedPanelId()).toBe('pathOps');
     expect(service.shouldAutoExpand('pathOps', false)).toBe(true);
+  });
+
+  it('suggests text panel when text tool is active', () => {
+    editorTool.setTool('text');
+    expect(service.suggestedPanelId()).toBe('text');
+    expect(service.shouldAutoExpand('text', false)).toBe(true);
+  });
+
+  it('suggests text panel when a text shape is selected', () => {
+    editorTool.setTool('selector');
+    shapeSelection.selectShape({
+      id: 't1',
+      type: 'text',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    expect(service.suggestedPanelId()).toBe('text');
   });
 
   it('does not suggest path ops for a single path', () => {

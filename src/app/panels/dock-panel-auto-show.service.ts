@@ -32,7 +32,8 @@ export class DockPanelAutoShowService {
     return {
       currentTool: this.editorTool.currentTool(),
       selectedShapeCount: shapes.length,
-      selectedPathCount: shapes.filter((shape) => shape.type === 'path').length
+      selectedPathCount: shapes.filter((shape) => shape.type === 'path').length,
+      selectedTextCount: shapes.filter((shape) => shape.type === 'text').length
     };
   });
 

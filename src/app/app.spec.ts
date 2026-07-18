@@ -43,7 +43,7 @@ describe('AppComponent', () => {
     expect(compiled.querySelector('header h1')?.textContent).toContain('Angular SVG Editor');
   });
 
-  it('should have left rail, canvas, dock stack with seven sections, and svg debug panel', () => {
+  it('should have left rail, canvas, dock stack with eight sections, and svg debug panel', () => {
     const fixture = TestBed.createComponent(AppComponent);
     fixture.detectChanges();
     const compiled = fixture.nativeElement as HTMLElement;
@@ -54,6 +54,7 @@ describe('AppComponent', () => {
     expect(compiled.querySelector('[data-testid="dock-tab-properties"]')).toBeNull();
     expect(compiled.querySelector('[data-testid="editor-document-area"]')).toBeTruthy();
     expect(compiled.querySelector('[data-testid="editor-properties-area"]')).toBeTruthy();
+    expect(compiled.querySelector('[data-testid="editor-text-area"]')).toBeTruthy();
     expect(compiled.querySelector('[data-testid="editor-colors-area"]')).toBeTruthy();
     expect(compiled.querySelector('[data-testid="editor-stroke-area"]')).toBeTruthy();
     expect(compiled.querySelector('[data-testid="editor-align-distribute-area"]')).toBeTruthy();
@@ -77,6 +78,39 @@ describe('AppComponent', () => {
     fixture.detectChanges();
 
     expect(layout.isSectionExpanded('pathOps')).toBe(true);
+  });
+
+  it('auto-expands text panel when text tool is active', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const layout = TestBed.inject(EditorLayoutService);
+    const editorTool = TestBed.inject(EditorToolService);
+    fixture.detectChanges();
+
+    editorTool.setTool('text');
+    fixture.detectChanges();
+
+    expect(layout.isSectionExpanded('text')).toBe(true);
+  });
+
+  it('auto-expands text panel when a text shape is selected', () => {
+    const fixture = TestBed.createComponent(AppComponent);
+    const layout = TestBed.inject(EditorLayoutService);
+    const shapeSelection = TestBed.inject(ShapeSelectionService);
+    const editorTool = TestBed.inject(EditorToolService);
+    fixture.detectChanges();
+
+    editorTool.setTool('selector');
+    shapeSelection.selectShape({
+      id: 't1',
+      type: 'text',
+      fill: '#000',
+      stroke: undefined,
+      strokeWidth: 0,
+      opacity: 1
+    });
+    fixture.detectChanges();
+
+    expect(layout.isSectionExpanded('text')).toBe(true);
   });
 
   it('preserves manual path ops collapse until selection changes', () => {

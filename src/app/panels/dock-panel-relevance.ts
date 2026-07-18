@@ -5,6 +5,8 @@ export interface DockPanelRelevanceContext {
   readonly currentTool: EditorTool;
   readonly selectedShapeCount: number;
   readonly selectedPathCount: number;
+  /** Count of selected shapes with `type === 'text'` (for Text panel auto-show). */
+  readonly selectedTextCount: number;
 }
 
 export function dockPanelContextKey(ctx: DockPanelRelevanceContext, selectedShapeIds: readonly string[]): string {
@@ -42,4 +44,9 @@ export function suggestDockPanelId(
 
 export function pathOpsMultiPathRelevance(ctx: DockPanelRelevanceContext): boolean {
   return ctx.selectedPathCount >= 2;
+}
+
+/** Text tool active, or selection includes at least one `<text>` shape. */
+export function textPanelRelevance(ctx: DockPanelRelevanceContext): boolean {
+  return ctx.currentTool === 'text' || ctx.selectedTextCount >= 1;
 }
