@@ -1,6 +1,6 @@
 import { Injectable, computed, signal } from '@angular/core';
 import type { OrientationPoint } from '../components/orientation-grid/orientation-grid.component';
-import { clampRectCornerRadius } from '../utils/rect-creation-geometry';
+import { clampRectCornerRadius, maxRectCornerRadius } from '../utils/rect-creation-geometry';
 
 export interface RectCreationDefaultsSnapshot {
   width: number;
@@ -29,6 +29,11 @@ export class RectCreationDefaultsService {
   readonly height = this.heightState.asReadonly();
   readonly cornerRadius = this.cornerRadiusState.asReadonly();
   readonly orientation = this.orientationState.asReadonly();
+
+  /** SVG max: half the shorter edge of current W×H. */
+  readonly maxCornerRadius = computed(() =>
+    maxRectCornerRadius(this.widthState(), this.heightState())
+  );
 
   /** Corner clamped to current W×H. */
   readonly effectiveCornerRadius = computed(() =>

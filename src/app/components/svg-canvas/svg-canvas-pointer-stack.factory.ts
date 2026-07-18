@@ -61,6 +61,8 @@ export interface CreateSvgCanvasPointerStackArgs {
   isSnapTemporarilyDisabled: () => boolean;
   /** Rect tool creation defaults (click-place size / corner / orientation). */
   getRectCreationDefaults: () => import('../../services/rect-creation-defaults.service').RectCreationDefaultsSnapshot;
+  /** Ellipse tool creation defaults (click-place size / orientation). */
+  getEllipseCreationDefaults: () => import('../../services/ellipse-creation-defaults.service').EllipseCreationDefaultsSnapshot;
   // Tool registration
   toolRegistry: ToolRegistryService;
   canvasBoundToolRegistrar: CanvasBoundToolRegistrar;
@@ -125,7 +127,10 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
   const resize = new ResizeGesture();
   const rotate = new RotateGesture();
   const skew = new SkewGesture();
-  const creation = new CreationGesture(() => args.getRectCreationDefaults());
+  const creation = new CreationGesture({
+    getRectDefaults: () => args.getRectCreationDefaults(),
+    getEllipseDefaults: () => args.getEllipseCreationDefaults()
+  });
   const selectionMarquee = new SelectionMarqueeGesture();
   const zoomMarquee = new ZoomMarqueeGesture();
 

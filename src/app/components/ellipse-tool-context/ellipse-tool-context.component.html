@@ -1,0 +1,40 @@
+<div
+  class="ellipse-tool-context"
+  data-testid="ellipse-tool-context"
+  role="group"
+  aria-label="Ellipse creation options">
+  <app-orientation-grid
+    [value]="defaults.orientation()"
+    ariaLabel="Ellipse placement anchor"
+    title="Placement anchor — which point of the ellipse bounding box sits on the click"
+    testIdPrefix="ellipse-place-anchor"
+    (valueChange)="onOrientationSelect($event)" />
+  <div class="dimension-field">
+    <label class="dimension-label" for="ellipse-creation-width">W</label>
+    <input
+      id="ellipse-creation-width"
+      type="number"
+      class="dimension-input"
+      data-testid="ellipse-creation-width"
+      min="0.0001"
+      step="any"
+      inputmode="decimal"
+      [value]="defaults.width()"
+      (change)="onWidthChange($event)"
+      aria-label="Default ellipse width" />
+  </div>
+  <div class="dimension-field">
+    <label class="dimension-label" for="ellipse-creation-height">H</label>
+    <input
+      id="ellipse-creation-height"
+      type="number"
+      class="dimension-input"
+      data-testid="ellipse-creation-height"
+      min="0.0001"
+      step="any"
+      inputmode="decimal"
+      [value]="defaults.height()"
+      (change)="onHeightChange($event)"
+      aria-label="Default ellipse height" />
+  </div>
+</div>

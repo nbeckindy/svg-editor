@@ -33,6 +33,14 @@ When the **rect** tool is active, the **tool context bar** hosts W / H / corner 
 - **Drag:** size from drag; still apply corner from defaults; do **not** rewrite W/H defaults.
 - **Ghost:** no preview until drag past threshold; then drag-sized ghost (with corner from defaults). Click-place still commits on sub-threshold mouseup with no ghost.
 
+## Ellipse tool context bar + click-place
+
+When the **ellipse** tool is active, the **tool context bar** hosts W / H and `app-orientation-grid` (default top-left) via `EllipseCreationDefaultsService` (session signals, not History). No corner control.
+
+- **Click (sub-threshold mouseup):** place ellipse whose bounding box is W×H with orientation anchor at the press point (`rx = W/2`, `ry = H/2`).
+- **Drag:** size from drag; do **not** rewrite W/H defaults.
+- **Ghost:** no preview until drag past threshold; then drag-sized ellipse ghost. Click-place still commits on sub-threshold mouseup with no ghost.
+
 ## Shift constraints per shape type
 
 When Shift is held during creation drag:

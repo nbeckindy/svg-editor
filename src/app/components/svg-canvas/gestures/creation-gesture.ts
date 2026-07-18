@@ -6,6 +6,7 @@ import { AddShapeCommand } from '../../../models/editor-commands';
 import type { SmartGuideResult } from '../../../services/snap.service';
 import { MARQUEE_MIN_DRAG_PX } from '../../../utils/marquee-selection';
 import type { RectCreationDefaultsSnapshot } from '../../../services/rect-creation-defaults.service';
+import type { EllipseCreationDefaultsSnapshot } from '../../../services/ellipse-creation-defaults.service';
 import {
   clampRectCornerRadius,
   placeRectAtOrientation
@@ -18,6 +19,12 @@ const TOOL_TO_SHAPE: Partial<Record<EditorTool, CreatableShapeType>> = {
 };
 
 export type RectCreationDefaultsProvider = () => RectCreationDefaultsSnapshot;
+export type EllipseCreationDefaultsProvider = () => EllipseCreationDefaultsSnapshot;
+
+export interface CreationGestureOptions {
+  getRectDefaults?: RectCreationDefaultsProvider;
+  getEllipseDefaults?: EllipseCreationDefaultsProvider;
+}
 
 /**
  * 8-way angle snap for line tool when Shift is held.
@@ -55,7 +62,15 @@ export class CreationGesture {
   /** For line ghost: end point in SVG user space. */
   ghostLineEnd: Point | null = null;
 
-  constructor(private readonly getRectDefaults?: RectCreationDefaultsProvider) {}
+  constructor(private readonly options: CreationGestureOptions = {}) {}
+
+  private getRectDefaults(): RectCreationDefaultsSnapshot | undefined {
+    return this.options.getRectDefaults?.();
+  }
+
+  private getEllipseDefaults(): EllipseCreationDefaultsSnapshot | undefined {
+    return this.options.getEllipseDefaults?.();
+  }
 
   start(
     ctx: GestureRuntimeContext,
@@ -132,6 +147,9 @@ export class CreationGesture {
       if (this.shapeType === 'rect') {
         return this.commitRectClickPlace(ctx, this.startSvg);
       }
+      if (this.shapeType === 'ellipse') {
+        return this.commitEllipseClickPlace(ctx, this.startSvg);
+      }
       this.justEnded = true;
       this.reset();
       ctx.pointer.cdr.detectChanges();
@@ -167,7 +185,7 @@ export class CreationGesture {
   }
 
   private commitRectClickPlace(ctx: GestureRuntimeContext, anchor: Point): string | null {
-    const defaults = this.getRectDefaults?.();
+    const defaults = this.getRectDefaults();
     const width = defaults?.width ?? 100;
     const height = defaults?.height ?? 100;
     const orientation = defaults?.orientation ?? 'top-left';
@@ -179,6 +197,23 @@ export class CreationGesture {
       width: placed.width,
       height: placed.height,
       ...(corner > 0 ? { rx: corner, ry: corner } : {})
+    };
+    return this.commitShape(ctx, attrs);
+  }
+
+  private commitEllipseClickPlace(ctx: GestureRuntimeContext, anchor: Point): string | null {
+    const defaults = this.getEllipseDefaults();
+    const width = defaults?.width ?? 100;
+    const height = defaults?.height ?? 100;
+    const orientation = defaults?.orientation ?? 'top-left';
+    const placed = placeRectAtOrientation(anchor, { width, height }, orientation);
+    const rx = placed.width / 2;
+    const ry = placed.height / 2;
+    const attrs: ShapeCreationAttrs = {
+      cx: placed.x + rx,
+      cy: placed.y + ry,
+      rx,
+      ry
     };
     return this.commitShape(ctx, attrs);
   }
@@ -209,7 +244,7 @@ export class CreationGesture {
   }
 
   private overlayCornerFromUserBbox(userBbox: Rect, overlayBbox: Rect): number | null {
-    const defaults = this.getRectDefaults?.();
+    const defaults = this.getRectDefaults();
     const corner = clampRectCornerRadius(
       userBbox.width,
       userBbox.height,
@@ -291,7 +326,7 @@ export class CreationGesture {
       const y = Math.min(start.y, end.y);
       const w = Math.abs(end.x - start.x);
       const h = Math.abs(end.y - start.y);
-      const defaults = this.getRectDefaults?.();
+      const defaults = this.getRectDefaults();
       const corner = clampRectCornerRadius(w, h, defaults?.cornerRadius ?? 0);
       return {
         x,

@@ -17,11 +17,16 @@ export interface Point2 {
   y: number;
 }
 
+/** SVG max corner radius: half the shorter edge. */
+export function maxRectCornerRadius(width: number, height: number): number {
+  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return 0;
+  return Math.min(width / 2, height / 2);
+}
+
 /** Clamp linked corner radius to SVG max: half the shorter edge. */
 export function clampRectCornerRadius(width: number, height: number, radius: number): number {
   if (!Number.isFinite(radius) || radius <= 0) return 0;
-  if (!Number.isFinite(width) || !Number.isFinite(height) || width <= 0 || height <= 0) return 0;
-  return Math.min(radius, width / 2, height / 2);
+  return Math.min(radius, maxRectCornerRadius(width, height));
 }
 
 /**

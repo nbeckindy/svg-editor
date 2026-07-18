@@ -33,6 +33,12 @@ describe('RectCreationDefaultsService', () => {
     expect(service.cornerRadius()).toBe(30);
   });
 
+  it('exposes maxCornerRadius as half the shorter edge', () => {
+    service.setWidth(100);
+    service.setHeight(40);
+    expect(service.maxCornerRadius()).toBe(20);
+  });
+
   it('updates orientation', () => {
     service.setOrientation('center');
     expect(service.orientation()).toBe('center');

@@ -85,6 +85,7 @@ import { parsePathDForNodeEditing } from '../../models/path-d';
 import { buildPathSelectionOutlineOverlayD } from '../../models/path-selection-outline';
 import { DrawingStyleDefaultsService } from '../../services/drawing-style-defaults.service';
 import { RectCreationDefaultsService } from '../../services/rect-creation-defaults.service';
+import { EllipseCreationDefaultsService } from '../../services/ellipse-creation-defaults.service';
 import {
   applyTextTypographyFromDrawingDefaults,
   isTextToolPreviewNode,
@@ -1325,6 +1326,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     private clipboard: ClipboardService,
     protected drawingDefaults: DrawingStyleDefaultsService,
     private rectCreationDefaults: RectCreationDefaultsService,
+    private ellipseCreationDefaults: EllipseCreationDefaultsService,
     private chromeEditorApply: ChromeEditorApplyService,
     private pathBooleanSelectionRead: PathBooleanSelectionReadService,
     private pathNodeEditBridge: PathNodeEditCommandBridgeService,
@@ -1349,6 +1351,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         getSmartGuideCandidates: () => this.getSmartGuideCandidates(),
         isSnapTemporarilyDisabled: () => this.altKeyPressed,
         getRectCreationDefaults: () => this.rectCreationDefaults.snapshot(),
+        getEllipseCreationDefaults: () => this.ellipseCreationDefaults.snapshot(),
         createPenToolSessionPorts: () => this.createPenToolSessionPorts(),
         toolRegistry: this.toolRegistry,
         canvasBoundToolRegistrar: this.canvasBoundToolRegistrar,

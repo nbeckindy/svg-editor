@@ -33,19 +33,33 @@
       (change)="onHeightChange($event)"
       aria-label="Default rectangle height" />
   </div>
-  <div class="dimension-field">
+  <div class="corner-field">
     <label class="dimension-label" for="rect-creation-corner">R</label>
-    <input
-      id="rect-creation-corner"
-      type="number"
-      class="dimension-input"
-      data-testid="rect-creation-corner"
-      min="0"
-      step="any"
-      inputmode="decimal"
-      [value]="defaults.effectiveCornerRadius()"
-      (change)="onCornerChange($event)"
-      aria-label="Default rectangle corner radius"
-      title="Corner radius (rx = ry)" />
+    <div class="range-input-group">
+      <input
+        type="range"
+        id="rect-creation-corner"
+        class="range-slider"
+        data-testid="rect-creation-corner-slider"
+        min="0"
+        [max]="defaults.maxCornerRadius()"
+        step="any"
+        [value]="defaults.effectiveCornerRadius()"
+        (input)="onCornerChange($event)"
+        aria-label="Default rectangle corner radius"
+        title="Corner radius (rx = ry)" />
+      <input
+        type="number"
+        class="range-number"
+        data-testid="rect-creation-corner"
+        min="0"
+        [max]="defaults.maxCornerRadius()"
+        step="any"
+        inputmode="decimal"
+        [value]="defaults.effectiveCornerRadius()"
+        (change)="onCornerChange($event)"
+        aria-label="Default rectangle corner radius"
+        title="Corner radius (rx = ry)" />
+    </div>
   </div>
 </div>

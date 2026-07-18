@@ -22,6 +22,7 @@ describe('RectToolContextComponent', () => {
     expect(el.querySelector('[data-testid="rect-place-anchor-top-left"]')).toBeTruthy();
     expect(el.querySelector('[data-testid="rect-creation-width"]')).toBeTruthy();
     expect(el.querySelector('[data-testid="rect-creation-height"]')).toBeTruthy();
+    expect(el.querySelector('[data-testid="rect-creation-corner-slider"]')).toBeTruthy();
     expect(el.querySelector('[data-testid="rect-creation-corner"]')).toBeTruthy();
   });
 
@@ -33,5 +34,25 @@ describe('RectToolContextComponent', () => {
     input.dispatchEvent(new Event('change'));
     fixture.detectChanges();
     expect(defaults.width()).toBe(80);
+  });
+
+  it('clamps corner slider max to half the shorter edge', () => {
+    defaults.setWidth(100);
+    defaults.setHeight(40);
+    fixture.detectChanges();
+    const slider = fixture.nativeElement.querySelector(
+      '[data-testid="rect-creation-corner-slider"]'
+    ) as HTMLInputElement;
+    expect(slider.max).toBe('20');
+  });
+
+  it('commits corner radius from the slider', () => {
+    const slider = fixture.nativeElement.querySelector(
+      '[data-testid="rect-creation-corner-slider"]'
+    ) as HTMLInputElement;
+    slider.value = '12';
+    slider.dispatchEvent(new Event('input'));
+    fixture.detectChanges();
+    expect(defaults.effectiveCornerRadius()).toBe(12);
   });
 });
