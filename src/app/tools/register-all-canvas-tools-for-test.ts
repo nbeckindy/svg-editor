@@ -52,6 +52,7 @@ export interface CanvasToolsTestHostState {
   updateTextToolPreviewFromClient: (clientX: number, clientY: number) => void;
   createTextAtPoint: (clientX: number, clientY: number) => string | undefined;
   tryEnterTextEditAfterCreate: (newId: string) => void;
+  isInlineTextEditActive: boolean;
   destroyTextToolPreview: () => void;
   enterInlineTextEditMode: (textId: string) => void;
   getSvgInstance: () => import('@svgdotjs/svg.js').Svg | null;
@@ -132,6 +133,7 @@ export function createDefaultCanvasToolsTestHostState(): CanvasToolsTestHostStat
     updateTextToolPreviewFromClient: vi.fn(),
     createTextAtPoint: vi.fn(),
     tryEnterTextEditAfterCreate: vi.fn(),
+    isInlineTextEditActive: false,
     destroyTextToolPreview: vi.fn(),
     enterInlineTextEditMode: vi.fn(),
     getSvgInstance: () => null,
@@ -318,6 +320,7 @@ export function registerAllCanvasToolsForTest(
     }),
     getTextDeps: () => ({
       isCanvasReady: () => hostState.isCanvasReady,
+      isInlineTextEditActive: () => hostState.isInlineTextEditActive,
       updateTextToolPreviewFromClient: hostState.updateTextToolPreviewFromClient,
       createTextAtPoint: hostState.createTextAtPoint,
       destroyTextToolPreview: hostState.destroyTextToolPreview,

@@ -1196,7 +1196,7 @@ describe('SvgCanvasComponent', () => {
     }
   });
 
-  it('creates a text element at click coordinates and switches back to selector', () => {
+  it('creates a text element at click coordinates and keeps the text tool active', () => {
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
     fixture.detectChanges();
     stubEditorSvgScreenMapping(component);
@@ -1217,9 +1217,12 @@ describe('SvgCanvasComponent', () => {
       expect.objectContaining({ x: 30, y: 40, textContent: 'Text' })
     );
     expect(pushSpy).toHaveBeenCalledTimes(1);
-    expect(editorToolService.getCurrentTool()).toBe('selector');
+    expect(editorToolService.getCurrentTool()).toBe('text');
     const editor = fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]');
     expect(editor).toBeTruthy();
+
+    component.onInlineTextEditInput('Hello');
+    expect(editorToolService.getCurrentTool()).toBe('text');
   });
 
   it('enters inline edit after creating text and commits edited content', () => {
@@ -1243,6 +1246,7 @@ describe('SvgCanvasComponent', () => {
     const textEl = fixture.nativeElement.querySelector('text') as SVGTextElement;
     expect(textEl?.textContent).toBe('Hello');
     expect(fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]')).toBeFalsy();
+    expect(editorToolService.getCurrentTool()).toBe('text');
   });
 
   it('shows text placement preview while text tool is active and clears it when leaving text tool', () => {

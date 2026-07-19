@@ -1423,6 +1423,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         createTextAtPoint: (clientX, clientY) => this.createTextAtPoint(clientX, clientY),
         destroyTextToolPreview: () => this.destroyTextToolPreview(),
         tryEnterTextEditAfterCreate: (newId) => this.inlineTextEditSession.tryEnterAfterTextCreate(newId),
+        isInlineTextEditActive: () => this.inlineTextEditSession.isActive,
         getSvgInstance: () => this.svgManipulation.getSVGInstance(),
         enterInlineTextEditMode: (textId) => this.inlineTextEditSession.enterInlineTextEditMode(textId),
         sampleEyedropperAt: (event) => this.tryEyedropperSample(event)
@@ -2189,7 +2190,6 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
       this.lastBbox = shapeBbox;
       this._highlightRectCacheKey = '';
     }
-    this.editorTool.setTool('selector');
     this.cdr.markForCheck();
     return newId;
   }
@@ -2401,7 +2401,11 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
    * Typography matches {@link DrawingStyleDefaultsService}; position follows pointer in user space.
    */
   private syncTextToolPreviewPresentation(): void {
-    if (this.editorTool.getCurrentTool() !== 'text' || !this.svgContent()) {
+    if (
+      this.editorTool.getCurrentTool() !== 'text' ||
+      !this.svgContent() ||
+      this.inlineTextEditSession.isActive
+    ) {
       this.destroyTextToolPreview();
       return;
     }
@@ -2424,7 +2428,13 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
   }
 
   updateTextToolPreviewFromClient(clientX: number, clientY: number): void {
-    if (this.editorTool.getCurrentTool() !== 'text' || !this.svgContent()) return;
+    if (
+      this.editorTool.getCurrentTool() !== 'text' ||
+      !this.svgContent() ||
+      this.inlineTextEditSession.isActive
+    ) {
+      return;
+    }
     const raw = this.clientToEditorSvgPoint(clientX, clientY);
     if (!raw) return;
     this.textToolPreviewLastPoint = raw;

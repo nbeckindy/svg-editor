@@ -119,6 +119,7 @@ export interface CreateSvgCanvasPointerStackArgs {
   createTextAtPoint: TextCanvasToolDeps['createTextAtPoint'];
   destroyTextToolPreview: TextCanvasToolDeps['destroyTextToolPreview'];
   tryEnterTextEditAfterCreate: TextCanvasToolDeps['tryEnterTextEditAfterCreate'];
+  isInlineTextEditActive: TextCanvasToolDeps['isInlineTextEditActive'];
   sampleEyedropperAt: EyedropperCanvasToolDeps['sampleAt'];
 }
 
@@ -241,6 +242,7 @@ export function createSvgCanvasPointerStack(args: CreateSvgCanvasPointerStackArg
     }),
     getTextDeps: () => ({
       isCanvasReady: args.isCanvasReady,
+      isInlineTextEditActive: args.isInlineTextEditActive,
       updateTextToolPreviewFromClient: args.updateTextToolPreviewFromClient,
       createTextAtPoint: args.createTextAtPoint,
       destroyTextToolPreview: args.destroyTextToolPreview,

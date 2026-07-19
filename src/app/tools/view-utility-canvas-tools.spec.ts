@@ -60,6 +60,7 @@ describe('view and utility canvas tools', () => {
     const createTextAtPoint = vi.fn().mockReturnValue(undefined);
     const tool = createTextCanvasTool(() => ({
       isCanvasReady: () => true,
+      isInlineTextEditActive: () => false,
       updateTextToolPreviewFromClient: vi.fn(),
       createTextAtPoint,
       tryEnterTextEditAfterCreate: vi.fn(),
@@ -67,6 +68,20 @@ describe('view and utility canvas tools', () => {
     }));
     tool.onClick?.({ clientX: 10, clientY: 20 } as MouseEvent, { x: 0, y: 0 });
     expect(createTextAtPoint).toHaveBeenCalledWith(10, 20);
+  });
+
+  it('text tool does not place while inline edit is still active', () => {
+    const createTextAtPoint = vi.fn();
+    const tool = createTextCanvasTool(() => ({
+      isCanvasReady: () => true,
+      isInlineTextEditActive: () => true,
+      updateTextToolPreviewFromClient: vi.fn(),
+      createTextAtPoint,
+      tryEnterTextEditAfterCreate: vi.fn(),
+      destroyTextToolPreview: vi.fn()
+    }));
+    expect(tool.onClick?.({ clientX: 10, clientY: 20 } as MouseEvent, { x: 0, y: 0 })).toBe(true);
+    expect(createTextAtPoint).not.toHaveBeenCalled();
   });
 
   it('eyedropper tool samples on click', () => {
@@ -103,6 +118,7 @@ describe('view and utility canvas tools', () => {
     }));
     registerTextCanvasTool(registry, () => ({
       isCanvasReady: () => true,
+      isInlineTextEditActive: () => false,
       updateTextToolPreviewFromClient: vi.fn(),
       createTextAtPoint: vi.fn().mockReturnValue(undefined),
       tryEnterTextEditAfterCreate: vi.fn(),
