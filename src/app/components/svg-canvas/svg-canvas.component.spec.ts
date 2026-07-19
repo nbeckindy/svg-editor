@@ -3959,6 +3959,44 @@ describe('SvgCanvasComponent', () => {
       expect(component.drilledIntoGroupId).toBeNull();
     });
 
+    it('expands the inline text editor while typing longer content', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><text id="text-grow" x="10" y="20">Hi</text></svg>');
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 20, height: 14 });
+      shapeSelectionService.selectShape({
+        id: 'text-grow',
+        type: 'text',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const textEl = fixture.nativeElement.querySelector('#text-grow') as Element;
+
+      component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+
+      const editor = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-inline-text-editor"]'
+      ) as HTMLTextAreaElement;
+      expect(editor).toBeTruthy();
+      const initialWidth = editor.getBoundingClientRect().width || Number.parseFloat(editor.style.width);
+      const initialHeight = editor.getBoundingClientRect().height || Number.parseFloat(editor.style.height);
+
+      editor.value = 'Hello world, a much longer line';
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+
+      const grownWidth = editor.getBoundingClientRect().width || Number.parseFloat(editor.style.width);
+      expect(grownWidth).toBeGreaterThan(initialWidth);
+
+      editor.value = 'Hello world, a much longer line\nsecond\nthird';
+      editor.dispatchEvent(new Event('input', { bubbles: true }));
+      fixture.detectChanges();
+
+      const grownHeight = editor.getBoundingClientRect().height || Number.parseFloat(editor.style.height);
+      expect(grownHeight).toBeGreaterThan(initialHeight);
+    });
+
     it('inline text editor font tracks SVG text typography and overlay scale', async () => {
       await loadSvgForSelector(
         '<svg viewBox="0 0 100 100"><text id="text-typo" x="10" y="40" font-size="24" font-weight="700" font-style="italic" font-family="Georgia">Hi</text></svg>'

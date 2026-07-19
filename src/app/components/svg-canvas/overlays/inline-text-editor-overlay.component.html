@@ -9,6 +9,6 @@
   [style.font]="typographyStyle()"
   [style.left.px]="panX() + overlayRect().x"
   [style.top.px]="panY() + overlayRect().y"
-  [style.width.px]="widthPx()"
-  [style.height.px]="heightPx()"
+  [style.width.px]="displayWidthPx()"
+  [style.height.px]="displayHeightPx()"
   (input)="onInput($event)"></textarea>

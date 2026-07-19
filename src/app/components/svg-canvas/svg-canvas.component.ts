@@ -2200,6 +2200,7 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
 
   onInlineTextEditInput(value: string): void {
     this.inlineTextEditSession.onInput(value);
+    this.cdr.markForCheck();
   }
 
   private getSnappedPenPoint(
