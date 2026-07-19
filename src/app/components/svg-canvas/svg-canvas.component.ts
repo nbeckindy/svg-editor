@@ -1424,6 +1424,8 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
         destroyTextToolPreview: () => this.destroyTextToolPreview(),
         tryEnterTextEditAfterCreate: (newId) => this.inlineTextEditSession.tryEnterAfterTextCreate(newId),
         isInlineTextEditActive: () => this.inlineTextEditSession.isActive,
+        resolveContentTextIdFromClick: (event) => this.resolveContentTextIdFromClick(event),
+        selectAndEnterTextEdit: (textId) => this.selectAndEnterTextEdit(textId),
         getSvgInstance: () => this.svgManipulation.getSVGInstance(),
         enterInlineTextEditMode: (textId) => this.inlineTextEditSession.enterInlineTextEditMode(textId),
         sampleEyedropperAt: (event) => this.tryEyedropperSample(event)
@@ -2192,6 +2194,35 @@ export class SvgCanvasComponent implements AfterViewInit, OnDestroy, SvgCanvasPo
     }
     this.cdr.markForCheck();
     return newId;
+  }
+
+  /**
+   * Resolve a content-tree `<text>` id from a click target (`<text>` or descendant such as `<tspan>`).
+   * Ignores the text-tool placement preview.
+   */
+  resolveContentTextIdFromClick(event: MouseEvent): string | null {
+    const target = event.target as Element | null;
+    if (!target || isTextToolPreviewNode(target)) return null;
+    const textEl =
+      target.tagName?.toLowerCase?.() === 'text'
+        ? target
+        : typeof target.closest === 'function'
+          ? (target.closest('text') as Element | null)
+          : null;
+    if (!textEl?.id) return null;
+    if (!this.isEditorContentShapeTarget(textEl)) return null;
+    return textEl.id;
+  }
+
+  /** Select an existing `<text>` and open the inline content editor (text tool). */
+  selectAndEnterTextEdit(textId: string): void {
+    const svgInstance = this.svgManipulation.getSVGInstance();
+    const el = svgInstance?.findOne(`#${textId}`) as SVGElement | undefined;
+    if (!el?.node || (el.node as Element).tagName.toLowerCase() !== 'text') return;
+    this.destroyTextToolPreview();
+    this.shapeSelection.selectShape(this.svgManipulation.getShapeProperties(el));
+    this.inlineTextEditSession.enterInlineTextEditMode(textId);
+    this.cdr.markForCheck();
   }
 
   onCanvasDoubleClick(event: MouseEvent): void {

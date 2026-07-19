@@ -1225,6 +1225,64 @@ describe('SvgCanvasComponent', () => {
     expect(editorToolService.getCurrentTool()).toBe('text');
   });
 
+  it('text tool click on existing text enters inline edit without adding a shape', async () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><text id="text-exist" x="10" y="20">Hello</text></svg>'
+    );
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 50));
+    fixture.detectChanges();
+    stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 30, height: 12 });
+    editorToolService.setTool('text');
+    fixture.detectChanges();
+    const addShapeSpy = vi.spyOn(svgManipulationService, 'addShape');
+    const textEl = fixture.nativeElement.querySelector('#text-exist') as SVGTextElement;
+    expect(textEl).toBeTruthy();
+
+    component.onCanvasClick({
+      target: textEl,
+      clientX: 15,
+      clientY: 18
+    } as unknown as MouseEvent);
+    fixture.detectChanges();
+
+    expect(addShapeSpy).not.toHaveBeenCalled();
+    expect(editorToolService.getCurrentTool()).toBe('text');
+    const editor = fixture.nativeElement.querySelector(
+      '[data-testid="canvas-inline-text-editor"]'
+    ) as HTMLTextAreaElement;
+    expect(editor).toBeTruthy();
+    expect(editor.value).toBe('Hello');
+    expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['text-exist']);
+  });
+
+  it('selector tool click on text selects it without entering inline edit', async () => {
+    fixture.componentRef.setInput(
+      'svgContent',
+      '<svg viewBox="0 0 100 100"><text id="text-sel" x="10" y="20">Hello</text></svg>'
+    );
+    fixture.detectChanges();
+    await new Promise((r) => setTimeout(r, 50));
+    fixture.detectChanges();
+    stubEditorSvgScreenMapping(component, new DOMRect(0, 0, 100, 100), '0 0 100 100');
+    vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 30, height: 12 });
+    editorToolService.setTool('selector');
+    fixture.detectChanges();
+    const textEl = fixture.nativeElement.querySelector('#text-sel') as SVGTextElement;
+
+    component.onCanvasClick({
+      target: textEl,
+      clientX: 15,
+      clientY: 18
+    } as unknown as MouseEvent);
+    fixture.detectChanges();
+
+    expect(shapeSelectionService.getSelectedShapes().map((s) => s.id)).toEqual(['text-sel']);
+    expect(fixture.nativeElement.querySelector('[data-testid="canvas-inline-text-editor"]')).toBeFalsy();
+  });
+
   it('enters inline edit after creating text and commits edited content', () => {
     fixture.componentRef.setInput('svgContent', '<svg viewBox="0 0 100 100"></svg>');
     fixture.detectChanges();

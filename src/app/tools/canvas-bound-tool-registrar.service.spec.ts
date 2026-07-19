@@ -171,6 +171,8 @@ describe('CanvasBoundToolRegistrar', () => {
       getTextDeps: () => ({
         isCanvasReady: () => true,
         isInlineTextEditActive: () => false,
+        resolveContentTextIdFromClick: () => null,
+        selectAndEnterTextEdit: vi.fn(),
         updateTextToolPreviewFromClient: vi.fn(),
         createTextAtPoint: vi.fn().mockReturnValue(undefined),
         tryEnterTextEditAfterCreate: vi.fn(),

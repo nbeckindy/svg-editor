@@ -61,6 +61,8 @@ describe('view and utility canvas tools', () => {
     const tool = createTextCanvasTool(() => ({
       isCanvasReady: () => true,
       isInlineTextEditActive: () => false,
+      resolveContentTextIdFromClick: () => null,
+      selectAndEnterTextEdit: vi.fn(),
       updateTextToolPreviewFromClient: vi.fn(),
       createTextAtPoint,
       tryEnterTextEditAfterCreate: vi.fn(),
@@ -72,15 +74,37 @@ describe('view and utility canvas tools', () => {
 
   it('text tool does not place while inline edit is still active', () => {
     const createTextAtPoint = vi.fn();
+    const selectAndEnterTextEdit = vi.fn();
     const tool = createTextCanvasTool(() => ({
       isCanvasReady: () => true,
       isInlineTextEditActive: () => true,
+      resolveContentTextIdFromClick: () => 't1',
+      selectAndEnterTextEdit,
       updateTextToolPreviewFromClient: vi.fn(),
       createTextAtPoint,
       tryEnterTextEditAfterCreate: vi.fn(),
       destroyTextToolPreview: vi.fn()
     }));
     expect(tool.onClick?.({ clientX: 10, clientY: 20 } as MouseEvent, { x: 0, y: 0 })).toBe(true);
+    expect(createTextAtPoint).not.toHaveBeenCalled();
+    expect(selectAndEnterTextEdit).not.toHaveBeenCalled();
+  });
+
+  it('text tool edits existing text instead of placing a new one', () => {
+    const createTextAtPoint = vi.fn();
+    const selectAndEnterTextEdit = vi.fn();
+    const tool = createTextCanvasTool(() => ({
+      isCanvasReady: () => true,
+      isInlineTextEditActive: () => false,
+      resolveContentTextIdFromClick: () => 'existing-text',
+      selectAndEnterTextEdit,
+      updateTextToolPreviewFromClient: vi.fn(),
+      createTextAtPoint,
+      tryEnterTextEditAfterCreate: vi.fn(),
+      destroyTextToolPreview: vi.fn()
+    }));
+    expect(tool.onClick?.({ clientX: 10, clientY: 20 } as MouseEvent, { x: 0, y: 0 })).toBe(true);
+    expect(selectAndEnterTextEdit).toHaveBeenCalledWith('existing-text');
     expect(createTextAtPoint).not.toHaveBeenCalled();
   });
 
@@ -119,6 +143,8 @@ describe('view and utility canvas tools', () => {
     registerTextCanvasTool(registry, () => ({
       isCanvasReady: () => true,
       isInlineTextEditActive: () => false,
+      resolveContentTextIdFromClick: () => null,
+      selectAndEnterTextEdit: vi.fn(),
       updateTextToolPreviewFromClient: vi.fn(),
       createTextAtPoint: vi.fn().mockReturnValue(undefined),
       tryEnterTextEditAfterCreate: vi.fn(),
