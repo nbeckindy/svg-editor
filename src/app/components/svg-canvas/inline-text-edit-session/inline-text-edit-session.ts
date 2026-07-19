@@ -5,6 +5,7 @@ import {
   inlineTextEditorFontShorthand,
   resolveInlineTextEditorTypography
 } from '../../../utils/svg-inline-text-typography';
+import { multilineDraftLineCount } from '../../../utils/text-multiline-tspans';
 import type { InlineTextEditState } from './inline-text-edit-session-types';
 import type { InlineTextEditSessionPorts } from './inline-text-edit-session-ports';
 
@@ -22,7 +23,7 @@ export class InlineTextEditSession {
 
   /** Tooltip for the floating SVG text editor (a11y / TER polish). */
   readonly inlineTextEditorHint =
-    'Edits canvas text. Press Escape or click outside the editor to apply changes.';
+    'Edits canvas text. Enter adds a new line. Press Escape or click outside to apply changes.';
 
   constructor(private readonly getPorts: () => InlineTextEditSessionPorts) {}
 
@@ -49,7 +50,14 @@ export class InlineTextEditSession {
   }
 
   overlayHeightPx(rect: { height: number }): number {
-    return Math.max(18, rect.height);
+    const lines = multilineDraftLineCount(this.draft);
+    const fromBbox = Math.max(18, rect.height);
+    if (lines <= 1) return fromBbox;
+
+    const t = this.resolveTypographyMetrics();
+    const lhRatio = typeof t.lineHeight === 'number' ? t.lineHeight : 1.2;
+    const fromDraft = lines * t.fontSizePx * lhRatio + 4;
+    return Math.max(fromBbox, fromDraft, 18);
   }
 
   /**
@@ -57,22 +65,25 @@ export class InlineTextEditSession {
    * `resolveInlineTextEditorTypography` for SVG vs DOM font limitations).
    */
   typographyStyle(): string {
+    return inlineTextEditorFontShorthand(this.resolveTypographyMetrics());
+  }
+
+  private resolveTypographyMetrics(): ReturnType<typeof resolveInlineTextEditorTypography> {
     if (!this.state) {
-      return inlineTextEditorFontShorthand({
+      return {
         fontSizePx: 14,
         fontFamily: 'sans-serif',
         fontWeight: 'normal',
         fontStyle: 'normal',
         lineHeight: 1.2
-      });
+      };
     }
     const ports = this.getPorts();
     const svg = ports.svgManipulation.getSVGInstance();
     const shape = svg?.findOne(`#${this.state.textId}`) as SvgJsElement | undefined;
     const node = shape?.node ?? null;
     const props = shape ? ports.svgManipulation.getShapeProperties(shape) : null;
-    const t = resolveInlineTextEditorTypography(node, props, (b) => ports.svgBboxToOverlayPixels(b));
-    return inlineTextEditorFontShorthand(t);
+    return resolveInlineTextEditorTypography(node, props, (b) => ports.svgBboxToOverlayPixels(b));
   }
 
   enterInlineTextEditMode(textId: string): void {

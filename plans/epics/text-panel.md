@@ -64,12 +64,12 @@ q5p.1 (register + ADR/CONTEXT)
 
 ## Out of scope / deferred
 
-- Multi-line / `<tspan>` authoring and per-span styling
+- Per-span styling / nested `<tspan>` authoring (canonical newline ↔ line tspans shipped separately — see `svg-editor-atr`)
 - `<textPath>`
 - `writing-mode` / `direction` / `text-orientation` (vertical / RTL)
 - `text-decoration` (spotty SVG support)
 - `textLength` / `lengthAdjust`
-- Per-glyph or per-tspan `dx` / `dy` / `rotate`
+- Per-glyph or per-tspan `dx` / `dy` / `rotate` (beyond fixed line `dy="1.2em"`)
 - Embedded / `@font-face` fonts (product feature separate; CSP already allows Google Fonts URLs)
 - Text-to-path
 - Duplicating fill/stroke/opacity/dash in the Text panel (Colors / Stroke stay authoritative)

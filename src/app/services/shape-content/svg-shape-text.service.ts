@@ -1,6 +1,10 @@
 import { Injectable, inject } from '@angular/core';
 import { Element as SvgJsElement } from '@svgdotjs/svg.js';
 import type { ShapeProperties } from '../../models/shape-properties.interface';
+import {
+  applyCanonicalSvgTextContent,
+  serializeSvgTextContent
+} from '../../utils/text-multiline-tspans';
 import type { SvgShapeTextPort } from './svg-shape-text.port';
 import { SvgEditorDocumentService } from '../svg-editor-document.service';
 
@@ -58,7 +62,7 @@ export class SvgShapeTextService implements SvgShapeTextPort {
       : Number.NaN;
 
     return {
-      textContent: textNode?.textContent ?? undefined,
+      textContent: textNode ? serializeSvgTextContent(textNode) : undefined,
       fontFamily: textNode?.getAttribute('font-family') ?? undefined,
       fontSize: Number.isFinite(rawFontSize) ? rawFontSize : undefined,
       fontWeight: textNode?.getAttribute('font-weight') ?? undefined,
@@ -75,18 +79,21 @@ export class SvgShapeTextService implements SvgShapeTextPort {
 
   getTextContent(textId: string): string | null {
     const textNode = this.resolveTextNode(textId);
-    return textNode?.textContent ?? null;
+    if (!textNode) return null;
+    return serializeSvgTextContent(textNode);
   }
 
   /**
    * Replace text content for a `<text>` node. `<tspan>` ids are resolved to their parent `<text>`.
+   * Multiline strings (`\\n`) become canonical per-line `<tspan>`s; single-line stays plain text.
+   * Does not run on read — imported markup is rewritten only when this is called (content commit).
    */
   updateTextContent(textId: string, text: string): void {
     const textNode = this.resolveTextNode(textId);
     if (!textNode) return;
-    // Use plain DOM text replacement: svg.js `Text.text()` can call `getBBox()` for layout, which
-    // is unavailable in jsdom and breaks unit tests; stroke/fill still go through svg.js helpers.
-    textNode.textContent = text;
+    // Prefer DOM over svg.js `Text.text()`: the latter can call `getBBox()` for layout, which is
+    // unavailable in jsdom; stroke/fill still go through svg.js helpers.
+    applyCanonicalSvgTextContent(textNode, text);
     this.doc.bumpDocumentRevision();
   }
 

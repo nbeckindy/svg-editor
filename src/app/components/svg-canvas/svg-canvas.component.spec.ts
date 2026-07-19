@@ -3955,6 +3955,7 @@ describe('SvgCanvasComponent', () => {
       expect(editor.getAttribute('aria-label')).toBe('Edit canvas text');
       expect(editor.getAttribute('aria-multiline')).toBe('true');
       expect(editor.getAttribute('title')).toContain('Escape');
+      expect(editor.getAttribute('title')).toMatch(/Enter/i);
       expect(component.drilledIntoGroupId).toBeNull();
     });
 
@@ -4068,6 +4069,64 @@ describe('SvgCanvasComponent', () => {
 
       const textEl = fixture.nativeElement.querySelector('#text-tspan') as SVGTextElement;
       expect(textEl.textContent).toBe('Merged');
+    });
+
+    it('commits multiline inline edit as canonical tspans and supports undo', async () => {
+      await loadSvgForSelector('<svg viewBox="0 0 100 100"><text id="text-ml" x="10" y="20">Hello</text></svg>');
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 30, height: 12 });
+      shapeSelectionService.selectShape({
+        id: 'text-ml',
+        type: 'text',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const textEl = fixture.nativeElement.querySelector('#text-ml') as SVGTextElement;
+
+      component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+      component.onInlineTextEditInput('Hello\nworld');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+
+      const spans = Array.from(textEl.querySelectorAll('tspan'));
+      expect(spans.map((s) => s.textContent)).toEqual(['Hello', 'world']);
+      expect(spans[1]!.getAttribute('dy')).toBe('1.2em');
+
+      editorHistoryService.undo();
+      expect(textEl.querySelectorAll('tspan').length).toBe(0);
+      expect(textEl.textContent).toBe('Hello');
+    });
+
+    it('preserves imported tspan markup when inline edit commits unchanged draft', async () => {
+      await loadSvgForSelector(
+        `<svg viewBox="0 0 100 100"><text id="text-keep" x="10" y="20"><tspan id="span-a" fill="red">A</tspan><tspan id="span-b" dy="1.2em" fill="blue">B</tspan></text></svg>`
+      );
+      vi.spyOn(svgManipulationService, 'getShapeBBox').mockReturnValue({ x: 10, y: 10, width: 30, height: 24 });
+      shapeSelectionService.selectShape({
+        id: 'text-keep',
+        type: 'text',
+        fill: '#000',
+        stroke: undefined,
+        strokeWidth: 0,
+        opacity: 1
+      });
+      const textEl = fixture.nativeElement.querySelector('#text-keep') as SVGTextElement;
+      const before = textEl.innerHTML;
+
+      component.onCanvasDoubleClick({ target: textEl } as unknown as MouseEvent);
+      fixture.detectChanges();
+      const editor = fixture.nativeElement.querySelector(
+        '[data-testid="canvas-inline-text-editor"]'
+      ) as HTMLTextAreaElement;
+      expect(editor.value).toBe('A\nB');
+      component.onKeyDown(new KeyboardEvent('keydown', { key: 'Escape', bubbles: true }));
+      fixture.detectChanges();
+
+      expect(textEl.innerHTML).toBe(before);
+      expect(textEl.querySelector('#span-a')?.getAttribute('fill')).toBe('red');
+      expect(textEl.querySelector('#span-b')?.getAttribute('fill')).toBe('blue');
     });
 
     it('does not enter inline text-edit mode for multi-select', async () => {
